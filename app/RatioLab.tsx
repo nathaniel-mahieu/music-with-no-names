@@ -18,15 +18,17 @@ import {
 import { HarmonyLab } from "./HarmonyLab";
 import { RhythmLab } from "./RhythmLab";
 import { AtlasLab } from "./AtlasLab";
+import { PersonalLab } from "./PersonalLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "ratio" | "harmony" | "rhythm" | "atlas";
+type LabId = "ratio" | "harmony" | "rhythm" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "ratio", label: "Ratio" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
   { id: "atlas", label: "Atlas" },
+  { id: "personal", label: "Personal Lens" },
 ];
 
 const LAB_COPY: Record<
@@ -75,6 +77,15 @@ const LAB_COPY: Record<
     principleTop: "Sound + sequence",
     principleMain: "→ response",
     principleBottom: "conditioned by listener and goal",
+  },
+  personal: {
+    eyebrow: "Listening evidence without a universal score",
+    title: "Make your response part of the model.",
+    description:
+      "Rate tension, movement, interest, familiarity, resolution, and liking separately—then see how purpose changes the interpretation.",
+    principleTop: "Sound + context + listener",
+    principleMain: "→ fit",
+    principleBottom: "personal, goal-relative, uncertain",
   },
 };
 
@@ -577,7 +588,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab} lab · v0.3
+          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.4
         </div>
       </header>
 
@@ -809,8 +820,10 @@ export function RatioLab() {
           <HarmonyLab />
         ) : activeLab === "rhythm" ? (
           <RhythmLab />
-        ) : (
+        ) : activeLab === "atlas" ? (
           <AtlasLab />
+        ) : (
+          <PersonalLab />
         )}
       </div>
 

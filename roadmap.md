@@ -430,12 +430,12 @@ Release candidate: **v0.4 — Music Atlas**
 
 Objective: visualize musical value honestly as personal, multidimensional, goal-relative, and uncertain.
 
-- [ ] **G9.1** Add separate continuous ratings for liking, tension, arousal, urge to move, interest, familiarity, and felt resolution.
+- [x] **G9.1** Add separate continuous ratings for liking, tension, arousal, urge to move, interest, familiarity, and felt resolution.
 - [x] **G9.2** Add optional listening goals such as dance, relaxation, focus, curiosity, comfort, and catharsis.
 - [ ] **G9.3** Build short calibration experiments using controlled transformations from the Labs.
 - [ ] **G9.4** Fit a transparent personal response surface with uncertainty.
 - [x] **G9.5** Visualize a listener’s preferred region over the atlas without labeling the region objectively good.
-- [ ] **G9.6** Show a goal-relative fit profile containing:
+- [x] **G9.6** Show a goal-relative fit profile containing:
   - Sensory fit.
   - Prediction reward.
   - Motor fit.
@@ -443,10 +443,10 @@ Objective: visualize musical value honestly as personal, multidimensional, goal-
   - Coherence and transformation.
   - Narrative payoff.
   - Personal resonance.
-- [ ] **G9.7** When a scalar is necessary, label it `predicted fit for this listener and goal` and show its uncertainty and component breakdown.
+- [x] **G9.7** When a scalar is necessary, label it `predicted fit for this listener and goal` and show its uncertainty and component breakdown.
 - [ ] **G9.8** Let users compare their response terrain with an anonymized cohort only after explicit consent and only if a backend is deliberately added.
 - [ ] **G9.9** Show how familiarity and repeated listening alter predictions and responses over time.
-- [ ] **G9.10** Provide a delete/export flow for all personal ratings and learned preferences.
+- [ ] **G9.10** Provide a delete/export flow for all personal ratings and learned preferences. (Ratings are covered; learned-preference export awaits G9.4.)
 
 Exit gate:
 
@@ -593,5 +593,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] First audible vertical slice implemented.
 - [x] Harmony and rhythm labs implemented.
 - [x] Initial listener-conditioned landmark atlas implemented.
+- [x] Personal Lens ratings, uncertainty, local export, and deletion implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

@@ -14,7 +14,7 @@ type LandmarkSection = ExperiencePosition & {
   label: string;
 };
 
-type Landmark = ExperiencePosition & {
+export type Landmark = ExperiencePosition & {
   id: string;
   short: string;
   title: string;
@@ -27,7 +27,7 @@ type Landmark = ExperiencePosition & {
   sections: LandmarkSection[];
 };
 
-const LANDMARKS: Landmark[] = [
+export const LANDMARKS: Landmark[] = [
   {
     id: "bad-guy",
     short: "bad guy",

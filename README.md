@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Experience Atlas v0.3**. It provides:
+The current milestone is **Personal Lens v0.4**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -14,6 +14,8 @@ The current milestone is **Experience Atlas v0.3**. It provides:
 - A twelve-position Rhythm Lab with onset-spacing ratios, tempo, and microtiming bias.
 - An interactive map of pop, blues, and classical landmarks as experiential trajectories.
 - Listener- and goal-conditioned preference proximity with an inspectable component profile.
+- Seven independent response ratings, transparent goal-relative fit, and visible uncertainty.
+- Local-only listening observations with portable JSON export and a two-step delete flow.
 
 ## Run locally
 

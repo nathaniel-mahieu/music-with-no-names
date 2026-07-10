@@ -47,11 +47,12 @@ test("server-renders the Ratio Lab product surface", async () => {
   assert.match(html, />Harmony<\/button>/i);
   assert.match(html, />Rhythm<\/button>/i);
   assert.match(html, />Atlas<\/button>/i);
+  assert.match(html, />Personal Lens<\/button>/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, ratioLab, harmonyLab, rhythmLab, atlasLab] = await Promise.all([
+  const [page, layout, packageJson, ratioLab, harmonyLab, rhythmLab, atlasLab, personalLab] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -59,6 +60,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/AtlasLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PersonalLab.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /<RatioLab \/>/);
@@ -75,6 +77,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(atlasLab, /There is no universal good region/);
   assert.match(atlasLab, /preference proximity/);
   assert.match(atlasLab, /is a path, not a point/);
+  assert.match(personalLab, /predicted fit for this listener and goal/);
+  assert.match(personalLab, /localStorage/);
+  assert.match(personalLab, /Export JSON/);
 
   await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
   await assert.rejects(access(new URL("../package-lock.json", projectRoot)));
