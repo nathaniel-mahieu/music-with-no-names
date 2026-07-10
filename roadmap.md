@@ -396,7 +396,7 @@ Release candidate: **v0.3 — Recording Journey**
 Objective: orient users with familiar music while avoiding genre essentialism and copyright problems.
 
 - [ ] **L8.1** Define a versioned landmark schema with work, performance, production, recording, provenance, and licensing metadata.
-- [ ] **L8.2** Represent every landmark as a trajectory with section markers, not just a centroid.
+- [x] **L8.2** Represent every landmark as a trajectory with section markers, not just a centroid.
 - [ ] **L8.3** Keep measured features, curator hypotheses, and listener reports visually distinct.
 - [ ] **L8.4** Build an atlas with interpretable selectable axes such as sensory tension, predictive surprise, pulse clarity, activation, repetition, and long-form transformation.
 - [ ] **L8.5** Encode inter-listener variation separately from model uncertainty.
@@ -431,10 +431,10 @@ Release candidate: **v0.4 — Music Atlas**
 Objective: visualize musical value honestly as personal, multidimensional, goal-relative, and uncertain.
 
 - [ ] **G9.1** Add separate continuous ratings for liking, tension, arousal, urge to move, interest, familiarity, and felt resolution.
-- [ ] **G9.2** Add optional listening goals such as dance, relaxation, focus, curiosity, comfort, and catharsis.
+- [x] **G9.2** Add optional listening goals such as dance, relaxation, focus, curiosity, comfort, and catharsis.
 - [ ] **G9.3** Build short calibration experiments using controlled transformations from the Labs.
 - [ ] **G9.4** Fit a transparent personal response surface with uncertainty.
-- [ ] **G9.5** Visualize a listener’s preferred region over the atlas without labeling the region objectively good.
+- [x] **G9.5** Visualize a listener’s preferred region over the atlas without labeling the region objectively good.
 - [ ] **G9.6** Show a goal-relative fit profile containing:
   - Sensory fit.
   - Prediction reward.
@@ -591,5 +591,7 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Initial roadmap created.
 - [x] Application scaffold created.
 - [x] First audible vertical slice implemented.
+- [x] Harmony and rhythm labs implemented.
+- [x] Initial listener-conditioned landmark atlas implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

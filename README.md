@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Sound Labs v0.2**. It provides:
+The current milestone is **Experience Atlas v0.3**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -12,6 +12,8 @@ The current milestone is **Sound Labs v0.2**. It provides:
 - Explanations that keep harmonicity, roughness, fusion, and musical goodness distinct.
 - A three-voice Harmony Lab with shared-basis and aggregate-spectrum views.
 - A twelve-position Rhythm Lab with onset-spacing ratios, tempo, and microtiming bias.
+- An interactive map of pop, blues, and classical landmarks as experiential trajectories.
+- Listener- and goal-conditioned preference proximity with an inspectable component profile.
 
 ## Run locally
 

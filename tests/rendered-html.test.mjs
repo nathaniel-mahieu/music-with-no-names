@@ -46,17 +46,19 @@ test("server-renders the Ratio Lab product surface", async () => {
   assert.match(html, />Ratio<\/button>/i);
   assert.match(html, />Harmony<\/button>/i);
   assert.match(html, />Rhythm<\/button>/i);
+  assert.match(html, />Atlas<\/button>/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, ratioLab, harmonyLab, rhythmLab] = await Promise.all([
+  const [page, layout, packageJson, ratioLab, harmonyLab, rhythmLab, atlasLab] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/AtlasLab.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /<RatioLab \/>/);
@@ -70,6 +72,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(harmonyLab, /Shared harmonic basis/);
   assert.match(rhythmLab, /Time as ratio and resistance/);
   assert.match(rhythmLab, /Anchor resistance/);
+  assert.match(atlasLab, /There is no universal good region/);
+  assert.match(atlasLab, /preference proximity/);
+  assert.match(atlasLab, /is a path, not a point/);
 
   await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
   await assert.rejects(access(new URL("../package-lock.json", projectRoot)));

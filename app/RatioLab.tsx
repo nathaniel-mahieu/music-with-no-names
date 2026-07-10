@@ -17,14 +17,16 @@ import {
 } from "@/lib/music-math";
 import { HarmonyLab } from "./HarmonyLab";
 import { RhythmLab } from "./RhythmLab";
+import { AtlasLab } from "./AtlasLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "ratio" | "harmony" | "rhythm";
+type LabId = "ratio" | "harmony" | "rhythm" | "atlas";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "ratio", label: "Ratio" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
+  { id: "atlas", label: "Atlas" },
 ];
 
 const LAB_COPY: Record<
@@ -64,6 +66,15 @@ const LAB_COPY: Record<
     principleTop: "Relative duration",
     principleMain: "pulse",
     principleBottom: "embodied in seconds",
+  },
+  atlas: {
+    eyebrow: "Existing music as navigational landmarks",
+    title: "Map experience, not objective quality.",
+    description:
+      "Place recordings as trajectories through tension, surprise, drive, repetition, and expression—then change the listener and purpose instead of pretending one region is universally good.",
+    principleTop: "Sound + sequence",
+    principleMain: "→ response",
+    principleBottom: "conditioned by listener and goal",
   },
 };
 
@@ -566,7 +577,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab} lab · v0.2
+          {activeLab} lab · v0.3
         </div>
       </header>
 
@@ -796,14 +807,16 @@ export function RatioLab() {
           </>
         ) : activeLab === "harmony" ? (
           <HarmonyLab />
-        ) : (
+        ) : activeLab === "rhythm" ? (
           <RhythmLab />
+        ) : (
+          <AtlasLab />
         )}
       </div>
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Roadmap phases R1 · H3 · T4</span>
+        <span>Roadmap phases R1 · H3 · T4 · L8 · G9</span>
       </footer>
     </main>
   );
