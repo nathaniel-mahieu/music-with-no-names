@@ -289,13 +289,13 @@ Exit gate:
 Objective: move from dyads to global spectral organization and voice motion without reverting to chord names.
 
 - [ ] **H3.1** Support three to six simultaneous sources with independent spectra, register, and amplitude.
-- [ ] **H3.2** Represent a sonority as a normalized ratio set plus its absolute realization.
-- [ ] **H3.3** Detect candidate common subharmonics and visualize competing interpretations.
+- [x] **H3.2** Represent a sonority as a normalized ratio set plus its absolute realization.
+- [x] **H3.3** Detect candidate common subharmonics and visualize competing interpretations.
 - [ ] **H3.4** Add prime-exponent coordinates for 2-, 3-, 5-, and 7-based relationships.
 - [ ] **H3.5** Build an octave-optional harmonic lattice; octave folding must be a view choice, not an implicit truth.
 - [ ] **H3.6** Calculate voice-leading distance as continuous log-frequency motion.
 - [ ] **H3.7** Let users morph between just relationships and equal-tempered approximations while hearing the difference.
-- [ ] **H3.8** Add instructive fields such as 4:5:6, 10:12:15, 4:5:6:7, and deliberately inharmonic sets.
+- [x] **H3.8** Add instructive fields such as 4:5:6, 10:12:15, 4:5:6:7, and deliberately inharmonic sets.
 - [ ] **H3.9** Create a sequence mode in which one or more voices move while others remain fixed.
 - [ ] **H3.10** Show why an internally smooth sonority can still feel contextually unstable.
 
@@ -309,15 +309,15 @@ Exit gate:
 
 Objective: give time the same first-principles treatment as frequency.
 
-- [ ] **T4.1** Create a pulse-relative timeline with continuous onset placement.
-- [ ] **T4.2** Represent durations as ratios to a chosen or inferred pulse.
+- [x] **T4.1** Create a pulse-relative timeline with continuous onset placement.
+- [x] **T4.2** Represent durations as ratios to a chosen or inferred pulse.
 - [ ] **T4.3** Show multiple pulse hypotheses and their confidence rather than forcing one meter.
 - [ ] **T4.4** Visualize phase within nested cycles.
-- [ ] **T4.5** Add swing and microtiming as continuous deviations from an inferred grid.
+- [x] **T4.5** Add swing and microtiming as continuous deviations from an inferred grid.
 - [ ] **T4.6** Implement a transparent syncopation measure.
 - [ ] **T4.7** Keep pulse clarity and groove conceptually and computationally separate.
 - [ ] **T4.8** Build low-, medium-, and high-syncopation A/B experiments on the same pulse.
-- [ ] **T4.9** Test the same duration ratios across different absolute tempos.
+- [x] **T4.9** Test the same duration ratios across different absolute tempos.
 - [ ] **T4.10** Add optional tapping input to compare inferred pulse with the listener’s embodied pulse.
 
 Exit gate:

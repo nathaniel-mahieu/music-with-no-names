@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 
-const title = "Music With No Names · Ratio Lab";
+const title = "Music With No Names · Sound Labs";
 const description =
-  "An audible, visual exploration of frequency ratios, harmonic spectra, and the physical relationships beneath musical labels.";
+  "Audible, visual explorations of frequency ratios, harmonic fields, pulse cycles, and the physical relationships beneath musical labels.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();

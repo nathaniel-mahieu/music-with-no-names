@@ -32,6 +32,13 @@ export function greatestCommonDivisor(a: number, b: number): number {
   return x || 1;
 }
 
+export function leastCommonMultiple(a: number, b: number): number {
+  const x = Math.abs(Math.trunc(a));
+  const y = Math.abs(Math.trunc(b));
+  if (x === 0 || y === 0) return 0;
+  return (x / greatestCommonDivisor(x, y)) * y;
+}
+
 export function centsFromRatio(ratio: number): number {
   if (!Number.isFinite(ratio) || ratio <= 0) {
     throw new RangeError("A frequency ratio must be finite and greater than zero.");
@@ -166,4 +173,55 @@ export function primeFactorization(value: number): Record<number, number> {
   }
 
   return factors;
+}
+
+export function harmonicBasis(
+  ratios: number[],
+  maxDenominator = 16,
+  toleranceCents = 1,
+): number[] | null {
+  if (ratios.length === 0) return null;
+
+  const approximations = ratios.map((ratio) =>
+    approximateRatio(ratio, maxDenominator),
+  );
+  if (
+    approximations.some(
+      (approximation) => Math.abs(approximation.errorCents) > toleranceCents,
+    )
+  ) {
+    return null;
+  }
+
+  const commonDenominator = approximations.reduce(
+    (current, approximation) =>
+      leastCommonMultiple(current, approximation.denominator),
+    1,
+  );
+  const harmonics = approximations.map(
+    (approximation) =>
+      approximation.numerator *
+      (commonDenominator / approximation.denominator),
+  );
+  const sharedDivisor = harmonics.reduce(
+    (current, harmonic) => greatestCommonDivisor(current, harmonic),
+    harmonics[0],
+  );
+
+  return harmonics.map((harmonic) => harmonic / sharedDivisor);
+}
+
+export function cyclicOnsetIntervals(pattern: boolean[]): number[] {
+  if (pattern.length === 0) return [];
+  const active = pattern
+    .map((isActive, index) => (isActive ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (active.length === 0) return [];
+  if (active.length === 1) return [pattern.length];
+
+  return active.map((index, activeIndex) => {
+    const next = active[(activeIndex + 1) % active.length];
+    return next > index ? next - index : pattern.length - index + next;
+  });
 }

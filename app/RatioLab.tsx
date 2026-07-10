@@ -15,8 +15,57 @@ import {
   findCoincidingPartials,
   harmonicPartials,
 } from "@/lib/music-math";
+import { HarmonyLab } from "./HarmonyLab";
+import { RhythmLab } from "./RhythmLab";
 
 type Timbre = "sine" | "harmonic";
+type LabId = "ratio" | "harmony" | "rhythm";
+
+const LABS: { id: LabId; label: string }[] = [
+  { id: "ratio", label: "Ratio" },
+  { id: "harmony", label: "Harmony" },
+  { id: "rhythm", label: "Rhythm" },
+];
+
+const LAB_COPY: Record<
+  LabId,
+  {
+    eyebrow: string;
+    title: string;
+    description: string;
+    principleTop: string;
+    principleMain: string;
+    principleBottom: string;
+  }
+> = {
+  ratio: {
+    eyebrow: "A first-principles music instrument",
+    title: "Hear relationships, not labels.",
+    description:
+      "Start with one vibration. Add another. Change only their relationship, then hear and see why some patterns fuse, shimmer, beat, or refuse to settle.",
+    principleTop: "Invariant",
+    principleMain: "ratio",
+    principleBottom: "embodied in frequency",
+  },
+  harmony: {
+    eyebrow: "A field of simultaneous relationships",
+    title: "Build harmony from shared motion.",
+    description:
+      "Add a third voice and the problem changes. Pairwise distances interact with one global periodic shape, competing centers, and the physical spectrum of every source.",
+    principleTop: "Local intervals",
+    principleMain: "→ field",
+    principleBottom: "one spectrum, many readings",
+  },
+  rhythm: {
+    eyebrow: "Time before meter names",
+    title: "Feel ratios unfold in time.",
+    description:
+      "Place events around a pulse cycle. Keep their spacing ratios fixed while changing tempo and microtiming to reveal where rhythm becomes movement.",
+    principleTop: "Relative duration",
+    principleMain: "pulse",
+    principleBottom: "embodied in seconds",
+  },
+};
 
 type AudioNodes = {
   context: AudioContext;
@@ -273,6 +322,7 @@ function formatHertz(value: number) {
 }
 
 export function RatioLab() {
+  const [activeLab, setActiveLab] = useState<LabId>("ratio");
   const [referenceHz, setReferenceHz] = useState(220);
   const [ratio, setRatio] = useState(3 / 2);
   const [timbre, setTimbre] = useState<Timbre>("harmonic");
@@ -281,6 +331,18 @@ export function RatioLab() {
     ratio,
     timbre,
   );
+  const activeCopy = LAB_COPY[activeLab];
+
+  const selectLab = (lab: LabId) => {
+    if (activeLab === "ratio" && isPlaying) stop();
+    setActiveLab(lab);
+    window.requestAnimationFrame(() => {
+      document.getElementById("lab-stage")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  };
 
   const approximation = useMemo(() => approximateRatio(ratio, 16), [ratio]);
   const period = useMemo(
@@ -489,30 +551,46 @@ export function RatioLab() {
           </span>
           <span>Music With No Names</span>
         </a>
+        <nav className="lab-nav" aria-label="Learning labs">
+          {LABS.map((lab) => (
+            <button
+              key={lab.id}
+              type="button"
+              className={activeLab === lab.id ? "is-selected" : ""}
+              onClick={() => selectLab(lab.id)}
+              aria-pressed={activeLab === lab.id}
+            >
+              {lab.label}
+            </button>
+          ))}
+        </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          Ratio Lab · v0.1
+          {activeLab} lab · v0.2
         </div>
       </header>
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <p className="eyebrow">A first-principles music instrument</p>
-          <h1>Hear relationships, not labels.</h1>
-          <p className="hero-description">
-            Start with one vibration. Add another. Change only their relationship,
-            then hear and see why some patterns fuse, shimmer, beat, or refuse to
-            settle.
-          </p>
+          <p className="eyebrow">{activeCopy.eyebrow}</p>
+          <h1>{activeCopy.title}</h1>
+          <p className="hero-description">{activeCopy.description}</p>
         </div>
         <div className="hero-principle" aria-label="Core principle">
-          <span>Invariant</span>
-          <strong>{ratioHeading}</strong>
-          <span>Embodied at {formatHertz(referenceHz)}</span>
+          <span>{activeCopy.principleTop}</span>
+          <strong>{activeLab === "ratio" ? ratioHeading : activeCopy.principleMain}</strong>
+          <span>
+            {activeLab === "ratio"
+              ? `Embodied at ${formatHertz(referenceHz)}`
+              : activeCopy.principleBottom}
+          </span>
         </div>
       </section>
 
-      <section className="instrument" aria-labelledby="instrument-title">
+      <div id="lab-stage" className="lab-stage">
+        {activeLab === "ratio" ? (
+          <>
+            <section className="instrument" aria-labelledby="instrument-title">
         <div className="control-panel">
           <div className="panel-heading">
             <div>
@@ -681,9 +759,9 @@ export function RatioLab() {
             </article>
           </div>
         </div>
-      </section>
+            </section>
 
-      <section className="explanation" aria-labelledby="explanation-title">
+            <section className="explanation" aria-labelledby="explanation-title">
         <div className="explanation-heading">
           <p className="section-kicker">03 · Interpretation</p>
           <h2 id="explanation-title">What your ear may organize</h2>
@@ -714,11 +792,18 @@ export function RatioLab() {
           goodness score. Timbre, register, timing, expectation, familiarity, and purpose
           all change what this relationship becomes as music.
         </div>
-      </section>
+            </section>
+          </>
+        ) : activeLab === "harmony" ? (
+          <HarmonyLab />
+        ) : (
+          <RhythmLab />
+        )}
+      </div>
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Roadmap phase R1 · Ratio Lab</span>
+        <span>Roadmap phases R1 · H3 · T4</span>
       </footer>
     </main>
   );

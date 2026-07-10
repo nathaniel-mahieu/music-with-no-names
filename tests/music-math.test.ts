@@ -6,13 +6,20 @@ import {
   commonPeriodSeconds,
   findCoincidingPartials,
   greatestCommonDivisor,
+  harmonicBasis,
   harmonicPartials,
+  cyclicOnsetIntervals,
+  leastCommonMultiple,
   primeFactorization,
 } from "../lib/music-math.ts";
 
 test("reduces integer relationships", () => {
   assert.equal(greatestCommonDivisor(42, 30), 6);
   assert.equal(greatestCommonDivisor(0, 8), 8);
+});
+
+test("finds shared cycle lengths", () => {
+  assert.equal(leastCommonMultiple(4, 6), 12);
 });
 
 test("finds exact small-integer frequency ratios", () => {
@@ -69,4 +76,30 @@ test("detects shared partials in a three-to-two relationship", () => {
 
 test("factorizes harmonic coordinates", () => {
   assert.deepEqual(primeFactorization(60), { 2: 2, 3: 1, 5: 1 });
+});
+
+test("expresses multi-tone ratios as a shared harmonic basis", () => {
+  assert.deepEqual(harmonicBasis([1, 5 / 4, 3 / 2]), [4, 5, 6]);
+  assert.deepEqual(harmonicBasis([1, 6 / 5, 3 / 2]), [10, 12, 15]);
+  assert.equal(harmonicBasis([1, Math.SQRT2, 3 / 2]), null);
+});
+
+test("describes circular rhythms as onset-spacing ratios", () => {
+  assert.deepEqual(
+    cyclicOnsetIntervals([
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]),
+    [3, 3, 2, 2, 2],
+  );
 });

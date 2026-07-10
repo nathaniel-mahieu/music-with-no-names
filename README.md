@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Ratio Lab v0.1**. It provides:
+The current milestone is **Sound Labs v0.2**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -10,6 +10,8 @@ The current milestone is **Ratio Lab v0.1**. It provides:
 - Sine and harmonic-complex timbres.
 - Synchronized waveform, spectrum, and cycle-against-cycle views.
 - Explanations that keep harmonicity, roughness, fusion, and musical goodness distinct.
+- A three-voice Harmony Lab with shared-basis and aggregate-spectrum views.
+- A twelve-position Rhythm Lab with onset-spacing ratios, tempo, and microtiming bias.
 
 ## Run locally
 

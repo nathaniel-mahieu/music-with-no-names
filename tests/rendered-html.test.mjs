@@ -31,7 +31,7 @@ test("server-renders the Ratio Lab product surface", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Music With No Names · Ratio Lab<\/title>/i);
+  assert.match(html, /<title>Music With No Names · Sound Labs<\/title>/i);
   assert.match(html, /Hear relationships, not labels\./i);
   assert.match(html, /Two oscillations/i);
   assert.match(html, /Hear relationship/i);
@@ -43,15 +43,20 @@ test("server-renders the Ratio Lab product surface", async () => {
   assert.match(html, /Energy across frequency/i);
   assert.match(html, /Cycle against cycle/i);
   assert.match(html, /Important:/i);
+  assert.match(html, />Ratio<\/button>/i);
+  assert.match(html, />Harmony<\/button>/i);
+  assert.match(html, />Rhythm<\/button>/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, ratioLab] = await Promise.all([
+  const [page, layout, packageJson, ratioLab, harmonyLab, rhythmLab] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /<RatioLab \/>/);
@@ -61,6 +66,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /exponentialRampToValueAtTime\(0\.14/);
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
+  assert.match(harmonyLab, /When relationships become a system/);
+  assert.match(harmonyLab, /Shared harmonic basis/);
+  assert.match(rhythmLab, /Time as ratio and resistance/);
+  assert.match(rhythmLab, /Anchor resistance/);
 
   await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
   await assert.rejects(access(new URL("../package-lock.json", projectRoot)));
