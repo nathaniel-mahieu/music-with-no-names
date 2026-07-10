@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Personal Lens v0.4**. It provides:
+The current milestone is **Journey + Acoustic Microscope v0.5**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -16,6 +16,9 @@ The current milestone is **Personal Lens v0.4**. It provides:
 - Listener- and goal-conditioned preference proximity with an inspectable component profile.
 - Seven independent response ratings, transparent goal-relative fit, and visible uncertainty.
 - Local-only listening observations with portable JSON export and a two-step delete flow.
+- A generated event-sequence Journey with aligned sensory, structural, prediction, and tension lanes.
+- Section selection that preserves event identity while opening an evidence-backed Acoustic Microscope.
+- Inspectable piece-local predictions, transformed-recurrence evidence, annotations, and counterfactual views.
 
 ## Run locally
 

@@ -332,13 +332,13 @@ Release candidate: **v0.2 — Ratio and Rhythm Labs**
 
 Objective: explain tension, surprise, coherence, and payoff as temporal phenomena.
 
-- [ ] **P5.1** Define a generic event sequence combining frequency relationships, onsets, durations, amplitude, and timbre.
-- [ ] **P5.2** Detect exact recurrence and transformed recurrence.
+- [x] **P5.1** Define a generic event sequence combining frequency relationships, onsets, durations, amplitude, and timbre.
+- [x] **P5.2** Detect exact recurrence and transformed recurrence.
 - [ ] **P5.3** Build a self-similarity view for motifs, loops, phrases, and sections.
-- [ ] **P5.4** Implement a simple, inspectable piece-local prediction model before considering learned neural models.
+- [x] **P5.4** Implement a simple, inspectable piece-local prediction model before considering learned neural models.
 - [ ] **P5.5** Display uncertainty before an event and surprise after it.
 - [ ] **P5.6** Support multiple prediction models: piece-local, synthetic-corpus, and eventually listener-personalized.
-- [ ] **P5.7** Build a human-response braid with separate lanes for roughness, harmonicity, pulse confidence, repetition, uncertainty, surprise, tension, and ratings.
+- [ ] **P5.7** Build a human-response braid with separate lanes for roughness, harmonicity, pulse confidence, repetition, uncertainty, surprise, tension, and ratings. (Model lanes are aligned; a persisted human-ratings lane remains.)
 - [ ] **P5.8** Mark buildup, expectation violation, return, and release as hypotheses that can be confirmed or rejected by the listener.
 - [ ] **P5.9** Demonstrate that local unpleasantness can contribute to a satisfying larger arc.
 - [ ] **P5.10** Add experiments for repetition, repetition-with-variation, expected versus unexpected context, and delayed resolution.
@@ -375,13 +375,13 @@ Exit gate:
 
 Objective: make a real recording inspectable from whole form down to partial interactions.
 
-- [ ] **J7.1** Create one aligned, zoomable timeline for audio, sections, physical features, perceptual features, prediction, and ratings.
+- [ ] **J7.1** Create one aligned, zoomable timeline for audio, sections, physical features, perceptual features, prediction, and ratings. (The generated aligned timeline exists; continuous zoom and imported audio remain.)
 - [ ] **J7.2** Support timescales from milliseconds to the whole recording without changing the underlying event identity.
-- [ ] **J7.3** Selecting any time range opens the Acoustic Microscope.
+- [ ] **J7.3** Selecting any time range opens the Acoustic Microscope. (Section-range selection works; arbitrary range selection remains.)
 - [ ] **J7.4** Show auditory spectrum, partial collisions, periodicity candidates, continuous ratio evidence, onset phase, and expected alternatives for the selection.
-- [ ] **J7.5** Explain a model estimate through visible contributing evidence rather than a black-box number.
-- [ ] **J7.6** Add counterfactual A/B transforms that preserve the gesture while changing one factor such as roughness, register, timbre, syncopation, or repetition.
-- [ ] **J7.7** Allow annotations for perceived section, tension, release, surprise, and personal significance.
+- [x] **J7.5** Explain a model estimate through visible contributing evidence rather than a black-box number.
+- [ ] **J7.6** Add counterfactual A/B transforms that preserve the gesture while changing one factor such as roughness, register, timbre, syncopation, or repetition. (Visual model counterfactuals exist; audible A/B transforms remain.)
+- [x] **J7.7** Allow annotations for perceived section, tension, release, surprise, and personal significance.
 
 Exit gate:
 
@@ -594,5 +594,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Harmony and rhythm labs implemented.
 - [x] Initial listener-conditioned landmark atlas implemented.
 - [x] Personal Lens ratings, uncertainty, local export, and deletion implemented.
+- [x] Generated Journey, inspectable local prediction, and Acoustic Microscope implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

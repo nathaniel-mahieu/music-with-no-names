@@ -19,14 +19,16 @@ import { HarmonyLab } from "./HarmonyLab";
 import { RhythmLab } from "./RhythmLab";
 import { AtlasLab } from "./AtlasLab";
 import { PersonalLab } from "./PersonalLab";
+import { JourneyLab } from "./JourneyLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "ratio" | "harmony" | "rhythm" | "atlas" | "personal";
+type LabId = "ratio" | "harmony" | "rhythm" | "journey" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "ratio", label: "Ratio" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
+  { id: "journey", label: "Journey" },
   { id: "atlas", label: "Atlas" },
   { id: "personal", label: "Personal Lens" },
 ];
@@ -68,6 +70,15 @@ const LAB_COPY: Record<
     principleTop: "Relative duration",
     principleMain: "pulse",
     principleBottom: "embodied in seconds",
+  },
+  journey: {
+    eyebrow: "From events to expectation and form",
+    title: "Follow musical meaning through time.",
+    description:
+      "Align physical features, recurrence, prediction, and human response—then zoom into one range without losing its identity in the larger arc.",
+    principleTop: "Local evidence",
+    principleMain: "→ arc",
+    principleBottom: "recurrence, violation, return",
   },
   atlas: {
     eyebrow: "Existing music as navigational landmarks",
@@ -588,7 +599,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.4
+          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.5
         </div>
       </header>
 
@@ -820,6 +831,8 @@ export function RatioLab() {
           <HarmonyLab />
         ) : activeLab === "rhythm" ? (
           <RhythmLab />
+        ) : activeLab === "journey" ? (
+          <JourneyLab />
         ) : activeLab === "atlas" ? (
           <AtlasLab />
         ) : (
