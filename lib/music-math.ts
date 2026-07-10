@@ -1,0 +1,169 @@
+export type RatioApproximation = {
+  numerator: number;
+  denominator: number;
+  value: number;
+  errorCents: number;
+  exact: boolean;
+};
+
+export type HarmonicPartial = {
+  index: number;
+  frequencyHz: number;
+  amplitude: number;
+};
+
+export type PartialCoincidence = {
+  lowerIndex: number;
+  upperIndex: number;
+  frequencyHz: number;
+  errorCents: number;
+};
+
+export function greatestCommonDivisor(a: number, b: number): number {
+  let x = Math.abs(Math.trunc(a));
+  let y = Math.abs(Math.trunc(b));
+
+  while (y !== 0) {
+    const remainder = x % y;
+    x = y;
+    y = remainder;
+  }
+
+  return x || 1;
+}
+
+export function centsFromRatio(ratio: number): number {
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    throw new RangeError("A frequency ratio must be finite and greater than zero.");
+  }
+
+  return 1200 * Math.log2(ratio);
+}
+
+export function approximateRatio(
+  ratio: number,
+  maxDenominator = 32,
+): RatioApproximation {
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    throw new RangeError("A frequency ratio must be finite and greater than zero.");
+  }
+
+  if (!Number.isInteger(maxDenominator) || maxDenominator < 1) {
+    throw new RangeError("The maximum denominator must be a positive integer.");
+  }
+
+  let bestNumerator = 1;
+  let bestDenominator = 1;
+  let bestError = Number.POSITIVE_INFINITY;
+
+  for (let denominator = 1; denominator <= maxDenominator; denominator += 1) {
+    const numerator = Math.max(1, Math.round(ratio * denominator));
+    const candidate = numerator / denominator;
+    const error = Math.abs(centsFromRatio(candidate / ratio));
+
+    if (error < bestError) {
+      const divisor = greatestCommonDivisor(numerator, denominator);
+      bestNumerator = numerator / divisor;
+      bestDenominator = denominator / divisor;
+      bestError = error;
+    }
+  }
+
+  const value = bestNumerator / bestDenominator;
+
+  return {
+    numerator: bestNumerator,
+    denominator: bestDenominator,
+    value,
+    errorCents: centsFromRatio(value / ratio),
+    exact: Math.abs(centsFromRatio(value / ratio)) < 0.01,
+  };
+}
+
+export function commonPeriodSeconds(
+  referenceHz: number,
+  ratio: number,
+  maxDenominator = 16,
+  toleranceCents = 0.2,
+): number | null {
+  if (!Number.isFinite(referenceHz) || referenceHz <= 0) {
+    throw new RangeError("The reference frequency must be greater than zero.");
+  }
+
+  const approximation = approximateRatio(ratio, maxDenominator);
+  if (Math.abs(approximation.errorCents) > toleranceCents) {
+    return null;
+  }
+
+  return approximation.denominator / referenceHz;
+}
+
+export function harmonicPartials(
+  fundamentalHz: number,
+  count: number,
+  rolloff = 1.15,
+): HarmonicPartial[] {
+  if (!Number.isFinite(fundamentalHz) || fundamentalHz <= 0) {
+    throw new RangeError("The fundamental frequency must be greater than zero.");
+  }
+
+  if (!Number.isInteger(count) || count < 1) {
+    throw new RangeError("Partial count must be a positive integer.");
+  }
+
+  return Array.from({ length: count }, (_, offset) => {
+    const index = offset + 1;
+    return {
+      index,
+      frequencyHz: fundamentalHz * index,
+      amplitude: 1 / index ** rolloff,
+    };
+  });
+}
+
+export function findCoincidingPartials(
+  lowerHz: number,
+  upperHz: number,
+  count = 12,
+  toleranceCents = 3,
+): PartialCoincidence[] {
+  const lowerPartials = harmonicPartials(lowerHz, count);
+  const upperPartials = harmonicPartials(upperHz, count);
+  const matches: PartialCoincidence[] = [];
+
+  for (const lower of lowerPartials) {
+    for (const upper of upperPartials) {
+      const errorCents = centsFromRatio(upper.frequencyHz / lower.frequencyHz);
+      if (Math.abs(errorCents) <= toleranceCents) {
+        matches.push({
+          lowerIndex: lower.index,
+          upperIndex: upper.index,
+          frequencyHz: (lower.frequencyHz + upper.frequencyHz) / 2,
+          errorCents,
+        });
+      }
+    }
+  }
+
+  return matches;
+}
+
+export function primeFactorization(value: number): Record<number, number> {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new RangeError("Prime factorization requires a positive integer.");
+  }
+
+  const factors: Record<number, number> = {};
+  let remainder = value;
+  let divisor = 2;
+
+  while (remainder > 1) {
+    while (remainder % divisor === 0) {
+      factors[divisor] = (factors[divisor] ?? 0) + 1;
+      remainder /= divisor;
+    }
+    divisor += 1;
+  }
+
+  return factors;
+}
