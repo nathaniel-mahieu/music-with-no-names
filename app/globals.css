@@ -394,6 +394,27 @@ input[type="range"] {
   color: var(--accent-strong);
 }
 
+.share-experiment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-top: 16px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.share-experiment:hover {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
 .secondary-controls {
   display: grid;
   gap: 30px;

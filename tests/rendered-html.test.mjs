@@ -39,6 +39,7 @@ test("server-renders the Ratio Lab product surface", async () => {
   assert.match(html, /Physical register/i);
   assert.match(html, /Pure sine/i);
   assert.match(html, /Harmonic/i);
+  assert.match(html, /Copy experiment link/i);
   assert.match(html, /Motion through time/i);
   assert.match(html, /Energy across frequency/i);
   assert.match(html, /Cycle against cycle/i);
@@ -72,6 +73,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /exponentialRampToValueAtTime\(0\.14/);
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
+  assert.match(ratioLab, /ratioShareSearch/);
   assert.match(harmonyLab, /When relationships become a system/);
   assert.match(harmonyLab, /Shared harmonic basis/);
   assert.match(rhythmLab, /Time as ratio and resistance/);

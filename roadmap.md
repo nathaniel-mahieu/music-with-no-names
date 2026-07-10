@@ -250,7 +250,7 @@ Objective: deliver the first complete learn-by-hearing experience.
 - [x] **R1.7** Add sine and harmonic-complex timbres.
 - [x] **R1.8** Support transposition of the absolute reference while preserving the ratio.
 - [x] **R1.9** Add concise, accessible explanations of what changed physically and what stayed invariant.
-- [ ] **R1.10** Add shareable local presets for 1:1, 2:1, 3:2, 4:3, 5:4, 6:5, 16:15, and an equal-tempered half-octave.
+- [x] **R1.10** Add shareable local presets for 1:1, 2:1, 3:2, 4:3, 5:4, 6:5, 16:15, and an equal-tempered half-octave.
 
 Exit gate:
 
@@ -595,5 +595,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Initial listener-conditioned landmark atlas implemented.
 - [x] Personal Lens ratings, uncertainty, local export, and deletion implemented.
 - [x] Generated Journey, inspectable local prediction, and Acoustic Microscope implemented.
+- [x] First vertical slice completed with shareable ratio/register/timbre state.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

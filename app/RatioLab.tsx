@@ -15,6 +15,7 @@ import {
   findCoincidingPartials,
   harmonicPartials,
 } from "@/lib/music-math";
+import { parseRatioShareState, ratioShareSearch } from "@/lib/ratio-share-state";
 import { HarmonyLab } from "./HarmonyLab";
 import { RhythmLab } from "./RhythmLab";
 import { AtlasLab } from "./AtlasLab";
@@ -359,12 +360,37 @@ export function RatioLab() {
   const [referenceHz, setReferenceHz] = useState(220);
   const [ratio, setRatio] = useState(3 / 2);
   const [timbre, setTimbre] = useState<Timbre>("harmonic");
+  const [shareMessage, setShareMessage] = useState("Copy experiment link");
   const { isPlaying, audioMessage, start, stop } = useRatioAudio(
     referenceHz,
     ratio,
     timbre,
   );
   const activeCopy = LAB_COPY[activeLab];
+
+  useEffect(() => {
+    const hydrationTask = window.setTimeout(() => {
+      const shared = parseRatioShareState(window.location.search);
+      setRatio(shared.ratio);
+      setReferenceHz(shared.referenceHz);
+      setTimbre(shared.timbre);
+    }, 0);
+    return () => window.clearTimeout(hydrationTask);
+  }, []);
+
+  const shareExperiment = async () => {
+    const url = new URL(window.location.href);
+    url.search = ratioShareSearch({ ratio, referenceHz, timbre });
+    url.hash = "lab-stage";
+    window.history.replaceState(null, "", url);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setShareMessage("Link copied");
+    } catch {
+      setShareMessage("Link added to address bar");
+    }
+    window.setTimeout(() => setShareMessage("Copy experiment link"), 2200);
+  };
 
   const selectLab = (lab: LabId) => {
     if (activeLab === "ratio" && isPlaying) stop();
@@ -599,7 +625,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.5
+          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.6
         </div>
       </header>
 
@@ -694,6 +720,11 @@ export function RatioLab() {
               );
             })}
           </div>
+
+          <button type="button" className="share-experiment" onClick={() => void shareExperiment()}>
+            <span aria-hidden="true">↗</span>
+            {shareMessage}
+          </button>
 
           <div className="secondary-controls">
             <label className="control-field" htmlFor="reference-control">
