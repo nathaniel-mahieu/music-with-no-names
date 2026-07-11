@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef, useState } from "react";
+
 type Destination = "ratio" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const PATH: { number: string; title: string; question: string; destination: Destination; action: string }[] = [
@@ -21,7 +23,84 @@ const GLOSSARY = [
   ["liking", "a listener report in one context and moment"],
 ];
 
+const LEARNING_CHECKS: {
+  prompt: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+  destination: Destination;
+  action: string;
+}[] = [
+  {
+    prompt: "Two frequencies both double. What remains invariant?",
+    options: ["Their physical frequencies", "Their frequency ratio", "Their register in the body"],
+    answer: 1,
+    explanation: "Both hertz values and the embodied register move, while the multiplicative relationship between them stays fixed.",
+    destination: "ratio",
+    action: "Test this in Ratio Lab",
+  },
+  {
+    prompt: "The ratio stays fixed, but register and partial balance change. What may change?",
+    options: ["Nothing perceptually relevant", "Only the conventional note name", "Roughness, brightness, fusion, and felt character"],
+    answer: 2,
+    explanation: "A ratio is an invariant relationship, not a complete sound. Absolute frequency and spectrum change how components interact in an ear.",
+    destination: "ear",
+    action: "Compare realizations in Ear Lab",
+  },
+  {
+    prompt: "A field is modeled as rough and you enjoy it. Is one observation wrong?",
+    options: ["Yes—roughness determines liking", "No—sensory interaction and liking are different variables", "Yes—liking determines harmonicity"],
+    answer: 1,
+    explanation: "Roughness is a model of sensory interaction. Liking is your report in a context; friction can be expressive, energizing, or desired.",
+    destination: "harmony",
+    action: "Inspect the causal chain",
+  },
+  {
+    prompt: "Which distinction correctly places uncertainty and surprise in time?",
+    options: ["Both are measured only after an event", "Uncertainty is before; surprise is after", "Surprise is before; uncertainty is after"],
+    answer: 1,
+    explanation: "Uncertainty describes the spread of predicted alternatives before an event. Surprise scores the event that actually occurred under that predictor.",
+    destination: "journey",
+    action: "Follow the prediction lanes",
+  },
+  {
+    prompt: "Can an abrasive instant contribute to a satisfying musical whole?",
+    options: ["No—local discomfort fixes whole-form value", "Only if its ratio is a small integer", "Yes—contrast, expectation, memory, and return can change its role"],
+    answer: 2,
+    explanation: "A moment inherits meaning from its path. Rupture can intensify a return, and local comfort can diverge from whole-arc satisfaction.",
+    destination: "journey",
+    action: "Compare whole-form contexts",
+  },
+];
+
 export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination) => void }) {
+  const [checkIndex, setCheckIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [answerRevealed, setAnswerRevealed] = useState(false);
+  const [correctCount, setCorrectCount] = useState(0);
+  const firstAnswerRef = useRef<HTMLInputElement>(null);
+  const check = LEARNING_CHECKS[checkIndex];
+  const answerIsCorrect = selectedAnswer === check.answer;
+  const isLastCheck = checkIndex === LEARNING_CHECKS.length - 1;
+
+  const revealAnswer = () => {
+    if (selectedAnswer === null || answerRevealed) return;
+    if (answerIsCorrect) setCorrectCount((count) => count + 1);
+    setAnswerRevealed(true);
+  };
+
+  const nextCheck = () => {
+    if (isLastCheck) {
+      setCheckIndex(0);
+      setCorrectCount(0);
+    } else {
+      setCheckIndex((index) => index + 1);
+    }
+    setSelectedAnswer(null);
+    setAnswerRevealed(false);
+    window.requestAnimationFrame(() => firstAnswerRef.current?.focus());
+  };
+
   return (
     <section className="advanced-lab guide-lab" aria-labelledby="guide-title">
       <div className="guide-opening">
@@ -66,6 +145,56 @@ export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination
       <div className="guide-glossary">
         <div className="guide-section-heading"><span>Working vocabulary</span><h3>Precise distinctions, optional names.</h3><p>These terms describe different layers. None is allowed to silently stand in for musical quality.</p></div>
         <dl>{GLOSSARY.map(([term, meaning]) => <div key={term}><dt>{term}</dt><dd>{meaning}</dd></div>)}</dl>
+      </div>
+
+      <div className="learning-check">
+        <div className="learning-check-heading">
+          <span>Reasoning check · stays on this device</span>
+          <h3>Can you predict what the model will say?</h3>
+          <p>This is practice, not a grade or a participant study. Choose the strongest explanation, reveal the reasoning, then test it in the relevant lab.</p>
+          <strong>{String(checkIndex + 1).padStart(2, "0")} / {String(LEARNING_CHECKS.length).padStart(2, "0")}</strong>
+        </div>
+
+        <div className="learning-check-question">
+          <fieldset>
+            <legend>{check.prompt}</legend>
+            {check.options.map((option, index) => (
+              <label key={option} className={answerRevealed && index === check.answer ? "is-answer" : ""}>
+                <input
+                  ref={index === 0 ? firstAnswerRef : undefined}
+                  type="radio"
+                  name={`learning-check-${checkIndex}`}
+                  value={index}
+                  checked={selectedAnswer === index}
+                  disabled={answerRevealed}
+                  onChange={() => setSelectedAnswer(index)}
+                />
+                <span>{option}</span>
+              </label>
+            ))}
+          </fieldset>
+
+          <button
+            type="button"
+            onClick={revealAnswer}
+            disabled={selectedAnswer === null}
+            aria-disabled={answerRevealed}
+          >
+            {answerRevealed ? "Reasoning checked" : "Check my reasoning"}
+          </button>
+
+          {answerRevealed ? (
+            <div className="learning-check-feedback" aria-live="polite">
+              <span>{answerIsCorrect ? "Reasoning holds" : "Revisit this layer"}</span>
+              <p>{check.explanation}</p>
+              {isLastCheck ? <strong>{correctCount} of {LEARNING_CHECKS.length} explanations matched on this pass.</strong> : null}
+              <div>
+                <button type="button" onClick={() => onNavigate(check.destination)}>{check.action}</button>
+                <button type="button" onClick={nextCheck}>{isLastCheck ? "Restart check" : "Next question"}</button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="safety-guide">

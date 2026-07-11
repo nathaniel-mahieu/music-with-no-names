@@ -5353,6 +5353,153 @@ footer a {
 .guide-glossary dt { color: var(--guide-gold); font-family: var(--font-mono), monospace; font-size: 0.7rem; }
 .guide-glossary dd { margin: 12px 0 0; color: var(--muted); font-size: 0.68rem; line-height: 1.58; }
 
+.learning-check {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.65fr) minmax(0, 1.35fr);
+  gap: 1px;
+  border-bottom: 1px solid var(--line);
+  background: var(--line);
+}
+
+.learning-check-heading,
+.learning-check-question {
+  padding: 38px 34px;
+  background: var(--surface-raised);
+}
+
+.learning-check-heading > span {
+  color: var(--guide-blue);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.learning-check-heading h3 {
+  margin: 13px 0 12px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.65rem;
+  font-weight: 400;
+  line-height: 1.12;
+}
+
+.learning-check-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.65;
+}
+
+.learning-check-heading > strong {
+  display: block;
+  margin-top: 28px;
+  color: var(--guide-gold);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+}
+
+.learning-check-question fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.learning-check-question legend {
+  margin-bottom: 20px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.25rem;
+  line-height: 1.25;
+}
+
+.learning-check-question label {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+
+.learning-check-question label:has(input:checked) {
+  border-color: var(--guide-gold);
+  background: color-mix(in srgb, var(--guide-gold) 8%, var(--surface-soft));
+}
+
+.learning-check-question label.is-answer {
+  border-style: double;
+  border-color: var(--positive);
+}
+
+.learning-check-question label span {
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.learning-check-question > button,
+.learning-check-feedback button {
+  min-height: 44px;
+  padding: 0 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--foreground);
+  background: transparent;
+  font: inherit;
+  font-size: 0.67rem;
+  cursor: pointer;
+}
+
+.learning-check-question > button {
+  margin-top: 18px;
+  border-color: var(--guide-gold);
+  color: var(--guide-gold);
+}
+
+.learning-check-question > button:disabled,
+.learning-check-question > button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.learning-check-feedback {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.learning-check-feedback > span {
+  color: var(--guide-gold);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.learning-check-feedback p,
+.learning-check-feedback > strong {
+  display: block;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+
+.learning-check-feedback > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.learning-check-feedback button:first-child {
+  border-color: var(--guide-blue);
+  color: var(--guide-blue);
+}
+
 .safety-guide {
   display: grid;
   grid-template-columns: minmax(210px, 0.45fr) 1.55fr;
@@ -5414,6 +5561,7 @@ footer a {
   .guide-steps { grid-template-columns: repeat(3, 1fr); }
   .guide-steps article:nth-child(3) { border-right: 0; }
   .guide-glossary dl { grid-template-columns: 1fr 1fr; }
+  .learning-check { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 680px) {
@@ -5431,6 +5579,8 @@ footer a {
   .transparency-registry dl > div { border-right: 0; border-bottom: 1px solid var(--line); }
   .guide-next { grid-template-columns: 1fr; }
   .guide-next button { width: 100%; }
+  .learning-check-heading, .learning-check-question { padding: 28px 18px; }
+  .learning-check-feedback > div { display: grid; }
 }
 
 @media (max-width: 440px) {

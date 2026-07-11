@@ -470,6 +470,7 @@ Objective: ensure that the experience is scientifically honest, musically useful
 - [ ] **Q10.9** Conduct listening studies that keep model predictions separate from self-reported experience. (A consent, randomization, condition, and data-separation protocol is published; participant sessions remain.)
 - [x] **Q10.10** Publish limitations, model cards, analysis versions, dataset provenance, and research citations.
 - [x] **Q10.11** Polish phone navigation, minimum interactive target sizes, responsive label separation, and reduced-motion-aware programmatic scrolling.
+- [x] **Q10.12** Add an in-product conceptual self-check with prediction questions, explanatory feedback, and direct evidence-lab links while keeping participant validation as a separate gate.
 
 Exit gate:
 
@@ -607,4 +608,4 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Versioned Atlas schema, selectable axes/layers, provenance, and uncertainty encodings implemented.
 - [x] Transparent learned preference terrain and repeated-listening response history implemented.
 
-The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.
+All locally authorized roadmap implementation packages are complete. Remaining unchecked release gates require real assistive technology and audio devices, recruited comprehension/listening participants, or explicit authorization for a consented cohort backend.

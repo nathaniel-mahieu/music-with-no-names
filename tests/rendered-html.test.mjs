@@ -73,6 +73,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(guideLab, /manipulation before terminology/);
   assert.match(guideLab, /Calibrate low\. Compare briefly/);
   assert.match(guideLab, /Every number has a scope and version/);
+  assert.match(guideLab, /Can you predict what the model will say/);
+  assert.match(guideLab, /Reasoning holds/);
+  assert.match(guideLab, /This is practice, not a grade or a participant study/);
+  assert.match(guideLab, /firstAnswerRef\.current\?\.focus/);
   assert.match(ratioLab, /exponentialRampToValueAtTime\(0\.14/);
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
