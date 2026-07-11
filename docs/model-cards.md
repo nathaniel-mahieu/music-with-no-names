@@ -58,4 +58,5 @@ These cards describe educational models used by Music With No Names. A model out
 - No scalar may be called goodness without listener, purpose, context, uncertainty, and visible components.
 - Changes to formulas or semantics require a version change and regression fixtures.
 - Empirical anchors and prohibited claims are recorded in [research-ledger.md](./research-ledger.md).
+- Reproducible checks and their limits are recorded in [validation-report.md](./validation-report.md).
 - Dataset and fixture origins are recorded in [data-provenance.md](./data-provenance.md).

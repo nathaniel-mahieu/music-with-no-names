@@ -66,6 +66,12 @@ export function pairRoughness(first: SpectralComponent, second: SpectralComponen
   return Math.max(0, first.amplitude * second.amplitude * shape);
 }
 
+export function roughnessPeakSeparationHz(lowerFrequencyHz: number) {
+  if (!Number.isFinite(lowerFrequencyHz) || lowerFrequencyHz <= 0) throw new RangeError("Lower frequency must be positive.");
+  const scale = 0.24 / (0.021 * lowerFrequencyHz + 19);
+  return Math.log(5.75 / 3.5) / ((5.75 - 3.5) * scale);
+}
+
 export function aggregateRoughness(components: SpectralComponent[]) {
   let roughness = 0;
   let normalization = 0;

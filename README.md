@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Model Registry v1.11**. It provides:
+The current milestone is **Psychoacoustic Validation v1.12**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -70,7 +70,7 @@ pnpm verify
 
 The broader development plan is in [roadmap.md](./roadmap.md).
 
-Scientific transparency is documented in [model cards](./docs/model-cards.md), [data provenance](./docs/data-provenance.md), and the [research ledger](./docs/research-ledger.md).
+Scientific transparency is documented in [model cards](./docs/model-cards.md), [data provenance](./docs/data-provenance.md), the [validation report](./docs/validation-report.md), and the [research ledger](./docs/research-ledger.md).
 
 ## Product principle
 

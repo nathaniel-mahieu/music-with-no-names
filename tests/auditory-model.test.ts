@@ -5,6 +5,8 @@ import {
   auditoryBandEnergy,
   harmonicSpectrum,
   harmonicityCandidates,
+  pairRoughness,
+  roughnessPeakSeparationHz,
   spectralOverlap,
 } from "../lib/auditory-model.ts";
 
@@ -39,4 +41,20 @@ test("projects a spectrum into declared auditory bands", () => {
   const bands = auditoryBandEnergy(harmonicSpectrum(220, 0, options));
   assert.equal(bands.length, 12);
   assert.ok(bands.every((value) => Number.isFinite(value) && value >= 0));
+});
+
+test("simple-tone roughness peaks near the declared critical-band fraction", () => {
+  for (const lowerHz of [250, 500, 1000]) {
+    const expectedPeak = roughnessPeakSeparationHz(lowerHz);
+    let numericalPeak = 1;
+    let maximum = -1;
+    for (let separation = 1; separation <= 180; separation += 0.25) {
+      const value = pairRoughness(
+        { frequencyHz: lowerHz, amplitude: 1, kind: "partial", source: 0, partialIndex: 1 },
+        { frequencyHz: lowerHz + separation, amplitude: 1, kind: "partial", source: 1, partialIndex: 1 },
+      );
+      if (value > maximum) { maximum = value; numericalPeak = separation; }
+    }
+    assert.ok(Math.abs(numericalPeak - expectedPeak) < 0.3);
+  }
 });

@@ -459,7 +459,7 @@ Exit gate:
 Objective: ensure that the experience is scientifically honest, musically useful, robust, and pleasant to use.
 
 - [x] **Q10.1** Validate ratio, waveform, spectrum, periodicity, and timing math against analytic fixtures.
-- [ ] **Q10.2** Compare psychoacoustic outputs with published test conditions where reproduction is feasible.
+- [x] **Q10.2** Compare psychoacoustic outputs with published test conditions where reproduction is feasible.
 - [ ] **Q10.3** Test all core flows with keyboard navigation, screen readers, reduced motion, and non-color encodings.
 - [x] **Q10.4** Add hearing-safety guidance, volume calibration guidance, and visible playback state.
 - [ ] **Q10.5** Test low-powered devices, headphones, phone speakers, and multiple browser audio implementations.
