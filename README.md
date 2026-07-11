@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Contextual Musicality Matrix v1.9**. It provides:
+The current milestone is **Analytic Validation v1.10**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -33,6 +33,7 @@ The current milestone is **Contextual Musicality Matrix v1.9**. It provides:
 - A manipulation-first learning path from physical relationships to listener-conditioned experience.
 - Hearing-safety and level-calibration guidance embedded in the product.
 - Architecture decisions, a first-principles glossary, and a research/limitations ledger.
+- Closed-form regression fixtures for waveform samples, ratio repetition, harmonic spectra, periodicity evidence, tempo, and nested timing phase.
 - Four-voice harmonic fields with 2/3/5/7 prime-exponent coordinates.
 - Three-to-six-source fields with independent register realization, amplitude, and harmonic-spectrum complexity.
 - Optional octave folding, just-to-equal approximation morphing, and continuous voice-leading distance.

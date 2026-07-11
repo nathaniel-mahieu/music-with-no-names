@@ -19,6 +19,17 @@ export type PartialCoincidence = {
   errorCents: number;
 };
 
+export function sineSample(frequencyHz: number, timeSeconds: number, phaseRadians = 0) {
+  if (!Number.isFinite(frequencyHz) || frequencyHz <= 0) throw new RangeError("Frequency must be positive.");
+  if (!Number.isFinite(timeSeconds) || !Number.isFinite(phaseRadians)) throw new RangeError("Time and phase must be finite.");
+  return Math.sin(2 * Math.PI * frequencyHz * timeSeconds + phaseRadians);
+}
+
+export function normalizedWaveSum(frequenciesHz: number[], timeSeconds: number) {
+  if (frequenciesHz.length === 0) throw new RangeError("At least one frequency is required.");
+  return frequenciesHz.reduce((sum, frequencyHz) => sum + sineSample(frequencyHz, timeSeconds), 0) / frequenciesHz.length;
+}
+
 export function greatestCommonDivisor(a: number, b: number): number {
   let x = Math.abs(Math.trunc(a));
   let y = Math.abs(Math.trunc(b));

@@ -14,6 +14,8 @@ import {
   commonPeriodSeconds,
   findCoincidingPartials,
   harmonicPartials,
+  normalizedWaveSum,
+  sineSample,
 } from "@/lib/music-math";
 import { parseRatioShareState, ratioShareSearch } from "@/lib/ratio-share-state";
 import { HarmonyLab } from "./HarmonyLab";
@@ -496,23 +498,20 @@ export function RatioLab() {
       drawTone(
         colors.lower,
         height * 0.19,
-        (time) => Math.sin(2 * Math.PI * referenceHz * time),
+        (time) => sineSample(referenceHz, time),
         1.4,
       );
       drawTone(
         colors.upper,
         height * 0.19,
-        (time) => Math.sin(2 * Math.PI * referenceHz * ratio * time),
+        (time) => sineSample(referenceHz * ratio, time),
         1.4,
       );
       context.globalAlpha = 1;
       drawTone(
         colors.sum,
         height * 0.31,
-        (time) =>
-          (Math.sin(2 * Math.PI * referenceHz * time) +
-            Math.sin(2 * Math.PI * referenceHz * ratio * time)) /
-          2,
+        (time) => normalizedWaveSum([referenceHz, referenceHz * ratio], time),
         2.2,
       );
     },
@@ -659,7 +658,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.9
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.10
         </div>
       </header>
 
