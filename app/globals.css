@@ -4760,6 +4760,32 @@ footer a {
 .safety-guide li strong { font-size: 0.7rem; }
 .safety-guide li span { color: var(--muted); font-size: 0.66rem; line-height: 1.55; }
 
+.transparency-registry {
+  padding: 38px 30px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.transparency-registry > div {
+  display: grid;
+  grid-template-columns: 0.45fr 1fr 1fr;
+  align-items: end;
+  gap: 28px;
+  margin-bottom: 24px;
+}
+
+.transparency-registry > div > span { color: var(--guide-blue); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.transparency-registry h3 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: 1.55rem; font-weight: 400; }
+.transparency-registry p { margin: 0; color: var(--muted); font-size: 0.68rem; line-height: 1.6; }
+.transparency-registry dl { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border: 1px solid var(--line); }
+.transparency-registry dl > div { padding: 17px; border-right: 1px solid var(--line); }
+.transparency-registry dl > div:last-child { border-right: 0; }
+.transparency-registry dt { color: var(--muted); font-size: 0.57rem; text-transform: uppercase; }
+.transparency-registry dd { margin: 9px 0 0; }
+.transparency-registry dd strong, .transparency-registry dd span { display: block; }
+.transparency-registry dd strong { color: var(--guide-gold); font-family: var(--font-mono), monospace; font-size: 0.66rem; }
+.transparency-registry dd span { margin-top: 6px; color: var(--muted); font-size: 0.61rem; line-height: 1.45; }
+
 .guide-next {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -4782,7 +4808,7 @@ footer a {
 }
 
 @media (max-width: 680px) {
-  .guide-opening, .guide-path, .guide-glossary, .safety-guide, .guide-next { padding-right: 18px; padding-left: 18px; }
+  .guide-opening, .guide-path, .guide-glossary, .safety-guide, .transparency-registry, .guide-next { padding-right: 18px; padding-left: 18px; }
   .guide-opening { min-height: 0; padding-top: 42px; padding-bottom: 42px; }
   .guide-section-heading { grid-template-columns: 1fr; align-items: start; }
   .guide-steps { grid-template-columns: 1fr 1fr; }
@@ -4791,6 +4817,8 @@ footer a {
   .guide-principles { grid-template-columns: 1fr; }
   .guide-principles article, .guide-principles article:nth-child(2n), .guide-principles article:nth-last-child(-n + 2) { padding: 26px 18px; border-right: 0; border-bottom: 1px solid var(--line); }
   .safety-guide, .safety-guide ol { grid-template-columns: 1fr; }
+  .transparency-registry > div, .transparency-registry dl { grid-template-columns: 1fr; }
+  .transparency-registry dl > div { border-right: 0; border-bottom: 1px solid var(--line); }
   .guide-next { grid-template-columns: 1fr; }
   .guide-next button { width: 100%; }
 }

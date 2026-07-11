@@ -15,7 +15,7 @@ This ledger ties empirical claims to research anchors and marks where the produc
 - **Evidence anchor:** Large and Jones modeled attending rhythms that entrain to time-varying event structure and tested predictions in listening experiments. DOI: [10.1037/0033-295X.106.1.119](https://doi.org/10.1037/0033-295X.106.1.119).
 - **Product claim allowed:** Pulse is a listener-facing hypothesis with confidence, not merely a written grid.
 - **Product claim prohibited:** One inferred pulse proves meter or groove.
-- **Implementation status:** Rhythm Lab exposes pulse-relative onset structure, microtiming, and tempo; Recording Journey offers autocorrelation pulse candidates. Multiple pulse hypotheses and tapping remain roadmap work.
+- **Implementation status:** Rhythm Lab exposes multiple pulse hypotheses, nested phase, microtiming, syncopation, tempo, and listener tapping. Recording Journey adds autocorrelation candidates, onset phase, a local tempo envelope, and syncopation evidence. These remain educational estimators rather than validated meter or groove models.
 
 ## Anticipation and musical reward
 

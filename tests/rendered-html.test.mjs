@@ -72,6 +72,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.match(guideLab, /manipulation before terminology/);
   assert.match(guideLab, /Calibrate low\. Compare briefly/);
+  assert.match(guideLab, /Every number has a scope and version/);
   assert.match(ratioLab, /exponentialRampToValueAtTime\(0\.14/);
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);

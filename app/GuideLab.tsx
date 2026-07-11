@@ -78,6 +78,16 @@ export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination
         </ol>
       </div>
 
+      <div className="transparency-registry">
+        <div><span>Model registry</span><h3>Every number has a scope and version.</h3><p>Full cards, fixture provenance, research anchors, and prohibited claims live with the source documentation.</p></div>
+        <dl>
+          <div><dt>Recording</dt><dd><strong>mwno-audio-0.2.0</strong><span>Mixed-audio descriptors are correctable hypotheses.</span></dd></div>
+          <div><dt>Prediction</dt><dd><strong>mwno-prediction-1</strong><span>Piece-local counts or a declared synthetic teaching prior.</span></dd></div>
+          <div><dt>Auditory</dt><dd><strong>mwno-ear-1</strong><span>Uncalibrated educational roughness, template, and fusion models.</span></dd></div>
+          <div><dt>Data</dt><dd><strong>local + generated</strong><span>No bundled commercial audio or hidden genre corpus.</span></dd></div>
+        </dl>
+      </div>
+
       <div className="guide-next">
         <div><span>Ready for existing music?</span><strong>Load audio privately or navigate by landmark.</strong></div>
         <button type="button" onClick={() => onNavigate("recording")}>Analyze a local recording</button>

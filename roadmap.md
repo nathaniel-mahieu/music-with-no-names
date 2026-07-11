@@ -467,7 +467,7 @@ Objective: ensure that the experience is scientifically honest, musically useful
 - [x] **Q10.7** Add an onboarding path that teaches by manipulation rather than terminology.
 - [ ] **Q10.8** Conduct comprehension tests: can users explain what changed and predict the next A/B result?
 - [ ] **Q10.9** Conduct listening studies that keep model predictions separate from self-reported experience.
-- [ ] **Q10.10** Publish limitations, model cards, analysis versions, dataset provenance, and research citations.
+- [x] **Q10.10** Publish limitations, model cards, analysis versions, dataset provenance, and research citations.
 
 Exit gate:
 
