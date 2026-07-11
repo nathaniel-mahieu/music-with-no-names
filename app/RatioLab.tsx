@@ -27,13 +27,15 @@ import { JourneyLab } from "./JourneyLab";
 import { RecordingLab } from "./RecordingLab";
 import { EarLab } from "./EarLab";
 import { GuideLab } from "./GuideLab";
+import { ScaleLab } from "./ScaleLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "guide" | "ratio" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type LabId = "guide" | "ratio" | "scale" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "guide", label: "Start" },
   { id: "ratio", label: "Ratio" },
+  { id: "scale", label: "Scale" },
   { id: "ear", label: "Ear" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
@@ -71,6 +73,15 @@ const LAB_COPY: Record<
     principleTop: "Invariant",
     principleMain: "ratio",
     principleBottom: "embodied in frequency",
+  },
+  scale: {
+    eyebrow: "Transposable scale intuition",
+    title: "Make Do movable. See the interval shape.",
+    description:
+      "Replace note letters with a relational orbit: movable syllables, unequal frequency gaps, sensory evidence, contextual pull, and an inner-hearing practice.",
+    principleTop: "Movable home",
+    principleMain: "Do → orbit",
+    principleBottom: "same relation, any register",
   },
   ear: {
     eyebrow: "Human auditory reality",
@@ -670,7 +681,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.20
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.21
         </div>
       </header>
 
@@ -905,6 +916,8 @@ export function RatioLab() {
         </div>
             </section>
           </>
+        ) : activeLab === "scale" ? (
+          <ScaleLab />
         ) : activeLab === "ear" ? (
           <EarLab />
         ) : activeLab === "harmony" ? (
@@ -924,7 +937,7 @@ export function RatioLab() {
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Roadmap phases R1 · H3 · T4 · P5 · I6 · J7 · L8 · G9</span>
+        <span>Roadmap phases R1 · S2.5 · H3 · T4 · P5 · I6 · J7 · L8 · G9</span>
       </footer>
     </main>
   );

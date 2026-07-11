@@ -17,6 +17,14 @@ This ledger ties empirical claims to research anchors and marks where the produc
 - **Product claim prohibited:** One inferred pulse proves meter or groove.
 - **Implementation status:** Rhythm Lab exposes multiple pulse hypotheses, nested phase, microtiming, syncopation, tempo, and listener tapping. Recording Journey adds autocorrelation candidates, onset phase, a local tempo envelope, and syncopation evidence. These remain educational estimators rather than validated meter or groove models.
 
+## Scale degree, tonal context, and movable coordinates
+
+- **Evidence anchor:** Krumhansl and Kessler elicited context-dependent probe-tone profiles after scales, chords, and cadences in Western tonal materials, finding stable hierarchies within those listeners and stimuli. DOI: [10.1037/0033-295X.89.4.334](https://doi.org/10.1037/0033-295X.89.4.334).
+- **Learning evidence:** Krumhansl and Keil found developmental differences in judgments of tonal function, supporting the treatment of tonal hierarchy as an acquired internal organization rather than a direct readout of frequency ratio. DOI: [10.3758/BF03197636](https://doi.org/10.3758/BF03197636).
+- **Product claim allowed:** A degree can acquire contextual stability or pull relative to a declared center, and that organization can be practiced with transposable relational labels.
+- **Product claim prohibited:** A scale degree has a fixed tension, emotion, or goodness independent of sequence, style, listener, timbre, and register.
+- **Implementation status:** Scale Lab v1.21 uses movable solfège as an optional relational mnemonic, not a physical universal. Step arcs encode logarithmic frequency distance; the degree inspector keeps spectral evidence separate from scale context; the inner-hearing exercise trains prediction and correction. The presets are teaching examples, not a claim that one tuning or scale system is natural or culturally neutral.
+
 ## Sonority, consonance, and emotional affordance
 
 - **Evidence anchor:** Eerola and Lahdelma found that roughness, harmonicity/familiarity, and spectral-envelope descriptors contribute to consonance ratings across several chord datasets, while also documenting strong predictor collinearity and stimulus limitations. DOI: [10.1177/20592043211030471](https://doi.org/10.1177/20592043211030471).

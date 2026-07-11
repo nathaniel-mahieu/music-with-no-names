@@ -455,6 +455,23 @@ Exit gate:
 - Tense, sad, rough, or surprising music can still be represented as pleasurable.
 - No screen silently converts consonance, popularity, familiarity, or model confidence into goodness.
 
+### S2.5 — Transposable scales and inner hearing
+
+Objective: teach scales as octave-closing relationship patterns, using movable syllables and physical geometry instead of absolute note letters.
+
+- [x] **S2.5.1** Add a movable-Do Scale Lab whose relational structure survives changes of reference frequency.
+- [x] **S2.5.2** Render scale steps as proportional logarithmic-frequency arcs and rails, including a 3 · 2 · 2 · 3 · 2 five-degree fingerprint.
+- [x] **S2.5.3** Separate sensory interaction, context-dependent pull, and listener-dependent musical value at the selected-degree level.
+- [x] **S2.5.4** Show equal-division ratios beside nearby small-integer landmarks without presenting the approximation as the scale’s identity.
+- [x] **S2.5.5** Add a safe listen–imagine–reveal exercise for inner hearing.
+- [x] **S2.5.6** Test octave closure, cyclic rotation, transposition invariance, responsive layout, keyboard semantics, and forced-color states.
+
+Exit gate:
+
+- A learner can move Do or its absolute frequency and explain what remains invariant.
+- A learner can read wide and narrow scale gaps without translating them into note letters.
+- No physical metric is presented as a universal measure of stability, emotion, or goodness.
+
 ### Q10 — Validation, accessibility, and release hardening
 
 Objective: ensure that the experience is scientifically honest, musically useful, robust, and pleasant to use.
@@ -488,6 +505,7 @@ Release candidate: **v1.0 — Music With No Names**
 F0 Foundation
   └─ R1 Ratio Lab
        └─ A2 Auditory reality
+            ├─ S2.5 Transposable scales + inner hearing
             ├─ H3 Multi-tone harmony
             └─ T4 Rhythm and embodiment
                  └─ P5 Pattern and prediction
@@ -603,6 +621,7 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Private local recording import, worker analysis, correction controls, and portable profiles implemented.
 - [x] Ear Lab sensory models and independent human reports implemented.
 - [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
+- [x] Movable-Do scale orbit, physical step fingerprint, degree evidence, and inner-hearing practice implemented.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 - [x] Event self-similarity and incremental uncertainty/surprise trace implemented.

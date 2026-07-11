@@ -2,19 +2,21 @@
 
 import { useRef, useState } from "react";
 
-type Destination = "ratio" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type Destination = "ratio" | "scale" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const PATH: { number: string; title: string; question: string; destination: Destination; action: string }[] = [
   { number: "01", title: "Relationship", question: "What remains the same when every frequency moves?", destination: "ratio", action: "Open Ratio Lab" },
-  { number: "02", title: "Auditory reality", question: "Why does the same ratio change with spectrum and register?", destination: "ear", action: "Open Ear Lab" },
-  { number: "03", title: "Time and embodiment", question: "How do duration ratios become pulse, resistance, and movement?", destination: "rhythm", action: "Open Rhythm Lab" },
-  { number: "04", title: "Expectation and form", question: "How can rupture, uncertainty, and return make a larger arc?", destination: "journey", action: "Open Journey" },
-  { number: "05", title: "Listener and purpose", question: "When does a musical strategy fit this person and goal?", destination: "personal", action: "Open Personal Lens" },
+  { number: "02", title: "Scale shape", question: "How can movable Do turn unequal frequency gaps into a transposable map?", destination: "scale", action: "Open Scale Lab" },
+  { number: "03", title: "Auditory reality", question: "Why does the same ratio change with spectrum and register?", destination: "ear", action: "Open Ear Lab" },
+  { number: "04", title: "Time and embodiment", question: "How do duration ratios become pulse, resistance, and movement?", destination: "rhythm", action: "Open Rhythm Lab" },
+  { number: "05", title: "Expectation and form", question: "How can rupture, uncertainty, and return make a larger arc?", destination: "journey", action: "Open Journey" },
+  { number: "06", title: "Listener and purpose", question: "When does a musical strategy fit this person and goal?", destination: "personal", action: "Open Personal Lens" },
 ];
 
 const GLOSSARY = [
   ["frequency", "physical cycles per second"],
   ["pitch", "a listener’s organization of periodic sound"],
+  ["scale degree", "a position relative to a movable center, not an absolute letter"],
   ["roughness", "a sensory-interaction model for nearby components"],
   ["harmonicity", "fit to one or more harmonic templates"],
   ["fusion", "a report or hypothesis that sources form one object"],

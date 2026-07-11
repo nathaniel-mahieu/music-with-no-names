@@ -2,9 +2,13 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Keyboard + High Contrast Hardening v1.20**. It provides:
+The current milestone is **Movable Scale + Inner Hearing v1.21**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
+- A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
+- Physical step geometry for seven-, five-, and six-degree scales, including the 3 · 2 · 2 · 3 · 2 fingerprint.
+- Degree-level frequency ratios, nearby small-integer landmarks, spectral-interaction evidence, and contextual-role explanations kept visibly separate.
+- A listen–imagine–reveal exercise for practicing inner hearing without a keyboard-shaped map.
 - A continuous frequency-ratio control from 1:1 through 2:1.
 - Small-integer landmarks without forced snapping.
 - Sine and harmonic-complex timbres.

@@ -40,6 +40,7 @@ test("server-renders the guided learning product surface", async () => {
   assert.match(html, /Goodness is conditional/i);
   assert.match(html, />Start<\/button>/i);
   assert.match(html, />Ratio<\/button>/i);
+  assert.match(html, />Scale<\/button>/i);
   assert.match(html, />Ear<\/button>/i);
   assert.match(html, />Harmony<\/button>/i);
   assert.match(html, />Rhythm<\/button>/i);
@@ -51,12 +52,13 @@ test("server-renders the guided learning product surface", async () => {
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, guideLab, ratioLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
+  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/GuideLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/EarLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
@@ -81,6 +83,11 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
+  assert.match(scaleLab, /Learn the shape of a scale without note letters/);
+  assert.match(scaleLab, /Move Do to the next landmark/);
+  assert.match(scaleLab, /imagine before reveal/i);
+  assert.match(scaleLab, /frequency interaction ≠ structural pull ≠ musical value/);
+  assert.match(scaleLab, /Hear Do \+ /);
   assert.match(earLab, /Separate sensory models from musical value/);
   assert.match(earLab, /modelPredictions/);
   assert.match(earLab, /humanRatings/);
