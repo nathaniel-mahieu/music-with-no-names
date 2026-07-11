@@ -28,7 +28,7 @@ test("degree relationships transpose while absolute frequency changes", () => {
 test("fingerprint width is proportional to octave share", () => {
   const fingerprint = scaleFingerprint([3, 2, 2, 3, 2]);
   assert.ok(Math.abs(fingerprint.reduce((sum, segment) => sum + segment.share, 0) - 1) < 1e-12);
-  assert.deepEqual(fingerprint.map((segment) => segment.width), ["open", "middle", "middle", "open", "middle"]);
+  assert.deepEqual(fingerprint.map((segment) => segment.width), ["large", "medium", "medium", "large", "medium"]);
 });
 
 test("the five-step solfege overlay matches its home-relative offsets", () => {
@@ -41,14 +41,14 @@ test("the five-step solfege overlay matches its home-relative offsets", () => {
 test("step ratios and interval recipes expose physical gap accumulation", () => {
   assert.ok(Math.abs(stepFrequencyRatio(12) - 2) < 1e-12);
   assert.ok(Math.abs(stepFrequencyRatio(2) - 2 ** (2 / 12)) < 1e-12);
-  assert.deepEqual(intervalStepRecipe([2, 2, 1, 2, 2, 2, 1], 4).map((segment) => segment.width), ["middle", "middle", "close", "middle"]);
+  assert.deepEqual(intervalStepRecipe([2, 2, 1, 2, 2, 2, 1], 4).map((segment) => segment.width), ["medium", "medium", "small", "medium"]);
 });
 
 test("the same physical gap keeps the same label across scales", () => {
   const seven = scaleFingerprint([2, 2, 1, 2, 2, 2, 1]);
   const five = scaleFingerprint([3, 2, 2, 3, 2]);
-  assert.equal(seven[0].width, "middle");
-  assert.equal(five[1].width, "middle");
+  assert.equal(seven[0].width, "medium");
+  assert.equal(five[1].width, "medium");
 });
 
 test("inner-hearing challenges are scale-specific and valid without modulo wrapping", () => {

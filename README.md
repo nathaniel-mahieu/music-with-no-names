@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Guided Musical Intuition v1.22**. It provides:
+The current milestone is **Clear Listening + Matched Levels v1.23**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
@@ -10,8 +10,10 @@ The current milestone is **Guided Musical Intuition v1.22**. It provides:
 - Degree-level frequency ratios, nearby small-integer landmarks, spectral-interaction evidence, and contextual-role explanations kept visibly separate.
 - A listen–imagine–reveal exercise for practicing inner hearing without a keyboard-shaped map.
 - A three-stage lesson that moves from felt home, through interval construction, to contextual prediction before exposing measurements.
-- Correct chromatic movable-Do spelling for the five-step open orbit: Do · Me · Fa · Sol · Te.
-- Physically invariant close/middle/open gap labels, so the same 200-cent distance never changes category between scales.
+- Correct chromatic movable-Do spelling for the five-pitch spacious path: Do · Me · Fa · Sol · Te.
+- Physically invariant small/medium/large gap labels, so the same 200-cent distance never changes category between scales.
+- Plain-language, action-first guidance across the start page, lab introductions, and all three Scale lessons.
+- A shared −28 dBFS nominal synthesis target, equal-power voice mixing, RMS-matched timbres, one safety-compressor policy, and RMS-plus-peak normalization for recordings.
 - Harmonic-complex playback matched to the displayed simultaneous-spectrum model, with melodic and overlapping intervals taught separately.
 - Scale-specific inner-hearing phrases that require an answer and restore the missing degree inside its phrase.
 - A continuous frequency-ratio control from 1:1 through 2:1.

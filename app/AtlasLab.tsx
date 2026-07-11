@@ -429,13 +429,11 @@ export function AtlasLab() {
     <section className="advanced-lab atlas-lab" aria-labelledby="atlas-title">
       <div className="lab-intro atlas-intro">
         <div>
-          <p className="section-kicker">Experience atlas · recordings as trajectories</p>
-          <h2 id="atlas-title">There is no universal good region.</h2>
+          <p className="section-kicker">Atlas · existing music as landmarks</p>
+          <h2 id="atlas-title">Compare musical paths, not quality scores.</h2>
         </div>
         <p>
-          The map locates curatorial hypotheses about recordings. Move your preferred
-          tension, surprise, and drive: the proximity halos change because musical value
-          belongs to a listener, a purpose, and a moment in time.
+          Each path is a teaching profile, not a verdict. Change your listening goal or preferred tension, surprise, and drive to see why the same music can fit different moments.
         </p>
       </div>
 

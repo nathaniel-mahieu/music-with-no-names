@@ -11,6 +11,7 @@ import {
   type EventSelection,
   type MusicalEvent,
 } from "@/lib/musical-sequence";
+import { SYNTH_MASTER_GAIN, configureSafetyCompressor } from "@/lib/audio-level";
 
 type Lens = "original" | "repeat" | "variation" | "unexpected" | "delay";
 type PredictionModel = "piece" | "synthetic" | "personal";
@@ -199,9 +200,8 @@ export function JourneyLab() {
       const compressor = context.createDynamicsCompressor();
       const now = context.currentTime;
       master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.11, now + 0.05);
-      compressor.threshold.setValueAtTime(-16, now);
-      compressor.ratio.setValueAtTime(8, now);
+      master.gain.exponentialRampToValueAtTime(SYNTH_MASTER_GAIN, now + 0.05);
+      configureSafetyCompressor(compressor, now);
       master.connect(compressor).connect(context.destination);
       const sources = selectedEvents.map((event, index) => {
         const source = context.createOscillator();
@@ -213,8 +213,9 @@ export function JourneyLab() {
         source.frequency.setValueAtTime(180 * event.ratioToReference * (transform === "register" ? 2 : 1), startsAt);
         source.type = transform === "smooth" ? "sine" : event.timbre === "pure" ? "sine" : event.timbre === "harmonic" ? "triangle" : "sawtooth";
         gain.gain.setValueAtTime(0.0001, startsAt);
-        gain.gain.exponentialRampToValueAtTime(0.05 + event.amplitude * 0.05, startsAt + 0.025);
-        gain.gain.setValueAtTime(0.05 + event.amplitude * 0.05, Math.max(startsAt + 0.025, endsAt - 0.05));
+        const eventGain = 0.6 + event.amplitude * 0.4;
+        gain.gain.exponentialRampToValueAtTime(eventGain, startsAt + 0.025);
+        gain.gain.setValueAtTime(eventGain, Math.max(startsAt + 0.025, endsAt - 0.05));
         gain.gain.linearRampToValueAtTime(0.0001, endsAt);
         source.connect(gain).connect(master);
         source.start(startsAt);
@@ -255,12 +256,11 @@ export function JourneyLab() {
     <section className="advanced-lab journey-lab" aria-labelledby="journey-title">
       <div className="lab-intro journey-intro">
         <div>
-          <p className="section-kicker">Journey · one identity across timescales</p>
-          <h2 id="journey-title">Musical meaning is a path through time.</h2>
+          <p className="section-kicker">Journey Lab · hear the whole and the moment</p>
+          <h2 id="journey-title">Follow a phrase as it repeats, changes, and returns.</h2>
         </div>
         <p>
-          This generated gesture begins with recurrence, violates its own pattern, searches,
-          and returns. Select a section to connect whole-form expectation with physical events.
+          This generated phrase sets up a pattern, breaks it, searches, and returns. Select any section to hear how its role depends on the larger path.
         </p>
       </div>
 

@@ -5,28 +5,28 @@ import { useRef, useState } from "react";
 type Destination = "ratio" | "scale" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const PATH: { number: string; title: string; question: string; destination: Destination; action: string }[] = [
-  { number: "01", title: "Relationship", question: "What remains the same when every frequency moves?", destination: "ratio", action: "Open Ratio Lab" },
-  { number: "02", title: "Scale shape", question: "How can movable Do turn unequal frequency gaps into a transposable map?", destination: "scale", action: "Open Scale Lab" },
-  { number: "03", title: "Auditory reality", question: "Why does the same ratio change with spectrum and register?", destination: "ear", action: "Open Ear Lab" },
-  { number: "04", title: "Time and embodiment", question: "How do duration ratios become pulse, resistance, and movement?", destination: "rhythm", action: "Open Rhythm Lab" },
-  { number: "05", title: "Expectation and form", question: "How can rupture, uncertainty, and return make a larger arc?", destination: "journey", action: "Open Journey" },
-  { number: "06", title: "Listener and purpose", question: "When does a musical strategy fit this person and goal?", destination: "personal", action: "Open Personal Lens" },
+  { number: "01", title: "Relationship", question: "If both pitches move, what stays the same between them?", destination: "ratio", action: "Compare two pitches" },
+  { number: "02", title: "Scale shape", question: "How can Do mean home at any pitch?", destination: "scale", action: "Learn movable scales" },
+  { number: "03", title: "Hearing", question: "Why can the same interval sound different in a new register or timbre?", destination: "ear", action: "Change the sound" },
+  { number: "04", title: "Rhythm", question: "How do spacing and tempo create pulse and movement?", destination: "rhythm", action: "Build a rhythm" },
+  { number: "05", title: "Musical journey", question: "How do repetition, surprise, and return shape a phrase?", destination: "journey", action: "Follow a musical journey" },
+  { number: "06", title: "Your response", question: "How do your goal and listening history change your response?", destination: "personal", action: "Map your listening" },
 ];
 
 const GLOSSARY = [
   ["frequency", "physical cycles per second"],
-  ["pitch", "a listener’s organization of periodic sound"],
-  ["movable Do", "a culturally situated syllable for a chosen home relationship"],
-  ["interval", "multiplicative pitch distance, heard across time or in overlap"],
-  ["scale", "an octave-closing route made from an ordered set of relative gaps"],
-  ["scale degree", "a position relative to a movable center, not an absolute letter"],
-  ["transposition", "moving every absolute frequency while preserving the relationships"],
-  ["roughness", "a sensory-interaction model for nearby components"],
-  ["harmonicity", "fit to one or more harmonic templates"],
-  ["fusion", "a report or hypothesis that sources form one object"],
+  ["pitch", "how high or low a sound seems"],
+  ["movable Do", "the syllable for whichever pitch is treated as home"],
+  ["interval", "the pitch distance between two sounds, heard in sequence or together"],
+  ["scale", "an ordered gap pattern that repeats when frequency doubles"],
+  ["scale degree", "one position relative to Do"],
+  ["transposition", "moving every pitch together while keeping their relationships"],
+  ["roughness", "modeled interaction between nearby frequencies that overlap in time"],
+  ["harmonicity", "how well spectral components fit a harmonic pattern"],
+  ["fusion", "whether several sounds seem to form one sound object"],
   ["tension", "felt or modeled pressure toward continuation or change"],
   ["surprise", "information after an event under a declared predictor"],
-  ["liking", "a listener report in one context and moment"],
+  ["liking", "what one listener reports in one moment and context"],
 ];
 
 const LEARNING_CHECKS: {
@@ -127,24 +127,24 @@ export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination
     <section className="advanced-lab guide-lab" aria-labelledby="guide-title">
       <div className="guide-opening">
         <div>
-          <p className="section-kicker">Start here · manipulation before terminology</p>
-          <h2 id="guide-title">Music without names begins with one question.</h2>
-          <p>What changed physically, what stayed invariant, what did a model predict, and what did <em>you</em> experience?</p>
-          <button type="button" onClick={() => onNavigate("ratio")}>Begin with two vibrations <span aria-hidden="true">→</span></button>
+          <p className="section-kicker">Start here · change one thing, then listen</p>
+          <h2 id="guide-title">Music begins with relationships you can hear.</h2>
+          <p>Change one part of a sound or phrase. Ask three things: what changed, what stayed the same, and what changed for <em>you</em>?</p>
+          <button type="button" onClick={() => onNavigate("ratio")}>Compare two pitches <span aria-hidden="true">→</span></button>
         </div>
         <div className="representation-chain" role="img" aria-label="Physical sound becomes auditory evidence, temporal expectation, and a listener response conditioned by context">
-          <div><span>physical</span><strong>frequency · spectrum · time</strong></div>
+          <div><span>sound</span><strong>frequency · overtones · timing</strong></div>
           <i aria-hidden="true">→</i>
-          <div><span>perceptual</span><strong>roughness · fusion · pulse</strong></div>
+          <div><span>hearing</span><strong>pitch · blend · pulse</strong></div>
           <i aria-hidden="true">→</i>
-          <div><span>structural</span><strong>recurrence · uncertainty · release</strong></div>
+          <div><span>music over time</span><strong>repetition · expectation · return</strong></div>
           <i aria-hidden="true">→</i>
-          <div><span>situated</span><strong>listener · purpose · history</strong></div>
+          <div><span>you in context</span><strong>memory · culture · purpose</strong></div>
         </div>
       </div>
 
       <div className="guide-path">
-        <div className="guide-section-heading"><span>Learning path</span><h3>Build intuition by changing one factor.</h3><p>You do not need to finish in order. Each lab keeps physical evidence, model hypotheses, and human reports visibly separate.</p></div>
+        <div className="guide-section-heading"><span>Learning path</span><h3>Learn by changing one thing at a time.</h3><p>Start anywhere. Each lab separates what happened in the sound, what a model estimates, and what you report hearing.</p></div>
         <div className="guide-steps">
           {PATH.map((step) => (
             <article key={step.number}>
@@ -158,22 +158,22 @@ export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination
       </div>
 
       <div className="guide-principles">
-        <article><span>Invariant + embodied</span><strong>3:2 is a relationship. 220 → 330 Hz is one bodily realization.</strong><p>Keep both. Human hearing changes with absolute register, spectrum, level, duration, and environment.</p></article>
-        <article><span>No consonance meter</span><strong>Roughness, harmonicity, stability, tension, and liking are different variables.</strong><p>They can correlate in a situation without becoming synonyms or universal laws.</p></article>
+        <article><span>Same relationship, different sound</span><strong>3:2 names the relationship. Playing 220 and 330 Hz places it in one particular register.</strong><p>Move both pitches and the ratio stays the same, while the physical sound and your hearing can change.</p></article>
+        <article><span>Keep the measures separate</span><strong>Roughness, harmonicity, stability, tension, and liking answer different questions.</strong><p>They can move together in one situation and apart in another.</p></article>
         <article><span>A song is a path</span><strong>A locally abrasive event can support a satisfying return.</strong><p>Judge moments within recurrence, prediction, surprise, transformation, memory, and purpose.</p></article>
-        <article><span>Goodness is conditional</span><strong>Ask “fit for whom, for what, and with what uncertainty?”</strong><p>The Atlas and Personal Lens visualize a response terrain—not an objectively good region.</p></article>
+        <article><span>Good for whom—and for what?</span><strong>Ask who is listening, what they want from the music, and how sure the evidence is.</strong><p>The Atlas and Personal Lens map responses, not an objectively good region.</p></article>
       </div>
 
       <div className="guide-glossary">
-        <div className="guide-section-heading"><span>Working vocabulary</span><h3>Precise distinctions, optional names.</h3><p>These terms describe different layers. None is allowed to silently stand in for musical quality.</p></div>
+        <div className="guide-section-heading"><span>A few useful terms</span><h3>Names for relationships you can already hear.</h3><p>The app introduces these terms only when they help describe an experience. None is a musical-quality score.</p></div>
         <dl>{GLOSSARY.map(([term, meaning]) => <div key={term}><dt>{term}</dt><dd>{meaning}</dd></div>)}</dl>
       </div>
 
       <div className="learning-check">
         <div className="learning-check-heading">
-          <span>Reasoning check · stays on this device</span>
-          <h3>Can you predict what the model will say?</h3>
-          <p>This is practice, not a grade or a participant study. Choose the strongest explanation, reveal the reasoning, then test it in the relevant lab.</p>
+          <span>Quick check · stays on this device</span>
+          <h3>Can you tell what changed?</h3>
+          <p>This is a self-check, not a test of musical ability. Choose the clearest explanation, read why, then try it in the related lab.</p>
           <strong>{String(checkIndex + 1).padStart(2, "0")} / {String(LEARNING_CHECKS.length).padStart(2, "0")}</strong>
         </div>
 
@@ -202,17 +202,17 @@ export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination
             disabled={selectedAnswer === null}
             aria-disabled={answerRevealed}
           >
-            {answerRevealed ? "Reasoning checked" : "Check my reasoning"}
+            {answerRevealed ? "Explanation shown" : "Show why"}
           </button>
 
           {answerRevealed ? (
             <div className="learning-check-feedback" aria-live="polite">
-              <span>{answerIsCorrect ? "Reasoning holds" : "Revisit this layer"}</span>
+              <span>{answerIsCorrect ? "That fits the model here" : "Separate the layers once more"}</span>
               <p>{check.explanation}</p>
-              {isLastCheck ? <strong>{correctCount} of {LEARNING_CHECKS.length} explanations matched on this pass.</strong> : null}
+              {isLastCheck ? <strong>You matched {correctCount} of {LEARNING_CHECKS.length} explanations. Revisit any distinction that still feels uncertain.</strong> : null}
               <div>
                 <button type="button" onClick={() => onNavigate(check.destination)}>{check.action}</button>
-                <button type="button" onClick={nextCheck}>{isLastCheck ? "Restart check" : "Next question"}</button>
+                <button type="button" onClick={nextCheck}>{isLastCheck ? "Start over" : "Next question"}</button>
               </div>
             </div>
           ) : null}
@@ -223,14 +223,14 @@ export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination
         <div><span>Hearing safety</span><h3>Calibrate low. Compare briefly.</h3></div>
         <ol>
           <li><strong>Turn your device down first.</strong><span>Begin near silence, then raise only enough to hear the relationship.</span></li>
-          <li><strong>Match level before judging A/B examples.</strong><span>Louder can seem fuller or better even when the intended variable is unchanged.</span></li>
+          <li><strong>Keep A and B equally loud.</strong><span>A louder example can seem fuller or better even when loudness is not the change being tested.</span></li>
           <li><strong>Stop if sound is uncomfortable.</strong><span>The app uses conservative gain and limiters, but your device, headphones, hearing, and environment still matter.</span></li>
           <li><strong>Use short comparisons.</strong><span>Rest your ears and avoid treating this educational tool as a calibrated hearing test.</span></li>
         </ol>
       </div>
 
       <div className="transparency-registry">
-        <div><span>Model registry</span><h3>Every number has a scope and version.</h3><p>Full cards, fixture provenance, research anchors, and prohibited claims live with the source documentation.</p></div>
+        <div><span>How the models are made</span><h3>Know what each number can—and cannot—tell you.</h3><p>The project notes list each model’s method, version, source examples, and limits.</p></div>
         <dl>
           <div><dt>Recording</dt><dd><strong>mwno-audio-0.3.0</strong><span>Mixed-audio descriptors are correctable hypotheses.</span></dd></div>
           <div><dt>Prediction</dt><dd><strong>mwno-prediction-1</strong><span>Piece-local counts or a declared synthetic teaching prior.</span></dd></div>

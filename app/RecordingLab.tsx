@@ -8,6 +8,7 @@ import {
   type RecordingAnalysis,
 } from "@/lib/audio-analysis";
 import { approximateRatio, findCoincidingPartials } from "@/lib/music-math";
+import { configureSafetyCompressor, recordingPlaybackGain, samplePeak, sampleRms } from "@/lib/audio-level";
 
 type Status = "idle" | "decoding" | "analyzing" | "ready" | "error";
 type Playback = { context: AudioContext; source: AudioBufferSourceNode; gain: GainNode };
@@ -82,6 +83,7 @@ export function RecordingLab() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
   const bufferRef = useRef<AudioBuffer | null>(null);
+  const playbackGainRef = useRef(1);
   const playbackRef = useRef<Playback | null>(null);
 
   const acceptAnalysis = (result: RecordingAnalysis) => {
@@ -125,9 +127,8 @@ export function RecordingLab() {
       const now = context.currentTime;
       source.buffer = bufferRef.current;
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.42, now + 0.06);
-      compressor.threshold.setValueAtTime(-10, now);
-      compressor.ratio.setValueAtTime(8, now);
+      gain.gain.exponentialRampToValueAtTime(playbackGainRef.current, now + 0.06);
+      configureSafetyCompressor(compressor, now);
       source.connect(gain).connect(compressor).connect(context.destination);
       source.start();
       source.onended = () => {
@@ -162,6 +163,8 @@ export function RecordingLab() {
       const decoded = await context.decodeAudioData(await file.arrayBuffer());
       await context.close();
       bufferRef.current = decoded;
+      const channels = Array.from({ length: decoded.numberOfChannels }, (_, channel) => decoded.getChannelData(channel));
+      playbackGainRef.current = recordingPlaybackGain(samplePeak(channels), sampleRms(channels));
       setHasAudio(true);
       const mono = new Float32Array(decoded.length);
       for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
@@ -202,6 +205,7 @@ export function RecordingLab() {
       const buffer = new AudioBuffer({ length: playbackSamples.length, numberOfChannels: 1, sampleRate });
       buffer.copyToChannel(playbackSamples, 0);
       bufferRef.current = buffer;
+      playbackGainRef.current = recordingPlaybackGain(samplePeak([playbackSamples]), sampleRms([playbackSamples]));
       setHasAudio(true);
       const analysisStarted = performance.now();
       const result = await analyzeInWorker(samples, sampleRate, "generated recurrence + rupture.wav", 1);
@@ -322,10 +326,10 @@ export function RecordingLab() {
     <section className="advanced-lab recording-lab" aria-labelledby="recording-title">
       <div className="lab-intro recording-intro">
         <div>
-          <p className="section-kicker">Recording · private analysis workspace</p>
+          <p className="section-kicker">Recording Lab · your audio stays on this device</p>
           <h2 id="recording-title">Bring your own sound. Keep the audio here.</h2>
         </div>
-        <p>Decode and analyze a recording entirely in this browser. Exported profiles contain measurements and hypotheses—not copyrighted audio.</p>
+        <p>Choose a recording to map its level, spectrum, pitch clues, pulse clues, and changes over time. Exported profiles contain the map, never the audio.</p>
       </div>
 
       <div className="recording-import">

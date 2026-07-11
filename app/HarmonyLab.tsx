@@ -15,6 +15,12 @@ import {
   sonorityAffordances,
   sonorityPerceptionModel,
 } from "@/lib/sonority-model";
+import {
+  SYNTH_MASTER_GAIN,
+  configureSafetyCompressor,
+  equalPowerMixGains,
+  rmsMatchedHarmonicCoefficients,
+} from "@/lib/audio-level";
 
 type HarmonyAudioNodes = {
   context: AudioContext;
@@ -63,12 +69,8 @@ const MOTION_STEPS = [
 ] as const;
 
 function createHarmonicWave(context: AudioContext, partialCount: number) {
-  const real = new Float32Array(partialCount + 1);
-  const imaginary = new Float32Array(partialCount + 1);
-  for (let index = 1; index < imaginary.length; index += 1) {
-    imaginary[index] = 1 / index ** 1.2;
-  }
-  return context.createPeriodicWave(real, imaginary);
+  const imaginary = rmsMatchedHarmonicCoefficients(partialCount, 1.2);
+  return context.createPeriodicWave(new Float32Array(imaginary.length), imaginary, { disableNormalization: true });
 }
 
 function useHarmonyAudio(voices: { frequencyHz: number; amplitude: number; partialCount: number }[]) {
@@ -105,12 +107,13 @@ function useHarmonyAudio(voices: { frequencyHz: number; amplitude: number; parti
       const compressor = context.createDynamicsCompressor();
       const now = context.currentTime;
       const gains: GainNode[] = [];
-      const oscillators = voices.map((voice) => {
+      const voiceGains = equalPowerMixGains(voices.map((voice) => voice.amplitude));
+      const oscillators = voices.map((voice, index) => {
         const oscillator = context.createOscillator();
         const gain = context.createGain();
         oscillator.frequency.setValueAtTime(voice.frequencyHz, now);
         oscillator.setPeriodicWave(createHarmonicWave(context, voice.partialCount));
-        gain.gain.setValueAtTime(voice.amplitude / Math.max(3, voices.length), now);
+        gain.gain.setValueAtTime(voiceGains[index], now);
         oscillator.connect(gain).connect(master);
         oscillator.start();
         gains.push(gain);
@@ -118,11 +121,9 @@ function useHarmonyAudio(voices: { frequencyHz: number; amplitude: number; parti
       });
 
       master.gain.setValueAtTime(0.0001, now);
-      compressor.threshold.setValueAtTime(-14, now);
-      compressor.knee.setValueAtTime(20, now);
-      compressor.ratio.setValueAtTime(7, now);
+      configureSafetyCompressor(compressor, now);
       master.connect(compressor).connect(context.destination);
-      master.gain.exponentialRampToValueAtTime(0.105, now + 0.06);
+      master.gain.exponentialRampToValueAtTime(SYNTH_MASTER_GAIN, now + 0.06);
       nodesRef.current = { context, master, oscillators, gains };
       setIsPlaying(true);
     } catch {
@@ -134,13 +135,14 @@ function useHarmonyAudio(voices: { frequencyHz: number; amplitude: number; parti
     const nodes = nodesRef.current;
     if (!nodes) return;
     const now = nodes.context.currentTime;
+    const voiceGains = equalPowerMixGains(voices.map((voice) => voice.amplitude));
     nodes.oscillators.forEach((oscillator, index) => {
       oscillator.frequency.setTargetAtTime(
         voices[index].frequencyHz,
         now,
         0.018,
       );
-      nodes.gains[index].gain.setTargetAtTime(voices[index].amplitude / Math.max(3, voices.length), now, 0.018);
+      nodes.gains[index].gain.setTargetAtTime(voiceGains[index], now, 0.018);
     });
   }, [voices]);
 
@@ -315,13 +317,11 @@ export function HarmonyLab() {
     <section className="advanced-lab harmony-lab" aria-labelledby="harmony-title">
       <div className="lab-intro">
         <div>
-          <p className="section-kicker">Harmony field · three to six simultaneous sources</p>
-          <h2 id="harmony-title">When relationships become a system</h2>
+          <p className="section-kicker">Harmony Lab · three to six pitches together</p>
+          <h2 id="harmony-title">Change one voice. Hear the whole harmony shift.</h2>
         </div>
         <p>
-          A multi-tone field is more than a list of intervals. The ear can infer a
-          shared periodic origin, separate streams, or hold several possible centers at
-          once.
+          Every pair of voices creates an interval, while all the overtones combine into one sound. Move a voice and watch both layers change.
         </p>
       </div>
 
@@ -417,7 +417,7 @@ export function HarmonyLab() {
                 /></label>
                 <div className="voice-realization">
                   <label><span>Register</span><select aria-label={`${VOICE_NAMES[index]} register`} value={voiceSettings[index]?.octave ?? 0} onChange={(event) => setVoiceSetting(index, { octave: Number(event.target.value) })}><option value="-1">½×</option><option value="0">1×</option><option value="1">2×</option></select></label>
-                  <label><span>Amplitude <output>{Math.round((voiceSettings[index]?.amplitude ?? 0.7) * 100)}</output></span><input type="range" min="0.15" max="1" step="0.01" aria-label={`${VOICE_NAMES[index]} amplitude`} value={voiceSettings[index]?.amplitude ?? 0.7} onChange={(event) => setVoiceSetting(index, { amplitude: Number(event.target.value) })} /></label>
+                  <label><span>Relative level <output>{Math.round((voiceSettings[index]?.amplitude ?? 0.7) * 100)}</output></span><input type="range" min="0.15" max="1" step="0.01" aria-label={`${VOICE_NAMES[index]} relative level`} value={voiceSettings[index]?.amplitude ?? 0.7} onChange={(event) => setVoiceSetting(index, { amplitude: Number(event.target.value) })} /></label>
                   <label><span>Partials <output>{voiceSettings[index]?.partialCount ?? 9}</output></span><input type="range" min="1" max="12" step="1" aria-label={`${VOICE_NAMES[index]} partial count`} value={voiceSettings[index]?.partialCount ?? 9} onChange={(event) => setVoiceSetting(index, { partialCount: Number(event.target.value) })} /></label>
                 </div>
               </div>

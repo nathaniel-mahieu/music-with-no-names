@@ -8,6 +8,8 @@ Accepted.
 
 Audio begins only after an explicit listener action. Every synthesized or decoded source passes through conservative gain staging and a dynamics compressor. Start and stop transitions use short ramps. Audio contexts and scheduled sources are closed on stop and component teardown.
 
+Nominal sustained synthesis targets approximately −28 dBFS RMS. Simultaneous voices use equal-power mixing with a separate coherent-peak ceiling; harmonic waveforms are RMS-matched to sine references. Imported and generated recordings are attenuated against both RMS and peak targets. Every path uses the same safety-compressor settings so page changes do not introduce arbitrary level jumps.
+
 ## Safety invariants
 
 - No autoplay.

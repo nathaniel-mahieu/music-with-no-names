@@ -26,22 +26,22 @@ export type ScaleHearingChallenge = { path: number[]; missingPosition: number };
 export const SCALE_PRESETS: ScalePreset[] = [
   {
     id: "seven",
-    name: "seven-step asymmetric orbit",
-    character: "Unequal steps create strong landmarks and a small closing step back to Do.",
+    name: "Seven-pitch unequal path",
+    character: "Small and medium gaps create clear landmarks. The final small gap sits close to Do.",
     steps: [2, 2, 1, 2, 2, 2, 1],
     syllables: ["Do", "Re", "Mi", "Fa", "Sol", "La", "Ti"],
   },
   {
     id: "five",
-    name: "five-step open orbit",
-    character: "Open · middle · middle · open · middle leaves more space and a broad return to Do.",
+    name: "Five-pitch spacious path",
+    character: "Medium and large gaps leave more room between pitches. A medium gap returns to Do.",
     steps: [3, 2, 2, 3, 2],
     syllables: ["Do", "Me", "Fa", "Sol", "Te"],
   },
   {
     id: "whole",
-    name: "six-step even orbit",
-    character: "Every step is equal, so the orbit supplies fewer unequal landmarks for a center.",
+    name: "Six-pitch equal path",
+    character: "Every gap is the same size, so the local shape gives fewer clues about which pitch is home.",
     steps: [2, 2, 2, 2, 2, 2],
     syllables: ["Do", "Re", "Mi", "Fi", "Si", "Li"],
   },
@@ -116,7 +116,7 @@ export function scaleFingerprint(steps: number[]) {
   return steps.map((step) => ({
     step,
     share: step / total,
-    width: (1200 * step) / total <= 125 ? "close" as const : (1200 * step) / total <= 225 ? "middle" as const : "open" as const,
+    width: (1200 * step) / total <= 125 ? "small" as const : (1200 * step) / total <= 225 ? "medium" as const : "large" as const,
   }));
 }
 

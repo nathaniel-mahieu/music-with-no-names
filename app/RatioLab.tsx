@@ -19,6 +19,12 @@ import {
   sineSample,
 } from "@/lib/music-math";
 import { parseRatioShareState, ratioShareSearch } from "@/lib/ratio-share-state";
+import {
+  SYNTH_MASTER_GAIN,
+  configureSafetyCompressor,
+  equalPowerMixGains,
+  rmsMatchedHarmonicCoefficients,
+} from "@/lib/audio-level";
 import { HarmonyLab } from "./HarmonyLab";
 import { RhythmLab } from "./RhythmLab";
 import { AtlasLab } from "./AtlasLab";
@@ -57,94 +63,94 @@ const LAB_COPY: Record<
   }
 > = {
   guide: {
-    eyebrow: "A first-principles path into music",
-    title: "Begin with relationships. End with experience.",
+    eyebrow: "Learn music from sound and relationships",
+    title: "Start with what you can hear and change.",
     description:
-      "Move from vibration and time through hearing, expectation, culture, and personal response—without requiring note names or a piano-shaped map.",
+      "Change one part of a sound at a time. Explore pitch, scales, harmony, rhythm, expectation, and your own response—without relying on note letters or a piano.",
     principleTop: "Sound",
-    principleMain: "→ meaning",
+    principleMain: "→ hearing → music",
     principleBottom: "through a listener in context",
   },
   ratio: {
-    eyebrow: "A first-principles music instrument",
+    eyebrow: "Intervals without note names",
     title: "Hear relationships, not labels.",
     description:
-      "Start with one vibration. Add another. Change only their relationship, then hear and see why some patterns fuse, shimmer, beat, or refuse to settle.",
-    principleTop: "Invariant",
-    principleMain: "ratio",
-    principleBottom: "embodied in frequency",
+      "Start with one frequency, add another, then change only the ratio between them. Hear and see how their cycles and overtones combine.",
+    principleTop: "Frequency relationship",
+    principleMain: "current ratio",
+    principleBottom: "same ratio at another pitch",
   },
   scale: {
-    eyebrow: "Transposable scale intuition",
-    title: "Make Do movable. See the interval shape.",
+    eyebrow: "Learn scales without fixed note names",
+    title: "Choose home. See the gaps. Hear where they lead.",
     description:
-      "Replace note letters with a relational orbit: movable syllables, unequal frequency gaps, sensory evidence, contextual pull, and an inner-hearing practice.",
+      "Do means home, wherever home is placed. Build a scale from small, medium, and large pitch gaps; then hear intervals, transposition, and expectation without note letters.",
     principleTop: "Movable home",
-    principleMain: "Do → orbit",
-    principleBottom: "same relation, any register",
+    principleMain: "Do → gaps → Do",
+    principleBottom: "same relationships at any pitch",
   },
   ear: {
-    eyebrow: "Human auditory reality",
-    title: "Hear what the spectrum becomes in an ear.",
+    eyebrow: "How sound changes in an ear",
+    title: "The same interval can sound different in a new timbre or register.",
     description:
-      "Separate physical partials, ear-relative crowding, periodicity hypotheses, perceived fusion, tension, and liking instead of compressing them into consonance.",
-    principleTop: "Spectrum",
-    principleMain: "→ hearing",
-    principleBottom: "models remain hypotheses",
+      "Change overtones, pitch range, noise, level, and attack. Compare the model’s estimates with what you actually hear.",
+    principleTop: "Same interval",
+    principleMain: "different hearing",
+    principleBottom: "with timbre, register, and level",
   },
   harmony: {
-    eyebrow: "A field of simultaneous relationships",
-    title: "Build harmony from shared motion.",
+    eyebrow: "Build harmony from interacting intervals",
+    title: "Add pitches and hear a harmony emerge.",
     description:
-      "Add a third voice and the problem changes. Pairwise distances interact with one global periodic shape, competing centers, and the physical spectrum of every source.",
-    principleTop: "Local intervals",
-    principleMain: "→ field",
-    principleBottom: "one spectrum, many readings",
+      "Move one of three to six simultaneous voices. See how its relationships with every other voice change the combined sound.",
+    principleTop: "Several intervals",
+    principleMain: "one combined sound",
+    principleBottom: "every voice changes the whole",
   },
   rhythm: {
-    eyebrow: "Time before meter names",
-    title: "Feel ratios unfold in time.",
+    eyebrow: "Build rhythm from relative time",
+    title: "Place sounds in a cycle and feel the pattern move.",
     description:
-      "Place events around a pulse cycle. Keep their spacing ratios fixed while changing tempo and microtiming to reveal where rhythm becomes movement.",
-    principleTop: "Relative duration",
-    principleMain: "pulse",
-    principleBottom: "embodied in seconds",
+      "Add or remove events around a repeating pulse. Change tempo and small timing offsets while keeping the pattern’s relative shape.",
+    principleTop: "Relative timing",
+    principleMain: "repeating cycle",
+    principleBottom: "heard at a chosen tempo",
   },
   journey: {
-    eyebrow: "From events to expectation and form",
-    title: "Follow musical meaning through time.",
+    eyebrow: "Hear how expectation grows over time",
+    title: "A musical moment means more inside a larger path.",
     description:
-      "Align physical features, recurrence, prediction, and human response—then zoom into one range without losing its identity in the larger arc.",
-    principleTop: "Local evidence",
-    principleMain: "→ arc",
-    principleBottom: "recurrence, violation, return",
+      "Follow repetition, variation, surprise, tension, and return across a phrase. Zoom in without losing where the moment sits in the whole.",
+    principleTop: "Moment",
+    principleMain: "→ phrase → form",
+    principleBottom: "memory builds expectation",
   },
   recording: {
-    eyebrow: "Your recording, analyzed without upload",
-    title: "Trace real sound from evidence to experience.",
+    eyebrow: "Explore your own recording privately",
+    title: "Bring your own sound. Keep the audio here.",
     description:
-      "Load audio locally, inspect versioned multi-resolution evidence, correct model hypotheses, and export a portable profile that never contains the recording.",
-    principleTop: "Private audio",
-    principleMain: "→ evidence",
-    principleBottom: "measured, modeled, correctable",
+      "Choose an audio file. It stays on your device while the app maps level, spectrum, pitch clues, pulse clues, and change over time.",
+    principleTop: "Your audio",
+    principleMain: "→ listening map",
+    principleBottom: "analyzed here, never uploaded",
   },
   atlas: {
-    eyebrow: "Existing music as navigational landmarks",
-    title: "Map experience, not objective quality.",
+    eyebrow: "Use existing music as landmarks",
+    title: "Compare musical journeys, not quality scores.",
     description:
-      "Place recordings as trajectories through tension, surprise, drive, repetition, and expression—then change the listener and purpose instead of pretending one region is universally good.",
-    principleTop: "Sound + sequence",
-    principleMain: "→ response",
-    principleBottom: "conditioned by listener and goal",
+      "Follow teaching profiles through tension, surprise, drive, repetition, and expression. Change the listener or goal to see why no region is universally good.",
+    principleTop: "Music over time",
+    principleMain: "→ experience map",
+    principleBottom: "changes with listener and goal",
   },
   personal: {
-    eyebrow: "Listening evidence without a universal score",
-    title: "Make your response part of the model.",
+    eyebrow: "Map your own listening",
+    title: "Describe your response without reducing it to liking.",
     description:
-      "Rate tension, movement, interest, familiarity, resolution, and liking separately—then see how purpose changes the interpretation.",
-    principleTop: "Sound + context + listener",
-    principleMain: "→ fit",
-    principleBottom: "personal, goal-relative, uncertain",
+      "Rate tension, movement, interest, familiarity, resolution, and liking separately. Save repeated listens to see what changes.",
+    principleTop: "Sound + situation + you",
+    principleMain: "→ response",
+    principleBottom: "personal and changeable",
   },
 };
 
@@ -173,15 +179,11 @@ const PRESETS = [
 ] as const;
 
 function makePeriodicWave(context: AudioContext): PeriodicWave {
-  const real = new Float32Array(12);
-  const imaginary = new Float32Array(12);
-
-  for (let harmonic = 1; harmonic < imaginary.length; harmonic += 1) {
-    imaginary[harmonic] = 1 / harmonic ** 1.2;
-  }
+  const imaginary = rmsMatchedHarmonicCoefficients(11, 1.2);
+  const real = new Float32Array(imaginary.length);
 
   return context.createPeriodicWave(real, imaginary, {
-    disableNormalization: false,
+    disableNormalization: true,
   });
 }
 
@@ -253,14 +255,11 @@ function useRatioAudio(referenceHz: number, ratio: number, timbre: Timbre) {
       const lower = context.createOscillator();
       const upper = context.createOscillator();
       const now = context.currentTime;
+      const [lowerLevel, upperLevel] = equalPowerMixGains([1, 1]);
 
-      compressor.threshold.setValueAtTime(-12, now);
-      compressor.knee.setValueAtTime(18, now);
-      compressor.ratio.setValueAtTime(6, now);
-      compressor.attack.setValueAtTime(0.003, now);
-      compressor.release.setValueAtTime(0.15, now);
-      lowerGain.gain.setValueAtTime(0.42, now);
-      upperGain.gain.setValueAtTime(0.42, now);
+      configureSafetyCompressor(compressor, now);
+      lowerGain.gain.setValueAtTime(lowerLevel, now);
+      upperGain.gain.setValueAtTime(upperLevel, now);
       master.gain.setValueAtTime(0.0001, now);
 
       lower.frequency.setValueAtTime(referenceHz, now);
@@ -272,7 +271,7 @@ function useRatioAudio(referenceHz: number, ratio: number, timbre: Timbre) {
       master.connect(compressor).connect(context.destination);
       lower.start();
       upper.start();
-      master.gain.exponentialRampToValueAtTime(0.14, now + 0.055);
+      master.gain.exponentialRampToValueAtTime(SYNTH_MASTER_GAIN, now + 0.055);
 
       nodesRef.current = {
         context,
@@ -681,7 +680,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.22
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.23
         </div>
       </header>
 
@@ -937,7 +936,7 @@ export function RatioLab() {
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Roadmap phases R1 · S2.5 · H3 · T4 · P5 · I6 · J7 · L8 · G9</span>
+        <span>Explore intervals · scales · hearing · harmony · rhythm · form · recordings · musical landmarks · your response</span>
       </footer>
     </main>
   );

@@ -9,6 +9,7 @@ import {
   harmonicityCandidates,
   spectralOverlap,
 } from "@/lib/auditory-model";
+import { configureSafetyCompressor, equalPowerMixGains, loudnessControlGain } from "@/lib/audio-level";
 
 type EarConfig = {
   referenceHz: number;
@@ -120,25 +121,28 @@ export function EarLab() {
       const master = context.createGain();
       const compressor = context.createDynamicsCompressor();
       const now = context.currentTime;
-      const targetGain = 0.025 + (config.loudness / 100) * 0.055;
+      const targetGain = loudnessControlGain(config.loudness);
       master.gain.setValueAtTime(0.0001, now);
       master.gain.exponentialRampToValueAtTime(targetGain, now + config.attackMs / 1000);
-      compressor.threshold.setValueAtTime(-14, now);
-      compressor.ratio.setValueAtTime(8, now);
+      configureSafetyCompressor(compressor, now);
       master.connect(compressor).connect(context.destination);
       const sources: AudioScheduledSourceNode[] = [];
       const tonal = combined.filter((component) => component.kind === "partial").slice(0, 28);
-      tonal.forEach((component) => {
+      const noiseShare = Math.min(0.35, config.noiseAmount * 0.35);
+      const tonalShare = Math.sqrt(1 - noiseShare ** 2);
+      const tonalGains = equalPowerMixGains(tonal.map((component) => component.amplitude));
+      tonal.forEach((component, index) => {
         const oscillator = context.createOscillator();
         const gain = context.createGain();
         oscillator.frequency.setValueAtTime(component.frequencyHz, now);
-        gain.gain.setValueAtTime(component.amplitude / Math.max(4, tonal.length * 0.45), now);
+        gain.gain.setValueAtTime(tonalGains[index] * tonalShare, now);
         oscillator.connect(gain).connect(master);
         oscillator.start();
         sources.push(oscillator);
       });
       if (config.noiseAmount > 0) {
-        [config.referenceHz, config.referenceHz * config.ratio].forEach((fundamental) => {
+        const noiseGains = equalPowerMixGains([1, 1]);
+        [config.referenceHz, config.referenceHz * config.ratio].forEach((fundamental, index) => {
           const noise = context.createBufferSource();
           const filter = context.createBiquadFilter();
           const gain = context.createGain();
@@ -147,7 +151,7 @@ export function EarLab() {
           filter.type = "bandpass";
           filter.frequency.setValueAtTime(Math.min(12000, fundamental * 2.4), now);
           filter.Q.setValueAtTime(0.65, now);
-          gain.gain.setValueAtTime(config.noiseAmount * 0.12, now);
+          gain.gain.setValueAtTime(noiseGains[index] * noiseShare, now);
           noise.connect(filter).connect(gain).connect(master);
           noise.start();
           sources.push(noise);
@@ -207,8 +211,8 @@ export function EarLab() {
   return (
     <section className="advanced-lab ear-lab" aria-labelledby="ear-title">
       <div className="lab-intro ear-intro">
-        <div><p className="section-kicker">Ear Lab · the spectrum is not the listener</p><h2 id="ear-title">Separate sensory models from musical value.</h2></div>
-        <p>Change spacing, spectrum, register, inharmonicity, noise, level, and attack. Roughness and harmonicity respond independently; your own ratings remain a separate observation.</p>
+        <div><p className="section-kicker">Ear Lab · change one part of the sound</p><h2 id="ear-title">Hear how timbre, register, and level change an interval.</h2></div>
+        <p>Try the ready-made comparisons or adjust one control. The model describes the sound; your ratings describe your experience.</p>
       </div>
 
       <div className="ear-experiments" aria-label="Controlled auditory A/B experiments">

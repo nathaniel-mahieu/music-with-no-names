@@ -20,9 +20,13 @@ The sonority-model fixtures require all dimensions to remain separately bounded,
 
 ## Scale-learning invariants
 
-The Scale Lab fixtures require every preset to close at an exact 2:1 octave, preserve its ratio structure under transposition, keep identical physical gaps in the same close/middle/open category, and spell the 3 · 2 · 2 · 3 · 2 orbit as Do · Me · Fa · Sol · Te in the declared chromatic movable-Do convention. Every inner-hearing path is authored for its specific scale, uses valid degree indices without modulo wrapping, varies the missing position, and avoids a target identical to either neighbor.
+The Scale Lab fixtures require every preset to close at an exact 2:1 octave, preserve its ratio structure under transposition, keep identical physical gaps in the same small/medium/large category, and spell the 3 · 2 · 2 · 3 · 2 path as Do · Me · Fa · Sol · Te in the declared chromatic movable-Do convention. Every inner-hearing path is authored for its specific scale, uses valid degree indices without modulo wrapping, varies the missing position, and avoids a target identical to either neighbor.
 
 The browser review additionally checks that the model’s ten-partial harmonic spectrum is the spectrum synthesized for simultaneous examples, while melodic examples explicitly exclude simultaneous roughness as their explanation. Context and inner-hearing tasks collect a learner response before interpretation. These checks validate internal consistency and interaction behavior; they do not demonstrate learning gains in recruited participants.
+
+## Playback-level invariants
+
+Synthesized labs share a nominal 0.065 master gain, equal-power simultaneous mixing, RMS-matched harmonic waveforms, a 0.24 coherent-peak ceiling, and one safety-compressor configuration. Recording playback is attenuated against both a 0.045 RMS target and a 0.20 peak ceiling. Tests cover silent and invalid inputs, voice-count invariance, timbre power matching, and recording gain bounds. Rhythm remains a separately calibrated transient, and authored musical dynamics remain intentionally audible.
 
 ## Open validation work
 

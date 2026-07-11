@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cyclicOnsetIntervals } from "@/lib/music-math";
 import { estimateTapTempo, nestedCyclePhases, pulseHypotheses, syncopationIndex } from "@/lib/rhythm-model";
+import { SYNTH_MASTER_GAIN, configureSafetyCompressor } from "@/lib/audio-level";
 
 const PULSE_COUNT = 12;
 const ANCHORS = new Set([0, 3, 6, 9]);
@@ -53,7 +54,7 @@ function scheduleClick(
   oscillator.type = "sine";
   oscillator.frequency.setValueAtTime(anchor ? 112 : 172, time);
   oscillator.frequency.exponentialRampToValueAtTime(anchor ? 78 : 124, time + 0.04);
-  gain.gain.setValueAtTime(anchor ? 0.2 : 0.13, time);
+  gain.gain.setValueAtTime(anchor ? 0.8 : 0.58, time);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.055);
   oscillator.connect(gain).connect(destination);
   oscillator.start(time);
@@ -122,10 +123,9 @@ export function RhythmLab() {
       const compressor = context.createDynamicsCompressor();
       const now = context.currentTime;
       master.gain.setValueAtTime(0.0001, now);
-      compressor.threshold.setValueAtTime(-14, now);
-      compressor.ratio.setValueAtTime(8, now);
+      configureSafetyCompressor(compressor, now);
       master.connect(compressor).connect(context.destination);
-      master.gain.exponentialRampToValueAtTime(0.16, now + 0.05);
+      master.gain.exponentialRampToValueAtTime(SYNTH_MASTER_GAIN, now + 0.05);
 
       const engine: RhythmEngine = {
         context,
@@ -183,13 +183,11 @@ export function RhythmLab() {
     <section className="advanced-lab rhythm-lab" aria-labelledby="rhythm-title">
       <div className="lab-intro">
         <div>
-          <p className="section-kicker">Rhythm field · one cycle, twelve pulse positions</p>
-          <h2 id="rhythm-title">Time as ratio and resistance</h2>
+          <p className="section-kicker">Rhythm Lab · one cycle, twelve places for sound</p>
+          <h2 id="rhythm-title">Build a pattern, then feel it at different speeds.</h2>
         </div>
         <p>
-          Rhythm begins with a pulse hypothesis, then gains character from where events
-          confirm it, avoid it, or arrive slightly late. The grid is a measuring tool—not
-          the music itself.
+          Turn positions on or off, then change tempo and timing. Notice which parts of the pattern stay recognizable.
         </p>
       </div>
 

@@ -475,7 +475,7 @@ Objective: teach scales as octave-closing relationship patterns, using movable s
 Exit gate:
 
 - A learner can move Do or its absolute frequency and explain what remains invariant.
-- A learner can read close, middle, and open scale gaps without translating them into note letters.
+- A learner can read small, medium, and large scale gaps without translating them into note letters.
 - No physical metric is presented as a universal measure of stability, emotion, or goodness.
 
 ### Q10 — Validation, accessibility, and release hardening
@@ -495,6 +495,7 @@ Objective: ensure that the experience is scientifically honest, musically useful
 - [x] **Q10.11** Polish phone navigation, minimum interactive target sizes, responsive label separation, and reduced-motion-aware programmatic scrolling.
 - [x] **Q10.12** Add an in-product conceptual self-check with prediction questions, explanatory feedback, and direct evidence-lab links while keeping participant validation as a separate gate.
 - [x] **Q10.13** Add a first-focus skip route and explicit forced-color fallbacks for selected states, spectral voices, maps, uncertainty rings, and learning feedback.
+- [x] **Q10.14** Rewrite core guidance around listening actions, replace ambiguous gap vocabulary, and normalize nominal playback across synthesized and recorded labs.
 
 Exit gate:
 

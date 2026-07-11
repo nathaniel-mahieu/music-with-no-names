@@ -196,12 +196,11 @@ export function PersonalLab() {
     <section className="advanced-lab personal-lab" aria-labelledby="personal-title">
       <div className="lab-intro personal-intro">
         <div>
-          <p className="section-kicker">Personal lens · your response is evidence</p>
-          <h2 id="personal-title">Separate what the sound did from what you felt.</h2>
+          <p className="section-kicker">Personal Lens · describe one listening experience</p>
+          <h2 id="personal-title">Notice more than whether you liked it.</h2>
         </div>
         <p>
-          Rate one listening experience across seven independent dimensions. The fit
-          model is deliberately transparent, local to this browser, and uncertain.
+          Rate tension, movement, interest, familiarity, resolution, and liking separately. Your entries stay in this browser and can change from one listen to the next.
         </p>
       </div>
 

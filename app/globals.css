@@ -5728,7 +5728,7 @@ footer a {
   .degree-inspector dl > div { grid-template-columns: 1fr; gap: 7px; }
 }
 
-/* Scale lesson v1.22: perception → prediction → explanation. */
+/* Scale lesson v1.23: listen → name → explain. */
 .learning-scale .scale-intro { padding-top: 48px; padding-bottom: 48px; }
 .learning-scale .scale-intro h2 { max-width: 18ch; font-size: clamp(2.35rem, 4.4vw, 4.5rem); }
 .scale-lesson-nav { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); background: var(--surface-soft); }
