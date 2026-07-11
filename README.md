@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Sonority Meaning Map v1.17**. It provides:
+The current milestone is **Interaction Polish v1.18**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -13,6 +13,8 @@ The current milestone is **Sonority Meaning Map v1.17**. It provides:
 - A three-voice Harmony Lab with shared-basis and aggregate-spectrum views.
 - A causal sonority view linking physical spectra, auditory friction and fusion, structural ambiguity and motion, and conditional felt affordances.
 - A live field map comparing current and landmark ratio combinations by activation and source fusion, plus an explicit previous-field delta.
+- Phone navigation with readable three-column lab choices and full-size touch targets.
+- Reduced-motion-aware lab navigation and enlarged Atlas landmark hit areas without inflating their data-encoded marks.
 - A twelve-position Rhythm Lab with onset-spacing ratios, tempo, and microtiming bias.
 - An interactive map of pop, blues, and classical landmarks as experiential trajectories.
 - Listener- and goal-conditioned preference proximity with an inspectable component profile.

@@ -469,6 +469,7 @@ Objective: ensure that the experience is scientifically honest, musically useful
 - [ ] **Q10.8** Conduct comprehension tests: can users explain what changed and predict the next A/B result? (Pre/post questions, manipulation tasks, and scoring requirements are published; participant sessions remain.)
 - [ ] **Q10.9** Conduct listening studies that keep model predictions separate from self-reported experience. (A consent, randomization, condition, and data-separation protocol is published; participant sessions remain.)
 - [x] **Q10.10** Publish limitations, model cards, analysis versions, dataset provenance, and research citations.
+- [x] **Q10.11** Polish phone navigation, minimum interactive target sizes, responsive label separation, and reduced-motion-aware programmatic scrolling.
 
 Exit gate:
 

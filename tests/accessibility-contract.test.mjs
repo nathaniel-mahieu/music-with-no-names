@@ -25,10 +25,17 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
 });
 
 test("focus, reduced-motion, and non-color contracts are present", async () => {
-  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const [css, ratio] = await Promise.all([
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+  ]);
   assert.match(css, /select:focus-visible/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /animation-duration: 0\.01ms !important/);
   assert.match(css, /cloud-blues[\s\S]*border-style: dotted/);
   assert.match(css, /cloud-classical[\s\S]*border-style: double/);
+  assert.match(css, /\.atlas-point[\s\S]*width: max\(50px, var\(--point-size\)\)/);
+  assert.match(css, /\.lab-nav[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(ratio, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)/);
+  assert.match(ratio, /behavior: prefersReducedMotion \? "auto" : "smooth"/);
 });
