@@ -89,3 +89,59 @@ export function sequenceSurprise(probability: number): number {
   }
   return probability === 1 ? 0 : -Math.log2(probability);
 }
+
+export function eventSimilarity(first: MusicalEvent, second: MusicalEvent) {
+  const ratioDistance = Math.abs(Math.log2(first.ratioToReference / second.ratioToReference));
+  const durationDistance = Math.abs(first.durationSeconds - second.durationSeconds) / Math.max(0.05, first.durationSeconds, second.durationSeconds);
+  const gesturePenalty = first.gesture === second.gesture ? 0 : 0.42;
+  const timbrePenalty = first.timbre === second.timbre ? 0 : 0.18;
+  return Math.exp(-(ratioDistance * 2.4 + durationDistance * 0.7 + gesturePenalty + timbrePenalty));
+}
+
+export function selfSimilarityMatrix(events: MusicalEvent[]) {
+  return events.map((first) => events.map((second) => eventSimilarity(first, second)));
+}
+
+function distributionEntropy(probabilities: number[]) {
+  return probabilities.reduce((sum, probability) => sum - (probability > 0 ? probability * Math.log2(probability) : 0), 0);
+}
+
+export type PredictionTracePoint = {
+  eventId: string;
+  previousGesture: string | null;
+  actualGesture: string;
+  probability: number | null;
+  uncertaintyBits: number;
+  surpriseBits: number | null;
+  alternatives: { gesture: string; probability: number }[];
+};
+
+export function incrementalPredictionTrace(events: MusicalEvent[]): PredictionTracePoint[] {
+  const transitions = new Map<string, Map<string, number>>();
+  return events.map((event, index) => {
+    const previous = index > 0 ? events[index - 1].gesture : null;
+    const row = previous ? transitions.get(previous) : undefined;
+    const total = row ? [...row.values()].reduce((sum, count) => sum + count, 0) : 0;
+    const alternatives = row && total > 0
+      ? [...row.entries()].map(([gesture, count]) => ({ gesture, probability: count / total })).sort((a, b) => b.probability - a.probability)
+      : [];
+    const probability = row && total > 0 ? (row.get(event.gesture) ?? 0) / total : null;
+    const point: PredictionTracePoint = {
+      eventId: event.id,
+      previousGesture: previous,
+      actualGesture: event.gesture,
+      probability,
+      uncertaintyBits: distributionEntropy(alternatives.map((alternative) => alternative.probability)),
+      surpriseBits: probability === null ? null : probability === 0 ? 6 : sequenceSurprise(probability),
+      alternatives,
+    };
+    if (index > 0) {
+      const from = events[index - 1].gesture;
+      const to = event.gesture;
+      const transitionRow = transitions.get(from) ?? new Map<string, number>();
+      transitionRow.set(to, (transitionRow.get(to) ?? 0) + 1);
+      transitions.set(from, transitionRow);
+    }
+    return point;
+  });
+}

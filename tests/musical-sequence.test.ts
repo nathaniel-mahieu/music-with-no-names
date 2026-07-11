@@ -5,6 +5,9 @@ import {
   localGesturePrediction,
   sequenceSurprise,
   transformedRecurrence,
+  eventSimilarity,
+  incrementalPredictionTrace,
+  selfSimilarityMatrix,
   type MusicalEvent,
 } from "../lib/musical-sequence.ts";
 
@@ -39,4 +42,29 @@ test("piece-local transitions remain inspectable", () => {
 test("surprise is information in bits", () => {
   assert.equal(sequenceSurprise(0.25), 2);
   assert.equal(sequenceSurprise(1), 0);
+});
+
+test("builds a symmetric motif self-similarity matrix", () => {
+  const events = [event("a", 0, 1, "anchor"), event("b", 1, 1.2, "rise"), event("c", 2, 1, "anchor")];
+  const matrix = selfSimilarityMatrix(events);
+  assert.equal(matrix.length, 3);
+  assert.equal(matrix[0][0], 1);
+  assert.equal(matrix[0][2], 1);
+  assert.equal(matrix[0][1], matrix[1][0]);
+  assert.ok(eventSimilarity(events[0], events[2]) > eventSimilarity(events[0], events[1]));
+});
+
+test("keeps uncertainty before and surprise after an event distinct", () => {
+  const events = [
+    event("a", 0, 1, "anchor"),
+    event("b", 1, 1.2, "rise"),
+    event("c", 2, 1, "anchor"),
+    event("d", 3, 1.2, "rise"),
+    event("e", 4, 1.5, "break"),
+  ];
+  const trace = incrementalPredictionTrace(events);
+  assert.equal(trace[3].probability, 1);
+  assert.equal(trace[3].surpriseBits, 0);
+  assert.equal(trace[4].probability, 0);
+  assert.equal(trace[4].surpriseBits, 6);
 });

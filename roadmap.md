@@ -334,12 +334,12 @@ Objective: explain tension, surprise, coherence, and payoff as temporal phenomen
 
 - [x] **P5.1** Define a generic event sequence combining frequency relationships, onsets, durations, amplitude, and timbre.
 - [x] **P5.2** Detect exact recurrence and transformed recurrence.
-- [ ] **P5.3** Build a self-similarity view for motifs, loops, phrases, and sections.
+- [x] **P5.3** Build a self-similarity view for motifs, loops, phrases, and sections.
 - [x] **P5.4** Implement a simple, inspectable piece-local prediction model before considering learned neural models.
-- [ ] **P5.5** Display uncertainty before an event and surprise after it.
+- [x] **P5.5** Display uncertainty before an event and surprise after it.
 - [ ] **P5.6** Support multiple prediction models: piece-local, synthetic-corpus, and eventually listener-personalized.
 - [ ] **P5.7** Build a human-response braid with separate lanes for roughness, harmonicity, pulse confidence, repetition, uncertainty, surprise, tension, and ratings. (Model lanes are aligned; a persisted human-ratings lane remains.)
-- [ ] **P5.8** Mark buildup, expectation violation, return, and release as hypotheses that can be confirmed or rejected by the listener.
+- [x] **P5.8** Mark buildup, expectation violation, return, and release as hypotheses that can be confirmed or rejected by the listener.
 - [ ] **P5.9** Demonstrate that local unpleasantness can contribute to a satisfying larger arc.
 - [ ] **P5.10** Add experiments for repetition, repetition-with-variation, expected versus unexpected context, and delayed resolution.
 
@@ -601,5 +601,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
+- [x] Event self-similarity and incremental uncertainty/surprise trace implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

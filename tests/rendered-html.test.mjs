@@ -93,6 +93,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(journeyLab, /Musical meaning is a path through time/);
   assert.match(journeyLab, /Acoustic Microscope/);
   assert.match(journeyLab, /Expected alternatives/);
+  assert.match(journeyLab, /Self-similarity across events/);
+  assert.match(journeyLab, /Before uncertainty, after surprise/);
+  assert.match(journeyLab, /Matches my listening/);
   assert.match(recordingLab, /Nothing is uploaded/);
   assert.match(recordingLab, /audio-analysis\.worker/);
   assert.match(recordingLab, /Export analysis JSON/);

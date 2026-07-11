@@ -2666,6 +2666,93 @@ footer a {
   font-size: 0.58rem;
 }
 
+.structure-inspector {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.72fr) minmax(420px, 1.28fr);
+  gap: 1px;
+  border-bottom: 1px solid var(--line);
+  background: var(--line);
+}
+
+.structure-inspector > article {
+  min-width: 0;
+  padding: 34px 30px;
+  background: var(--surface-raised);
+}
+
+.structure-inspector .journey-heading {
+  margin-bottom: 24px;
+}
+
+.structure-inspector > article > p {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 0.69rem;
+  line-height: 1.6;
+}
+
+.similarity-matrix {
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  gap: 2px;
+  width: min(100%, 360px);
+  aspect-ratio: 1;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--background);
+}
+
+.similarity-matrix i {
+  min-width: 2px;
+  min-height: 2px;
+}
+
+.prediction-trace {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  grid-template-rows: 92px 92px auto;
+  align-items: end;
+  gap: 11px 14px;
+}
+
+.trace-label {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.trace-bars {
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  align-items: end;
+  gap: 3px;
+  height: 92px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.trace-bars i {
+  min-height: 2px;
+  background: var(--journey-cyan);
+  opacity: 0.76;
+}
+
+.surprise-bars i {
+  background: #f08dc0;
+}
+
+.trace-events {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  gap: 3px;
+  color: var(--faint);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.48rem;
+  text-align: center;
+}
+
 .microscope {
   padding: 38px 30px;
   background: var(--surface-raised);
@@ -2823,6 +2910,30 @@ footer a {
   line-height: 1.7;
 }
 
+.hypothesis-response {
+  grid-column: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.hypothesis-response button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.62rem;
+  cursor: pointer;
+}
+
+.hypothesis-response button[aria-pressed="true"] {
+  border-color: var(--journey-gold);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--journey-gold) 8%, transparent);
+}
+
 .journey-annotation {
   border-top: 1px solid var(--line);
   border-bottom: 0;
@@ -2894,6 +3005,14 @@ footer a {
 
   .explain-estimate {
     grid-template-columns: 1fr;
+  }
+
+  .structure-inspector {
+    grid-template-columns: 1fr;
+  }
+
+  .hypothesis-response {
+    grid-column: 1;
   }
 
   .journey-annotation > label,

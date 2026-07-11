@@ -3,7 +3,9 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import {
   eventsInSelection,
+  incrementalPredictionTrace,
   localGesturePrediction,
+  selfSimilarityMatrix,
   transformedRecurrence,
   type EventSelection,
   type MusicalEvent,
@@ -76,6 +78,7 @@ export function JourneyLab() {
   const [lens, setLens] = useState<Lens>("original");
   const [annotation, setAnnotation] = useState("surprise");
   const [feltTension, setFeltTension] = useState(68);
+  const [hypothesisResponses, setHypothesisResponses] = useState<Record<string, "confirm" | "reject">>({});
   const selectedEvents = eventsInSelection(EVENTS, selectedSection.selection);
   const predict = useMemo(() => localGesturePrediction(EVENTS), []);
   const finalGesture = selectedEvents[selectedEvents.length - 1]?.gesture ?? "anchor";
@@ -83,6 +86,8 @@ export function JourneyLab() {
   const firstPhrase = eventsInSelection(EVENTS, SECTIONS[0].selection);
   const repeatedPhrase = eventsInSelection(EVENTS, SECTIONS[1].selection);
   const recurrence = transformedRecurrence(firstPhrase, repeatedPhrase);
+  const similarity = useMemo(() => selfSimilarityMatrix(EVENTS), []);
+  const predictionTrace = useMemo(() => incrementalPredictionTrace(EVENTS), []);
   const meanRatio = selectedEvents.reduce((sum, event) => sum + event.ratioToReference, 0) / Math.max(1, selectedEvents.length);
 
   return (
@@ -161,6 +166,28 @@ export function JourneyLab() {
         <div className="time-axis" aria-hidden="true"><span>0 s</span><span>4</span><span>8</span><span>12</span><span>16 s</span></div>
       </div>
 
+      <div className="structure-inspector">
+        <article className="similarity-card">
+          <div className="journey-heading"><div><span>Pattern · transformed recurrence</span><h3>Self-similarity across events</h3></div><p>brighter cell = stronger match</p></div>
+          <div className="similarity-matrix" role="img" aria-label="Fifteen by fifteen event self-similarity matrix showing repeated and transformed gestures">
+            {similarity.flatMap((row, rowIndex) => row.map((value, columnIndex) => <i key={`${rowIndex}-${columnIndex}`} style={{ backgroundColor: `rgba(114, 213, 209, ${0.04 + value * 0.88})` }} title={`event ${rowIndex + 1} to ${columnIndex + 1}: ${Math.round(value * 100)} percent similar`} />))}
+          </div>
+          <p>The diagonal is identity. Off-diagonal blocks reveal recurrence even when onset time moves; similarity uses ratio, duration, gesture, and timbre with declared weights.</p>
+        </article>
+
+        <article className="prediction-trace-card">
+          <div className="journey-heading"><div><span>Prediction · incremental piece-local model</span><h3>Before uncertainty, after surprise</h3></div><p>bits of information</p></div>
+          <div className="prediction-trace" role="img" aria-label="Uncertainty before and surprise after each generated musical event">
+            <div className="trace-label">uncertainty before</div>
+            <div className="trace-bars uncertainty-bars">{predictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, point.uncertaintyBits / 2 * 100))}%` }} title={`event ${index + 1}: ${point.uncertaintyBits.toFixed(2)} bits uncertainty`} />)}</div>
+            <div className="trace-label">surprise after</div>
+            <div className="trace-bars surprise-bars">{predictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, (point.surpriseBits ?? 0) / 6 * 100))}%` }} title={`event ${index + 1}: ${point.surpriseBits === null ? "unlearned" : `${point.surpriseBits.toFixed(2)} bits surprise`}`} />)}</div>
+            <div className="trace-events">{predictionTrace.map((point, index) => <span key={point.eventId}>{index + 1}</span>)}</div>
+          </div>
+          <p>The predictor learns transition counts only from earlier events. A wide distribution raises uncertainty before an event; a low-probability realized event raises surprise afterward.</p>
+        </article>
+      </div>
+
       <div className="microscope">
         <div className="microscope-heading">
           <div>
@@ -200,6 +227,10 @@ export function JourneyLab() {
           <p>
             Visible contributors: {selectedSection.id === "repeat" ? "a high-probability recurrence is interrupted while roughness spikes and harmonicity falls" : selectedSection.id === "search" ? "pulse confidence weakens, event spacing becomes less regular, and several futures remain plausible" : selectedSection.id === "return" ? "recurrence and pulse confidence rise while uncertainty falls" : "the system is still learning the piece-local pattern"}. This is a hypothesis, not your report.
           </p>
+          <div className="hypothesis-response" role="group" aria-label={`Respond to the ${selectedSection.label} tension hypothesis`}>
+            <button type="button" aria-pressed={hypothesisResponses[selectedSection.id] === "confirm"} onClick={() => setHypothesisResponses((current) => ({ ...current, [selectedSection.id]: "confirm" }))}>Matches my listening</button>
+            <button type="button" aria-pressed={hypothesisResponses[selectedSection.id] === "reject"} onClick={() => setHypothesisResponses((current) => ({ ...current, [selectedSection.id]: "reject" }))}>Does not match</button>
+          </div>
         </div>
       </div>
 
