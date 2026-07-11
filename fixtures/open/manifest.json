@@ -12,7 +12,7 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
       "declaredBytes": 36730,
       "sha1": "437c3e1fe9bf9ab06df87369328d8303865efad4",
-      "bundled": false
+      "bundled": true
     }
   ]
 }

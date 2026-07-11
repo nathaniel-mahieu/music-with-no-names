@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
@@ -12,6 +13,9 @@ test("open recording fixtures pin provenance, license, size, and checksum", asyn
     assert.equal(fixture.license, "CC0-1.0");
     assert.ok(Number.isInteger(fixture.declaredBytes) && fixture.declaredBytes > 0);
     assert.match(fixture.sha1, /^[a-f0-9]{40}$/);
-    assert.equal(fixture.bundled, false);
+    assert.equal(fixture.bundled, true);
+    const bytes = await readFile(new URL(`../fixtures/open/${fixture.filename}`, import.meta.url));
+    assert.equal(bytes.byteLength, fixture.declaredBytes);
+    assert.equal(createHash("sha1").update(bytes).digest("hex"), fixture.sha1);
   }
 });

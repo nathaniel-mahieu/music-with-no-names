@@ -12,7 +12,7 @@ No commercial or third-party recording is bundled. Recording Lab operates on aud
 
 ## Open recording fixture candidate
 
-`fixtures/open/manifest.json` pins Rubinkumar's fourteen-second *A Major Scale* recording from Wikimedia Commons under CC0 1.0, including its source page, direct media URL, declared byte count, and Wikimedia SHA-1 checksum. The deterministic fetch script rejects any size or checksum mismatch. The binary is not treated as available until that verification has run successfully.
+`fixtures/open/manifest.json` pins Rubinkumar's fourteen-second *A Major Scale* recording from Wikimedia Commons under CC0 1.0, including its source page, direct media URL, declared byte count, and Wikimedia SHA-1 checksum. The deterministic fetch script rejects any size or checksum mismatch, and the test suite rechecks the bundled bytes. Browser codec coverage remains in the real-device matrix.
 
 ## Atlas teaching data
 

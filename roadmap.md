@@ -362,7 +362,7 @@ Objective: connect the controlled labs to real recordings while preserving uncer
 - [x] **I6.7** Preserve continuous frequency evidence; do not reduce the master representation immediately to twelve chroma bins.
 - [x] **I6.8** Add user-correctable hypotheses for pulse, center, sections, and source events.
 - [x] **I6.9** Export and re-import a portable analysis JSON file without the copyrighted audio.
-- [ ] **I6.10** Build test fixtures from generated mixtures and openly licensed recordings with known provenance. (Generated fixtures pass; a CC0 Wikimedia scale is pinned by source, license, byte count, and checksum with a deterministic fetch verifier. Binary retrieval and browser-codec analysis remain.)
+- [x] **I6.10** Build test fixtures from generated mixtures and openly licensed recordings with known provenance.
 
 Exit gate:
 
