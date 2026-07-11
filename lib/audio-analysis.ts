@@ -1,5 +1,5 @@
 export const AUDIO_ANALYSIS_SCHEMA = "music-with-no-names.analysis.v1" as const;
-export const AUDIO_ANALYSIS_VERSION = "mwno-audio-0.2.0" as const;
+export const AUDIO_ANALYSIS_VERSION = "mwno-audio-0.3.0" as const;
 
 export type AnalysisFrame = {
   timeSeconds: number;
@@ -13,6 +13,11 @@ export type AnalysisFrame = {
   roughness: number;
   harmonicity: number;
   pitchSalience: number;
+  featureConfidence: {
+    roughness: number;
+    harmonicity: number;
+    pitchSalience: number;
+  };
   auditoryBandEnergy: number[];
 };
 
@@ -133,6 +138,12 @@ function analyzeResolution(
     const roughness = clamp01(physical.brightness * 0.5 + spectralFlux * 0.5);
     const harmonicity = clamp01(physical.periodicityConfidence * (1 - physical.brightness * 0.38));
     const pitchSalience = clamp01(harmonicity * clamp01((loudnessDb + 72) / 54));
+    const signalConfidence = clamp01((loudnessDb + 72) / 48);
+    const featureConfidence = {
+      roughness: clamp01(signalConfidence * (0.35 + physical.brightness * 0.25 + spectralFlux * 0.4)),
+      harmonicity: clamp01(signalConfidence * physical.periodicityConfidence),
+      pitchSalience: clamp01(signalConfidence * physical.periodicityConfidence * (1 - spectralFlux * 0.45)),
+    };
     frames.push({
       timeSeconds: start / sampleRate,
       durationSeconds: (end - start) / sampleRate,
@@ -145,6 +156,7 @@ function analyzeResolution(
       roughness,
       harmonicity,
       pitchSalience,
+      featureConfidence,
       auditoryBandEnergy: proxyAuditoryBands(samples, start, end, sampleRate),
     });
     previousDb = loudnessDb;
@@ -274,5 +286,10 @@ export function analyzeMonoAudio(
 export function isRecordingAnalysis(value: unknown): value is RecordingAnalysis {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<RecordingAnalysis>;
-  return candidate.schema === AUDIO_ANALYSIS_SCHEMA && candidate.analysisVersion === AUDIO_ANALYSIS_VERSION && Array.isArray(candidate.resolutions) && candidate.source?.audioIncluded === false && typeof candidate.structural === "object";
+  return candidate.schema === AUDIO_ANALYSIS_SCHEMA
+    && candidate.analysisVersion === AUDIO_ANALYSIS_VERSION
+    && Array.isArray(candidate.resolutions)
+    && candidate.resolutions.every((resolution) => Array.isArray(resolution.frames) && resolution.frames.every((frame) => typeof frame.featureConfidence === "object"))
+    && candidate.source?.audioIncluded === false
+    && typeof candidate.structural === "object";
 }

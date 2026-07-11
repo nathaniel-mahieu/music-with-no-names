@@ -13,11 +13,13 @@ import {
 } from "@/lib/musical-sequence";
 
 type Lens = "original" | "repeat" | "variation" | "unexpected" | "delay";
-type PredictionModel = "piece" | "synthetic";
+type PredictionModel = "piece" | "synthetic" | "personal";
 type ResponsePoint = { sectionId: string; type: string; intensity: number; recordedAt: string };
+type PredictionObservation = { fromGesture: string; toGesture: string; recordedAt: string };
 
 const DURATION_SECONDS = 16;
 const RESPONSE_STORAGE_KEY = "mwno.journey.responses.v1";
+const PREDICTION_STORAGE_KEY = "mwno.journey.predictions.v1";
 const SYNTHETIC_TRANSITIONS = {
   anchor: { rise: 12, anchor: 3, turn: 2 },
   rise: { crest: 11, turn: 4, break: 1 },
@@ -27,7 +29,6 @@ const SYNTHETIC_TRANSITIONS = {
   search: { rise: 6, search: 3, anchor: 4 },
   return: { anchor: 8 },
 } as const;
-
 const EVENTS: MusicalEvent[] = [
   { id: "e1", onsetSeconds: 0, durationSeconds: 0.8, ratioToReference: 1, amplitude: 0.72, timbre: "harmonic", gesture: "anchor" },
   { id: "e2", onsetSeconds: 1, durationSeconds: 0.65, ratioToReference: 1.25, amplitude: 0.62, timbre: "harmonic", gesture: "rise" },
@@ -45,6 +46,7 @@ const EVENTS: MusicalEvent[] = [
   { id: "e14", onsetSeconds: 14, durationSeconds: 0.9, ratioToReference: 1.5, amplitude: 0.88, timbre: "harmonic", gesture: "crest" },
   { id: "e15", onsetSeconds: 15, durationSeconds: 0.95, ratioToReference: 1, amplitude: 0.64, timbre: "pure", gesture: "return" },
 ];
+const GESTURES = [...new Set(EVENTS.map((event) => event.gesture))];
 
 const SECTIONS: { id: string; label: string; role: string; selection: EventSelection }[] = [
   { id: "statement", label: "Statement", role: "pattern learned", selection: { startSeconds: 0, endSeconds: 4 } },
@@ -94,6 +96,8 @@ export function JourneyLab() {
   const [arcSatisfaction, setArcSatisfaction] = useState(78);
   const [predictionModel, setPredictionModel] = useState<PredictionModel>("piece");
   const [responses, setResponses] = useState<ResponsePoint[]>([]);
+  const [predictionObservations, setPredictionObservations] = useState<PredictionObservation[]>([]);
+  const [expectedGestureReport, setExpectedGestureReport] = useState("anchor");
   const [hypothesisResponses, setHypothesisResponses] = useState<Record<string, "confirm" | "reject">>({});
   const selectedEvents = eventsInSelection(EVENTS, selectedSection.selection);
   const predict = useMemo(() => localGesturePrediction(EVENTS), []);
@@ -105,7 +109,14 @@ export function JourneyLab() {
   const similarity = useMemo(() => selfSimilarityMatrix(EVENTS), []);
   const predictionTrace = useMemo(() => incrementalPredictionTrace(EVENTS), []);
   const syntheticPredictionTrace = useMemo(() => predictionTraceWithPrior(EVENTS, SYNTHETIC_TRANSITIONS), []);
-  const visiblePredictionTrace = predictionModel === "piece" ? predictionTrace : syntheticPredictionTrace;
+  const personalPrior = useMemo(() => predictionObservations.reduce<Record<string, Record<string, number>>>((prior, observation) => {
+    const row = prior[observation.fromGesture] ?? {};
+    row[observation.toGesture] = (row[observation.toGesture] ?? 0) + 1;
+    prior[observation.fromGesture] = row;
+    return prior;
+  }, {}), [predictionObservations]);
+  const personalPredictionTrace = useMemo(() => predictionTraceWithPrior(EVENTS, personalPrior), [personalPrior]);
+  const visiblePredictionTrace = predictionModel === "piece" ? predictionTrace : predictionModel === "synthetic" ? syntheticPredictionTrace : personalPredictionTrace;
   const responseBySection = useMemo(() => Object.fromEntries(SECTIONS.map((section) => {
     const latest = [...responses].reverse().find((response) => response.sectionId === section.id);
     return [section.id, latest?.intensity ?? 0];
@@ -122,6 +133,16 @@ export function JourneyLab() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    let saved: PredictionObservation[] = [];
+    try {
+      const parsed: unknown = JSON.parse(window.localStorage.getItem(PREDICTION_STORAGE_KEY) ?? "[]");
+      if (Array.isArray(parsed)) saved = parsed.filter((item): item is PredictionObservation => typeof item?.fromGesture === "string" && typeof item?.toGesture === "string");
+    } catch { /* A malformed local record should not block the lab. */ }
+    const timer = window.setTimeout(() => setPredictionObservations(saved), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const saveResponse = () => {
     const next = [...responses, { sectionId: selectedSection.id, type: annotation, intensity: feltTension, recordedAt: new Date().toISOString() }];
     setResponses(next);
@@ -131,6 +152,18 @@ export function JourneyLab() {
   const clearResponses = () => {
     setResponses([]);
     window.localStorage.removeItem(RESPONSE_STORAGE_KEY);
+  };
+
+  const saveExpectedTransition = () => {
+    const next = [...predictionObservations, { fromGesture: finalGesture, toGesture: expectedGestureReport, recordedAt: new Date().toISOString() }];
+    setPredictionObservations(next);
+    window.localStorage.setItem(PREDICTION_STORAGE_KEY, JSON.stringify(next));
+    setPredictionModel("personal");
+  };
+
+  const clearExpectedTransitions = () => {
+    setPredictionObservations([]);
+    window.localStorage.removeItem(PREDICTION_STORAGE_KEY);
   };
 
   return (
@@ -227,7 +260,7 @@ export function JourneyLab() {
         </article>
 
         <article className="prediction-trace-card">
-          <div className="journey-heading"><div><span>Prediction · declared model comparison</span><h3>Before uncertainty, after surprise</h3></div><div className="prediction-model-picker" role="group" aria-label="Prediction model"><button type="button" aria-pressed={predictionModel === "piece"} onClick={() => setPredictionModel("piece")}>Piece-local</button><button type="button" aria-pressed={predictionModel === "synthetic"} onClick={() => setPredictionModel("synthetic")}>Synthetic corpus</button></div></div>
+          <div className="journey-heading"><div><span>Prediction · declared model comparison</span><h3>Before uncertainty, after surprise</h3></div><div className="prediction-model-picker" role="group" aria-label="Prediction model"><button type="button" aria-pressed={predictionModel === "piece"} onClick={() => setPredictionModel("piece")}>Piece-local</button><button type="button" aria-pressed={predictionModel === "synthetic"} onClick={() => setPredictionModel("synthetic")}>Synthetic corpus</button><button type="button" aria-pressed={predictionModel === "personal"} onClick={() => setPredictionModel("personal")}>Your expectations · {predictionObservations.length}</button></div></div>
           <div className="prediction-trace" role="img" aria-label={`Uncertainty before and surprise after each generated musical event under the ${predictionModel} model`}>
             <div className="trace-label">uncertainty before</div>
             <div className="trace-bars uncertainty-bars">{visiblePredictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, point.uncertaintyBits / 2 * 100))}%` }} title={`event ${index + 1}: ${point.uncertaintyBits.toFixed(2)} bits uncertainty`} />)}</div>
@@ -235,7 +268,8 @@ export function JourneyLab() {
             <div className="trace-bars surprise-bars">{visiblePredictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, (point.surpriseBits ?? 0) / 6 * 100))}%` }} title={`event ${index + 1}: ${point.surpriseBits === null ? "unlearned" : `${point.surpriseBits.toFixed(2)} bits surprise`}`} />)}</div>
             <div className="trace-events">{visiblePredictionTrace.map((point, index) => <span key={point.eventId}>{index + 1}</span>)}</div>
           </div>
-          <p>{predictionModel === "piece" ? "The piece-local predictor learns transition counts only from earlier events in this sequence." : "The synthetic corpus is a small, declared teaching prior—not a claim about any musical culture or genre."} A wide distribution raises uncertainty before an event; a low-probability realized event raises surprise afterward.</p>
+          <p>{predictionModel === "piece" ? "The piece-local predictor learns transition counts only from earlier events in this sequence." : predictionModel === "synthetic" ? "The synthetic corpus is a small, declared teaching prior—not a claim about any musical culture or genre." : predictionObservations.length ? "Your model begins with transition choices you explicitly saved, then learns from this piece." : "Your model has no saved expectations yet, so it currently falls back to piece-local evidence."} A wide distribution raises uncertainty before an event; a low-probability realized event raises surprise afterward.</p>
+          <div className="personal-prediction-teacher"><span>After <strong>{finalGesture}</strong>, I expect</span><select aria-label="Your expected next gesture" value={expectedGestureReport} onChange={(event) => setExpectedGestureReport(event.target.value)}>{GESTURES.map((gesture) => <option key={gesture} value={gesture}>{gesture}</option>)}</select><button type="button" onClick={saveExpectedTransition}>Teach my model</button><button type="button" disabled={predictionObservations.length === 0} onClick={clearExpectedTransitions}>Clear</button></div>
         </article>
       </div>
 

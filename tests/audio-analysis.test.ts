@@ -14,6 +14,7 @@ test("creates versioned multi-resolution analysis without embedding audio", () =
   assert.ok(result.resolutions.every((resolution) => resolution.frames.length > 0));
   assert.equal(isRecordingAnalysis(result), true);
   assert.ok(result.resolutions[0].frames.every((frame) => frame.roughness >= 0 && frame.harmonicity >= 0 && frame.pitchSalience >= 0));
+  assert.ok(result.resolutions[0].frames.every((frame) => Object.values(frame.featureConfidence).every((value) => value >= 0 && value <= 1)));
 });
 
 test("preserves continuous frequency evidence for a simple tone", () => {

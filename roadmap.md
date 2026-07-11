@@ -337,7 +337,7 @@ Objective: explain tension, surprise, coherence, and payoff as temporal phenomen
 - [x] **P5.3** Build a self-similarity view for motifs, loops, phrases, and sections.
 - [x] **P5.4** Implement a simple, inspectable piece-local prediction model before considering learned neural models.
 - [x] **P5.5** Display uncertainty before an event and surprise after it.
-- [ ] **P5.6** Support multiple prediction models: piece-local, synthetic-corpus, and eventually listener-personalized. (Piece-local and declared synthetic-corpus models are switchable; listener-personalized prediction remains.)
+- [x] **P5.6** Support multiple prediction models: piece-local, synthetic-corpus, and listener-personalized.
 - [x] **P5.7** Build a human-response braid with separate lanes for roughness, harmonicity, pulse confidence, repetition, uncertainty, surprise, tension, and ratings.
 - [x] **P5.8** Mark buildup, expectation violation, return, and release as hypotheses that can be confirmed or rejected by the listener.
 - [x] **P5.9** Demonstrate that local unpleasantness can contribute to a satisfying larger arc.
@@ -356,7 +356,7 @@ Objective: connect the controlled labs to real recordings while preserving uncer
 - [x] **I6.1** Add explicit local-file audio import. Do not upload audio for the MVP.
 - [x] **I6.2** Decode audio and compute versioned, multi-resolution analysis frames in a worker.
 - [x] **I6.3** Extract loudness, spectral balance, spectral flux, onset strength, and auditory-band energy.
-- [ ] **I6.4** Estimate periodicity, harmonicity candidates, pitch salience, and roughness with confidence values. (Declared proxies are visible; per-feature confidence calibration remains.)
+- [x] **I6.4** Estimate periodicity, harmonicity candidates, pitch salience, and roughness with confidence values.
 - [x] **I6.5** Estimate pulse candidates, onset phase, tempo changes, and syncopation.
 - [x] **I6.6** Detect recurrence and candidate section boundaries.
 - [x] **I6.7** Preserve continuous frequency evidence; do not reduce the master representation immediately to twelve chroma bins.
@@ -375,10 +375,10 @@ Exit gate:
 
 Objective: make a real recording inspectable from whole form down to partial interactions.
 
-- [ ] **J7.1** Create one aligned, zoomable timeline for audio, sections, physical features, perceptual features, prediction, and ratings. (The generated aligned timeline exists; continuous zoom and imported audio remain.)
-- [ ] **J7.2** Support timescales from milliseconds to the whole recording without changing the underlying event identity.
+- [x] **J7.1** Create one aligned, zoomable timeline for audio, sections, physical features, perceptual features, prediction, and ratings.
+- [x] **J7.2** Support timescales from milliseconds to the whole recording without changing the underlying event identity.
 - [x] **J7.3** Selecting any time range opens the Acoustic Microscope.
-- [ ] **J7.4** Show auditory spectrum, partial collisions, periodicity candidates, continuous ratio evidence, onset phase, and expected alternatives for the selection.
+- [x] **J7.4** Show auditory spectrum, partial collisions, periodicity candidates, continuous ratio evidence, onset phase, and expected alternatives for the selection.
 - [x] **J7.5** Explain a model estimate through visible contributing evidence rather than a black-box number.
 - [ ] **J7.6** Add counterfactual A/B transforms that preserve the gesture while changing one factor such as roughness, register, timbre, syncopation, or repetition. (Visual model counterfactuals exist; audible A/B transforms remain.)
 - [x] **J7.7** Allow annotations for perceived section, tension, release, surprise, and personal significance.

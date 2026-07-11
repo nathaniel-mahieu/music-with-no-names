@@ -32,16 +32,17 @@ These cards describe educational models used by Music With No Names. A model out
 - **Version:** `mwno-prediction-1`.
 - **Piece-local model:** transition counts are learned incrementally only from earlier events in the generated sequence.
 - **Synthetic-corpus model:** a small declared gesture-transition prior used for teaching model dependence. It is not trained on, or representative of, a musical culture.
+- **Listener-personalized model:** transition counts begin with next-gesture expectations the listener explicitly teaches and stores locally, then update with the current piece. With no observations it reduces to the piece-local model.
 - **Outputs:** alternatives, uncertainty before an event, and surprise after an event.
 - **Limits:** gestures are curated labels; no claim is made that transition counts capture human expectation. Listener annotations remain separate lanes.
 
 ## Recording analysis
 
 - **Schema:** `music-with-no-names.analysis.v1`.
-- **Analysis version:** `mwno-audio-0.2.0`.
+- **Analysis version:** `mwno-audio-0.3.0`.
 - **Inputs:** locally decoded mono samples, sample rate, channel count, and filename. Audio is never included in export.
 - **Outputs:** 50 ms, 250 ms, and 1 s frames; RMS level; spectral-balance and band-energy proxies; flux and onset evidence; zero-crossing frequency; periodicity; harmonicity, salience, and roughness proxies; pulse candidates; onset phase; tempo envelope; syncopation; recurrence; and section candidates.
-- **Confidence:** periodicity and pulse confidence are normalized internal model evidence. Roughness, harmonicity, and salience are currently uncalibrated proxies; per-feature confidence calibration remains open.
+- **Confidence:** periodicity and pulse confidence are normalized internal model evidence. Roughness, harmonicity, and salience carry explicit evidence-confidence values derived from signal level, periodicity, brightness, and local change; these are model-internal confidence measures, not population-calibrated probabilities.
 - **Known failures:** dense mixtures, noise, polyphony, strong transients, expressive tempo, and long files can undermine estimates. Listener corrections are exported separately from measurements.
 
 ## Atlas and personal-response models

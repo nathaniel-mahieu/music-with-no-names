@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Psychoacoustic Validation v1.12**. It provides:
+The current milestone is **Unified Evidence Timeline v1.13**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -24,6 +24,8 @@ The current milestone is **Psychoacoustic Validation v1.12**. It provides:
 - Versioned fine, medium, and whole-form feature frames with continuous frequency evidence.
 - Editable pulse, frequency-center, section, and listener-heard source-event hypotheses plus portable analysis JSON that contains no audio.
 - Arbitrary time-range inspection with adaptive fine, medium, and whole-form evidence frames.
+- A zoomable aligned recording timeline spanning audio envelope, physical and perceptual evidence, pulse expectedness, sections, source events, and listener ratings.
+- Per-feature evidence confidence plus selection-level ratio, partial-collision, onset-phase, and expected-pulse alternatives.
 - Declared harmonicity, pitch-salience, roughness, onset-phase, tempo-change, syncopation, and recurrence proxies.
 - An Ear Lab with editable spectrum, register, spacing, level, envelope, inharmonicity, and noise.
 - Explicit A/B families that hold fundamentals or spectra steady while changing timbre, register, partial balance, or envelope and duration.
@@ -44,6 +46,7 @@ The current milestone is **Psychoacoustic Validation v1.12**. It provides:
 - A motif self-similarity matrix that detects recurrence beyond absolute event time.
 - An incremental piece-local prediction trace separating uncertainty before from surprise after events.
 - A side-by-side switch between piece-local learning and a small declared synthetic-corpus prior.
+- A listener-personalized predictor learned only from explicitly saved next-gesture expectations.
 - A local, persisted listener-response lane aligned with the generated Journey and removable at any time.
 - Listener confirmation or rejection of section-level tension hypotheses.
 - A versioned landmark schema with provenance, licensing, and no bundled commercial audio.

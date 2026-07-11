@@ -7,6 +7,7 @@ import {
   type AnalysisFrame,
   type RecordingAnalysis,
 } from "@/lib/audio-analysis";
+import { approximateRatio, findCoincidingPartials } from "@/lib/music-math";
 
 type Status = "idle" | "decoding" | "analyzing" | "ready" | "error";
 type Playback = { context: AudioContext; source: AudioBufferSourceNode; gain: GainNode };
@@ -15,6 +16,7 @@ type Corrections = {
   centerHz: number | null;
   sectionBoundariesSeconds: number[];
   sourceEventsSeconds: number[];
+  rangeRatings: { startSeconds: number; endSeconds: number; tension: number; significance: number }[];
 };
 type TimeRange = { start: number; end: number };
 
@@ -67,10 +69,13 @@ export function RecordingLab() {
   const [status, setStatus] = useState<Status>("idle");
   const [statusMessage, setStatusMessage] = useState("Choose an audio file from this device. Nothing is uploaded.");
   const [analysis, setAnalysis] = useState<RecordingAnalysis | null>(null);
-  const [corrections, setCorrections] = useState<Corrections>({ pulseBpm: null, centerHz: null, sectionBoundariesSeconds: [], sourceEventsSeconds: [] });
+  const [corrections, setCorrections] = useState<Corrections>({ pulseBpm: null, centerHz: null, sectionBoundariesSeconds: [], sourceEventsSeconds: [], rangeRatings: [] });
   const [boundaryDraft, setBoundaryDraft] = useState(0);
   const [sourceEventDraft, setSourceEventDraft] = useState(0);
   const [selection, setSelection] = useState<TimeRange>({ start: 0, end: 0 });
+  const [timelineZoom, setTimelineZoom] = useState(false);
+  const [rangeTension, setRangeTension] = useState(50);
+  const [rangeSignificance, setRangeSignificance] = useState(50);
   const [selectedSection, setSelectedSection] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
@@ -82,7 +87,7 @@ export function RecordingLab() {
     const frequencyEvidence = result.resolutions[1].frames.map((frame) => frame.zeroCrossingHz).filter((value): value is number => value !== null && value >= 35 && value <= 4000);
     const centerHz = frequencyEvidence.length ? frequencyEvidence.reduce((sum, value) => sum + value, 0) / frequencyEvidence.length : null;
     setAnalysis(result);
-    setCorrections({ pulseBpm, centerHz, sectionBoundariesSeconds: result.sectionBoundariesSeconds, sourceEventsSeconds: [] });
+    setCorrections({ pulseBpm, centerHz, sectionBoundariesSeconds: result.sectionBoundariesSeconds, sourceEventsSeconds: [], rangeRatings: [] });
     setBoundaryDraft(Math.min(result.source.durationSeconds, Math.max(0, result.source.durationSeconds / 2)));
     setSourceEventDraft(Math.min(result.source.durationSeconds, 1));
     setSelection({ start: 0, end: result.sectionBoundariesSeconds[1] ?? result.source.durationSeconds });
@@ -216,6 +221,7 @@ export function RecordingLab() {
         centerHz: typeof extras.corrections?.centerHz === "number" ? extras.corrections.centerHz : null,
         sectionBoundariesSeconds: Array.isArray(extras.corrections?.sectionBoundariesSeconds) ? extras.corrections.sectionBoundariesSeconds : parsed.sectionBoundariesSeconds,
         sourceEventsSeconds: Array.isArray(extras.corrections?.sourceEventsSeconds) ? extras.corrections.sourceEventsSeconds : [],
+        rangeRatings: Array.isArray(extras.corrections?.rangeRatings) ? extras.corrections.rangeRatings : [],
       });
       bufferRef.current = null;
       setHasAudio(false);
@@ -239,11 +245,23 @@ export function RecordingLab() {
   const selectedResolution = rangeDuration <= 2 ? analysis?.resolutions[0] : rangeDuration <= 15 ? analysis?.resolutions[1] : analysis?.resolutions[2];
   const selectedFrames = (selectedResolution?.frames ?? []).filter((frame) => frame.timeSeconds >= currentRange.start && frame.timeSeconds < currentRange.end);
   const overviewFrames = downsample(coarseFrames);
+  const timelineRange = timelineZoom ? currentRange : { start: 0, end: analysis?.source.durationSeconds ?? 0 };
+  const timelineFrames = timelineZoom ? downsample(selectedFrames) : overviewFrames;
+  const timelineDuration = Math.max(0.001, timelineRange.end - timelineRange.start);
+  const timelinePosition = (timeSeconds: number) => ((timeSeconds - timelineRange.start) / timelineDuration) * 100;
+  const pulseSeconds = corrections.pulseBpm ? 60 / corrections.pulseBpm : null;
+  const pulseExpectedness = (frame: AnalysisFrame) => pulseSeconds ? Math.cos(Math.PI * ((frame.timeSeconds % pulseSeconds) / pulseSeconds)) ** 2 : 0;
+  const ratingAt = (frame: AnalysisFrame) => [...corrections.rangeRatings].reverse().find((rating) => frame.timeSeconds >= rating.startSeconds && frame.timeSeconds < rating.endSeconds)?.tension ?? 0;
   const selectedHz = selectedFrames.map((frame) => frame.zeroCrossingHz).filter((value): value is number => value !== null && value >= 35 && value <= 4000);
   const averageHz = selectedHz.length ? selectedHz.reduce((sum, value) => sum + value, 0) / selectedHz.length : null;
   const averageBands = analysis?.auditoryBandCentersHz.map((_, index) => frameMean(selectedFrames, (frame) => frame.auditoryBandEnergy[index] ?? 0)) ?? [];
   const rangeOnsets = analysis?.structural.onsetPhases.filter((onset) => onset.timeSeconds >= currentRange.start && onset.timeSeconds < currentRange.end) ?? [];
   const rangeRecurrences = analysis?.structural.recurrencePairs.filter((pair) => (pair.firstSeconds >= currentRange.start && pair.firstSeconds < currentRange.end) || (pair.secondSeconds >= currentRange.start && pair.secondSeconds < currentRange.end)) ?? [];
+  const continuousRatio = corrections.centerHz && averageHz ? averageHz / corrections.centerHz : null;
+  const ratioApproximation = continuousRatio ? approximateRatio(continuousRatio, 32) : null;
+  const partialCollisions = corrections.centerHz && averageHz ? findCoincidingPartials(corrections.centerHz, averageHz, 12, 8) : [];
+  const meanOnsetPhase = rangeOnsets.length ? rangeOnsets.reduce((sum, onset) => sum + onset.phase * onset.strength, 0) / Math.max(0.001, rangeOnsets.reduce((sum, onset) => sum + onset.strength, 0)) : null;
+  const expectedPulseTimes = pulseSeconds ? [1, 2, 3].map((step) => currentRange.end + pulseSeconds * step).filter((time) => time <= analysis!.source.durationSeconds) : [];
 
   const addBoundary = () => {
     if (!analysis) return;
@@ -274,6 +292,10 @@ export function RecordingLab() {
     if (!analysis) return;
     const value = Math.round(clamp(sourceEventDraft, 0, analysis.source.durationSeconds) * 100) / 100;
     setCorrections((current) => ({ ...current, sourceEventsSeconds: [...new Set([...current.sourceEventsSeconds, value])].sort((a, b) => a - b) }));
+  };
+
+  const saveRangeRating = () => {
+    setCorrections((current) => ({ ...current, rangeRatings: [...current.rangeRatings, { startSeconds: currentRange.start, endSeconds: currentRange.end, tension: rangeTension, significance: rangeSignificance }] }));
   };
 
   return (
@@ -321,7 +343,8 @@ export function RecordingLab() {
 
           <div className="recording-journey">
             <div className="recording-heading"><div><span>Recording Journey</span><h3>Physical and perceptual evidence over time</h3></div><p>{fineFrames.length.toLocaleString()} fine frames · {mediumFrames.length.toLocaleString()} medium · {coarseFrames.length.toLocaleString()} whole-form</p></div>
-            <div className="recording-overview" role="img" aria-label={`Overview of loudness, brightness, onset strength, harmonicity, roughness, and periodicity confidence for ${analysis.source.filename}`}>
+            <div className="timeline-view-picker" role="group" aria-label="Recording timeline scale"><button type="button" aria-pressed={!timelineZoom} onClick={() => setTimelineZoom(false)}>Whole recording</button><button type="button" aria-pressed={timelineZoom} onClick={() => setTimelineZoom(true)}>Follow microscope · {currentRange.start.toFixed(2)}–{currentRange.end.toFixed(2)}s</button><span>Same time identity · {timelineZoom ? `${selectedResolution?.windowSeconds.toFixed(3)}s frames` : "whole-form frames"}</span></div>
+            <div className="recording-overview" role="img" aria-label={`${timelineZoom ? "Zoomed" : "Whole-recording"} aligned timeline of physical, perceptual, structural, prediction, and listener evidence for ${analysis.source.filename}`}>
               {[
                 ["Loudness", (frame: AnalysisFrame) => clamp((frame.loudnessDb + 72) / 72, 0, 1), "var(--recording-gold)"],
                 ["Brightness proxy", (frame: AnalysisFrame) => frame.brightness, "var(--recording-cyan)"],
@@ -329,13 +352,15 @@ export function RecordingLab() {
                 ["Roughness proxy", (frame: AnalysisFrame) => frame.roughness, "#ea8c74"],
                 ["Harmonicity proxy", (frame: AnalysisFrame) => frame.harmonicity, "#7ecfb7"],
                 ["Periodicity confidence", (frame: AnalysisFrame) => frame.periodicityConfidence, "#b8a5e8"],
+                ["Pulse expectedness", (frame: AnalysisFrame) => pulseExpectedness(frame), "#f0d67a"],
+                ["Your tension report", (frame: AnalysisFrame) => ratingAt(frame) / 100, "#ffffff"],
               ].map(([label, read, color]) => (
                 <div className="recording-lane" key={label as string}>
                   <span>{label as string}</span>
-                  <div>{overviewFrames.map((frame, index) => <i key={index} style={{ height: `${(read as (frame: AnalysisFrame) => number)(frame) * 100}%`, background: color as string }} />)}</div>
+                  <div>{timelineFrames.map((frame) => <i key={`${frame.timeSeconds}-${frame.durationSeconds}`} style={{ height: `${(read as (frame: AnalysisFrame) => number)(frame) * 100}%`, background: color as string }} />)}</div>
                 </div>
               ))}
-              <div className="boundary-lines" aria-hidden="true">{boundaries.slice(1, -1).map((time) => <i key={time} style={{ left: `${(time / analysis.source.durationSeconds) * 100}%` }} />)}</div>
+              <div className="boundary-lines" aria-hidden="true">{boundaries.slice(1, -1).filter((time) => time >= timelineRange.start && time <= timelineRange.end).map((time) => <i key={`boundary-${time}`} style={{ left: `${timelinePosition(time)}%` }} />)}{corrections.sourceEventsSeconds.filter((time) => time >= timelineRange.start && time <= timelineRange.end).map((time) => <i className="source-event-line" key={`event-${time}`} style={{ left: `${timelinePosition(time)}%` }} />)}{!timelineZoom ? <b className="selection-window" style={{ left: `${timelinePosition(currentRange.start)}%`, width: `${((currentRange.end - currentRange.start) / timelineDuration) * 100}%` }} /> : null}</div>
             </div>
             <div className="recording-sections" aria-label="Candidate recording sections">
               {sectionRanges.map((range, index) => <button key={`${range.start}-${range.end}`} type="button" aria-pressed={selectedSection === index} onClick={() => chooseSection(range, index)}><strong>{String(index + 1).padStart(2, "0")}</strong><span>{formatTime(range.start)}–{formatTime(range.end)}</span></button>)}
@@ -352,11 +377,18 @@ export function RecordingLab() {
               <article><span>Mean loudness</span><strong>{frameMean(selectedFrames, (frame) => frame.loudnessDb).toFixed(1)} dBFS</strong><p>Windowed root-mean-square level. This is not calibrated perceived loudness.</p></article>
               <article><span>Continuous frequency evidence</span><strong>{averageHz ? `${averageHz.toFixed(1)} Hz` : "unresolved"}</strong><p>Zero-crossing evidence remains continuous. Dense mixtures can make this estimate unreliable.</p></article>
               <article><span>Pulse hypothesis</span><strong>{corrections.pulseBpm ? `${corrections.pulseBpm.toFixed(1)} /min` : "uncertain"}</strong><p>{analysis.pulseCandidates.length ? `${Math.round(analysis.pulseCandidates[0].confidence * 100)}% relative autocorrelation confidence.` : "No stable onset recurrence was found."}</p></article>
-              <article><span>Harmonicity · salience</span><strong>{Math.round(frameMean(selectedFrames, (frame) => frame.harmonicity) * 100)} · {Math.round(frameMean(selectedFrames, (frame) => frame.pitchSalience) * 100)}</strong><p>Transparent periodicity-derived proxies, separate from confidence and preference.</p></article>
-              <article><span>Roughness proxy</span><strong>{Math.round(frameMean(selectedFrames, (frame) => frame.roughness) * 100)}</strong><p>Brightness and local spectral change provide a declared first-order sensory-conflict proxy.</p></article>
+              <article><span>Harmonicity · salience</span><strong>{Math.round(frameMean(selectedFrames, (frame) => frame.harmonicity) * 100)} · {Math.round(frameMean(selectedFrames, (frame) => frame.pitchSalience) * 100)}</strong><p>Evidence confidence: {Math.round(frameMean(selectedFrames, (frame) => frame.featureConfidence.harmonicity) * 100)} · {Math.round(frameMean(selectedFrames, (frame) => frame.featureConfidence.pitchSalience) * 100)}. Separate from preference.</p></article>
+              <article><span>Roughness proxy</span><strong>{Math.round(frameMean(selectedFrames, (frame) => frame.roughness) * 100)}</strong><p>Evidence confidence: {Math.round(frameMean(selectedFrames, (frame) => frame.featureConfidence.roughness) * 100)}. Brightness and local change drive this first-order proxy.</p></article>
               <article><span>Timing structure</span><strong>{rangeOnsets.length} · {rangeRecurrences.length}</strong><p>Onset-phase events · coarse recurrence links. Whole-recording syncopation: {Math.round(analysis.structural.syncopation * 100)}.</p></article>
             </div>
+            <div className="selection-evidence-strip">
+              <article><span>Continuous ratio evidence</span><strong>{continuousRatio ? `${continuousRatio.toFixed(4)}×` : "unresolved"}</strong><p>{ratioApproximation ? `Nearest small relation ${ratioApproximation.numerator}:${ratioApproximation.denominator}, ${Math.abs(ratioApproximation.errorCents).toFixed(1)} cents away.` : "Set or correct a center to compare continuous frequency evidence."}</p></article>
+              <article><span>Partial-collision hypothesis</span><strong>{partialCollisions.length}</strong><p>{partialCollisions.length ? `First match near ${partialCollisions[0].frequencyHz.toFixed(1)} Hz.` : "No collisions inside the declared twelve-partial, eight-cent search."}</p></article>
+              <article><span>Onset phase</span><strong>{meanOnsetPhase === null ? "open" : meanOnsetPhase.toFixed(2)}</strong><p>Strength-weighted phase under the corrected pulse; 0 is the pulse boundary and 0.5 is midway.</p></article>
+              <article><span>Expected pulse alternatives</span><strong>{expectedPulseTimes.length || "open"}</strong><p>{expectedPulseTimes.length ? expectedPulseTimes.map((time) => `${time.toFixed(2)}s`).join(" · ") : "No later pulse positions remain inside the recording."}</p></article>
+            </div>
             <div className="auditory-bands"><span>Ear-relative band evidence</span><div>{analysis.auditoryBandCentersHz.map((center, index) => <i key={center} style={{ height: `${(averageBands[index] ?? 0) * 100}%` }}><b>{center >= 1000 ? `${center / 1000}k` : center}</b></i>)}</div><p>Transparent lag-correlation proxies at declared center frequencies—not a calibrated cochlear filterbank.</p></div>
+            <div className="recording-range-report"><div><span>Human report for this exact time identity</span><strong>{currentRange.start.toFixed(2)}–{currentRange.end.toFixed(2)}s</strong></div><label><span>Felt tension <output>{rangeTension}</output></span><input type="range" min="0" max="100" aria-label="Recording range felt tension" value={rangeTension} onChange={(event) => setRangeTension(Number(event.target.value))} /></label><label><span>Personal significance <output>{rangeSignificance}</output></span><input type="range" min="0" max="100" aria-label="Recording range personal significance" value={rangeSignificance} onChange={(event) => setRangeSignificance(Number(event.target.value))} /></label><button type="button" onClick={saveRangeRating}>Save to timeline · {corrections.rangeRatings.length}</button></div>
           </div>
 
           <div className="hypothesis-editor">

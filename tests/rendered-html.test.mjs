@@ -103,9 +103,12 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(journeyLab, /Matches my listening/);
   assert.match(journeyLab, /Exact repeat/);
   assert.match(journeyLab, /Whole-arc satisfaction/);
+  assert.match(journeyLab, /Teach my model/);
   assert.match(recordingLab, /Nothing is uploaded/);
   assert.match(recordingLab, /audio-analysis\.worker/);
   assert.match(recordingLab, /Export analysis JSON/);
+  assert.match(recordingLab, /Follow microscope/);
+  assert.match(recordingLab, /Partial-collision hypothesis/);
   assert.match(atlasLab, /There is no universal good region/);
   assert.match(atlasLab, /preference proximity/);
   assert.match(atlasLab, /is a path, not a point/);
