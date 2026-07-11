@@ -12,7 +12,7 @@ No commercial or third-party recording is bundled. Recording Lab operates on aud
 
 ## Atlas teaching data
 
-The initial Atlas entries are hand-authored pedagogical landmarks and transformations. They are not measurements of bundled copyrighted recordings and do not constitute a genre dataset. Each entry carries source type, method, version, layer, confidence or spread, and licensing metadata. Genre density claims remain disabled until a declared corpus exists.
+The initial Atlas entries are hand-authored pedagogical landmarks and transformations. They are not measurements of bundled copyrighted recordings and do not constitute a representative genre dataset. Each entry carries source type, method, version, layer, confidence or spread, and licensing metadata. The Atlas computes explicitly provisional density regions from three pop profiles, two blues profiles, and four selected-classical profiles; counts and methods remain visible, and the regions are deliberately porous and overlapping.
 
 ## Listener data
 

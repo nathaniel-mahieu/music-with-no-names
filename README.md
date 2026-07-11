@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Audible Counterfactuals v1.14**. It provides:
+The current milestone is **Porous Corpus Atlas v1.15**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -52,6 +52,8 @@ The current milestone is **Audible Counterfactuals v1.14**. It provides:
 - A versioned landmark schema with provenance, licensing, and no bundled commercial audio.
 - Selectable Atlas axes and whole-recording/composition/performance/production views.
 - Separate measured, curator, listener, model-uncertainty, and inter-listener-spread encodings.
+- Data-derived, overlapping genre regions whose centers and widths follow the selected axes and declared starter corpora.
+- Explicit pop, blues, and selected-classical novelty-channel comparisons with visible corpus counts and methods.
 - A transparent listener preference center and bandwidth learned from saved evidence.
 - Goal-relative fit blended with learned proximity and sample-count uncertainty.
 - Repeated-listening history that keeps familiarity and liking changes separate.

@@ -118,6 +118,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(atlasLab, /Atlas interpretation layer/);
   assert.match(atlasLab, /Provenance and licensing/);
   assert.match(atlasLab, /Generated 4:5:6 harmonic field/);
+  assert.match(atlasLab, /where novelty tends to live/);
+  assert.match(atlasLab, /declared profiles/);
   assert.match(personalLab, /predicted fit for this listener and goal/);
   assert.match(personalLab, /localStorage/);
   assert.match(personalLab, /Export JSON/);

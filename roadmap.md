@@ -400,7 +400,7 @@ Objective: orient users with familiar music while avoiding genre essentialism an
 - [x] **L8.3** Keep measured features, curator hypotheses, and listener reports visually distinct.
 - [x] **L8.4** Build an atlas with interpretable selectable axes such as sensory tension, predictive surprise, pulse clarity, activation, repetition, and long-form transformation.
 - [x] **L8.5** Encode inter-listener variation separately from model uncertainty.
-- [ ] **L8.6** Construct genre regions from declared corpora and display porous overlapping density clouds.
+- [x] **L8.6** Construct genre regions from declared corpora and display porous overlapping density clouds.
 - [x] **L8.7** Add a composition/performance/production layer switch.
 - [x] **L8.8** Create the first landmark set:
   - A generated 4:5:6 harmonic field.
@@ -412,7 +412,7 @@ Objective: orient users with familiar music while avoiding genre essentialism an
   - Billie Eilish, “bad guy.”
   - The Weeknd, “Blinding Lights.”
 - [x] **L8.9** Use openly licensed recordings where available; otherwise provide metadata and analysis profiles while requiring the user to load audio they are entitled to use.
-- [ ] **L8.10** Add comparisons that expose where novelty tends to live:
+- [x] **L8.10** Add comparisons that expose where novelty tends to live:
   - Pop: stable pulse/loop with variation in production, voice, and sectional energy.
   - Blues: stable cyclic frame with continuous pitch, timing, interaction, and timbral variation.
   - Selected classical works: motif transformation, orchestration, center movement, and longer-range formal memory.

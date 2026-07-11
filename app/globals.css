@@ -1699,40 +1699,40 @@ footer a {
   position: absolute;
   display: grid;
   place-items: center;
-  border: 1px solid currentColor;
+  z-index: 1;
+  border: 2px dashed currentColor;
   border-radius: 50%;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.58rem;
   letter-spacing: 0.08em;
-  opacity: 0.11;
+  opacity: 0.18;
+  pointer-events: none;
   text-transform: uppercase;
+  transform: translate(-50%, -50%) rotate(-5deg);
 }
 
+.genre-cloud strong,
+.genre-cloud span { display: block; text-align: center; }
+.genre-cloud span { margin-top: 4px; font-size: 0.48rem; }
+
 .cloud-pop {
-  top: 44%;
-  left: 8%;
-  width: 43%;
-  height: 40%;
   color: var(--tone-a);
-  transform: rotate(-8deg);
+  background: repeating-linear-gradient(45deg, transparent 0 9px, color-mix(in srgb, var(--tone-a) 14%, transparent) 10px 11px);
+  transform: translate(-50%, -50%) rotate(-8deg);
 }
 
 .cloud-blues {
-  top: 35%;
-  left: 32%;
-  width: 36%;
-  height: 38%;
+  border-style: dotted;
   color: var(--tone-b);
-  transform: rotate(9deg);
+  background: repeating-radial-gradient(circle, transparent 0 10px, color-mix(in srgb, var(--tone-b) 13%, transparent) 11px 12px);
+  transform: translate(-50%, -50%) rotate(9deg);
 }
 
 .cloud-classical {
-  top: 7%;
-  left: 14%;
-  width: 78%;
-  height: 78%;
+  border-style: double;
   color: var(--accent);
-  transform: rotate(-4deg);
+  background: repeating-linear-gradient(90deg, transparent 0 14px, color-mix(in srgb, var(--accent) 12%, transparent) 15px 16px);
+  transform: translate(-50%, -50%) rotate(-4deg);
 }
 
 .preference-target {
@@ -2115,6 +2115,62 @@ footer a {
 .landmark-provenance dt { color: var(--faint); }
 .landmark-provenance dd { margin: 0; color: var(--muted); line-height: 1.45; }
 
+.novelty-comparison {
+  padding: clamp(26px, 4vw, 58px);
+  border-top: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.novelty-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-top: 28px;
+  background: var(--line);
+}
+
+.novelty-cards article {
+  min-width: 0;
+  padding: 22px;
+  background: var(--surface-soft);
+}
+
+.novelty-cards article > div:first-child > span {
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.novelty-cards article.novelty-pop > div:first-child > span { color: var(--tone-a); }
+.novelty-cards article.novelty-blues > div:first-child > span { color: var(--tone-b); }
+.novelty-cards article > div:first-child > strong { display: block; margin-top: 8px; font-family: var(--font-mono), monospace; font-size: 0.62rem; }
+.novelty-cards article p { color: var(--muted); font-size: 0.64rem; line-height: 1.55; }
+
+.novelty-bars {
+  display: grid;
+  gap: 9px;
+  margin: 18px 0;
+}
+
+.novelty-bars > div {
+  display: grid;
+  grid-template-columns: 105px 1fr 25px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.57rem;
+}
+
+.novelty-bars i { height: 5px; border: 1px solid var(--line-strong); background: repeating-linear-gradient(90deg, transparent 0 5px, var(--line) 6px); }
+.novelty-bars b { display: block; height: 100%; background: var(--accent); }
+.novelty-pop .novelty-bars b { background: var(--tone-a); }
+.novelty-blues .novelty-bars b { background: var(--tone-b); }
+.novelty-bars output { text-align: right; }
+.novelty-note { min-height: 58px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--foreground) !important; }
+.corpus-boundary { max-width: 920px; margin: 18px 0 0; color: var(--muted); font-size: 0.65rem; line-height: 1.6; }
+
 .journey-view {
   padding: clamp(26px, 4vw, 58px);
   border-top: 1px solid var(--line);
@@ -2199,6 +2255,10 @@ footer a {
 }
 
 @media (max-width: 1080px) {
+  .novelty-cards {
+    grid-template-columns: 1fr;
+  }
+
   .instrument {
     grid-template-columns: 1fr;
   }

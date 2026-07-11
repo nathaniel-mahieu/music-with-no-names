@@ -7,8 +7,10 @@ import {
   type ExperiencePosition,
   type ExperienceWeights,
 } from "@/lib/experience-model";
+import { densityRegion, meanValue } from "@/lib/atlas-model";
 
 type Genre = "generated" | "pop" | "blues" | "classical";
+type CorpusGenre = Exclude<Genre, "generated">;
 type AtlasLayer = "whole" | "composition" | "performance" | "production";
 type AtlasDimension = "tension" | "surprise" | "drive" | "repetition" | "expression" | "transformation";
 
@@ -260,6 +262,12 @@ const LAYER_LABELS: Record<AtlasLayer, string> = {
   production: "production",
 };
 
+const CORPUS_DECLARATIONS: Record<CorpusGenre, { version: string; method: string; novelty: string }> = {
+  pop: { version: "pop-starter-corpus-v1 · 3 profiles", method: "curated whole-recording and section hypotheses", novelty: "Stable pulse and loop make production, voice, and sectional-energy changes conspicuous." },
+  blues: { version: "blues-starter-corpus-v1 · 2 profiles", method: "curated cyclic-frame and performance hypotheses", novelty: "A stable cycle magnifies continuous pitch, timing, interaction, and timbral variation." },
+  classical: { version: "classical-starter-corpus-v1 · 4 profiles", method: "curated score, form, and reference-performance hypotheses", novelty: "Motif transformation, orchestration, center movement, and long-range memory carry change." },
+};
+
 function transformationValue(landmark: Landmark) {
   const dimensions: (keyof ExperiencePosition)[] = ["tension", "surprise", "drive"];
   return Math.min(100, dimensions.reduce((sum, dimension) => {
@@ -372,6 +380,21 @@ export function AtlasLab() {
       })),
     [layer, preference, sizeAxis, weights, xAxis, yAxis],
   );
+  const genreRegions = useMemo(() => (Object.keys(CORPUS_DECLARATIONS) as CorpusGenre[]).map((genre) => {
+    const items = landmarksWithFit.filter((landmark) => landmark.genre === genre);
+    return { genre, ...densityRegion(items) };
+  }), [landmarksWithFit]);
+  const noveltyProfiles = useMemo(() => (Object.keys(CORPUS_DECLARATIONS) as CorpusGenre[]).map((genre) => {
+    const items = LANDMARKS.filter((landmark) => landmark.genre === genre);
+    return {
+      genre,
+      repetition: meanValue(items.map((item) => item.repetition)),
+      expression: meanValue(items.map((item) => item.expression)),
+      surprise: meanValue(items.map((item) => item.surprise)),
+      transformation: meanValue(items.map(transformationValue)),
+      declaration: CORPUS_DECLARATIONS[genre],
+    };
+  }), []);
   const selectedFit = experienceProximity(selected, preference, weights);
   const selectedMetadata = landmarkMetadata(selected);
   const profile = [
@@ -479,9 +502,7 @@ export function AtlasLab() {
             role="img"
             aria-label={`Music landmarks positioned by ${DIMENSION_LABELS[xAxis]} and ${DIMENSION_LABELS[yAxis]}. Point size indicates ${DIMENSION_LABELS[sizeAxis]}. ${LAYER_LABELS[layer]} layer.`}
           >
-            <div className="genre-cloud cloud-pop">pop cloud</div>
-            <div className="genre-cloud cloud-blues">blues cloud</div>
-            <div className="genre-cloud cloud-classical">classical cloud</div>
+            {genreRegions.map((region) => <div key={region.genre} className={`genre-cloud cloud-${region.genre}`} style={{ left: `${region.centerX}%`, top: `${100 - region.centerY}%`, width: `${region.width}%`, height: `${region.height}%` }}><strong>{region.genre}</strong><span>{region.count} declared profiles</span></div>)}
             {xAxis === "tension" && yAxis === "surprise" && layer === "whole" ? <div className="preference-target" style={{ left: `${preference.tension}%`, top: `${100 - preference.surprise}%` }} aria-hidden="true" /> : null}
             {landmarksWithFit.map((landmark) => {
               const style = {
@@ -554,6 +575,22 @@ export function AtlasLab() {
           </div>
           <details className="landmark-provenance"><summary>Provenance and licensing</summary><dl><div><dt>Schema</dt><dd>{selectedMetadata.schema}</dd></div><div><dt>Corpus</dt><dd>{selectedMetadata.provenance.corpus}</dd></div><div><dt>Recording</dt><dd>{selectedMetadata.recording.access}</dd></div><div><dt>Rights</dt><dd>{selectedMetadata.licensing.status}. {selectedMetadata.licensing.requirement}</dd></div></dl></details>
         </aside>
+      </div>
+
+      <div className="novelty-comparison">
+        <div className="journey-heading"><div><span>Corpus comparison · where novelty tends to live</span><h3>Stable frames make different changes audible.</h3></div><p>descriptive teaching profiles · overlapping, not essential</p></div>
+        <div className="novelty-cards">
+          {noveltyProfiles.map((profile) => <article key={profile.genre} className={`novelty-${profile.genre}`}><div><span>{profile.genre}</span><strong>{profile.declaration.version}</strong><p>{profile.declaration.method}</p></div><div className="novelty-bars">{([[
+            "stable repetition", profile.repetition,
+          ], [
+            "expressive variation", profile.expression,
+          ], [
+            "event surprise", profile.surprise,
+          ], [
+            "long-form change", profile.transformation,
+          ]] as [string, number][]).map(([label, value]) => <div key={label}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><output>{Math.round(value)}</output></div>)}</div><p className="novelty-note">{profile.declaration.novelty}</p></article>)}
+        </div>
+        <p className="corpus-boundary">Cloud centers and widths are computed from the currently selected axes and interpretation layer. Small counts, curator placement, and corpus version remain visible; the regions overlap by design and are not claims about all music in a genre.</p>
       </div>
 
       <div className="journey-view">

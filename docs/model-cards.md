@@ -51,7 +51,7 @@ These cards describe educational models used by Music With No Names. A model out
 - **Inputs:** declared measured values, curator hypotheses, uncertainty, listener spread, layer, provenance, and licensing.
 - **Outputs:** porous descriptive placements and listener/goal-conditioned proximity—not quality rankings.
 - **Personal terrain version:** `mwno-personal-1`; weighted centers and bandwidths are learned from local ratings with visible sample-count uncertainty.
-- **Limits:** the bundled Atlas is a teaching set, not a statistically representative genre corpus. Personal models with few samples are unstable and remain on the device.
+- **Limits:** the bundled Atlas is a teaching set, not a statistically representative genre corpus. Its density clouds are derived only from the declared small starter corpora and must not be generalized to all music in a genre. Personal models with few samples are unstable and remain on the device.
 
 ## Governance
 
