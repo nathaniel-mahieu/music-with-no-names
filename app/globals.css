@@ -823,12 +823,13 @@ footer a {
   border-top: 1px solid var(--line);
 }
 
-.voice-control {
+.voice-control,
+.voice-control > label {
   display: grid;
   gap: 8px;
 }
 
-.voice-control > span {
+.voice-control > label > span {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -846,6 +847,66 @@ footer a {
 .voice-control input:disabled {
   cursor: not-allowed;
   opacity: 0.34;
+}
+
+.voice-count-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.voice-count-control > div {
+  display: flex;
+  gap: 6px;
+}
+
+.voice-count-control button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--foreground);
+  background: transparent;
+  font: inherit;
+  font-size: 0.62rem;
+  cursor: pointer;
+}
+
+.voice-count-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.voice-realization {
+  display: grid;
+  grid-template-columns: 0.55fr 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.voice-realization label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.58rem;
+}
+
+.voice-realization label > span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.voice-realization select {
+  min-height: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  color: var(--foreground);
+  background: var(--surface-raised);
 }
 
 .voice-swatch {
@@ -870,9 +931,19 @@ footer a {
   --voice-color: #b99ae8;
 }
 
+.voice-5 {
+  --voice-color: #7fcf9d;
+}
+
+.voice-6 {
+  --voice-color: #ee8caf;
+}
+
 .voice-swatch.voice-1,
 .voice-swatch.voice-2,
-.voice-swatch.voice-3 {
+.voice-swatch.voice-3,
+.voice-swatch.voice-5,
+.voice-swatch.voice-6 {
   background: var(--voice-color);
 }
 
@@ -2309,6 +2380,15 @@ footer a {
 
   .harmony-presets,
   .rhythm-presets {
+    grid-template-columns: 1fr;
+  }
+
+  .voice-count-control {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .voice-realization {
     grid-template-columns: 1fr;
   }
 

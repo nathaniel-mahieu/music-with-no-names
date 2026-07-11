@@ -288,7 +288,7 @@ Exit gate:
 
 Objective: move from dyads to global spectral organization and voice motion without reverting to chord names.
 
-- [ ] **H3.1** Support three to six simultaneous sources with independent spectra, register, and amplitude.
+- [x] **H3.1** Support three to six simultaneous sources with independent spectra, register, and amplitude.
 - [x] **H3.2** Represent a sonority as a normalized ratio set plus its absolute realization.
 - [x] **H3.3** Detect candidate common subharmonics and visualize competing interpretations.
 - [x] **H3.4** Add prime-exponent coordinates for 2-, 3-, 5-, and 7-based relationships.

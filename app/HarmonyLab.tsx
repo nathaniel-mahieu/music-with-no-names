@@ -16,7 +16,10 @@ type HarmonyAudioNodes = {
   context: AudioContext;
   master: GainNode;
   oscillators: OscillatorNode[];
+  gains: GainNode[];
 };
+
+type VoiceSetting = { octave: number; amplitude: number; partialCount: number };
 
 const HARMONY_PRESETS = [
   {
@@ -55,16 +58,16 @@ const MOTION_STEPS = [
   { label: "Return", ratios: [1, 5 / 4, 3 / 2], note: "short basis restored" },
 ] as const;
 
-function createHarmonicWave(context: AudioContext) {
-  const real = new Float32Array(10);
-  const imaginary = new Float32Array(10);
+function createHarmonicWave(context: AudioContext, partialCount: number) {
+  const real = new Float32Array(partialCount + 1);
+  const imaginary = new Float32Array(partialCount + 1);
   for (let index = 1; index < imaginary.length; index += 1) {
     imaginary[index] = 1 / index ** 1.2;
   }
   return context.createPeriodicWave(real, imaginary);
 }
 
-function useHarmonyAudio(referenceHz: number, ratios: number[]) {
+function useHarmonyAudio(voices: { frequencyHz: number; amplitude: number; partialCount: number }[]) {
   const nodesRef = useRef<HarmonyAudioNodes | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -96,16 +99,17 @@ function useHarmonyAudio(referenceHz: number, ratios: number[]) {
       await context.resume();
       const master = context.createGain();
       const compressor = context.createDynamicsCompressor();
-      const wave = createHarmonicWave(context);
       const now = context.currentTime;
-      const oscillators = ratios.map((ratio) => {
+      const gains: GainNode[] = [];
+      const oscillators = voices.map((voice) => {
         const oscillator = context.createOscillator();
         const gain = context.createGain();
-        oscillator.frequency.setValueAtTime(referenceHz * ratio, now);
-        oscillator.setPeriodicWave(wave);
-        gain.gain.setValueAtTime(0.28, now);
+        oscillator.frequency.setValueAtTime(voice.frequencyHz, now);
+        oscillator.setPeriodicWave(createHarmonicWave(context, voice.partialCount));
+        gain.gain.setValueAtTime(voice.amplitude / Math.max(3, voices.length), now);
         oscillator.connect(gain).connect(master);
         oscillator.start();
+        gains.push(gain);
         return oscillator;
       });
 
@@ -115,12 +119,12 @@ function useHarmonyAudio(referenceHz: number, ratios: number[]) {
       compressor.ratio.setValueAtTime(7, now);
       master.connect(compressor).connect(context.destination);
       master.gain.exponentialRampToValueAtTime(0.105, now + 0.06);
-      nodesRef.current = { context, master, oscillators };
+      nodesRef.current = { context, master, oscillators, gains };
       setIsPlaying(true);
     } catch {
       setIsPlaying(false);
     }
-  }, [ratios, referenceHz]);
+  }, [voices]);
 
   useEffect(() => {
     const nodes = nodesRef.current;
@@ -128,12 +132,13 @@ function useHarmonyAudio(referenceHz: number, ratios: number[]) {
     const now = nodes.context.currentTime;
     nodes.oscillators.forEach((oscillator, index) => {
       oscillator.frequency.setTargetAtTime(
-        referenceHz * ratios[index],
+        voices[index].frequencyHz,
         now,
         0.018,
       );
+      nodes.gains[index].gain.setTargetAtTime(voices[index].amplitude / Math.max(3, voices.length), now, 0.018);
     });
-  }, [ratios, referenceHz]);
+  }, [voices]);
 
   useEffect(() => {
     return () => {
@@ -161,6 +166,11 @@ function formatFrequency(value: number) {
 export function HarmonyLab() {
   const [referenceHz, setReferenceHz] = useState(160);
   const [justRatios, setJustRatios] = useState<number[]>([1, 5 / 4, 3 / 2]);
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSetting[]>([
+    { octave: 0, amplitude: 0.75, partialCount: 9 },
+    { octave: 0, amplitude: 0.68, partialCount: 9 },
+    { octave: 0, amplitude: 0.72, partialCount: 9 },
+  ]);
   const [temperamentMorph, setTemperamentMorph] = useState(0);
   const [foldOctaves, setFoldOctaves] = useState(true);
   const [motionStep, setMotionStep] = useState(0);
@@ -173,9 +183,10 @@ export function HarmonyLab() {
       }),
     [justRatios, temperamentMorph],
   );
-  const { isPlaying, start, stop } = useHarmonyAudio(referenceHz, ratios);
   const basis = useMemo(() => harmonicBasis(ratios, 20, 1), [ratios]);
-  const voicesHz = ratios.map((ratio) => referenceHz * ratio);
+  const voicesHz = useMemo(() => ratios.map((ratio, index) => referenceHz * ratio * 2 ** (voiceSettings[index]?.octave ?? 0)), [ratios, referenceHz, voiceSettings]);
+  const audioVoices = useMemo(() => voicesHz.map((frequencyHz, index) => ({ frequencyHz, amplitude: voiceSettings[index]?.amplitude ?? 0.7, partialCount: voiceSettings[index]?.partialCount ?? 9 })), [voiceSettings, voicesHz]);
+  const { isPlaying, start, stop } = useHarmonyAudio(audioVoices);
 
   const pairwise = useMemo(() => ratios.slice(1).map((ratio, index) => centsFromRatio(ratio / ratios[index])), [ratios]);
   const motionDistance = useMemo(() => previousRatios.length === ratios.length ? voiceLeadingDistance(previousRatios, ratios) : 0, [previousRatios, ratios]);
@@ -183,13 +194,14 @@ export function HarmonyLab() {
 
   const spectrum = useMemo(() => {
     const partials = voicesHz.flatMap((frequencyHz, voiceIndex) =>
-      harmonicPartials(frequencyHz, 9).map((partial) => ({
+      harmonicPartials(frequencyHz, voiceSettings[voiceIndex]?.partialCount ?? 9).map((partial) => ({
         ...partial,
+        amplitude: partial.amplitude * (voiceSettings[voiceIndex]?.amplitude ?? 0.7),
         voiceIndex,
       })),
     );
     const maxHz = Math.max(...partials.map((partial) => partial.frequencyHz));
-    const minHz = referenceHz;
+    const minHz = Math.min(...voicesHz);
     const marks = partials.map((partial) => ({
       ...partial,
       position:
@@ -212,6 +224,7 @@ export function HarmonyLab() {
 
     return {
       marks,
+      minHz,
       maxHz,
       alignments: Array.from(alignments.entries()).map(([frequencyHz, strength]) => ({
         frequencyHz,
@@ -220,7 +233,7 @@ export function HarmonyLab() {
           (Math.log2(frequencyHz / minHz) / Math.log2(maxHz / minHz)) * 100,
       })),
     };
-  }, [referenceHz, voicesHz]);
+  }, [voiceSettings, voicesHz]);
 
   const selectedPreset = HARMONY_PRESETS.find((preset) =>
     preset.ratios.length === justRatios.length && preset.ratios.every((value, index) => Math.abs(value - justRatios[index]) < 0.0005),
@@ -233,10 +246,20 @@ export function HarmonyLab() {
     );
   };
 
+  const setVoiceSetting = (index: number, patch: Partial<VoiceSetting>) => {
+    if (isPlaying) stop();
+    setVoiceSettings((current) => current.map((setting, voiceIndex) => voiceIndex === index ? { ...setting, ...patch } : setting));
+  };
+
+  const resizeVoiceSettings = (length: number) => {
+    setVoiceSettings((current) => Array.from({ length }, (_, index) => current[index] ?? { octave: 0, amplitude: 0.65, partialCount: 7 }));
+  };
+
   const choosePreset = (preset: (typeof HARMONY_PRESETS)[number]) => {
     if (isPlaying) stop();
     setPreviousRatios(ratios);
     setJustRatios([...preset.ratios]);
+    resizeVoiceSettings(preset.ratios.length);
     setTemperamentMorph(0);
     setMotionStep(0);
   };
@@ -245,15 +268,32 @@ export function HarmonyLab() {
     if (isPlaying) stop();
     setPreviousRatios([...MOTION_STEPS[motionStep].ratios]);
     setJustRatios([...MOTION_STEPS[index].ratios]);
+    resizeVoiceSettings(MOTION_STEPS[index].ratios.length);
     setTemperamentMorph(0);
     setMotionStep(index);
+  };
+
+  const addVoice = () => {
+    if (justRatios.length >= 6) return;
+    if (isPlaying) stop();
+    setPreviousRatios(ratios);
+    setJustRatios((current) => [...current, 1.75]);
+    resizeVoiceSettings(justRatios.length + 1);
+  };
+
+  const removeVoice = () => {
+    if (justRatios.length <= 3) return;
+    if (isPlaying) stop();
+    setPreviousRatios(ratios);
+    setJustRatios((current) => current.slice(0, -1));
+    resizeVoiceSettings(justRatios.length - 1);
   };
 
   return (
     <section className="advanced-lab harmony-lab" aria-labelledby="harmony-title">
       <div className="lab-intro">
         <div>
-          <p className="section-kicker">Harmony field · three or four simultaneous voices</p>
+          <p className="section-kicker">Harmony field · three to six simultaneous sources</p>
           <h2 id="harmony-title">When relationships become a system</h2>
         </div>
         <p>
@@ -335,9 +375,10 @@ export function HarmonyLab() {
           </label>
 
           <div className="voice-controls">
+            <div className="voice-count-control"><span>{ratios.length} active sources</span><div><button type="button" onClick={removeVoice} disabled={ratios.length <= 3}>Remove source</button><button type="button" onClick={addVoice} disabled={ratios.length >= 6}>Add source</button></div></div>
             {ratios.map((ratio, index) => (
-              <label className="voice-control" key={VOICE_NAMES[index]}>
-                <span>
+              <div className="voice-control" key={VOICE_NAMES[index]}>
+                <label><span>
                   <i className={`voice-swatch voice-${index + 1}`} />
                   {VOICE_NAMES[index]}
                   <output>{ratio.toFixed(4)}×</output>
@@ -351,8 +392,13 @@ export function HarmonyLab() {
                   disabled={index === 0}
                   onChange={(event) => setVoice(index, Number(event.target.value))}
                   aria-label={`${VOICE_NAMES[index]} frequency ratio`}
-                />
-              </label>
+                /></label>
+                <div className="voice-realization">
+                  <label><span>Register</span><select aria-label={`${VOICE_NAMES[index]} register`} value={voiceSettings[index]?.octave ?? 0} onChange={(event) => setVoiceSetting(index, { octave: Number(event.target.value) })}><option value="-1">½×</option><option value="0">1×</option><option value="1">2×</option></select></label>
+                  <label><span>Amplitude <output>{Math.round((voiceSettings[index]?.amplitude ?? 0.7) * 100)}</output></span><input type="range" min="0.15" max="1" step="0.01" aria-label={`${VOICE_NAMES[index]} amplitude`} value={voiceSettings[index]?.amplitude ?? 0.7} onChange={(event) => setVoiceSetting(index, { amplitude: Number(event.target.value) })} /></label>
+                  <label><span>Partials <output>{voiceSettings[index]?.partialCount ?? 9}</output></span><input type="range" min="1" max="12" step="1" aria-label={`${VOICE_NAMES[index]} partial count`} value={voiceSettings[index]?.partialCount ?? 9} onChange={(event) => setVoiceSetting(index, { partialCount: Number(event.target.value) })} /></label>
+                </div>
+              </div>
             ))}
           </div>
 
@@ -410,7 +456,7 @@ export function HarmonyLab() {
             <div
               className="spectrum-field"
               role="img"
-              aria-label={`Harmonic spectrum for three voices with ${spectrum.alignments.length} alignment zones.`}
+              aria-label={`Harmonic spectrum for ${ratios.length} sources with ${spectrum.alignments.length} alignment zones.`}
             >
               {[25, 50, 75].map((position) => (
                 <i className="spectrum-gridline" key={position} style={{ left: `${position}%` }} />
@@ -432,7 +478,7 @@ export function HarmonyLab() {
                   style={{ left: `${alignment.position}%` }}
                 />
               ))}
-              <span className="spectrum-min">{formatFrequency(referenceHz)}</span>
+              <span className="spectrum-min">{formatFrequency(spectrum.minHz)}</span>
               <span className="spectrum-max">{formatFrequency(spectrum.maxHz)}</span>
             </div>
           </article>

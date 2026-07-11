@@ -87,6 +87,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(harmonyLab, /Equal-division approximation morph/);
   assert.match(harmonyLab, /One moving voice/);
   assert.match(harmonyLab, /Contextual stability is separate/);
+  assert.match(harmonyLab, /three to six simultaneous sources/);
+  assert.match(harmonyLab, /Add source/);
   assert.match(rhythmLab, /Time as ratio and resistance/);
   assert.match(rhythmLab, /Anchor resistance/);
   assert.match(rhythmLab, /Competing pulse hypotheses/);
