@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type RefObject,
 } from "react";
 import {
@@ -440,6 +441,15 @@ export function RatioLab() {
     });
   };
 
+  const skipToActiveLab = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const stage = document.getElementById("lab-stage");
+    if (!stage) return;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#lab-stage`);
+    stage.focus({ preventScroll: true });
+    stage.scrollIntoView({ behavior: "auto", block: "start" });
+  };
+
   const approximation = useMemo(() => approximateRatio(ratio, 16), [ratio]);
   const period = useMemo(
     () => commonPeriodSeconds(referenceHz, ratio, 16, 0.2),
@@ -637,6 +647,7 @@ export function RatioLab() {
 
   return (
     <main className="app-shell">
+      <a className="skip-link" href="#lab-stage" onClick={skipToActiveLab}>Skip to active lab</a>
       <header className="site-header">
         <a className="brand" href="#top" aria-label="Music With No Names home">
           <span className="brand-mark" aria-hidden="true">
@@ -659,7 +670,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.19
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.20
         </div>
       </header>
 
@@ -680,7 +691,7 @@ export function RatioLab() {
         </div>
       </section>
 
-      <div id="lab-stage" className="lab-stage">
+      <div id="lab-stage" className="lab-stage" tabIndex={-1}>
         {activeLab === "guide" ? (
           <GuideLab onNavigate={selectLab} />
         ) : activeLab === "ratio" ? (

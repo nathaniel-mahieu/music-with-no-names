@@ -471,6 +471,7 @@ Objective: ensure that the experience is scientifically honest, musically useful
 - [x] **Q10.10** Publish limitations, model cards, analysis versions, dataset provenance, and research citations.
 - [x] **Q10.11** Polish phone navigation, minimum interactive target sizes, responsive label separation, and reduced-motion-aware programmatic scrolling.
 - [x] **Q10.12** Add an in-product conceptual self-check with prediction questions, explanatory feedback, and direct evidence-lab links while keeping participant validation as a separate gate.
+- [x] **Q10.13** Add a first-focus skip route and explicit forced-color fallbacks for selected states, spectral voices, maps, uncertainty rings, and learning feedback.
 
 Exit gate:
 

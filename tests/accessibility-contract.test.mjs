@@ -38,4 +38,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.lab-nav[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(ratio, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)/);
   assert.match(ratio, /behavior: prefersReducedMotion \? "auto" : "smooth"/);
+  assert.match(ratio, /className="skip-link" href="#lab-stage" onClick=\{skipToActiveLab\}/);
+  assert.match(ratio, /id="lab-stage" className="lab-stage" tabIndex=\{-1\}/);
+  assert.match(css, /@media \(forced-colors: active\)/);
+  assert.match(css, /\.atlas-point\.is-selected > i[\s\S]*outline: 4px solid Highlight/);
+  assert.match(css, /\.spectrum-partial\.voice-6[\s\S]*border: 3px double Canvas/);
+  assert.doesNotMatch(ratio, /tabIndex=\{?[1-9]/);
 });

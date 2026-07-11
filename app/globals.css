@@ -77,6 +77,34 @@ select:focus-visible {
   padding: 0 34px;
 }
 
+.skip-link {
+  position: absolute;
+  top: 10px;
+  left: 34px;
+  z-index: 100;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 2px solid var(--accent);
+  border-radius: 3px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.lab-stage:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
 .site-header {
   min-height: 82px;
   display: flex;
@@ -5597,6 +5625,170 @@ footer a {
 @media (max-width: 620px) {
   .atlas-axis-controls {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --background: Canvas;
+    --surface: Canvas;
+    --surface-raised: Canvas;
+    --surface-soft: Canvas;
+    --foreground: CanvasText;
+    --muted: CanvasText;
+    --faint: CanvasText;
+    --line: CanvasText;
+    --line-strong: CanvasText;
+    --accent: Highlight;
+    --accent-strong: Highlight;
+    --tone-a: LinkText;
+    --tone-b: VisitedText;
+    --positive: Highlight;
+    --danger: MarkText;
+  }
+
+  body {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 3px solid Highlight;
+  }
+
+  .skip-link,
+  .brand-mark,
+  .analysis-card,
+  .visual-card,
+  .learning-check-question label,
+  .model-score-grid article,
+  .harmony-metrics article,
+  .rhythm-metrics article {
+    border-color: CanvasText;
+  }
+
+  .lab-nav button.is-selected,
+  button[aria-pressed="true"]:not(.atlas-point),
+  .preset.is-selected,
+  .harmony-preset.is-selected,
+  .learning-check-question label:has(input:checked) {
+    border-color: Highlight !important;
+    background: Highlight !important;
+    color: HighlightText !important;
+    box-shadow: none !important;
+  }
+
+  .status-dot,
+  .spectrum-alignment,
+  .map-current,
+  .roughness-landscape > div[role="img"] i.is-current,
+  .pulse-rail button.is-active,
+  .candidate-field i b,
+  .affordance-field > div > i > b {
+    background: Highlight !important;
+    border-color: Highlight !important;
+    box-shadow: none !important;
+  }
+
+  .voice-1,
+  .voice-2,
+  .voice-3,
+  .voice-4,
+  .voice-5,
+  .voice-6 {
+    --voice-color: CanvasText;
+  }
+
+  .voice-swatch,
+  .ladder-voice i,
+  .spectrum-partial,
+  .partial-field > i,
+  .ear-band-field > i,
+  .roughness-landscape > div[role="img"] i,
+  .event-lane > div > i,
+  .feature-lane > div i {
+    background: CanvasText !important;
+    box-shadow: none !important;
+    opacity: 1;
+  }
+
+  .voice-swatch.voice-2,
+  .ladder-voice.voice-2 i {
+    border-radius: 0;
+  }
+
+  .voice-swatch.voice-3,
+  .ladder-voice.voice-3 i {
+    border-radius: 0;
+    transform: rotate(45deg);
+  }
+
+  .voice-swatch.voice-4,
+  .ladder-voice.voice-4 i {
+    border-radius: 2px;
+    outline: 2px double CanvasText;
+  }
+
+  .spectrum-partial.voice-1 { width: 1px; }
+  .spectrum-partial.voice-2 { width: 3px; }
+  .spectrum-partial.voice-3 { width: 5px; }
+  .spectrum-partial.voice-4 { width: 2px; border: 1px double Canvas; }
+  .spectrum-partial.voice-5 { width: 6px; border: 2px solid Canvas; }
+  .spectrum-partial.voice-6 { width: 8px; border: 3px double Canvas; }
+
+  .partial-field > i.source-0 { width: 2px; }
+  .partial-field > i.source-1 { width: 5px; }
+
+  .genre-cloud {
+    background: transparent !important;
+    color: CanvasText !important;
+    opacity: 1;
+  }
+
+  .preference-target {
+    border: 3px solid Highlight;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .atlas-point {
+    color: CanvasText;
+    opacity: 1;
+  }
+
+  .atlas-point > i {
+    border-color: Canvas;
+    background: CanvasText !important;
+    box-shadow: none;
+  }
+
+  .atlas-point::before {
+    border: 2px solid CanvasText;
+  }
+
+  .atlas-point::after {
+    border: 2px dashed CanvasText;
+  }
+
+  .atlas-point.is-selected > i {
+    outline: 4px solid Highlight;
+  }
+
+  .sonority-map,
+  .atlas-plot,
+  .partial-field {
+    background: Canvas;
+  }
+
+  .map-landmark {
+    background: CanvasText;
+  }
+
+  .learning-check-question label.is-answer {
+    border: 3px double Highlight;
   }
 }
 

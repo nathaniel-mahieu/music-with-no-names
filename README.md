@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Concept Learning Check v1.19**. It provides:
+The current milestone is **Keyboard + High Contrast Hardening v1.20**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -17,6 +17,8 @@ The current milestone is **Concept Learning Check v1.19**. It provides:
 - Reduced-motion-aware lab navigation and enlarged Atlas landmark hit areas without inflating their data-encoded marks.
 - A five-part private reasoning check that tests relationships, auditory realization, perceptual-value distinctions, prediction timing, and whole-form context.
 - Explanations and direct evidence-lab links after every answer, with no score upload or claim of participant validation.
+- A first-focus skip route to the active Lab and native-order keyboard navigation without positive tab indices.
+- Forced-color fallbacks for selection, spectra, voice identity, causal maps, and Atlas uncertainty encodings.
 - A twelve-position Rhythm Lab with onset-spacing ratios, tempo, and microtiming bias.
 - An interactive map of pop, blues, and classical landmarks as experiential trajectories.
 - Listener- and goal-conditioned preference proximity with an inspectable component profile.
