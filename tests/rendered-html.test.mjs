@@ -100,6 +100,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(journeyLab, /Self-similarity across events/);
   assert.match(journeyLab, /Before uncertainty, after surprise/);
   assert.match(journeyLab, /Matches my listening/);
+  assert.match(journeyLab, /Exact repeat/);
+  assert.match(journeyLab, /Whole-arc satisfaction/);
   assert.match(recordingLab, /Nothing is uploaded/);
   assert.match(recordingLab, /audio-analysis\.worker/);
   assert.match(recordingLab, /Export analysis JSON/);

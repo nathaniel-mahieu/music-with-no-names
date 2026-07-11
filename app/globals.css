@@ -3180,6 +3180,51 @@ footer a {
   color: var(--journey-coral);
 }
 
+.arc-dissociation {
+  display: grid;
+  grid-template-columns: 1.25fr 0.8fr 0.8fr 1fr;
+  align-items: center;
+  gap: 28px;
+  padding: 30px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--journey-gold) 5%, var(--surface));
+}
+
+.arc-dissociation h3 {
+  margin: 5px 0 7px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.arc-dissociation p,
+.arc-dissociation > div > span,
+.arc-dissociation label > span {
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+.arc-dissociation label {
+  display: grid;
+  gap: 9px;
+}
+
+.arc-dissociation label > span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.arc-dissociation input {
+  accent-color: var(--journey-gold);
+}
+
+.arc-dissociation > strong {
+  color: var(--journey-gold);
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+
 .prediction-model-picker button[aria-pressed="true"] {
   border-color: #bb9bea;
   color: var(--foreground);
@@ -3485,6 +3530,10 @@ footer a {
     flex-direction: column;
   }
 
+  .arc-dissociation {
+    grid-template-columns: 1fr;
+  }
+
   .section-rail {
     margin-left: 0;
   }
@@ -3534,7 +3583,8 @@ footer a {
   .journey-timeline,
   .microscope,
   .journey-toolbar,
-  .journey-annotation {
+  .journey-annotation,
+  .arc-dissociation {
     padding-right: 16px;
     padding-left: 16px;
   }

@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Six-Source Harmony Field v1.8**. It provides:
+The current milestone is **Contextual Musicality Matrix v1.9**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -51,6 +51,8 @@ The current milestone is **Six-Source Harmony Field v1.8**. It provides:
 - A transparent listener preference center and bandwidth learned from saved evidence.
 - Goal-relative fit blended with learned proximity and sample-count uncertainty.
 - Repeated-listening history that keeps familiarity and liking changes separate.
+- Exact-repeat, variation, unexpected-rupture, and delayed-return context experiments.
+- Independent local-comfort and whole-arc-satisfaction reports that expose moment/form dissociation.
 
 ## Run locally
 

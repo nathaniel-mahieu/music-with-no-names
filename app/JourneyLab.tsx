@@ -12,7 +12,7 @@ import {
   type MusicalEvent,
 } from "@/lib/musical-sequence";
 
-type Lens = "original" | "smooth" | "delay";
+type Lens = "original" | "repeat" | "variation" | "unexpected" | "delay";
 type PredictionModel = "piece" | "synthetic";
 type ResponsePoint = { sectionId: string; type: string; intensity: number; recordedAt: string };
 
@@ -74,15 +74,14 @@ function featureValue(key: (typeof FEATURE_LANES)[number]["key"], index: number,
   const returnShape = Math.exp(-(((time - (lens === "delay" ? 15.1 : 12.7)) / 1.15) ** 2));
   const wave = (Math.sin(time * 2.1) + 1) / 2;
   const values = {
-    roughness: 18 + wave * 16 + rupture * 62 + search * 24,
+    roughness: 18 + wave * 16 + rupture * (lens === "repeat" ? 8 : lens === "variation" ? 34 : 62) + search * 24,
     harmonicity: 78 - rupture * 55 - search * 28 + returnShape * 18,
     pulse: 72 + Math.sin(time * 1.55) * 10 - search * 38 + returnShape * 18,
-    repetition: time < 4 ? 18 + time * 11 : time < 8 ? 82 : 36 + returnShape * 55,
+    repetition: time < 4 ? 18 + time * 11 : time < 8 ? (lens === "repeat" ? 98 : lens === "variation" ? 72 : 82) : 36 + returnShape * 55,
     uncertainty: 62 - Math.min(time * 7, 42) + rupture * 58 + search * 40 - returnShape * 38,
-    surprise: 12 + rupture * 82 + search * 24 + (lens === "delay" ? Math.exp(-(((time - 12.5) / 0.8) ** 2)) * 42 : 0),
+    surprise: 12 + rupture * (lens === "repeat" ? 6 : lens === "variation" ? 34 : lens === "unexpected" ? 98 : 82) + search * 24 + (lens === "delay" ? Math.exp(-(((time - 12.5) / 0.8) ** 2)) * 42 : 0),
     tension: 24 + rupture * 48 + search * 43 - returnShape * 34,
   };
-  if (key === "roughness" && lens === "smooth") return clamp(values[key] * 0.42);
   return clamp(values[key]);
 }
 
@@ -91,6 +90,8 @@ export function JourneyLab() {
   const [lens, setLens] = useState<Lens>("original");
   const [annotation, setAnnotation] = useState("surprise");
   const [feltTension, setFeltTension] = useState(68);
+  const [localComfort, setLocalComfort] = useState(24);
+  const [arcSatisfaction, setArcSatisfaction] = useState(78);
   const [predictionModel, setPredictionModel] = useState<PredictionModel>("piece");
   const [responses, setResponses] = useState<ResponsePoint[]>([]);
   const [hypothesisResponses, setHypothesisResponses] = useState<Record<string, "confirm" | "reject">>({});
@@ -150,7 +151,9 @@ export function JourneyLab() {
           <span>Counterfactual</span>
           {([
             ["original", "Original"],
-            ["smooth", "Reduce roughness"],
+            ["repeat", "Exact repeat"],
+            ["variation", "Repeat + variation"],
+            ["unexpected", "Unexpected rupture"],
             ["delay", "Delay return"],
           ] as [Lens, string][]).map(([id, label]) => (
             <button key={id} type="button" onClick={() => setLens(id)} aria-pressed={lens === id} className={lens === id ? "is-selected" : ""}>{label}</button>
@@ -295,6 +298,13 @@ export function JourneyLab() {
         </label>
         <p>Human annotation: <strong>{annotation}</strong> at {feltTension}/100. Kept visually separate from the modeled lanes above.</p>
         <div className="journey-response-actions"><button type="button" className="save-journey-response" onClick={saveResponse}>Save to response lane</button><button type="button" disabled={responses.length === 0} onClick={clearResponses}>Clear saved ratings</button></div>
+      </div>
+
+      <div className="arc-dissociation">
+        <div><span>Moment versus form</span><h3>Can a difficult event serve a satisfying arc?</h3><p>These are independent listener reports. The interface never infers the second from the first.</p></div>
+        <label><span>Rupture comfort <output>{localComfort}</output></span><input type="range" min="0" max="100" aria-label="Local rupture comfort" value={localComfort} onChange={(event) => setLocalComfort(Number(event.target.value))} /></label>
+        <label><span>Whole-arc satisfaction <output>{arcSatisfaction}</output></span><input type="range" min="0" max="100" aria-label="Whole arc satisfaction" value={arcSatisfaction} onChange={(event) => setArcSatisfaction(Number(event.target.value))} /></label>
+        <strong>{arcSatisfaction > localComfort + 20 ? "Dissociation visible: low local comfort, higher form-level satisfaction." : "Your reports do not currently show a strong moment/form dissociation."}</strong>
       </div>
     </section>
   );
