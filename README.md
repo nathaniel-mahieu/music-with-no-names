@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Relational Harmony in Motion v1.0**. It provides:
+The current milestone is **Rhythmic Embodiment v1.1**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -32,6 +32,9 @@ The current milestone is **Relational Harmony in Motion v1.0**. It provides:
 - Four-voice harmonic fields with 2/3/5/7 prime-exponent coordinates.
 - Optional octave folding, just-to-equal approximation morphing, and continuous voice-leading distance.
 - A sequence mode showing how local interval familiarity can diverge from contextual stability.
+- Multiple pattern-relative pulse hypotheses with confidence and nested-cycle phase.
+- A transparent syncopation measure kept explicitly separate from pulse clarity and groove.
+- Low/medium/high syncopation comparisons plus optional listener tapping and consistency feedback.
 
 ## Run locally
 

@@ -311,14 +311,14 @@ Objective: give time the same first-principles treatment as frequency.
 
 - [x] **T4.1** Create a pulse-relative timeline with continuous onset placement.
 - [x] **T4.2** Represent durations as ratios to a chosen or inferred pulse.
-- [ ] **T4.3** Show multiple pulse hypotheses and their confidence rather than forcing one meter.
-- [ ] **T4.4** Visualize phase within nested cycles.
+- [x] **T4.3** Show multiple pulse hypotheses and their confidence rather than forcing one meter.
+- [x] **T4.4** Visualize phase within nested cycles.
 - [x] **T4.5** Add swing and microtiming as continuous deviations from an inferred grid.
-- [ ] **T4.6** Implement a transparent syncopation measure.
-- [ ] **T4.7** Keep pulse clarity and groove conceptually and computationally separate.
-- [ ] **T4.8** Build low-, medium-, and high-syncopation A/B experiments on the same pulse.
+- [x] **T4.6** Implement a transparent syncopation measure.
+- [x] **T4.7** Keep pulse clarity and groove conceptually and computationally separate.
+- [x] **T4.8** Build low-, medium-, and high-syncopation A/B experiments on the same pulse.
 - [x] **T4.9** Test the same duration ratios across different absolute tempos.
-- [ ] **T4.10** Add optional tapping input to compare inferred pulse with the listener’s embodied pulse.
+- [x] **T4.10** Add optional tapping input to compare inferred pulse with the listener’s embodied pulse.
 
 Exit gate:
 
@@ -600,5 +600,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Ear Lab sensory models and independent human reports implemented.
 - [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
+- [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

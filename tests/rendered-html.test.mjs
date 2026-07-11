@@ -87,6 +87,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(harmonyLab, /Contextual stability is separate/);
   assert.match(rhythmLab, /Time as ratio and resistance/);
   assert.match(rhythmLab, /Anchor resistance/);
+  assert.match(rhythmLab, /Competing pulse hypotheses/);
+  assert.match(rhythmLab, /Transparent syncopation/);
+  assert.match(rhythmLab, /Embodied pulse input/);
   assert.match(journeyLab, /Musical meaning is a path through time/);
   assert.match(journeyLab, /Acoustic Microscope/);
   assert.match(journeyLab, /Expected alternatives/);

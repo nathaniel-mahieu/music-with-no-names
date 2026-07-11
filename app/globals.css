@@ -1244,6 +1244,75 @@ footer a {
   grid-template-columns: 1fr;
 }
 
+.ab-label {
+  display: block;
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ab-label + .rhythm-presets {
+  margin-top: 11px;
+}
+
+.tap-input {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 9px;
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+
+.tap-input > div {
+  display: grid;
+  gap: 4px;
+}
+
+.tap-input span {
+  color: var(--muted);
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tap-input strong {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.76rem;
+}
+
+.tap-input small {
+  color: var(--faint);
+  font-size: 0.58rem;
+}
+
+.tap-input button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--foreground);
+  background: transparent;
+  font: inherit;
+  font-size: 0.63rem;
+  cursor: pointer;
+}
+
+.tap-input button:first-of-type {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tap-input button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
 .rhythm-workspace {
   grid-template-columns: minmax(330px, 0.72fr) minmax(0, 1.45fr);
 }
@@ -1255,6 +1324,92 @@ footer a {
 
 .pulse-cycle-card {
   flex: 1;
+}
+
+.pulse-hypotheses-card {
+  margin-top: 14px;
+}
+
+.pulse-hypothesis-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.pulse-hypothesis-grid > div {
+  display: grid;
+  grid-template-columns: 105px 1fr 34px 90px;
+  align-items: center;
+  gap: 10px;
+}
+
+.pulse-hypothesis-grid span {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.pulse-hypothesis-grid span strong {
+  color: var(--foreground);
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.4rem;
+  font-weight: 400;
+}
+
+.pulse-hypothesis-grid > div > i {
+  height: 4px;
+  background: var(--line);
+}
+
+.pulse-hypothesis-grid > div > i b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--tone-b), var(--accent));
+}
+
+.pulse-hypothesis-grid output,
+.pulse-hypothesis-grid small {
+  color: var(--muted);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.58rem;
+}
+
+.nested-phases {
+  display: grid;
+  gap: 11px;
+  margin-top: 28px;
+  padding-top: 23px;
+  border-top: 1px solid var(--line);
+}
+
+.nested-phases > div {
+  display: grid;
+  grid-template-columns: 86px 1fr 34px;
+  align-items: center;
+  gap: 11px;
+  color: var(--muted);
+  font-size: 0.6rem;
+}
+
+.nested-phases > div > i {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 25%);
+}
+
+.nested-phases > div > i b {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--tone-b);
+  transform: translate(-50%, -50%);
+}
+
+.nested-phases output {
+  font-family: var(--font-mono), monospace;
 }
 
 .pulse-rail {
@@ -1974,6 +2129,22 @@ footer a {
   .pulse-rail {
     grid-template-columns: repeat(6, 1fr);
     row-gap: 24px;
+  }
+
+  .pulse-hypothesis-grid > div {
+    grid-template-columns: 92px 1fr 32px;
+  }
+
+  .pulse-hypothesis-grid small {
+    grid-column: 2 / -1;
+  }
+
+  .tap-input {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tap-input > div {
+    grid-column: 1 / -1;
   }
 
   .pulse-rail button.is-anchor::after {

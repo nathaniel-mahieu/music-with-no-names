@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cyclicOnsetIntervals } from "@/lib/music-math";
+import { estimateTapTempo, nestedCyclePhases, pulseHypotheses, syncopationIndex } from "@/lib/rhythm-model";
 
 const PULSE_COUNT = 12;
 const ANCHORS = new Set([0, 3, 6, 9]);
@@ -9,12 +10,12 @@ const ANCHORS = new Set([0, 3, 6, 9]);
 const RHYTHM_PRESETS = [
   {
     label: "3:3:3:3",
-    note: "equal four-part cycle",
+    note: "low syncopation · equal four-part cycle",
     active: [0, 3, 6, 9],
   },
   {
     label: "3:3:2:2:2",
-    note: "stable cycle, uneven motion",
+    note: "medium syncopation · stable uneven motion",
     active: [0, 3, 6, 8, 10],
   },
   {
@@ -24,7 +25,7 @@ const RHYTHM_PRESETS = [
   },
   {
     label: "2:3:2:3:2",
-    note: "alternating short and long",
+    note: "high syncopation · alternating short and long",
     active: [0, 2, 5, 7, 10],
   },
 ] as const;
@@ -65,6 +66,7 @@ export function RhythmLab() {
   const [oddDelayMs, setOddDelayMs] = useState(18);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
+  const [tapTimes, setTapTimes] = useState<number[]>([]);
   const engineRef = useRef<RhythmEngine | null>(null);
   const patternRef = useRef(pattern);
   const pulseRateRef = useRef(pulseRate);
@@ -86,6 +88,10 @@ export function RhythmLab() {
     (isActive, index) => isActive && !ANCHORS.has(index),
   ).length;
   const resistance = activeCount === 0 ? 0 : offAnchorCount / activeCount;
+  const syncopation = useMemo(() => syncopationIndex(pattern), [pattern]);
+  const hypotheses = useMemo(() => pulseHypotheses(pattern), [pattern]);
+  const nestedPhases = useMemo(() => nestedCyclePhases(currentStep ?? 0, PULSE_COUNT), [currentStep]);
+  const tapEstimate = useMemo(() => estimateTapTempo(tapTimes), [tapTimes]);
   const pulseSeconds = 60 / pulseRate;
   const cycleSeconds = pulseSeconds * PULSE_COUNT;
 
@@ -165,6 +171,14 @@ export function RhythmLab() {
     });
   };
 
+  const registerTap = () => {
+    const now = performance.now();
+    setTapTimes((current) => {
+      const recent = current.length && now - current[current.length - 1] <= 2200 ? current : [];
+      return [...recent, now].slice(-9);
+    });
+  };
+
   return (
     <section className="advanced-lab rhythm-lab" aria-labelledby="rhythm-title">
       <div className="lab-intro">
@@ -198,6 +212,7 @@ export function RhythmLab() {
             </button>
           </div>
 
+          <span className="ab-label">Same twelve-pulse cycle · syncopation A/B</span>
           <div className="harmony-presets rhythm-presets" aria-label="Rhythm presets">
             {RHYTHM_PRESETS.map((preset) => {
               const selected = preset === selectedPreset;
@@ -245,6 +260,12 @@ export function RhythmLab() {
               onChange={(event) => setOddDelayMs(Number(event.target.value))}
             />
           </label>
+
+          <div className="tap-input">
+            <div><span>Embodied pulse input</span><strong>{tapEstimate ? `${tapEstimate.pulsesPerMinute.toFixed(1)} /min` : tapTimes.length ? `${tapTimes.length} tap${tapTimes.length === 1 ? "" : "s"}` : "waiting"}</strong><small>{tapEstimate ? `${Math.round(tapEstimate.consistency * 100)}% timing consistency` : "Tap at least twice at a comfortable pulse."}</small></div>
+            <button type="button" onClick={registerTap}>Tap pulse</button>
+            <button type="button" onClick={() => setTapTimes([])} disabled={tapTimes.length === 0}>Reset</button>
+          </div>
         </div>
 
         <div className="lab-observations rhythm-observations">
@@ -283,6 +304,16 @@ export function RhythmLab() {
             </div>
           </article>
 
+          <article className="analysis-card pulse-hypotheses-card">
+            <div className="analysis-heading"><div><span>B · Competing pulse hypotheses</span><h3>One pattern, several plausible clocks</h3></div><small>confidence is pattern-relative</small></div>
+            <div className="pulse-hypothesis-grid">
+              {hypotheses.map((hypothesis) => <div key={hypothesis.pulsesPerCycle}><span><strong>{hypothesis.pulsesPerCycle}</strong> pulses/cycle</span><i><b style={{ width: `${Math.round(hypothesis.confidence * 100)}%` }} /></i><output>{Math.round(hypothesis.confidence * 100)}%</output><small>{hypothesis.anchorPositions.map((position) => position + 1).join(" · ")}</small></div>)}
+            </div>
+            <div className="nested-phases" role="img" aria-label={`Current pulse ${currentStep === null ? 1 : currentStep + 1} within two-, three-, and four-part nested cycles`}>
+              {nestedPhases.map((phase) => <div key={phase.divisions}><span>{phase.divisions}-part phase</span><i><b style={{ left: `${phase.phase * 100}%` }} /></i><output>{phase.phase.toFixed(2)}</output></div>)}
+            </div>
+          </article>
+
           <div className="rhythm-metrics">
             <article>
               <span>Cycle duration</span>
@@ -307,6 +338,16 @@ export function RhythmLab() {
                 Delaying alternate pulse positions changes feel without changing the
                 written spacing ratios.
               </p>
+            </article>
+            <article>
+              <span>Transparent syncopation</span>
+              <strong>{Math.round(syncopation * 100)}%</strong>
+              <p>Weak-position onsets gain weight when they precede silent stronger positions. This declared metrical model is not groove.</p>
+            </article>
+            <article>
+              <span>Pulse clarity</span>
+              <strong>{hypotheses[0] ? `${Math.round(hypotheses[0].confidence * 100)}%` : "open"}</strong>
+              <p>Best pattern-relative pulse hypothesis. Groove remains a separate embodied report that this scalar does not compute.</p>
             </article>
           </div>
         </div>
