@@ -395,14 +395,14 @@ Release candidate: **v0.3 — Recording Journey**
 
 Objective: orient users with familiar music while avoiding genre essentialism and copyright problems.
 
-- [ ] **L8.1** Define a versioned landmark schema with work, performance, production, recording, provenance, and licensing metadata.
+- [x] **L8.1** Define a versioned landmark schema with work, performance, production, recording, provenance, and licensing metadata.
 - [x] **L8.2** Represent every landmark as a trajectory with section markers, not just a centroid.
-- [ ] **L8.3** Keep measured features, curator hypotheses, and listener reports visually distinct.
-- [ ] **L8.4** Build an atlas with interpretable selectable axes such as sensory tension, predictive surprise, pulse clarity, activation, repetition, and long-form transformation.
-- [ ] **L8.5** Encode inter-listener variation separately from model uncertainty.
+- [x] **L8.3** Keep measured features, curator hypotheses, and listener reports visually distinct.
+- [x] **L8.4** Build an atlas with interpretable selectable axes such as sensory tension, predictive surprise, pulse clarity, activation, repetition, and long-form transformation.
+- [x] **L8.5** Encode inter-listener variation separately from model uncertainty.
 - [ ] **L8.6** Construct genre regions from declared corpora and display porous overlapping density clouds.
-- [ ] **L8.7** Add a composition/performance/production layer switch.
-- [ ] **L8.8** Create the first landmark set:
+- [x] **L8.7** Add a composition/performance/production layer switch.
+- [x] **L8.8** Create the first landmark set:
   - A generated 4:5:6 harmonic field.
   - Bach, *Prelude in C major*, BWV 846.
   - Beethoven, Symphony No. 5, first movement.
@@ -411,7 +411,7 @@ Objective: orient users with familiar music while avoiding genre essentialism an
   - Muddy Waters, “Mannish Boy.”
   - Billie Eilish, “bad guy.”
   - The Weeknd, “Blinding Lights.”
-- [ ] **L8.9** Use openly licensed recordings where available; otherwise provide metadata and analysis profiles while requiring the user to load audio they are entitled to use.
+- [x] **L8.9** Use openly licensed recordings where available; otherwise provide metadata and analysis profiles while requiring the user to load audio they are entitled to use.
 - [ ] **L8.10** Add comparisons that expose where novelty tends to live:
   - Pop: stable pulse/loop with variation in production, voice, and sectional energy.
   - Blues: stable cyclic frame with continuous pitch, timing, interaction, and timbral variation.
@@ -602,5 +602,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 - [x] Event self-similarity and incremental uncertainty/surprise trace implemented.
+- [x] Versioned Atlas schema, selectable axes/layers, provenance, and uncertainty encodings implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

@@ -102,6 +102,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(atlasLab, /There is no universal good region/);
   assert.match(atlasLab, /preference proximity/);
   assert.match(atlasLab, /is a path, not a point/);
+  assert.match(atlasLab, /LANDMARK_SCHEMA_VERSION/);
+  assert.match(atlasLab, /Atlas interpretation layer/);
+  assert.match(atlasLab, /Provenance and licensing/);
+  assert.match(atlasLab, /Generated 4:5:6 harmonic field/);
   assert.match(personalLab, /predicted fit for this listener and goal/);
   assert.match(personalLab, /localStorage/);
   assert.match(personalLab, /Export JSON/);

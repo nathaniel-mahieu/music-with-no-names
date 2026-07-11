@@ -8,7 +8,21 @@ import {
   type ExperienceWeights,
 } from "@/lib/experience-model";
 
-type Genre = "pop" | "blues" | "classical";
+type Genre = "generated" | "pop" | "blues" | "classical";
+type AtlasLayer = "whole" | "composition" | "performance" | "production";
+type AtlasDimension = "tension" | "surprise" | "drive" | "repetition" | "expression" | "transformation";
+
+export const LANDMARK_SCHEMA_VERSION = "music-with-no-names.landmark.v1" as const;
+
+export type LandmarkMetadata = {
+  schema: typeof LANDMARK_SCHEMA_VERSION;
+  work: { title: string; creator: string };
+  performance: { performer: string; edition: string };
+  production: { note: string };
+  recording: { bundledAudio: false; access: string };
+  provenance: { profileSource: string; corpus: string };
+  licensing: { status: string; requirement: string };
+};
 
 type LandmarkSection = ExperiencePosition & {
   label: string;
@@ -28,6 +42,26 @@ export type Landmark = ExperiencePosition & {
 };
 
 export const LANDMARKS: Landmark[] = [
+  {
+    id: "generated-456",
+    short: "4:5:6 field",
+    title: "Generated 4:5:6 harmonic field",
+    creator: "Music With No Names",
+    genre: "generated",
+    tension: 14,
+    surprise: 18,
+    drive: 34,
+    repetition: 94,
+    expression: 20,
+    description: "A rights-clear generated field built from three simultaneous harmonic sources in the ratio 4:5:6.",
+    mechanism: "Short shared periodicity and aligned partials make a compact baseline for separating physical fusion cues from liking.",
+    sections: [
+      { label: "Establish", tension: 10, surprise: 22, drive: 26 },
+      { label: "Sustain", tension: 12, surprise: 8, drive: 34 },
+      { label: "Middle voice moves", tension: 42, surprise: 58, drive: 38 },
+      { label: "Return", tension: 8, surprise: 18, drive: 28 },
+    ],
+  },
   {
     id: "bad-guy",
     short: "bad guy",
@@ -210,6 +244,75 @@ export const LANDMARKS: Landmark[] = [
   },
 ];
 
+const DIMENSION_LABELS: Record<AtlasDimension, string> = {
+  tension: "sensory tension",
+  surprise: "predictive surprise",
+  drive: "embodied drive",
+  repetition: "repetition",
+  expression: "expressive salience",
+  transformation: "long-form transformation",
+};
+
+const LAYER_LABELS: Record<AtlasLayer, string> = {
+  whole: "whole recording",
+  composition: "composition",
+  performance: "performance",
+  production: "production",
+};
+
+function transformationValue(landmark: Landmark) {
+  const dimensions: (keyof ExperiencePosition)[] = ["tension", "surprise", "drive"];
+  return Math.min(100, dimensions.reduce((sum, dimension) => {
+    const values = landmark.sections.map((section) => section[dimension]);
+    return sum + Math.max(...values) - Math.min(...values);
+  }, 0) / dimensions.length * 1.45);
+}
+
+function dimensionValue(landmark: Landmark, dimension: AtlasDimension) {
+  return dimension === "transformation" ? transformationValue(landmark) : landmark[dimension];
+}
+
+function layerValue(landmark: Landmark, dimension: AtlasDimension, layer: AtlasLayer) {
+  const base = dimensionValue(landmark, dimension);
+  if (layer === "whole") return base;
+  if (layer === "composition") {
+    if (dimension === "drive") return base * 0.76;
+    if (dimension === "expression") return base * 0.68;
+    if (dimension === "transformation") return Math.min(100, base * 1.12);
+    return base * 0.92;
+  }
+  if (layer === "performance") {
+    if (dimension === "expression") return Math.min(100, base * 1.08);
+    if (dimension === "repetition") return base * 0.82;
+    return Math.min(100, base * 0.9 + landmark.expression * 0.12);
+  }
+  if (dimension === "drive") return Math.min(100, base * (landmark.genre === "pop" ? 1.05 : 0.92));
+  if (dimension === "expression") return Math.min(100, base * 0.9 + landmark.drive * 0.08);
+  if (dimension === "transformation") return base * 0.72;
+  return Math.min(100, base * 0.9 + landmark.repetition * 0.08);
+}
+
+function landmarkMetadata(landmark: Landmark): LandmarkMetadata {
+  const generated = landmark.genre === "generated";
+  return {
+    schema: LANDMARK_SCHEMA_VERSION,
+    work: { title: landmark.title, creator: landmark.creator },
+    performance: { performer: generated ? "browser-generated harmonic sources" : landmark.creator, edition: generated ? "deterministic synthesis profile" : "illustrative reference performance; recording not asserted" },
+    production: { note: generated ? "harmonic-complex synthesis with conservative gain" : "curatorial production-layer description; not extracted measurement" },
+    recording: { bundledAudio: false, access: generated ? "generated on demand in the Labs" : "load audio you are entitled to use in Recording Journey" },
+    provenance: { profileSource: generated ? "declared generated fixture" : "curatorial hypothesis profile", corpus: `${landmark.genre}-starter-corpus-v1` },
+    licensing: { status: generated ? "rights-clear generated profile" : "metadata and analysis profile only", requirement: generated ? "no commercial audio used" : "commercial audio is not bundled; user supplies lawful access" },
+  };
+}
+
+function modelUncertainty(landmark: Landmark) {
+  return landmark.genre === "generated" ? 7 : Math.round(12 + landmark.surprise * 0.12);
+}
+
+function listenerSpread(landmark: Landmark) {
+  return Math.round(10 + landmark.expression * 0.15);
+}
+
 const GOALS: Record<
   string,
   { label: string; position: ExperiencePosition; weights: ExperienceWeights }
@@ -251,6 +354,10 @@ export function AtlasLab() {
   const [preference, setPreference] = useState<ExperiencePosition>(
     GOALS.balanced.position,
   );
+  const [xAxis, setXAxis] = useState<AtlasDimension>("tension");
+  const [yAxis, setYAxis] = useState<AtlasDimension>("surprise");
+  const [sizeAxis, setSizeAxis] = useState<AtlasDimension>("drive");
+  const [layer, setLayer] = useState<AtlasLayer>("whole");
   const selected = LANDMARKS.find((landmark) => landmark.id === selectedId) ?? LANDMARKS[0];
   const weights = useMemo(() => GOALS[goalId]?.weights ?? {}, [goalId]);
 
@@ -259,10 +366,14 @@ export function AtlasLab() {
       LANDMARKS.map((landmark) => ({
         ...landmark,
         fit: experienceProximity(landmark, preference, weights),
+        xValue: layerValue(landmark, xAxis, layer),
+        yValue: layerValue(landmark, yAxis, layer),
+        sizeValue: layerValue(landmark, sizeAxis, layer),
       })),
-    [preference, weights],
+    [layer, preference, sizeAxis, weights, xAxis, yAxis],
   );
   const selectedFit = experienceProximity(selected, preference, weights);
+  const selectedMetadata = landmarkMetadata(selected);
   const profile = [
     {
       label: "Sensory fit",
@@ -343,6 +454,22 @@ export function AtlasLab() {
             </label>
           ))}
         </div>
+        <div className="atlas-view-controls">
+          <div className="atlas-axis-controls">
+            {([
+              ["Horizontal axis", xAxis, setXAxis],
+              ["Vertical axis", yAxis, setYAxis],
+              ["Point size", sizeAxis, setSizeAxis],
+            ] as [string, AtlasDimension, (value: AtlasDimension) => void][]).map(([label, value, setter]) => (
+              <label key={label}><span>{label}</span><select aria-label={label} value={value} onChange={(event) => setter(event.target.value as AtlasDimension)}>{(Object.keys(DIMENSION_LABELS) as AtlasDimension[]).map((dimension) => <option key={dimension} value={dimension}>{DIMENSION_LABELS[dimension]}</option>)}</select></label>
+            ))}
+          </div>
+          <div className="atlas-layer-switch" role="group" aria-label="Atlas interpretation layer">
+            <span>Interpretation layer</span>
+            {(Object.keys(LAYER_LABELS) as AtlasLayer[]).map((value) => <button key={value} type="button" aria-pressed={layer === value} onClick={() => setLayer(value)}>{LAYER_LABELS[value]}</button>)}
+          </div>
+          <p>Axis positions and layer decompositions are curator hypotheses until a recording is analyzed. Changing the view never changes the underlying landmark trajectory.</p>
+        </div>
       </div>
 
       <div className="atlas-stage">
@@ -350,25 +477,20 @@ export function AtlasLab() {
           <div
             className="atlas-plot"
             role="img"
-            aria-label="Music landmarks positioned by sensory tension and predictive surprise. Point size indicates embodied drive."
+            aria-label={`Music landmarks positioned by ${DIMENSION_LABELS[xAxis]} and ${DIMENSION_LABELS[yAxis]}. Point size indicates ${DIMENSION_LABELS[sizeAxis]}. ${LAYER_LABELS[layer]} layer.`}
           >
             <div className="genre-cloud cloud-pop">pop cloud</div>
             <div className="genre-cloud cloud-blues">blues cloud</div>
             <div className="genre-cloud cloud-classical">classical cloud</div>
-            <div
-              className="preference-target"
-              style={{
-                left: `${preference.tension}%`,
-                top: `${100 - preference.surprise}%`,
-              }}
-              aria-hidden="true"
-            />
+            {xAxis === "tension" && yAxis === "surprise" && layer === "whole" ? <div className="preference-target" style={{ left: `${preference.tension}%`, top: `${100 - preference.surprise}%` }} aria-hidden="true" /> : null}
             {landmarksWithFit.map((landmark) => {
               const style = {
-                left: `${landmark.tension}%`,
-                top: `${100 - landmark.surprise}%`,
+                left: `${landmark.xValue}%`,
+                top: `${100 - landmark.yValue}%`,
                 "--fit": landmark.fit,
-                "--point-size": `${22 + landmark.drive * 0.13}px`,
+                "--point-size": `${22 + landmark.sizeValue * 0.13}px`,
+                "--model-uncertainty": `${modelUncertainty(landmark)}px`,
+                "--listener-spread": `${listenerSpread(landmark)}px`,
               } as CSSProperties;
               return (
                 <button
@@ -379,7 +501,7 @@ export function AtlasLab() {
                   }`}
                   style={style}
                   onClick={() => setSelectedId(landmark.id)}
-                  aria-label={`${landmark.creator}, ${landmark.title}; sensory tension ${landmark.tension}, surprise ${landmark.surprise}, drive ${landmark.drive}, preference proximity ${fitPercent(landmark.fit)} percent`}
+                  aria-label={`${landmark.creator}, ${landmark.title}; ${DIMENSION_LABELS[xAxis]} ${Math.round(landmark.xValue)}, ${DIMENSION_LABELS[yAxis]} ${Math.round(landmark.yValue)}, ${DIMENSION_LABELS[sizeAxis]} ${Math.round(landmark.sizeValue)}, model uncertainty ${modelUncertainty(landmark)}, illustrative listener spread ${listenerSpread(landmark)}, preference proximity ${fitPercent(landmark.fit)} percent`}
                   aria-pressed={selected.id === landmark.id}
                 >
                   <i aria-hidden="true" />
@@ -387,17 +509,20 @@ export function AtlasLab() {
                 </button>
               );
             })}
-            <span className="atlas-y-high">more surprising</span>
-            <span className="atlas-y-low">more expected</span>
-            <span className="atlas-x-low">smooth / fused</span>
-            <span className="atlas-x-high">rough / ambiguous</span>
+            <span className="atlas-y-high">more {DIMENSION_LABELS[yAxis]}</span>
+            <span className="atlas-y-low">less {DIMENSION_LABELS[yAxis]}</span>
+            <span className="atlas-x-low">less {DIMENSION_LABELS[xAxis]}</span>
+            <span className="atlas-x-high">more {DIMENSION_LABELS[xAxis]}</span>
           </div>
           <div className="atlas-legend" aria-label="Atlas legend">
             <span><i className="legend-pop" /> pop</span>
             <span><i className="legend-blues" /> blues</span>
             <span><i className="legend-classical" /> classical</span>
+            <span><i className="legend-generated" /> generated</span>
             <span><i className="legend-fit" /> halo = preference proximity</span>
-            <span>size = embodied drive</span>
+            <span><i className="legend-uncertainty" /> inner ring = model uncertainty</span>
+            <span><i className="legend-listener" /> outer ring = listener spread</span>
+            <span>size = {DIMENSION_LABELS[sizeAxis]}</span>
           </div>
         </div>
 
@@ -422,6 +547,12 @@ export function AtlasLab() {
             ))}
           </div>
           <p className="mechanism-note"><strong>Why it may work:</strong> {selected.mechanism}</p>
+          <div className="evidence-ledger">
+            <div className="evidence-measured"><span>Measured evidence</span><strong>{selected.genre === "generated" ? "declared generated ratios" : "not loaded"}</strong><p>{selectedMetadata.recording.access}</p></div>
+            <div className="evidence-curator"><span>Curator hypothesis</span><strong>{selectedMetadata.provenance.profileSource}</strong><p>{LAYER_LABELS[layer]} view · model uncertainty {modelUncertainty(selected)}</p></div>
+            <div className="evidence-listener"><span>Listener reports</span><strong>illustrative spread {listenerSpread(selected)}</strong><p>Your preference target is separate; no cohort responses are bundled.</p></div>
+          </div>
+          <details className="landmark-provenance"><summary>Provenance and licensing</summary><dl><div><dt>Schema</dt><dd>{selectedMetadata.schema}</dd></div><div><dt>Corpus</dt><dd>{selectedMetadata.provenance.corpus}</dd></div><div><dt>Recording</dt><dd>{selectedMetadata.recording.access}</dd></div><div><dt>Rights</dt><dd>{selectedMetadata.licensing.status}. {selectedMetadata.licensing.requirement}</dd></div></dl></details>
         </aside>
       </div>
 
@@ -451,8 +582,9 @@ export function AtlasLab() {
       <div className="lab-learning-note atlas-note">
         <strong>Interpretation boundary:</strong> these song positions are explicit
         curatorial hypotheses, not extracted measurements or claims about entire genres.
-        A future recording analysis will replace each point with a versioned trajectory,
-        model uncertainty, and listener-response distributions.
+        Commercial audio is never bundled. Load audio you are entitled to use in the
+        Recording Journey to add measured evidence; curator uncertainty and illustrative
+        listener spread remain separate encodings.
       </div>
     </section>
   );

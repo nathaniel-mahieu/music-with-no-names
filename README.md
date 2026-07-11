@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Pattern + Prediction v1.2**. It provides:
+The current milestone is **Versioned Music Atlas v1.3**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -38,6 +38,9 @@ The current milestone is **Pattern + Prediction v1.2**. It provides:
 - A motif self-similarity matrix that detects recurrence beyond absolute event time.
 - An incremental piece-local prediction trace separating uncertainty before from surprise after events.
 - Listener confirmation or rejection of section-level tension hypotheses.
+- A versioned landmark schema with provenance, licensing, and no bundled commercial audio.
+- Selectable Atlas axes and whole-recording/composition/performance/production views.
+- Separate measured, curator, listener, model-uncertainty, and inter-listener-spread encodings.
 
 ## Run locally
 
