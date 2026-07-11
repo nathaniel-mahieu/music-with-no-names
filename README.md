@@ -2,6 +2,8 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
+Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
+
 The current milestone is **Clear Listening + Matched Levels v1.23**. It provides:
 
 - Safe, user-initiated two-tone synthesis.

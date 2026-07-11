@@ -1,41 +1,34 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 
 const title = "Music With No Names · Sound Labs";
+export const dynamic = "force-static";
 const description =
   "Audible, visual explorations of frequency ratios, harmonic fields, pulse cycles, and the physical relationships beneath musical labels.";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host =
-    requestHeaders.get("x-forwarded-host") ??
-    requestHeaders.get("host") ??
-    "localhost:3000";
-  const protocol =
-    requestHeaders.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") ? "http" : "https");
-  const baseUrl = new URL(`${protocol}://${host}`);
-  const imageUrl = new URL("/og.png", baseUrl).toString();
+const metadataBase = new URL(
+  process.env.NEXT_PUBLIC_SITE_URL ??
+    "https://nathaniel-mahieu.github.io/music-with-no-names/",
+);
+const imageUrl = new URL("og.png", metadataBase).toString();
 
-  return {
-    metadataBase: baseUrl,
+export const metadata: Metadata = {
+  metadataBase,
+  title,
+  description,
+  openGraph: {
     title,
     description,
-    openGraph: {
-      title,
-      description,
-      type: "website",
-      images: [{ url: imageUrl, width: 1536, height: 1024 }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [imageUrl],
-    },
-  };
-}
+    type: "website",
+    images: [{ url: imageUrl, width: 1536, height: 1024 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: [imageUrl],
+  },
+};
 
 export default function RootLayout({
   children,
