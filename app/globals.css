@@ -866,10 +866,78 @@ footer a {
   --voice-color: var(--accent);
 }
 
+.voice-4 {
+  --voice-color: #b99ae8;
+}
+
 .voice-swatch.voice-1,
 .voice-swatch.voice-2,
 .voice-swatch.voice-3 {
   background: var(--voice-color);
+}
+
+.voice-swatch.voice-4 {
+  background: var(--voice-color);
+}
+
+.temperament-control {
+  margin-bottom: 28px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sequence-control {
+  margin-top: 32px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.sequence-control > span {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.sequence-control > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.sequence-control button {
+  min-height: 56px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sequence-control button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.sequence-control strong,
+.sequence-control small {
+  display: block;
+}
+
+.sequence-control strong {
+  font-size: 0.68rem;
+}
+
+.sequence-control small {
+  margin-top: 3px;
+  font-size: 0.57rem;
+  line-height: 1.35;
 }
 
 .analysis-card {
@@ -1022,6 +1090,98 @@ footer a {
   right: 8px;
 }
 
+.fold-choice {
+  display: flex;
+  gap: 5px;
+}
+
+.fold-choice button {
+  min-height: 29px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.56rem;
+  cursor: pointer;
+}
+
+.fold-choice button[aria-pressed="true"] {
+  border-color: #b99ae8;
+  color: var(--foreground);
+}
+
+.prime-lattice {
+  position: relative;
+  height: 270px;
+  margin-top: 28px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 9.8%, var(--line) 10%),
+    repeating-linear-gradient(0deg, transparent 0 19.8%, var(--line) 20%),
+    color-mix(in srgb, #b99ae8 3%, transparent);
+}
+
+.prime-axis-x,
+.prime-axis-y {
+  position: absolute;
+  background: var(--line-strong);
+}
+
+.prime-axis-x { top: 50%; right: 0; left: 0; height: 1px; }
+.prime-axis-y { top: 0; bottom: 0; left: 50%; width: 1px; }
+
+.prime-lattice > span {
+  position: absolute;
+  display: grid;
+  min-width: 105px;
+  justify-items: center;
+  gap: 5px;
+  color: var(--voice-color);
+  transform: translate(-50%, -50%);
+}
+
+.prime-lattice > span > i {
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  background: var(--voice-color);
+  box-shadow: 0 0 0 1px var(--voice-color);
+}
+
+.prime-lattice > span strong {
+  color: var(--foreground);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.62rem;
+}
+
+.prime-lattice > span small {
+  color: var(--muted);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.49rem;
+  white-space: nowrap;
+}
+
+.prime-lattice > b {
+  position: absolute;
+  color: var(--faint);
+  font-size: 0.52rem;
+  font-weight: 500;
+}
+
+.axis-three { right: 8px; top: calc(50% + 7px); }
+.axis-five { top: 8px; left: calc(50% + 7px); }
+
+.lattice-note {
+  margin: 13px 0 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+
 .harmony-metrics,
 .rhythm-metrics {
   display: grid;
@@ -1029,6 +1189,10 @@ footer a {
   gap: 1px;
   margin-top: 14px;
   background: var(--line);
+}
+
+.harmony-metrics {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .harmony-metrics article,

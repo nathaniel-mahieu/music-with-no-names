@@ -11,6 +11,10 @@ import {
   cyclicOnsetIntervals,
   leastCommonMultiple,
   primeFactorization,
+  primeExponentCoordinates,
+  equalDivisionApproximation,
+  interpolateRatioLogarithmically,
+  voiceLeadingDistance,
 } from "../lib/music-math.ts";
 
 test("reduces integer relationships", () => {
@@ -102,4 +106,21 @@ test("describes circular rhythms as onset-spacing ratios", () => {
     ]),
     [3, 3, 2, 2, 2],
   );
+});
+
+test("places ratios in low-prime exponent coordinates", () => {
+  const result = primeExponentCoordinates(5 / 4);
+  assert.deepEqual(result.coordinates, { 2: -2, 3: 0, 5: 1, 7: 0 });
+  assert.equal(result.explained, true);
+});
+
+test("finds equal-division approximations and their error", () => {
+  const result = equalDivisionApproximation(3 / 2, 12);
+  assert.equal(result.steps, 7);
+  assert.ok(Math.abs(result.errorCents) < 2);
+});
+
+test("interpolates and measures voice motion logarithmically", () => {
+  assert.ok(Math.abs(interpolateRatioLogarithmically(1, 2, 0.5) - Math.SQRT2) < 1e-12);
+  assert.ok(Math.abs(voiceLeadingDistance([1, 5 / 4, 3 / 2], [1, 4 / 3, 3 / 2]) - centsFromRatio(16 / 15)) < 1e-9);
 });

@@ -6,6 +6,10 @@ import {
   findCoincidingPartials,
   harmonicBasis,
   harmonicPartials,
+  equalDivisionApproximation,
+  interpolateRatioLogarithmically,
+  primeExponentCoordinates,
+  voiceLeadingDistance,
 } from "@/lib/music-math";
 
 type HarmonyAudioNodes = {
@@ -15,6 +19,11 @@ type HarmonyAudioNodes = {
 };
 
 const HARMONY_PRESETS = [
+  {
+    label: "4:5:6:7",
+    ratios: [1, 5 / 4, 3 / 2, 7 / 4],
+    note: "four consecutive harmonics",
+  },
   {
     label: "4:5:6",
     ratios: [1, 5 / 4, 3 / 2],
@@ -37,7 +46,14 @@ const HARMONY_PRESETS = [
   },
 ] as const;
 
-const VOICE_NAMES = ["Reference", "Voice two", "Voice three"];
+const VOICE_NAMES = ["Reference", "Voice two", "Voice three", "Voice four", "Voice five", "Voice six"];
+
+const MOTION_STEPS = [
+  { label: "Origin", ratios: [1, 5 / 4, 3 / 2], note: "globally aligned" },
+  { label: "Lean", ratios: [1, 1.29, 3 / 2], note: "middle voice leaves the template" },
+  { label: "Open", ratios: [1, 4 / 3, 3 / 2], note: "locally familiar, globally changed" },
+  { label: "Return", ratios: [1, 5 / 4, 3 / 2], note: "short basis restored" },
+] as const;
 
 function createHarmonicWave(context: AudioContext) {
   const real = new Float32Array(10);
@@ -144,19 +160,26 @@ function formatFrequency(value: number) {
 
 export function HarmonyLab() {
   const [referenceHz, setReferenceHz] = useState(160);
-  const [ratios, setRatios] = useState<number[]>([1, 5 / 4, 3 / 2]);
+  const [justRatios, setJustRatios] = useState<number[]>([1, 5 / 4, 3 / 2]);
+  const [temperamentMorph, setTemperamentMorph] = useState(0);
+  const [foldOctaves, setFoldOctaves] = useState(true);
+  const [motionStep, setMotionStep] = useState(0);
+  const [previousRatios, setPreviousRatios] = useState<number[]>([1, 5 / 4, 3 / 2]);
+  const ratios = useMemo(
+    () =>
+      justRatios.map((ratio) => {
+        const equal = equalDivisionApproximation(ratio, 12).ratio;
+        return interpolateRatioLogarithmically(ratio, equal, temperamentMorph);
+      }),
+    [justRatios, temperamentMorph],
+  );
   const { isPlaying, start, stop } = useHarmonyAudio(referenceHz, ratios);
   const basis = useMemo(() => harmonicBasis(ratios, 20, 1), [ratios]);
   const voicesHz = ratios.map((ratio) => referenceHz * ratio);
 
-  const pairwise = useMemo(
-    () => [
-      centsFromRatio(ratios[1] / ratios[0]),
-      centsFromRatio(ratios[2] / ratios[1]),
-      centsFromRatio(ratios[2] / ratios[0]),
-    ],
-    [ratios],
-  );
+  const pairwise = useMemo(() => ratios.slice(1).map((ratio, index) => centsFromRatio(ratio / ratios[index])), [ratios]);
+  const motionDistance = useMemo(() => previousRatios.length === ratios.length ? voiceLeadingDistance(previousRatios, ratios) : 0, [previousRatios, ratios]);
+  const primeCoordinates = useMemo(() => justRatios.map((ratio) => primeExponentCoordinates(ratio, 32)), [justRatios]);
 
   const spectrum = useMemo(() => {
     const partials = voicesHz.flatMap((frequencyHz, voiceIndex) =>
@@ -200,20 +223,37 @@ export function HarmonyLab() {
   }, [referenceHz, voicesHz]);
 
   const selectedPreset = HARMONY_PRESETS.find((preset) =>
-    preset.ratios.every((value, index) => Math.abs(value - ratios[index]) < 0.0005),
+    preset.ratios.length === justRatios.length && preset.ratios.every((value, index) => Math.abs(value - justRatios[index]) < 0.0005),
   );
 
   const setVoice = (index: number, value: number) => {
-    setRatios((current) =>
+    setPreviousRatios(ratios);
+    setJustRatios((current) =>
       current.map((ratio, voiceIndex) => (voiceIndex === index ? value : ratio)),
     );
+  };
+
+  const choosePreset = (preset: (typeof HARMONY_PRESETS)[number]) => {
+    if (isPlaying) stop();
+    setPreviousRatios(ratios);
+    setJustRatios([...preset.ratios]);
+    setTemperamentMorph(0);
+    setMotionStep(0);
+  };
+
+  const chooseMotionStep = (index: number) => {
+    if (isPlaying) stop();
+    setPreviousRatios([...MOTION_STEPS[motionStep].ratios]);
+    setJustRatios([...MOTION_STEPS[index].ratios]);
+    setTemperamentMorph(0);
+    setMotionStep(index);
   };
 
   return (
     <section className="advanced-lab harmony-lab" aria-labelledby="harmony-title">
       <div className="lab-intro">
         <div>
-          <p className="section-kicker">Harmony field · three simultaneous voices</p>
+          <p className="section-kicker">Harmony field · three or four simultaneous voices</p>
           <h2 id="harmony-title">When relationships become a system</h2>
         </div>
         <p>
@@ -250,7 +290,7 @@ export function HarmonyLab() {
                   key={preset.label}
                   type="button"
                   className={selected ? "harmony-preset is-selected" : "harmony-preset"}
-                  onClick={() => setRatios([...preset.ratios])}
+                  onClick={() => choosePreset(preset)}
                   aria-pressed={selected}
                 >
                   <strong>{preset.label}</strong>
@@ -259,6 +299,25 @@ export function HarmonyLab() {
               );
             })}
           </div>
+
+          <label className="control-field temperament-control">
+            <span>
+              Just relationship → equal-division approximation
+              <output>{Math.round(temperamentMorph * 100)}%</output>
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              aria-label="Equal-division approximation morph"
+              value={temperamentMorph}
+              onChange={(event) => {
+                setPreviousRatios(ratios);
+                setTemperamentMorph(Number(event.target.value));
+              }}
+            />
+          </label>
 
           <label className="control-field" htmlFor="harmony-reference">
             <span>
@@ -296,6 +355,11 @@ export function HarmonyLab() {
               </label>
             ))}
           </div>
+
+          <div className="sequence-control">
+            <span>One moving voice · sequence mode</span>
+            <div>{MOTION_STEPS.map((step, index) => <button key={`${step.label}-${index}`} type="button" onClick={() => chooseMotionStep(index)} aria-pressed={motionStep === index}><strong>{step.label}</strong><small>{step.note}</small></button>)}</div>
+          </div>
         </div>
 
         <div className="lab-observations">
@@ -310,7 +374,7 @@ export function HarmonyLab() {
             <div
               className="harmonic-ladder"
               role="img"
-              aria-label={`Three voices at ratios ${ratios.map((value) => value.toFixed(3)).join(", ")}`}
+              aria-label={`${ratios.length} voices at ratios ${ratios.map((value) => value.toFixed(3)).join(", ")}`}
             >
               <div className="ladder-axis" />
               {[1, 4 / 3, 3 / 2, 2].map((landmark) => (
@@ -373,6 +437,23 @@ export function HarmonyLab() {
             </div>
           </article>
 
+          <article className="analysis-card prime-lattice-card">
+            <div className="analysis-heading">
+              <div><span>C · Low-prime coordinates</span><h3>Relationships as exponent vectors</h3></div>
+              <div className="fold-choice" role="group" aria-label="Octave folding view"><button type="button" aria-pressed={foldOctaves} onClick={() => setFoldOctaves(true)}>fold octaves</button><button type="button" aria-pressed={!foldOctaves} onClick={() => setFoldOctaves(false)}>show octave axis</button></div>
+            </div>
+            <div className={`prime-lattice ${foldOctaves ? "is-folded" : ""}`} role="img" aria-label={`Prime exponent coordinates for ${justRatios.length} voices; octave axis ${foldOctaves ? "folded" : "visible"}`}>
+              <i className="prime-axis-x" /><i className="prime-axis-y" />
+              {primeCoordinates.map((coordinate, index) => {
+                const x = 50 + coordinate.coordinates[3] * 17 + coordinate.coordinates[7] * 8;
+                const y = 52 - coordinate.coordinates[5] * 22 - (foldOctaves ? 0 : coordinate.coordinates[2] * 7);
+                return <span key={`${index}-${justRatios[index]}`} className={`voice-${index + 1}`} style={{ left: `${Math.max(7, Math.min(93, x))}%`, top: `${Math.max(8, Math.min(92, y))}%` }}><i /><strong>{justRatios[index].toFixed(3)}×</strong><small>2^{coordinate.coordinates[2]} · 3^{coordinate.coordinates[3]} · 5^{coordinate.coordinates[5]} · 7^{coordinate.coordinates[7]}</small></span>;
+              })}
+              <b className="axis-three">3-exponent →</b><b className="axis-five">5-exponent ↑</b>
+            </div>
+            <p className="lattice-note">Octave folding is a view choice. The stored relationships retain their 2-exponents either way.</p>
+          </article>
+
           <div className="harmony-metrics">
             <article>
               <span>Shared harmonic basis</span>
@@ -391,14 +472,20 @@ export function HarmonyLab() {
                 the field as one global object.
               </p>
             </article>
+            <article>
+              <span>Voice-leading distance</span>
+              <strong>{motionDistance.toFixed(1)}¢</strong>
+              <p>Sum of continuous log-frequency movement from the previous field. Zero means no voice moved.</p>
+            </article>
           </div>
         </div>
       </div>
 
       <div className="lab-learning-note">
-        <strong>Try this:</strong> begin at 4:5:6, then move only the middle voice. Notice
-        how a tiny change can dissolve global alignment even when both neighboring
-        distances remain individually familiar.
+        <strong>Contextual stability is separate:</strong> use the sequence from Origin to
+        Open. The moved voice can form familiar local relationships while the original
+        shared template and expectation disappear. Return restores the learned field,
+        so stability belongs to motion and memory—not only the sonority in isolation.
       </div>
     </section>
   );

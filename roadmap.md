@@ -291,13 +291,13 @@ Objective: move from dyads to global spectral organization and voice motion with
 - [ ] **H3.1** Support three to six simultaneous sources with independent spectra, register, and amplitude.
 - [x] **H3.2** Represent a sonority as a normalized ratio set plus its absolute realization.
 - [x] **H3.3** Detect candidate common subharmonics and visualize competing interpretations.
-- [ ] **H3.4** Add prime-exponent coordinates for 2-, 3-, 5-, and 7-based relationships.
-- [ ] **H3.5** Build an octave-optional harmonic lattice; octave folding must be a view choice, not an implicit truth.
-- [ ] **H3.6** Calculate voice-leading distance as continuous log-frequency motion.
-- [ ] **H3.7** Let users morph between just relationships and equal-tempered approximations while hearing the difference.
+- [x] **H3.4** Add prime-exponent coordinates for 2-, 3-, 5-, and 7-based relationships.
+- [x] **H3.5** Build an octave-optional harmonic lattice; octave folding must be a view choice, not an implicit truth.
+- [x] **H3.6** Calculate voice-leading distance as continuous log-frequency motion.
+- [x] **H3.7** Let users morph between just relationships and equal-tempered approximations while hearing the difference.
 - [x] **H3.8** Add instructive fields such as 4:5:6, 10:12:15, 4:5:6:7, and deliberately inharmonic sets.
-- [ ] **H3.9** Create a sequence mode in which one or more voices move while others remain fixed.
-- [ ] **H3.10** Show why an internally smooth sonority can still feel contextually unstable.
+- [x] **H3.9** Create a sequence mode in which one or more voices move while others remain fixed.
+- [x] **H3.10** Show why an internally smooth sonority can still feel contextually unstable.
 
 Exit gate:
 
@@ -599,5 +599,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Private local recording import, worker analysis, correction controls, and portable profiles implemented.
 - [x] Ear Lab sensory models and independent human reports implemented.
 - [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
+- [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

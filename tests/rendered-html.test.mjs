@@ -81,6 +81,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(earLab, /humanRatings/);
   assert.match(harmonyLab, /When relationships become a system/);
   assert.match(harmonyLab, /Shared harmonic basis/);
+  assert.match(harmonyLab, /Low-prime coordinates/);
+  assert.match(harmonyLab, /Equal-division approximation morph/);
+  assert.match(harmonyLab, /One moving voice/);
+  assert.match(harmonyLab, /Contextual stability is separate/);
   assert.match(rhythmLab, /Time as ratio and resistance/);
   assert.match(rhythmLab, /Anchor resistance/);
   assert.match(journeyLab, /Musical meaning is a path through time/);

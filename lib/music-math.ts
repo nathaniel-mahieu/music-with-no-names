@@ -175,6 +175,37 @@ export function primeFactorization(value: number): Record<number, number> {
   return factors;
 }
 
+export function primeExponentCoordinates(ratio: number, maximumDenominator = 32) {
+  const approximation = approximateRatio(ratio, maximumDenominator);
+  const numerator = primeFactorization(approximation.numerator);
+  const denominator = primeFactorization(approximation.denominator);
+  const coordinates = [2, 3, 5, 7].reduce<Record<number, number>>((result, prime) => {
+    result[prime] = (numerator[prime] ?? 0) - (denominator[prime] ?? 0);
+    return result;
+  }, {});
+  const explained = Object.entries(numerator).every(([prime]) => Number(prime) <= 7) && Object.entries(denominator).every(([prime]) => Number(prime) <= 7);
+  return { ...approximation, coordinates, explained };
+}
+
+export function equalDivisionApproximation(ratio: number, divisions = 12) {
+  if (!Number.isFinite(ratio) || ratio <= 0) throw new RangeError("Ratio must be positive.");
+  if (!Number.isInteger(divisions) || divisions <= 0) throw new RangeError("Divisions must be a positive integer.");
+  const steps = Math.round(divisions * Math.log2(ratio));
+  const approximatedRatio = 2 ** (steps / divisions);
+  return { steps, ratio: approximatedRatio, errorCents: centsFromRatio(approximatedRatio / ratio) };
+}
+
+export function interpolateRatioLogarithmically(first: number, second: number, amount: number) {
+  if (first <= 0 || second <= 0) throw new RangeError("Ratios must be positive.");
+  const bounded = Math.max(0, Math.min(1, amount));
+  return 2 ** (Math.log2(first) * (1 - bounded) + Math.log2(second) * bounded);
+}
+
+export function voiceLeadingDistance(first: number[], second: number[]) {
+  if (first.length !== second.length) throw new RangeError("Voice sets must contain the same number of voices.");
+  return first.reduce((sum, ratio, index) => sum + Math.abs(centsFromRatio(second[index] / ratio)), 0);
+}
+
 export function harmonicBasis(
   ratios: number[],
   maxDenominator = 16,
