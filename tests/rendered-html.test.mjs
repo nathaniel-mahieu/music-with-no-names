@@ -109,6 +109,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(personalLab, /predicted fit for this listener and goal/);
   assert.match(personalLab, /localStorage/);
   assert.match(personalLab, /Export JSON/);
+  assert.match(personalLab, /Transparent personal response surface/);
+  assert.match(personalLab, /learnedPreferenceModel/);
+  assert.match(personalLab, /Repeated listening/);
 
   await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
   await assert.rejects(access(new URL("../package-lock.json", projectRoot)));

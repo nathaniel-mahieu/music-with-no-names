@@ -2608,6 +2608,181 @@ footer a {
   padding: 28px 32px;
 }
 
+.personal-terrain {
+  padding: 36px 32px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.terrain-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 28px;
+}
+
+.terrain-heading span,
+.terrain-grid article > span {
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.terrain-heading h3 {
+  max-width: 720px;
+  margin: 7px 0 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 400;
+}
+
+.terrain-heading > p,
+.terrain-grid article > p {
+  max-width: 390px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.6;
+}
+
+.terrain-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1fr 1fr;
+  gap: 1px;
+  background: var(--line);
+}
+
+.terrain-grid article {
+  min-width: 0;
+  padding: 24px;
+  background: var(--surface-raised);
+}
+
+.terrain-center > div {
+  position: relative;
+  height: 210px;
+  margin: 18px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, transparent 49.8%, var(--line) 50%, transparent 50.2%),
+    linear-gradient(0deg, transparent 49.8%, var(--line) 50%, transparent 50.2%);
+}
+
+.terrain-center > div > i,
+.terrain-center > div > b {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.terrain-center > div > i {
+  border: 1px solid var(--personal-cyan);
+  background: color-mix(in srgb, var(--personal-cyan) 7%, transparent);
+}
+
+.terrain-center > div > b {
+  width: 9px;
+  height: 9px;
+  background: var(--personal-gold);
+}
+
+.terrain-ranking {
+  display: grid;
+  align-content: start;
+  gap: 13px;
+}
+
+.terrain-ranking > div {
+  display: grid;
+  grid-template-columns: 90px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.61rem;
+}
+
+.terrain-ranking > div > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terrain-ranking > div > i {
+  height: 4px;
+  background: var(--line);
+}
+
+.terrain-ranking > div > i b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--personal-cyan), var(--personal-gold));
+}
+
+.terrain-ranking output {
+  color: var(--muted);
+  text-align: right;
+}
+
+.terrain-ranking > p {
+  margin-top: 6px !important;
+}
+
+.familiarity-history > strong {
+  display: block;
+  margin: 28px 0;
+  color: var(--muted);
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.3rem;
+  font-weight: 400;
+}
+
+.history-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 180px;
+  margin: 18px 0;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.history-bars > i {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 1;
+  height: 100%;
+}
+
+.history-bars b,
+.history-bars em {
+  width: 50%;
+  min-height: 2px;
+}
+
+.history-bars b { background: var(--personal-cyan); }
+.history-bars em { background: var(--personal-gold); }
+
+@media (max-width: 900px) {
+  .terrain-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .personal-terrain {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  .terrain-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .personal-data strong {
   display: block;
   margin: 5px 0 3px;

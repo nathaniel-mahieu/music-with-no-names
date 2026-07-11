@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Versioned Music Atlas v1.3**. It provides:
+The current milestone is **Learned Personal Terrain v1.4**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -41,6 +41,9 @@ The current milestone is **Versioned Music Atlas v1.3**. It provides:
 - A versioned landmark schema with provenance, licensing, and no bundled commercial audio.
 - Selectable Atlas axes and whole-recording/composition/performance/production views.
 - Separate measured, curator, listener, model-uncertainty, and inter-listener-spread encodings.
+- A transparent listener preference center and bandwidth learned from saved evidence.
+- Goal-relative fit blended with learned proximity and sample-count uncertainty.
+- Repeated-listening history that keeps familiarity and liking changes separate.
 
 ## Run locally
 

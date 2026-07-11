@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { LANDMARKS } from "./AtlasLab";
+import { familiarityResponseTrend, learnPreferenceTerrain, terrainFit, type ResponseSample } from "@/lib/personal-response";
 
 type RatingKey =
   | "liking"
@@ -128,6 +129,14 @@ export function PersonalLab() {
   const repeats = observations.filter(
     (item) => item.landmarkId === landmarkId && item.goal === goal,
   ).length;
+  const responseSamples = useMemo(() => observations.flatMap<ResponseSample>((observation) => {
+    const landmark = LANDMARKS.find((item) => item.id === observation.landmarkId);
+    return landmark ? [{ position: { tension: landmark.tension, surprise: landmark.surprise, drive: landmark.drive }, liking: observation.ratings.liking, interest: observation.ratings.interest, familiarity: observation.ratings.familiarity, recordedAt: observation.recordedAt }] : [];
+  }), [observations]);
+  const learnedTerrain = useMemo(() => learnPreferenceTerrain(responseSamples), [responseSamples]);
+  const selectedHistory = useMemo(() => observations.filter((observation) => observation.landmarkId === landmarkId).map<ResponseSample>((observation) => ({ position: { tension: selected.tension, surprise: selected.surprise, drive: selected.drive }, liking: observation.ratings.liking, interest: observation.ratings.interest, familiarity: observation.ratings.familiarity, recordedAt: observation.recordedAt })), [landmarkId, observations, selected]);
+  const historyTrend = useMemo(() => familiarityResponseTrend(selectedHistory), [selectedHistory]);
+  const terrainRanking = useMemo(() => learnedTerrain ? LANDMARKS.map((landmark) => ({ landmark, fit: terrainFit(landmark, learnedTerrain) })).sort((a, b) => b.fit - a.fit).slice(0, 5) : [], [learnedTerrain]);
 
   const components = useMemo(() => {
     const target = goalProfile.targets;
@@ -142,8 +151,10 @@ export function PersonalLab() {
     ];
   }, [goalProfile, ratings]);
 
-  const predictedFit = Math.round(mean(components.map((item) => item.value)));
-  const uncertainty = Math.max(6, 24 - repeats * 4);
+  const declaredGoalFit = mean(components.map((item) => item.value));
+  const learnedFit = learnedTerrain ? terrainFit(selected, learnedTerrain) * 100 : null;
+  const predictedFit = Math.round(learnedFit === null ? declaredGoalFit : declaredGoalFit * 0.42 + learnedFit * 0.58);
+  const uncertainty = Math.round(learnedTerrain ? Math.max(learnedTerrain.uncertainty, 8 - repeats) : Math.max(6, 24 - repeats * 4));
 
   const saveObservation = () => {
     const observation: Observation = {
@@ -162,6 +173,7 @@ export function PersonalLab() {
       schema: "music-with-no-names.personal-lens.v1",
       exportedAt: new Date().toISOString(),
       observations,
+      learnedPreferenceModel: learnedTerrain,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
@@ -263,6 +275,20 @@ export function PersonalLab() {
             only with repeated observations; it does not infer a universal taste score.
           </p>
         </aside>
+      </div>
+
+      <div className="personal-terrain">
+        <div className="terrain-heading">
+          <div><span>Transparent personal response surface</span><h3>{learnedTerrain ? "A preference center learned from your saved evidence" : "Save observations to reveal a response terrain"}</h3></div>
+          <p>{learnedTerrain ? `${learnedTerrain.sampleCount} observations · model uncertainty ±${Math.round(learnedTerrain.uncertainty)}` : "No learned model yet. The declared goal profile above remains available without pretending to know your taste."}</p>
+        </div>
+        {learnedTerrain ? (
+          <div className="terrain-grid">
+            <article className="terrain-center"><span>Learned center</span><div><i style={{ left: `${learnedTerrain.center.tension}%`, top: `${100 - learnedTerrain.center.surprise}%`, width: `${learnedTerrain.bandwidth.tension * 1.4}px`, height: `${learnedTerrain.bandwidth.surprise * 1.4}px` }} /><b style={{ left: `${learnedTerrain.center.tension}%`, top: `${100 - learnedTerrain.center.surprise}%` }} /></div><p>x: tension {learnedTerrain.center.tension.toFixed(0)} · y: surprise {learnedTerrain.center.surprise.toFixed(0)} · desired drive {learnedTerrain.center.drive.toFixed(0)}</p></article>
+            <article className="terrain-ranking"><span>Nearby landmarks under this model</span>{terrainRanking.map((item) => <div key={item.landmark.id}><strong>{item.landmark.short}</strong><i><b style={{ width: `${Math.round(item.fit * 100)}%` }} /></i><output>{Math.round(item.fit * 100)}%</output></div>)}<p>Proximity is a Gaussian response surface weighted by your liking and interest reports. It is interpretable, sparse, and uncertain.</p></article>
+            <article className="familiarity-history"><span>Repeated listening · {selected.short}</span>{selectedHistory.length ? <div className="history-bars" role="img" aria-label={`Familiarity and liking across ${selectedHistory.length} saved observations for ${selected.title}`}>{selectedHistory.map((sample, index) => <i key={`${sample.recordedAt}-${index}`}><b style={{ height: `${sample.familiarity}%` }} /><em style={{ height: `${sample.liking}%` }} /></i>)}</div> : <strong>No repeat history for this landmark</strong>}<p>{historyTrend ? `Familiarity ${historyTrend.familiarityChange >= 0 ? "+" : ""}${historyTrend.familiarityChange}; liking ${historyTrend.likingChange >= 0 ? "+" : ""}${historyTrend.likingChange} across ${historyTrend.observations} observations.` : "Save this landmark at least twice to compare familiarity and liking change without assuming they move together."}</p></article>
+          </div>
+        ) : null}
       </div>
 
       <div className="personal-data">
