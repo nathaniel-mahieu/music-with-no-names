@@ -9,9 +9,9 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "node --test tests/music-math.test.ts tests/experience-model.test.ts tests/musical-sequence.test.ts tests/ratio-share-state.test.ts tests/audio-analysis.test.ts",
+    "test": "node --test tests/music-math.test.ts tests/experience-model.test.ts tests/musical-sequence.test.ts tests/ratio-share-state.test.ts tests/audio-analysis.test.ts tests/auditory-model.test.ts",
     "test:render": "node --test tests/rendered-html.test.mjs",
-    "verify": "vinext build && node --test tests/music-math.test.ts tests/experience-model.test.ts tests/musical-sequence.test.ts tests/ratio-share-state.test.ts tests/audio-analysis.test.ts tests/rendered-html.test.mjs",
+    "verify": "vinext build && node --test tests/music-math.test.ts tests/experience-model.test.ts tests/musical-sequence.test.ts tests/ratio-share-state.test.ts tests/audio-analysis.test.ts tests/auditory-model.test.ts tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {

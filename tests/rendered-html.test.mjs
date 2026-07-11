@@ -45,6 +45,7 @@ test("server-renders the Ratio Lab product surface", async () => {
   assert.match(html, /Cycle against cycle/i);
   assert.match(html, /Important:/i);
   assert.match(html, />Ratio<\/button>/i);
+  assert.match(html, />Ear<\/button>/i);
   assert.match(html, />Harmony<\/button>/i);
   assert.match(html, />Rhythm<\/button>/i);
   assert.match(html, />Journey<\/button>/i);
@@ -55,11 +56,12 @@ test("server-renders the Ratio Lab product surface", async () => {
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, ratioLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
+  const [page, layout, packageJson, ratioLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/EarLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/JourneyLab.tsx", import.meta.url), "utf8"),
@@ -76,6 +78,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
+  assert.match(earLab, /Separate sensory models from musical value/);
+  assert.match(earLab, /modelPredictions/);
+  assert.match(earLab, /humanRatings/);
   assert.match(harmonyLab, /When relationships become a system/);
   assert.match(harmonyLab, /Shared harmonic basis/);
   assert.match(rhythmLab, /Time as ratio and resistance/);

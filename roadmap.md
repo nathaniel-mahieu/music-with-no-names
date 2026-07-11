@@ -264,19 +264,19 @@ Release candidate: **v0.1 — Ratio Lab**
 
 Objective: connect ideal frequency mathematics to the behavior of an actual auditory system.
 
-- [ ] **A2.1** Add editable partial spectra, harmonic rolloff, controlled inharmonicity, and noise components.
-- [ ] **A2.2** Add register, loudness, envelope, and spacing controls.
-- [ ] **A2.3** Implement an auditory-filterbank view rather than relying only on a raw Fourier spectrum.
-- [ ] **A2.4** Implement at least one documented roughness model and expose its assumptions.
-- [ ] **A2.5** Implement harmonicity/periodicity measures separately from roughness.
+- [x] **A2.1** Add editable partial spectra, harmonic rolloff, controlled inharmonicity, and noise components.
+- [x] **A2.2** Add register, loudness, envelope, and spacing controls.
+- [x] **A2.3** Implement an auditory-filterbank view rather than relying only on a raw Fourier spectrum.
+- [x] **A2.4** Implement at least one documented roughness model and expose its assumptions.
+- [x] **A2.5** Implement harmonicity/periodicity measures separately from roughness.
 - [ ] **A2.6** Show fusion as a model hypothesis, not as a synonym for liking.
 - [ ] **A2.7** Build controlled A/B experiments:
   - Same ratio, sine versus harmonic versus inharmonic timbre.
   - Same ratio, low versus middle versus high register.
   - Same fundamentals, different partial amplitudes.
   - Same spectrum, different envelope and duration.
-- [ ] **A2.8** Let users rate sensory smoothness, fusion, tension, and liking independently.
-- [ ] **A2.9** Store model predictions and human ratings separately for later comparison.
+- [x] **A2.8** Let users rate sensory smoothness, fusion, tension, and liking independently.
+- [x] **A2.9** Store model predictions and human ratings separately for later comparison.
 
 Exit gate:
 
@@ -597,5 +597,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Generated Journey, inspectable local prediction, and Acoustic Microscope implemented.
 - [x] First vertical slice completed with shareable ratio/register/timbre state.
 - [x] Private local recording import, worker analysis, correction controls, and portable profiles implemented.
+- [x] Ear Lab sensory models and independent human reports implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

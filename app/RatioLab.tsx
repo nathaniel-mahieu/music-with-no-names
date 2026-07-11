@@ -22,12 +22,14 @@ import { AtlasLab } from "./AtlasLab";
 import { PersonalLab } from "./PersonalLab";
 import { JourneyLab } from "./JourneyLab";
 import { RecordingLab } from "./RecordingLab";
+import { EarLab } from "./EarLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "ratio" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type LabId = "ratio" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "ratio", label: "Ratio" },
+  { id: "ear", label: "Ear" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
   { id: "journey", label: "Journey" },
@@ -55,6 +57,15 @@ const LAB_COPY: Record<
     principleTop: "Invariant",
     principleMain: "ratio",
     principleBottom: "embodied in frequency",
+  },
+  ear: {
+    eyebrow: "Human auditory reality",
+    title: "Hear what the spectrum becomes in an ear.",
+    description:
+      "Separate physical partials, ear-relative crowding, periodicity hypotheses, perceived fusion, tension, and liking instead of compressing them into consonance.",
+    principleTop: "Spectrum",
+    principleMain: "→ hearing",
+    principleBottom: "models remain hypotheses",
   },
   harmony: {
     eyebrow: "A field of simultaneous relationships",
@@ -636,7 +647,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.7
+          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.8
         </div>
       </header>
 
@@ -869,6 +880,8 @@ export function RatioLab() {
         </div>
             </section>
           </>
+        ) : activeLab === "ear" ? (
+          <EarLab />
         ) : activeLab === "harmony" ? (
           <HarmonyLab />
         ) : activeLab === "rhythm" ? (
