@@ -3527,6 +3527,221 @@ footer a {
   .ear-playback .listen-button { width: 100%; }
 }
 
+.guide-lab {
+  --guide-gold: #ecc66b;
+  --guide-blue: #70d8da;
+  --guide-coral: #ec8c78;
+}
+
+.guide-opening {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(400px, 1.1fr);
+  align-items: center;
+  gap: clamp(40px, 7vw, 100px);
+  min-height: 500px;
+  padding: 60px 44px;
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--guide-blue) 10%, transparent), transparent 28%),
+    var(--surface-soft);
+}
+
+.guide-opening h2 {
+  max-width: 620px;
+  margin: 12px 0 20px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(2.4rem, 5vw, 4.7rem);
+  font-weight: 400;
+  line-height: 0.97;
+}
+
+.guide-opening > div:first-child > p:not(.section-kicker) {
+  max-width: 570px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+
+.guide-opening > div:first-child > button {
+  min-height: 46px;
+  margin-top: 18px;
+  padding: 0 18px;
+  border: 1px solid var(--guide-gold);
+  border-radius: 3px;
+  color: #15130b;
+  background: var(--guide-gold);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 730;
+  cursor: pointer;
+}
+
+.guide-opening > div:first-child > button span { margin-left: 16px; }
+
+.representation-chain {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.representation-chain > div {
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--guide-blue);
+  background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
+}
+
+.representation-chain > div:nth-of-type(2) { border-left-color: var(--guide-gold); }
+.representation-chain > div:nth-of-type(3) { border-left-color: var(--guide-coral); }
+.representation-chain > div:nth-of-type(4) { border-left-color: #bb9be8; }
+
+.representation-chain span,
+.guide-section-heading > span,
+.guide-principles article > span,
+.safety-guide > div > span,
+.guide-next span {
+  color: var(--muted);
+  font-size: 0.59rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.representation-chain strong { font-size: 0.69rem; font-weight: 560; }
+.representation-chain > i { grid-column: 2; color: var(--muted); font-style: normal; }
+
+.guide-path,
+.guide-glossary {
+  padding: 46px 34px;
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-section-heading {
+  display: grid;
+  grid-template-columns: 0.42fr 0.95fr 1fr;
+  align-items: end;
+  gap: 30px;
+  margin-bottom: 32px;
+}
+
+.guide-section-heading h3 {
+  margin: 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.7rem, 3vw, 2.8rem);
+  font-weight: 400;
+}
+
+.guide-section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.65;
+}
+
+.guide-steps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-steps article {
+  display: flex;
+  min-height: 260px;
+  padding: 24px 18px;
+  border-right: 1px solid var(--line);
+  flex-direction: column;
+}
+
+.guide-steps article:last-child { border-right: 0; }
+.guide-steps article > span { color: var(--guide-gold); font-family: var(--font-mono), monospace; font-size: 0.62rem; }
+.guide-steps h4 { margin: 28px 0 11px; font-size: 0.8rem; }
+.guide-steps p { margin: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.65; }
+.guide-steps button { margin-top: auto; padding: 12px 0 0; border: 0; color: var(--guide-blue); background: transparent; font: inherit; font-size: 0.64rem; text-align: left; cursor: pointer; }
+
+.guide-principles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.guide-principles article {
+  padding: 34px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-principles article:nth-child(2n) { border-right: 0; }
+.guide-principles article:nth-last-child(-n + 2) { border-bottom: 0; }
+.guide-principles strong { display: block; max-width: 620px; margin: 14px 0 11px; font-family: var(--font-display), Georgia, serif; font-size: 1.32rem; font-weight: 400; line-height: 1.25; }
+.guide-principles p { max-width: 610px; margin: 0; color: var(--muted); font-size: 0.72rem; line-height: 1.65; }
+
+.guide-glossary { background: var(--surface-soft); }
+.guide-glossary dl { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.guide-glossary dl > div { min-height: 120px; padding: 20px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.guide-glossary dt { color: var(--guide-gold); font-family: var(--font-mono), monospace; font-size: 0.7rem; }
+.guide-glossary dd { margin: 12px 0 0; color: var(--muted); font-size: 0.68rem; line-height: 1.58; }
+
+.safety-guide {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.45fr) 1.55fr;
+  gap: 50px;
+  padding: 42px 34px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--guide-coral) 6%, var(--surface));
+}
+
+.safety-guide h3 { margin: 9px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 1.8rem; font-weight: 400; }
+.safety-guide ol { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 30px; margin: 0; padding: 0; list-style: none; counter-reset: safety; }
+.safety-guide li { display: grid; grid-template-columns: 22px 1fr; gap: 8px 10px; counter-increment: safety; }
+.safety-guide li::before { grid-row: 1 / 3; color: var(--guide-coral); content: counter(safety, decimal-leading-zero); font-family: var(--font-mono), monospace; font-size: 0.59rem; }
+.safety-guide li strong { font-size: 0.7rem; }
+.safety-guide li span { color: var(--muted); font-size: 0.66rem; line-height: 1.55; }
+
+.guide-next {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 28px 34px;
+}
+
+.guide-next strong { display: block; margin-top: 5px; font-family: var(--font-display), Georgia, serif; font-size: 1.18rem; font-weight: 400; }
+.guide-next button { min-height: 40px; padding: 0 15px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--foreground); background: transparent; font: inherit; font-size: 0.66rem; cursor: pointer; }
+.guide-next button:first-of-type { border-color: var(--guide-blue); color: var(--guide-blue); }
+
+@media (max-width: 920px) {
+  .guide-opening { grid-template-columns: 1fr; }
+  .representation-chain { grid-template-columns: 1fr; }
+  .representation-chain > i { grid-column: 1; transform: rotate(90deg); justify-self: center; }
+  .guide-steps { grid-template-columns: repeat(3, 1fr); }
+  .guide-steps article:nth-child(3) { border-right: 0; }
+  .guide-glossary dl { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 680px) {
+  .guide-opening, .guide-path, .guide-glossary, .safety-guide, .guide-next { padding-right: 18px; padding-left: 18px; }
+  .guide-opening { min-height: 0; padding-top: 42px; padding-bottom: 42px; }
+  .guide-section-heading { grid-template-columns: 1fr; align-items: start; }
+  .guide-steps { grid-template-columns: 1fr 1fr; }
+  .guide-steps article, .guide-steps article:nth-child(3) { min-height: 230px; border-right: 1px solid var(--line); }
+  .guide-steps article:nth-child(2n) { border-right: 0; }
+  .guide-principles { grid-template-columns: 1fr; }
+  .guide-principles article, .guide-principles article:nth-child(2n), .guide-principles article:nth-last-child(-n + 2) { padding: 26px 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .safety-guide, .safety-guide ol { grid-template-columns: 1fr; }
+  .guide-next { grid-template-columns: 1fr; }
+  .guide-next button { width: 100%; }
+}
+
+@media (max-width: 440px) {
+  .guide-steps, .guide-glossary dl { grid-template-columns: 1fr; }
+  .guide-steps article, .guide-steps article:nth-child(2n), .guide-steps article:nth-child(3) { min-height: 205px; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

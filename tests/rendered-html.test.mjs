@@ -25,25 +25,20 @@ async function render() {
   );
 }
 
-test("server-renders the Ratio Lab product surface", async () => {
+test("server-renders the guided learning product surface", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
   assert.match(html, /<title>Music With No Names · Sound Labs<\/title>/i);
-  assert.match(html, /Hear relationships, not labels\./i);
-  assert.match(html, /Two oscillations/i);
-  assert.match(html, /Hear relationship/i);
-  assert.match(html, /Relationship/i);
-  assert.match(html, /Physical register/i);
-  assert.match(html, /Pure sine/i);
-  assert.match(html, /Harmonic/i);
-  assert.match(html, /Copy experiment link/i);
-  assert.match(html, /Motion through time/i);
-  assert.match(html, /Energy across frequency/i);
-  assert.match(html, /Cycle against cycle/i);
-  assert.match(html, /Important:/i);
+  assert.match(html, /Begin with relationships\. End with experience\./i);
+  assert.match(html, /Music without names begins with one question/i);
+  assert.match(html, /Begin with two vibrations/i);
+  assert.match(html, /Build intuition by changing one factor/i);
+  assert.match(html, /Hearing safety/i);
+  assert.match(html, /Goodness is conditional/i);
+  assert.match(html, />Start<\/button>/i);
   assert.match(html, />Ratio<\/button>/i);
   assert.match(html, />Ear<\/button>/i);
   assert.match(html, />Harmony<\/button>/i);
@@ -56,10 +51,11 @@ test("server-renders the Ratio Lab product surface", async () => {
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, ratioLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
+  const [page, layout, packageJson, guideLab, ratioLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/GuideLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/EarLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
@@ -74,6 +70,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(layout, /Music With No Names/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+  assert.match(guideLab, /manipulation before terminology/);
+  assert.match(guideLab, /Calibrate low\. Compare briefly/);
   assert.match(ratioLab, /exponentialRampToValueAtTime\(0\.14/);
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);

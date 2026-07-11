@@ -222,13 +222,13 @@ Each phase has a stable work-package prefix so later tasks can be requested and 
 Objective: create a reliable project skeleton and make the conceptual distinctions enforceable in code.
 
 - [x] **F0.1** Scaffold the TypeScript application, linting, formatting, tests, and production build.
-- [ ] **F0.2** Create architecture decision records for the stack, audio lifecycle, storage, and visualization approach.
+- [x] **F0.2** Create architecture decision records for the stack, audio lifecycle, storage, and visualization approach.
 - [x] **F0.3** Define units and core domain types. Use explicit suffixes such as `Hz`, `Seconds`, and `Ratio` to prevent accidental mixing.
 - [x] **F0.4** Implement shared math utilities for ratios, log-frequency distance, rational approximation, prime factorization, and safe normalization.
 - [x] **F0.5** Establish audio safety: master limiter, conservative gain defaults, short attack/release ramps, and explicit user-started playback.
 - [x] **F0.6** Add deterministic generated signal fixtures for unison, 2:1, 3:2, 5:4, close beating tones, harmonic spectra, and inharmonic spectra.
-- [ ] **F0.7** Create a glossary distinguishing frequency, pitch, interval, harmonicity, roughness, consonance, stability, tension, pleasure, and goodness.
-- [ ] **F0.8** Add a research ledger that ties empirical UI claims to sources and records known limitations.
+- [x] **F0.7** Create a glossary distinguishing frequency, pitch, interval, harmonicity, roughness, consonance, stability, tension, pleasure, and goodness.
+- [x] **F0.8** Add a research ledger that ties empirical UI claims to sources and records known limitations.
 
 Exit gate:
 
@@ -461,10 +461,10 @@ Objective: ensure that the experience is scientifically honest, musically useful
 - [ ] **Q10.1** Validate ratio, waveform, spectrum, periodicity, and timing math against analytic fixtures.
 - [ ] **Q10.2** Compare psychoacoustic outputs with published test conditions where reproduction is feasible.
 - [ ] **Q10.3** Test all core flows with keyboard navigation, screen readers, reduced motion, and non-color encodings.
-- [ ] **Q10.4** Add hearing-safety guidance, volume calibration guidance, and visible playback state.
+- [x] **Q10.4** Add hearing-safety guidance, volume calibration guidance, and visible playback state.
 - [ ] **Q10.5** Test low-powered devices, headphones, phone speakers, and multiple browser audio implementations.
 - [ ] **Q10.6** Profile audio latency, main-thread frame time, memory use, and long-file analysis.
-- [ ] **Q10.7** Add an onboarding path that teaches by manipulation rather than terminology.
+- [x] **Q10.7** Add an onboarding path that teaches by manipulation rather than terminology.
 - [ ] **Q10.8** Conduct comprehension tests: can users explain what changed and predict the next A/B result?
 - [ ] **Q10.9** Conduct listening studies that keep model predictions separate from self-reported experience.
 - [ ] **Q10.10** Publish limitations, model cards, analysis versions, dataset provenance, and research citations.
@@ -598,5 +598,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] First vertical slice completed with shareable ratio/register/timbre state.
 - [x] Private local recording import, worker analysis, correction controls, and portable profiles implemented.
 - [x] Ear Lab sensory models and independent human reports implemented.
+- [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.

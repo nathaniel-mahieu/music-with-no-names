@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Human Auditory Reality v0.8**. It provides:
+The current milestone is **Guided Learning + Scientific Guardrails v0.9**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -26,6 +26,9 @@ The current milestone is **Human Auditory Reality v0.8**. It provides:
 - An Ear Lab with editable spectrum, register, spacing, level, envelope, inharmonicity, and noise.
 - Separate roughness, auditory-band, spectral-overlap, and harmonic-template models.
 - Independent smoothness, fusion, tension, and liking reports stored separately from predictions.
+- A manipulation-first learning path from physical relationships to listener-conditioned experience.
+- Hearing-safety and level-calibration guidance embedded in the product.
+- Architecture decisions, a first-principles glossary, and a research/limitations ledger.
 
 ## Run locally
 

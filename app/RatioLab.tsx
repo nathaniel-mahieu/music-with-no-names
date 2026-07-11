@@ -23,11 +23,13 @@ import { PersonalLab } from "./PersonalLab";
 import { JourneyLab } from "./JourneyLab";
 import { RecordingLab } from "./RecordingLab";
 import { EarLab } from "./EarLab";
+import { GuideLab } from "./GuideLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "ratio" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type LabId = "guide" | "ratio" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
+  { id: "guide", label: "Start" },
   { id: "ratio", label: "Ratio" },
   { id: "ear", label: "Ear" },
   { id: "harmony", label: "Harmony" },
@@ -49,6 +51,15 @@ const LAB_COPY: Record<
     principleBottom: string;
   }
 > = {
+  guide: {
+    eyebrow: "A first-principles path into music",
+    title: "Begin with relationships. End with experience.",
+    description:
+      "Move from vibration and time through hearing, expectation, culture, and personal response—without requiring note names or a piano-shaped map.",
+    principleTop: "Sound",
+    principleMain: "→ meaning",
+    principleBottom: "through a listener in context",
+  },
   ratio: {
     eyebrow: "A first-principles music instrument",
     title: "Hear relationships, not labels.",
@@ -378,7 +389,7 @@ function formatHertz(value: number) {
 }
 
 export function RatioLab() {
-  const [activeLab, setActiveLab] = useState<LabId>("ratio");
+  const [activeLab, setActiveLab] = useState<LabId>("guide");
   const [referenceHz, setReferenceHz] = useState(220);
   const [ratio, setRatio] = useState(3 / 2);
   const [timbre, setTimbre] = useState<Timbre>("harmonic");
@@ -396,6 +407,7 @@ export function RatioLab() {
       setRatio(shared.ratio);
       setReferenceHz(shared.referenceHz);
       setTimbre(shared.timbre);
+      if (window.location.search.includes("ratio=")) setActiveLab("ratio");
     }, 0);
     return () => window.clearTimeout(hydrationTask);
   }, []);
@@ -647,7 +659,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.8
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.9
         </div>
       </header>
 
@@ -669,7 +681,9 @@ export function RatioLab() {
       </section>
 
       <div id="lab-stage" className="lab-stage">
-        {activeLab === "ratio" ? (
+        {activeLab === "guide" ? (
+          <GuideLab onNavigate={selectLab} />
+        ) : activeLab === "ratio" ? (
           <>
             <section className="instrument" aria-labelledby="instrument-title">
         <div className="control-panel">
