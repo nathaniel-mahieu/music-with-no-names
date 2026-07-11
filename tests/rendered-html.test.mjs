@@ -104,6 +104,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(journeyLab, /Exact repeat/);
   assert.match(journeyLab, /Whole-arc satisfaction/);
   assert.match(journeyLab, /Teach my model/);
+  assert.match(journeyLab, /Audible counterfactual A\/B/);
+  assert.match(journeyLab, /Blind calibration/);
   assert.match(recordingLab, /Nothing is uploaded/);
   assert.match(recordingLab, /audio-analysis\.worker/);
   assert.match(recordingLab, /Export analysis JSON/);

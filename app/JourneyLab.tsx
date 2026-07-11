@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   eventsInSelection,
   incrementalPredictionTrace,
@@ -16,6 +16,9 @@ type Lens = "original" | "repeat" | "variation" | "unexpected" | "delay";
 type PredictionModel = "piece" | "synthetic" | "personal";
 type ResponsePoint = { sectionId: string; type: string; intensity: number; recordedAt: string };
 type PredictionObservation = { fromGesture: string; toGesture: string; recordedAt: string };
+type AudibleTransform = "original" | "smooth" | "register" | "timing";
+type CalibrationTransform = Exclude<AudibleTransform, "original">;
+type JourneyPlayback = { context: AudioContext; master: GainNode; sources: OscillatorNode[]; timer: number };
 
 const DURATION_SECONDS = 16;
 const RESPONSE_STORAGE_KEY = "mwno.journey.responses.v1";
@@ -98,7 +101,12 @@ export function JourneyLab() {
   const [responses, setResponses] = useState<ResponsePoint[]>([]);
   const [predictionObservations, setPredictionObservations] = useState<PredictionObservation[]>([]);
   const [expectedGestureReport, setExpectedGestureReport] = useState("anchor");
+  const [audibleTransform, setAudibleTransform] = useState<AudibleTransform | null>(null);
+  const [calibrationTransform, setCalibrationTransform] = useState<CalibrationTransform>("smooth");
+  const [calibrationGuess, setCalibrationGuess] = useState<CalibrationTransform>("smooth");
+  const [calibrationRevealed, setCalibrationRevealed] = useState(false);
   const [hypothesisResponses, setHypothesisResponses] = useState<Record<string, "confirm" | "reject">>({});
+  const playbackRef = useRef<JourneyPlayback | null>(null);
   const selectedEvents = eventsInSelection(EVENTS, selectedSection.selection);
   const predict = useMemo(() => localGesturePrediction(EVENTS), []);
   const finalGesture = selectedEvents[selectedEvents.length - 1]?.gesture ?? "anchor";
@@ -165,6 +173,83 @@ export function JourneyLab() {
     setPredictionObservations([]);
     window.localStorage.removeItem(PREDICTION_STORAGE_KEY);
   };
+
+  const stopAudible = useCallback(() => {
+    const playback = playbackRef.current;
+    if (!playback) return;
+    playbackRef.current = null;
+    window.clearTimeout(playback.timer);
+    const now = playback.context.currentTime;
+    playback.master.gain.cancelScheduledValues(now);
+    playback.master.gain.setValueAtTime(playback.master.gain.value, now);
+    playback.master.gain.linearRampToValueAtTime(0.0001, now + 0.04);
+    window.setTimeout(() => {
+      playback.sources.forEach((source) => { try { source.stop(); } catch { /* Already ended. */ } });
+      void playback.context.close();
+    }, 55);
+    setAudibleTransform(null);
+  }, []);
+
+  const playAudible = async (transform: AudibleTransform) => {
+    stopAudible();
+    try {
+      const context = new AudioContext();
+      await context.resume();
+      const master = context.createGain();
+      const compressor = context.createDynamicsCompressor();
+      const now = context.currentTime;
+      master.gain.setValueAtTime(0.0001, now);
+      master.gain.exponentialRampToValueAtTime(0.11, now + 0.05);
+      compressor.threshold.setValueAtTime(-16, now);
+      compressor.ratio.setValueAtTime(8, now);
+      master.connect(compressor).connect(context.destination);
+      const sources = selectedEvents.map((event, index) => {
+        const source = context.createOscillator();
+        const gain = context.createGain();
+        const relativeOnset = event.onsetSeconds - selectedSection.selection.startSeconds;
+        const timingShift = transform === "timing" && index % 2 === 1 ? 0.09 : 0;
+        const startsAt = now + 0.08 + Math.max(0, relativeOnset + timingShift);
+        const endsAt = startsAt + Math.max(0.12, event.durationSeconds * 0.72);
+        source.frequency.setValueAtTime(180 * event.ratioToReference * (transform === "register" ? 2 : 1), startsAt);
+        source.type = transform === "smooth" ? "sine" : event.timbre === "pure" ? "sine" : event.timbre === "harmonic" ? "triangle" : "sawtooth";
+        gain.gain.setValueAtTime(0.0001, startsAt);
+        gain.gain.exponentialRampToValueAtTime(0.05 + event.amplitude * 0.05, startsAt + 0.025);
+        gain.gain.setValueAtTime(0.05 + event.amplitude * 0.05, Math.max(startsAt + 0.025, endsAt - 0.05));
+        gain.gain.linearRampToValueAtTime(0.0001, endsAt);
+        source.connect(gain).connect(master);
+        source.start(startsAt);
+        source.stop(endsAt + 0.02);
+        return source;
+      });
+      const durationMs = Math.ceil((selectedSection.selection.endSeconds - selectedSection.selection.startSeconds + 0.35) * 1000);
+      const playback: JourneyPlayback = { context, master, sources, timer: 0 };
+      playback.timer = window.setTimeout(() => {
+        if (playbackRef.current !== playback) return;
+        playbackRef.current = null;
+        setAudibleTransform(null);
+        void context.close();
+      }, durationMs);
+      playbackRef.current = playback;
+      setAudibleTransform(transform);
+    } catch {
+      setAudibleTransform(null);
+    }
+  };
+
+  const nextCalibration = () => {
+    const order: CalibrationTransform[] = ["smooth", "register", "timing"];
+    setCalibrationTransform(order[(order.indexOf(calibrationTransform) + 1) % order.length]);
+    setCalibrationRevealed(false);
+  };
+
+  useEffect(() => () => {
+    const playback = playbackRef.current;
+    playbackRef.current = null;
+    if (!playback) return;
+    window.clearTimeout(playback.timer);
+    playback.sources.forEach((source) => { try { source.stop(); } catch { /* Already ended. */ } });
+    void playback.context.close();
+  }, []);
 
   return (
     <section className="advanced-lab journey-lab" aria-labelledby="journey-title">
@@ -316,6 +401,22 @@ export function JourneyLab() {
             <button type="button" aria-pressed={hypothesisResponses[selectedSection.id] === "confirm"} onClick={() => setHypothesisResponses((current) => ({ ...current, [selectedSection.id]: "confirm" }))}>Matches my listening</button>
             <button type="button" aria-pressed={hypothesisResponses[selectedSection.id] === "reject"} onClick={() => setHypothesisResponses((current) => ({ ...current, [selectedSection.id]: "reject" }))}>Does not match</button>
           </div>
+        </div>
+
+        <div className="audible-counterfactuals">
+          <div><span>Audible counterfactual A/B · {selectedSection.label}</span><h4>Same gesture identity, one declared factor changed.</h4><p>Begin with your device low. Compare briefly; level and event ratios remain fixed.</p></div>
+          <div role="group" aria-label="Audible counterfactual transforms">
+            {([[
+              "original", "A · Original", "baseline realization",
+            ], [
+              "smooth", "B · Smooth timbre", "source waveform only",
+            ], [
+              "register", "C · Higher register", "all frequencies ×2",
+            ], [
+              "timing", "D · Timing shift", "alternate events +90 ms",
+            ]] as [AudibleTransform, string, string][]).map(([id, label, note]) => <button key={id} type="button" aria-pressed={audibleTransform === id} onClick={audibleTransform === id ? stopAudible : () => void playAudible(id)}><strong>{audibleTransform === id ? "■ Stop" : `▶ ${label}`}</strong><span>{note}</span></button>)}
+          </div>
+          <div className="calibration-quiz"><div><span>Blind calibration</span><strong>Can you identify the single changed factor?</strong></div><button type="button" onClick={() => void playAudible("original")}>▶ Hear A</button><button type="button" onClick={() => void playAudible(calibrationTransform)}>▶ Hear mystery B</button><label><span>My answer</span><select value={calibrationGuess} onChange={(event) => setCalibrationGuess(event.target.value as CalibrationTransform)}><option value="smooth">spectrum / timbre</option><option value="register">absolute register</option><option value="timing">event timing</option></select></label><button type="button" onClick={() => setCalibrationRevealed(true)}>Reveal</button>{calibrationRevealed ? <output className={calibrationGuess === calibrationTransform ? "is-correct" : "is-different"}>{calibrationGuess === calibrationTransform ? "Matched" : `Changed: ${calibrationTransform}`}</output> : null}<button type="button" onClick={nextCalibration}>Next</button></div>
         </div>
       </div>
 

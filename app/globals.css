@@ -3519,6 +3519,89 @@ footer a {
   background: color-mix(in srgb, var(--journey-gold) 8%, transparent);
 }
 
+.audible-counterfactuals {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.55fr) 1.45fr;
+  gap: 28px;
+  margin-top: 28px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.audible-counterfactuals > div:first-child > span {
+  color: var(--journey-coral);
+  font-size: 0.59rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.audible-counterfactuals h4 {
+  margin: 8px 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.28rem;
+  font-weight: 400;
+}
+
+.audible-counterfactuals p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.55;
+}
+
+.audible-counterfactuals > div:last-child {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.audible-counterfactuals button {
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--foreground);
+  background: var(--surface-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.audible-counterfactuals button strong,
+.audible-counterfactuals button span {
+  display: block;
+}
+
+.audible-counterfactuals button strong { font-size: 0.65rem; }
+.audible-counterfactuals button span { margin-top: 5px; color: var(--muted); font-size: 0.57rem; }
+.audible-counterfactuals button[aria-pressed="true"] { border-color: var(--journey-coral); background: color-mix(in srgb, var(--journey-coral) 8%, transparent); }
+
+.calibration-quiz {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1.3fr auto auto minmax(130px, 0.7fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  background: var(--surface-soft);
+}
+
+.calibration-quiz > div > span,
+.calibration-quiz label > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+}
+
+.calibration-quiz > div > strong { font-size: 0.65rem; }
+.calibration-quiz label { display: grid; }
+.calibration-quiz select { min-height: 32px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--foreground); background: var(--surface-raised); font-size: 0.61rem; }
+.calibration-quiz output { color: var(--journey-gold); font-size: 0.61rem; }
+.calibration-quiz output.is-correct { color: #8bd5a7; }
+
 .journey-annotation {
   border-top: 1px solid var(--line);
   border-bottom: 0;
@@ -3606,6 +3689,14 @@ footer a {
     grid-template-columns: 1fr;
   }
 
+  .audible-counterfactuals {
+    grid-template-columns: 1fr;
+  }
+
+  .calibration-quiz {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .structure-inspector {
     grid-template-columns: 1fr;
   }
@@ -3629,6 +3720,10 @@ footer a {
   .arc-dissociation {
     padding-right: 16px;
     padding-left: 16px;
+  }
+
+  .audible-counterfactuals > div:last-child {
+    grid-template-columns: 1fr;
   }
 
   .section-rail {

@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Unified Evidence Timeline v1.13**. It provides:
+The current milestone is **Audible Counterfactuals v1.14**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -56,6 +56,8 @@ The current milestone is **Unified Evidence Timeline v1.13**. It provides:
 - Goal-relative fit blended with learned proximity and sample-count uncertainty.
 - Repeated-listening history that keeps familiarity and liking changes separate.
 - Exact-repeat, variation, unexpected-rupture, and delayed-return context experiments.
+- Safe, short A/B renderings that preserve gesture identity while changing only timbre, register, or timing.
+- Blind calibration prompts for identifying the changed physical factor by ear.
 - Independent local-comfort and whole-arc-satisfaction reports that expose moment/form dissociation.
 
 ## Run locally

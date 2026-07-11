@@ -380,7 +380,7 @@ Objective: make a real recording inspectable from whole form down to partial int
 - [x] **J7.3** Selecting any time range opens the Acoustic Microscope.
 - [x] **J7.4** Show auditory spectrum, partial collisions, periodicity candidates, continuous ratio evidence, onset phase, and expected alternatives for the selection.
 - [x] **J7.5** Explain a model estimate through visible contributing evidence rather than a black-box number.
-- [ ] **J7.6** Add counterfactual A/B transforms that preserve the gesture while changing one factor such as roughness, register, timbre, syncopation, or repetition. (Visual model counterfactuals exist; audible A/B transforms remain.)
+- [x] **J7.6** Add counterfactual A/B transforms that preserve the gesture while changing one factor such as roughness, register, timbre, syncopation, or repetition.
 - [x] **J7.7** Allow annotations for perceived section, tension, release, surprise, and personal significance.
 
 Exit gate:
@@ -432,7 +432,7 @@ Objective: visualize musical value honestly as personal, multidimensional, goal-
 
 - [x] **G9.1** Add separate continuous ratings for liking, tension, arousal, urge to move, interest, familiarity, and felt resolution.
 - [x] **G9.2** Add optional listening goals such as dance, relaxation, focus, curiosity, comfort, and catharsis.
-- [ ] **G9.3** Build short calibration experiments using controlled transformations from the Labs.
+- [x] **G9.3** Build short calibration experiments using controlled transformations from the Labs.
 - [x] **G9.4** Fit a transparent personal response surface with uncertainty.
 - [x] **G9.5** Visualize a listener’s preferred region over the atlas without labeling the region objectively good.
 - [x] **G9.6** Show a goal-relative fit profile containing:
