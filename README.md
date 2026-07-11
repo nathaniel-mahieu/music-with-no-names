@@ -80,7 +80,7 @@ pnpm verify
 
 The broader development plan is in [roadmap.md](./roadmap.md).
 
-Scientific transparency is documented in [model cards](./docs/model-cards.md), [data provenance](./docs/data-provenance.md), the [validation report](./docs/validation-report.md), the [accessibility matrix](./docs/accessibility-matrix.md), the [study protocol](./docs/study-protocol.md), and the [research ledger](./docs/research-ledger.md).
+Scientific transparency is documented in [model cards](./docs/model-cards.md), [data provenance](./docs/data-provenance.md), the [validation report](./docs/validation-report.md), the [accessibility matrix](./docs/accessibility-matrix.md), the [study protocol](./docs/study-protocol.md), the [proposed cohort architecture](./docs/cohort-backend-proposal.md), and the [research ledger](./docs/research-ledger.md).
 
 ## Product principle
 

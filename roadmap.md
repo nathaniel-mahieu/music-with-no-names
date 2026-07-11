@@ -444,7 +444,7 @@ Objective: visualize musical value honestly as personal, multidimensional, goal-
   - Narrative payoff.
   - Personal resonance.
 - [x] **G9.7** When a scalar is necessary, label it `predicted fit for this listener and goal` and show its uncertainty and component breakdown.
-- [ ] **G9.8** Let users compare their response terrain with an anonymized cohort only after explicit consent and only if a backend is deliberately added.
+- [ ] **G9.8** Let users compare their response terrain with an anonymized cohort only after explicit consent and only if a backend is deliberately added. (A no-data architecture, consent sequence, minimal schema, aggregation rules, deletion model, and launch decision checklist are published; implementation remains intentionally unauthorized.)
 - [x] **G9.9** Show how familiarity and repeated listening alter predictions and responses over time.
 - [x] **G9.10** Provide a delete/export flow for all personal ratings and learned preferences.
 

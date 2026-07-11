@@ -11,6 +11,8 @@ This protocol turns the remaining human-validation gates into concrete sessions.
 - Obtain explicit consent before saving or aggregating any response.
 - Allow withdrawal and deletion without penalty.
 
+Any future cross-listener aggregation must follow the separate [cohort backend proposal](./cohort-backend-proposal.md); this study protocol does not authorize network collection.
+
 ## Comprehension session
 
 ### Questions before exploration
