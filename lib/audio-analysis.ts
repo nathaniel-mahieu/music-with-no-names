@@ -1,5 +1,5 @@
 export const AUDIO_ANALYSIS_SCHEMA = "music-with-no-names.analysis.v1" as const;
-export const AUDIO_ANALYSIS_VERSION = "mwno-audio-0.1.0" as const;
+export const AUDIO_ANALYSIS_VERSION = "mwno-audio-0.2.0" as const;
 
 export type AnalysisFrame = {
   timeSeconds: number;
@@ -10,6 +10,9 @@ export type AnalysisFrame = {
   onsetStrength: number;
   zeroCrossingHz: number | null;
   periodicityConfidence: number;
+  roughness: number;
+  harmonicity: number;
+  pitchSalience: number;
   auditoryBandEnergy: number[];
 };
 
@@ -22,6 +25,13 @@ export type AnalysisResolution = {
 export type PulseCandidate = {
   pulsesPerMinute: number;
   confidence: number;
+};
+
+export type StructuralAnalysis = {
+  onsetPhases: { timeSeconds: number; phase: number; strength: number }[];
+  tempoEnvelope: { timeSeconds: number; pulsesPerMinute: number; confidence: number }[];
+  syncopation: number;
+  recurrencePairs: { firstSeconds: number; secondSeconds: number; similarity: number }[];
 };
 
 export type RecordingAnalysis = {
@@ -40,6 +50,7 @@ export type RecordingAnalysis = {
   resolutions: AnalysisResolution[];
   pulseCandidates: PulseCandidate[];
   sectionBoundariesSeconds: number[];
+  structural: StructuralAnalysis;
 };
 
 export type AnalyzeAudioOptions = {
@@ -119,6 +130,9 @@ function analyzeResolution(
     const physical = timeDomainFeatures(samples, start, end, sampleRate);
     const spectralFlux = clamp01(Math.abs(physical.brightness - previousBrightness) * 1.6);
     const onsetStrength = clamp01(Math.max(0, loudnessDb - previousDb) / 18 + spectralFlux * 0.35);
+    const roughness = clamp01(physical.brightness * 0.5 + spectralFlux * 0.5);
+    const harmonicity = clamp01(physical.periodicityConfidence * (1 - physical.brightness * 0.38));
+    const pitchSalience = clamp01(harmonicity * clamp01((loudnessDb + 72) / 54));
     frames.push({
       timeSeconds: start / sampleRate,
       durationSeconds: (end - start) / sampleRate,
@@ -128,6 +142,9 @@ function analyzeResolution(
       onsetStrength,
       zeroCrossingHz: physical.zeroCrossingHz,
       periodicityConfidence: physical.periodicityConfidence,
+      roughness,
+      harmonicity,
+      pitchSalience,
       auditoryBandEnergy: proxyAuditoryBands(samples, start, end, sampleRate),
     });
     previousDb = loudnessDb;
@@ -136,6 +153,39 @@ function analyzeResolution(
   }
 
   return { windowSeconds, hopSeconds: hopSize / sampleRate, frames };
+}
+
+function structuralAnalysis(resolutions: AnalysisResolution[], candidates: PulseCandidate[]): StructuralAnalysis {
+  const medium = resolutions[1];
+  const coarse = resolutions[2];
+  const bestPulse = candidates[0];
+  const pulseSeconds = bestPulse ? 60 / bestPulse.pulsesPerMinute : null;
+  const onsetPhases = pulseSeconds
+    ? medium.frames.filter((frame) => frame.onsetStrength >= 0.18).map((frame) => ({ timeSeconds: frame.timeSeconds, phase: (frame.timeSeconds % pulseSeconds) / pulseSeconds, strength: frame.onsetStrength }))
+    : [];
+  const syncopation = onsetPhases.length
+    ? onsetPhases.reduce((sum, onset) => sum + Math.sin(Math.PI * onset.phase) ** 2 * onset.strength, 0) / onsetPhases.reduce((sum, onset) => sum + onset.strength, 0)
+    : 0;
+  const tempoEnvelope: StructuralAnalysis["tempoEnvelope"] = [];
+  const chunkFrames = Math.max(8, Math.round(8 / medium.hopSeconds));
+  for (let start = 0; start < medium.frames.length; start += Math.max(4, Math.floor(chunkFrames / 2))) {
+    const chunk = medium.frames.slice(start, start + chunkFrames);
+    if (chunk.length < 8) break;
+    const local = pulseCandidates(chunk, medium.hopSeconds)[0];
+    if (local) tempoEnvelope.push({ timeSeconds: chunk[0].timeSeconds, pulsesPerMinute: local.pulsesPerMinute, confidence: local.confidence });
+  }
+  const recurrencePairs: StructuralAnalysis["recurrencePairs"] = [];
+  for (let first = 0; first < coarse.frames.length; first += 1) {
+    for (let second = first + 1; second < coarse.frames.length; second += 1) {
+      const a = coarse.frames[first];
+      const b = coarse.frames[second];
+      if (b.timeSeconds - a.timeSeconds < 3) continue;
+      const distance = Math.abs(a.loudnessDb - b.loudnessDb) / 36 + Math.abs(a.brightness - b.brightness) + Math.abs(a.onsetStrength - b.onsetStrength) + Math.abs(a.harmonicity - b.harmonicity);
+      const similarity = Math.exp(-distance / 2.2);
+      if (similarity >= 0.82) recurrencePairs.push({ firstSeconds: a.timeSeconds, secondSeconds: b.timeSeconds, similarity });
+    }
+  }
+  return { onsetPhases, tempoEnvelope, syncopation: clamp01(syncopation), recurrencePairs: recurrencePairs.sort((a, b) => b.similarity - a.similarity).slice(0, 48) };
 }
 
 function pulseCandidates(frames: AnalysisFrame[], hopSeconds: number): PulseCandidate[] {
@@ -211,17 +261,18 @@ export function analyzeMonoAudio(
     limitations: [
       "Brightness and band energy are transparent time-domain proxies, not a calibrated cochlear model.",
       "Zero-crossing frequency is unreliable for dense polyphonic or noisy material.",
-      "Pulse and section candidates are hypotheses and should be corrected by the listener.",
+      "Roughness, harmonicity, pitch salience, pulse, recurrence, and section outputs are model hypotheses—not musical facts—and should be checked by the listener.",
     ],
     auditoryBandCentersHz: BAND_CENTERS_HZ,
     resolutions,
     pulseCandidates: pulse,
     sectionBoundariesSeconds: sectionBoundaries(resolutions[2].frames, durationSeconds),
+    structural: structuralAnalysis(resolutions, pulse),
   };
 }
 
 export function isRecordingAnalysis(value: unknown): value is RecordingAnalysis {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<RecordingAnalysis>;
-  return candidate.schema === AUDIO_ANALYSIS_SCHEMA && candidate.analysisVersion === AUDIO_ANALYSIS_VERSION && Array.isArray(candidate.resolutions) && candidate.source?.audioIncluded === false;
+  return candidate.schema === AUDIO_ANALYSIS_SCHEMA && candidate.analysisVersion === AUDIO_ANALYSIS_VERSION && Array.isArray(candidate.resolutions) && candidate.source?.audioIncluded === false && typeof candidate.structural === "object";
 }

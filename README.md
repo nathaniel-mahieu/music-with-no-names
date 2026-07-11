@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Learned Personal Terrain v1.4**. It provides:
+The current milestone is **Recording Microscope v1.5**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -22,7 +22,9 @@ The current milestone is **Learned Personal Terrain v1.4**. It provides:
 - Shareable Ratio Lab URLs that preserve relationship, physical register, and timbre.
 - Local-only recording import with safe playback and background-worker analysis.
 - Versioned fine, medium, and whole-form feature frames with continuous frequency evidence.
-- Editable pulse and section hypotheses plus portable analysis JSON that contains no audio.
+- Editable pulse, frequency-center, section, and listener-heard source-event hypotheses plus portable analysis JSON that contains no audio.
+- Arbitrary time-range inspection with adaptive fine, medium, and whole-form evidence frames.
+- Declared harmonicity, pitch-salience, roughness, onset-phase, tempo-change, syncopation, and recurrence proxies.
 - An Ear Lab with editable spectrum, register, spacing, level, envelope, inharmonicity, and noise.
 - Separate roughness, auditory-band, spectral-overlap, and harmonic-template models.
 - Independent smoothness, fusion, tension, and liking reports stored separately from predictions.

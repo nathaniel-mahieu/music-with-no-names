@@ -13,6 +13,7 @@ test("creates versioned multi-resolution analysis without embedding audio", () =
   assert.equal(result.resolutions.length, 3);
   assert.ok(result.resolutions.every((resolution) => resolution.frames.length > 0));
   assert.equal(isRecordingAnalysis(result), true);
+  assert.ok(result.resolutions[0].frames.every((frame) => frame.roughness >= 0 && frame.harmonicity >= 0 && frame.pitchSalience >= 0));
 });
 
 test("preserves continuous frequency evidence for a simple tone", () => {
@@ -31,6 +32,8 @@ test("finds onset evidence in a pulsed signal", () => {
   const result = analyzeMonoAudio(samples, sampleRate);
   assert.ok(result.resolutions[1].frames.some((frame) => frame.onsetStrength > 0.5));
   assert.ok(result.pulseCandidates.length > 0);
+  assert.ok(result.structural.onsetPhases.length > 0);
+  assert.ok(result.structural.syncopation >= 0 && result.structural.syncopation <= 1);
 });
 
 test("rejects malformed imported profiles", () => {

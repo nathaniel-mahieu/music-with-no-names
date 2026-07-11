@@ -3761,6 +3761,32 @@ footer a {
   background: var(--surface-raised);
 }
 
+.range-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: -8px 0 26px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.range-editor label {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.range-editor output {
+  min-width: 50px;
+  color: var(--recording-cyan);
+  font-family: var(--font-mono), monospace;
+  text-align: right;
+}
+
 .recording-microscope-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3937,6 +3963,7 @@ footer a {
   }
 
   .hypothesis-editor,
+  .range-editor,
   .recording-limitations {
     grid-template-columns: 1fr;
   }
