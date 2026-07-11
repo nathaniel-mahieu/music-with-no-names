@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Prediction + Response Braid v1.6**. It provides:
+The current milestone is **Controlled Listening Matrix v1.7**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -26,6 +26,8 @@ The current milestone is **Prediction + Response Braid v1.6**. It provides:
 - Arbitrary time-range inspection with adaptive fine, medium, and whole-form evidence frames.
 - Declared harmonicity, pitch-salience, roughness, onset-phase, tempo-change, syncopation, and recurrence proxies.
 - An Ear Lab with editable spectrum, register, spacing, level, envelope, inharmonicity, and noise.
+- Explicit A/B families that hold fundamentals or spectra steady while changing timbre, register, partial balance, or envelope and duration.
+- A transparent fusion hypothesis kept separate from perceived fusion and liking reports.
 - Separate roughness, auditory-band, spectral-overlap, and harmonic-template models.
 - Independent smoothness, fusion, tension, and liking reports stored separately from predictions.
 - A manipulation-first learning path from physical relationships to listener-conditioned experience.

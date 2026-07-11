@@ -79,6 +79,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(earLab, /Separate sensory models from musical value/);
   assert.match(earLab, /modelPredictions/);
   assert.match(earLab, /humanRatings/);
+  assert.match(earLab, /Controlled auditory A\/B experiments/);
+  assert.match(earLab, /Fusion hypothesis/);
   assert.match(harmonyLab, /When relationships become a system/);
   assert.match(harmonyLab, /Shared harmonic basis/);
   assert.match(harmonyLab, /Low-prime coordinates/);

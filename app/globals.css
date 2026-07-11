@@ -4109,27 +4109,49 @@ footer a {
 
 .ear-experiments {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   border-bottom: 1px solid var(--line);
+  background: var(--line);
+}
+
+.ear-experiments article {
+  min-width: 0;
+  padding: 16px;
+  background: var(--surface-raised);
+}
+
+.ear-experiments article > span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ear-gold);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ear-experiments article > div {
+  display: flex;
+  gap: 7px;
 }
 
 .ear-experiments button {
+  flex: 1;
   min-width: 0;
-  min-height: 78px;
-  padding: 14px 16px;
-  border: 0;
-  border-right: 1px solid var(--line);
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
   color: var(--muted);
-  background: var(--surface-raised);
+  background: var(--surface-soft);
   text-align: left;
   cursor: pointer;
 }
 
-.ear-experiments button:last-child { border-right: 0; }
 .ear-experiments button:hover { color: var(--foreground); background: color-mix(in srgb, var(--ear-gold) 6%, var(--surface-raised)); }
-.ear-experiments strong, .ear-experiments span { display: block; }
+.ear-experiments strong, .ear-experiments small { display: block; }
 .ear-experiments strong { font-size: 0.71rem; }
-.ear-experiments span { margin-top: 5px; font-size: 0.58rem; line-height: 1.4; }
+.ear-experiments small { margin-top: 5px; color: var(--muted); font-size: 0.56rem; line-height: 1.35; }
 
 .ear-workspace {
   display: grid;
@@ -4212,7 +4234,7 @@ footer a {
 
 .model-score-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
@@ -4411,8 +4433,7 @@ footer a {
 .ear-boundary strong { color: var(--ear-red); font-size: 0.7rem; }
 
 @media (max-width: 980px) {
-  .ear-experiments { grid-template-columns: repeat(3, 1fr); }
-  .ear-experiments button:nth-child(3) { border-right: 0; }
+  .ear-experiments { grid-template-columns: 1fr 1fr; }
   .ear-workspace { grid-template-columns: 1fr; }
   .ear-controls { border-right: 0; border-bottom: 1px solid var(--line); }
   .ear-response { grid-template-columns: 1fr 1fr; }
@@ -4420,9 +4441,7 @@ footer a {
 }
 
 @media (max-width: 680px) {
-  .ear-experiments { grid-template-columns: 1fr 1fr; }
-  .ear-experiments button { border-bottom: 1px solid var(--line); }
-  .ear-experiments button:nth-child(2n) { border-right: 0; }
+  .ear-experiments { grid-template-columns: 1fr; }
   .ear-view-grid, .model-score-grid, .ear-response { grid-template-columns: 1fr; }
   .model-score-grid article, .model-score-grid article:first-child, .model-score-grid article:last-child { padding: 20px 0; border-right: 0; border-bottom: 1px solid var(--line); }
   .ear-response { gap: 25px; }

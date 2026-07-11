@@ -269,8 +269,8 @@ Objective: connect ideal frequency mathematics to the behavior of an actual audi
 - [x] **A2.3** Implement an auditory-filterbank view rather than relying only on a raw Fourier spectrum.
 - [x] **A2.4** Implement at least one documented roughness model and expose its assumptions.
 - [x] **A2.5** Implement harmonicity/periodicity measures separately from roughness.
-- [ ] **A2.6** Show fusion as a model hypothesis, not as a synonym for liking.
-- [ ] **A2.7** Build controlled A/B experiments:
+- [x] **A2.6** Show fusion as a model hypothesis, not as a synonym for liking.
+- [x] **A2.7** Build controlled A/B experiments:
   - Same ratio, sine versus harmonic versus inharmonic timbre.
   - Same ratio, low versus middle versus high register.
   - Same fundamentals, different partial amplitudes.

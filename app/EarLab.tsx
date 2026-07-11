@@ -19,10 +19,11 @@ type EarConfig = {
   noiseAmount: number;
   loudness: number;
   attackMs: number;
+  durationMs: number;
 };
 
 type RatingKey = "smoothness" | "fusion" | "tension" | "liking";
-type EarPlayback = { context: AudioContext; master: GainNode; sources: AudioScheduledSourceNode[] };
+type EarPlayback = { context: AudioContext; master: GainNode; sources: AudioScheduledSourceNode[]; timer: number };
 
 const EAR_STORAGE_KEY = "music-with-no-names.ear-observations.v1";
 
@@ -35,14 +36,28 @@ const DEFAULT_CONFIG: EarConfig = {
   noiseAmount: 0,
   loudness: 46,
   attackMs: 55,
+  durationMs: 1400,
 };
 
-const EXPERIMENTS: { label: string; note: string; config: Partial<EarConfig> }[] = [
-  { label: "Sparse 3:2", note: "one component per source", config: { ratio: 1.5, partialCount: 1, noiseAmount: 0, inharmonicity: 0 } },
-  { label: "Bright 3:2", note: "same ratio, richer spectrum", config: { ratio: 1.5, partialCount: 14, rolloffDbPerOctave: 4, noiseAmount: 0, inharmonicity: 0 } },
-  { label: "Close beating", note: "small spacing, shared filter region", config: { ratio: 1.055, partialCount: 8, rolloffDbPerOctave: 7, noiseAmount: 0, inharmonicity: 0 } },
-  { label: "Stretched field", note: "familiar ratio, inharmonic sources", config: { ratio: 1.5, partialCount: 10, inharmonicity: 0.0024, noiseAmount: 0.08 } },
-  { label: "Noisy low field", note: "roughness without a clean pitch object", config: { referenceHz: 110, ratio: 1.33, partialCount: 6, noiseAmount: 0.42, inharmonicity: 0.001 } },
+const CONTROLLED_EXPERIMENTS: { factor: string; variants: { label: string; note: string; config: Partial<EarConfig> }[] }[] = [
+  { factor: "Timbre · same 3:2", variants: [
+    { label: "A · sine", note: "one partial", config: { ratio: 1.5, partialCount: 1, inharmonicity: 0, noiseAmount: 0 } },
+    { label: "B · harmonic", note: "ten aligned partials", config: { ratio: 1.5, partialCount: 10, rolloffDbPerOctave: 7, inharmonicity: 0, noiseAmount: 0 } },
+    { label: "C · stretched", note: "same fundamentals", config: { ratio: 1.5, partialCount: 10, inharmonicity: 0.0024, noiseAmount: 0 } },
+  ] },
+  { factor: "Register · same spectrum", variants: [
+    { label: "A · low", note: "110 Hz anchor", config: { referenceHz: 110, ratio: 1.5, partialCount: 10, inharmonicity: 0 } },
+    { label: "B · middle", note: "220 Hz anchor", config: { referenceHz: 220, ratio: 1.5, partialCount: 10, inharmonicity: 0 } },
+    { label: "C · high", note: "440 Hz anchor", config: { referenceHz: 440, ratio: 1.5, partialCount: 10, inharmonicity: 0 } },
+  ] },
+  { factor: "Partial balance", variants: [
+    { label: "A · bright", note: "4 dB/oct rolloff", config: { partialCount: 14, rolloffDbPerOctave: 4, inharmonicity: 0 } },
+    { label: "B · dark", note: "14 dB/oct rolloff", config: { partialCount: 14, rolloffDbPerOctave: 14, inharmonicity: 0 } },
+  ] },
+  { factor: "Envelope · same spectrum", variants: [
+    { label: "A · brief", note: "fast 450 ms gesture", config: { attackMs: 8, durationMs: 450 } },
+    { label: "B · sustained", note: "slow 2.4 s gesture", config: { attackMs: 180, durationMs: 2400 } },
+  ] },
 ];
 
 function makeNoiseBuffer(context: AudioContext) {
@@ -76,6 +91,7 @@ export function EarLab() {
   const roughness = useMemo(() => aggregateRoughness(combined), [combined]);
   const overlap = useMemo(() => spectralOverlap(firstSpectrum, secondSpectrum), [firstSpectrum, secondSpectrum]);
   const harmonicity = useMemo(() => harmonicityCandidates(combined, 30, Math.min(500, config.referenceHz)), [combined, config.referenceHz]);
+  const fusionHypothesis = Math.max(0, Math.min(1, overlap * 0.42 + (harmonicity[0]?.confidence ?? 0) * 0.45 + (1 - roughness) * 0.13));
   const bandEnergy = useMemo(() => auditoryBandEnergy(combined), [combined]);
   const maxBandEnergy = Math.max(1e-8, ...bandEnergy);
 
@@ -83,6 +99,7 @@ export function EarLab() {
     const playback = playbackRef.current;
     if (!playback) return;
     playbackRef.current = null;
+    window.clearTimeout(playback.timer);
     const now = playback.context.currentTime;
     playback.master.gain.cancelScheduledValues(now);
     playback.master.gain.setValueAtTime(playback.master.gain.value, now);
@@ -136,7 +153,19 @@ export function EarLab() {
           sources.push(noise);
         });
       }
-      playbackRef.current = { context, master, sources };
+      const endAt = now + Math.max(config.durationMs, config.attackMs + 100) / 1000;
+      master.gain.setValueAtTime(targetGain, Math.max(now + config.attackMs / 1000, endAt - 0.06));
+      master.gain.linearRampToValueAtTime(0.0001, endAt);
+      sources.forEach((source) => source.stop(endAt + 0.02));
+      const playback: EarPlayback = { context, master, sources, timer: 0 };
+      playback.timer = window.setTimeout(() => {
+        if (playbackRef.current !== playback) return;
+        playbackRef.current = null;
+        setIsPlaying(false);
+        setAudioMessage("Gesture complete.");
+        void context.close();
+      }, Math.max(config.durationMs, config.attackMs + 100) + 90);
+      playbackRef.current = playback;
       setIsPlaying(true);
       setAudioMessage("Audio playing at a conservative level.");
     } catch {
@@ -149,7 +178,7 @@ export function EarLab() {
     setConfig((current) => ({ ...current, [key]: value }));
   };
 
-  const chooseExperiment = (experiment: (typeof EXPERIMENTS)[number]) => {
+  const chooseExperiment = (experiment: (typeof CONTROLLED_EXPERIMENTS)[number]["variants"][number]) => {
     if (isPlaying) stop();
     setConfig((current) => ({ ...current, ...experiment.config }));
   };
@@ -161,7 +190,7 @@ export function EarLab() {
     current.push({
       recordedAt: new Date().toISOString(),
       physicalConfig: config,
-      modelPredictions: { roughness, spectralOverlap: overlap, harmonicityCandidates: harmonicity },
+      modelPredictions: { roughness, spectralOverlap: overlap, harmonicityCandidates: harmonicity, fusionHypothesis },
       humanRatings: ratings,
     });
     window.localStorage.setItem(EAR_STORAGE_KEY, JSON.stringify(current));
@@ -182,8 +211,8 @@ export function EarLab() {
         <p>Change spacing, spectrum, register, inharmonicity, noise, level, and attack. Roughness and harmonicity respond independently; your own ratings remain a separate observation.</p>
       </div>
 
-      <div className="ear-experiments" aria-label="Controlled auditory experiments">
-        {EXPERIMENTS.map((experiment) => <button key={experiment.label} type="button" onClick={() => chooseExperiment(experiment)}><strong>{experiment.label}</strong><span>{experiment.note}</span></button>)}
+      <div className="ear-experiments" aria-label="Controlled auditory A/B experiments">
+        {CONTROLLED_EXPERIMENTS.map((experiment) => <article key={experiment.factor}><span>{experiment.factor}</span><div>{experiment.variants.map((variant) => <button key={variant.label} type="button" onClick={() => chooseExperiment(variant)}><strong>{variant.label}</strong><small>{variant.note}</small></button>)}</div></article>)}
       </div>
 
       <div className="ear-workspace">
@@ -199,6 +228,7 @@ export function EarLab() {
             ["noiseAmount", "Noise component", 0, 0.6, 0.01, Math.round(config.noiseAmount * 100) + "%"],
             ["loudness", "Playback level", 10, 80, 1, String(config.loudness)],
             ["attackMs", "Attack time", 8, 300, 1, config.attackMs.toFixed(0) + " ms"],
+            ["durationMs", "Gesture duration", 300, 3000, 50, config.durationMs.toFixed(0) + " ms"],
           ].map(([key, label, min, max, step, output]) => <label className="ear-control" key={key as string}><span><strong>{label as string}</strong><output>{output as string}</output></span><input type="range" aria-label={label as string} min={min as number} max={max as number} step={step as number} value={config[key as keyof EarConfig]} onChange={(event) => updateConfig(key as keyof EarConfig, Number(event.target.value))} /></label>)}
         </div>
 
@@ -207,6 +237,7 @@ export function EarLab() {
             <article><span>Roughness hypothesis</span><strong>{modelScale(roughness)}</strong><p>Pairwise interaction inside critical-band spacing.</p></article>
             <article><span>Spectral overlap</span><strong>{modelScale(overlap)}</strong><p>Aligned partial energy, not a liking score.</p></article>
             <article><span>Best periodic candidate</span><strong>{harmonicity[0] ? `${harmonicity[0].fundamentalHz.toFixed(1)} Hz` : "open"}</strong><p>{harmonicity[0] ? `${modelScale(harmonicity[0].confidence)}% template fit.` : "No compact candidate."}</p></article>
+            <article><span>Fusion hypothesis</span><strong>{modelScale(fusionHypothesis)}</strong><p>Declared blend of overlap, template fit, and low roughness—not your report or liking.</p></article>
           </div>
 
           <div className="ear-view-grid">
@@ -228,7 +259,7 @@ export function EarLab() {
         <button type="button" className="save-ear-observation" onClick={saveObservation}>Save model + report separately{savedCount ? ` · ${savedCount}` : ""}</button>
       </div>
 
-      <div className="ear-boundary"><strong>Model boundary</strong><p>The roughness equation is a documented Plomp–Levelt/Sethares-style interaction curve. Harmonicity is a separate harmonic-template search. Neither predicts fusion, tension, liking, musical stability, or goodness without listener and context evidence.</p></div>
+      <div className="ear-boundary"><strong>Model boundary</strong><p>The roughness equation is a documented Plomp–Levelt/Sethares-style interaction curve. Harmonicity uses a separate template search. The fusion number is an intentionally simple, inspectable hypothesis; your fusion and liking reports remain independent evidence. None of these establishes musical goodness.</p></div>
     </section>
   );
 }
