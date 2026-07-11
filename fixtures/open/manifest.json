@@ -1,0 +1,18 @@
+{
+  "schema": "music-with-no-names.fixture-manifest.v1",
+  "fixtures": [
+    {
+      "id": "wikimedia-a-major-scale-cc0",
+      "filename": "a-major-scale.ogg",
+      "description": "A fourteen-second performed A-major scale used to test decoding, onset, continuous-frequency, tempo-envelope, and section hypotheses on non-generated audio.",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:A_Major_Scale.ogg",
+      "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/d/dc/A_Major_Scale.ogg",
+      "creator": "Rubinkumar",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "declaredBytes": 36730,
+      "sha1": "437c3e1fe9bf9ab06df87369328d8303865efad4",
+      "bundled": false
+    }
+  ]
+}

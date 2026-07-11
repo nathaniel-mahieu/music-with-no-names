@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Porous Corpus Atlas v1.15**. It provides:
+The current milestone is **Performance + Accessibility Diagnostics v1.16**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -36,6 +36,9 @@ The current milestone is **Porous Corpus Atlas v1.15**. It provides:
 - Hearing-safety and level-calibration guidance embedded in the product.
 - Architecture decisions, a first-principles glossary, and a research/limitations ledger.
 - Closed-form regression fixtures for waveform samples, ratio repetition, harmonic spectra, periodicity evidence, tempo, and nested timing phase.
+- A two-minute analysis performance budget covering elapsed time, memory growth, and bounded frame counts.
+- In-product worker throughput, browser audio-latency, display-frame, and available heap diagnostics.
+- Automated semantic, focus, reduced-motion, and non-color accessibility contracts with a documented manual assistive-technology matrix.
 - Four-voice harmonic fields with 2/3/5/7 prime-exponent coordinates.
 - Three-to-six-source fields with independent register realization, amplitude, and harmonic-spectrum complexity.
 - Optional octave folding, just-to-equal approximation morphing, and continuous voice-leading distance.
@@ -77,7 +80,7 @@ pnpm verify
 
 The broader development plan is in [roadmap.md](./roadmap.md).
 
-Scientific transparency is documented in [model cards](./docs/model-cards.md), [data provenance](./docs/data-provenance.md), the [validation report](./docs/validation-report.md), and the [research ledger](./docs/research-ledger.md).
+Scientific transparency is documented in [model cards](./docs/model-cards.md), [data provenance](./docs/data-provenance.md), the [validation report](./docs/validation-report.md), the [accessibility matrix](./docs/accessibility-matrix.md), the [study protocol](./docs/study-protocol.md), and the [research ledger](./docs/research-ledger.md).
 
 ## Product principle
 

@@ -10,6 +10,10 @@ No commercial or third-party recording is bundled. Recording Lab operates on aud
 - **Analytic sine fixtures:** generated at test time from closed-form sine functions at declared frequencies and sample rates.
 - **Controlled Ear Lab fields:** synthesized at interaction time from declared fundamentals, partial amplitudes, inharmonic stretch, noise amount, attack, and duration.
 
+## Open recording fixture candidate
+
+`fixtures/open/manifest.json` pins Rubinkumar's fourteen-second *A Major Scale* recording from Wikimedia Commons under CC0 1.0, including its source page, direct media URL, declared byte count, and Wikimedia SHA-1 checksum. The deterministic fetch script rejects any size or checksum mismatch. The binary is not treated as available until that verification has run successfully.
+
 ## Atlas teaching data
 
 The initial Atlas entries are hand-authored pedagogical landmarks and transformations. They are not measurements of bundled copyrighted recordings and do not constitute a representative genre dataset. Each entry carries source type, method, version, layer, confidence or spread, and licensing metadata. The Atlas computes explicitly provisional density regions from three pop profiles, two blues profiles, and four selected-classical profiles; counts and methods remain visible, and the regions are deliberately porous and overlapping.

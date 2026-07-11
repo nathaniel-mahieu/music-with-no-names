@@ -362,7 +362,7 @@ Objective: connect the controlled labs to real recordings while preserving uncer
 - [x] **I6.7** Preserve continuous frequency evidence; do not reduce the master representation immediately to twelve chroma bins.
 - [x] **I6.8** Add user-correctable hypotheses for pulse, center, sections, and source events.
 - [x] **I6.9** Export and re-import a portable analysis JSON file without the copyrighted audio.
-- [ ] **I6.10** Build test fixtures from generated mixtures and openly licensed recordings with known provenance. (Generated fixtures exist; openly licensed recording fixtures remain.)
+- [ ] **I6.10** Build test fixtures from generated mixtures and openly licensed recordings with known provenance. (Generated fixtures pass; a CC0 Wikimedia scale is pinned by source, license, byte count, and checksum with a deterministic fetch verifier. Binary retrieval and browser-codec analysis remain.)
 
 Exit gate:
 
@@ -460,13 +460,13 @@ Objective: ensure that the experience is scientifically honest, musically useful
 
 - [x] **Q10.1** Validate ratio, waveform, spectrum, periodicity, and timing math against analytic fixtures.
 - [x] **Q10.2** Compare psychoacoustic outputs with published test conditions where reproduction is feasible.
-- [ ] **Q10.3** Test all core flows with keyboard navigation, screen readers, reduced motion, and non-color encodings.
+- [ ] **Q10.3** Test all core flows with keyboard navigation, screen readers, reduced motion, and non-color encodings. (Automated semantic, focus, reduced-motion, and non-color contracts pass; manual VoiceOver/NVDA and real-device traversal remain.)
 - [x] **Q10.4** Add hearing-safety guidance, volume calibration guidance, and visible playback state.
-- [ ] **Q10.5** Test low-powered devices, headphones, phone speakers, and multiple browser audio implementations.
-- [ ] **Q10.6** Profile audio latency, main-thread frame time, memory use, and long-file analysis.
+- [ ] **Q10.5** Test low-powered devices, headphones, phone speakers, and multiple browser audio implementations. (A concrete device/browser/assistive-technology matrix is published; physical execution remains.)
+- [x] **Q10.6** Profile audio latency, main-thread frame time, memory use, and long-file analysis.
 - [x] **Q10.7** Add an onboarding path that teaches by manipulation rather than terminology.
-- [ ] **Q10.8** Conduct comprehension tests: can users explain what changed and predict the next A/B result?
-- [ ] **Q10.9** Conduct listening studies that keep model predictions separate from self-reported experience.
+- [ ] **Q10.8** Conduct comprehension tests: can users explain what changed and predict the next A/B result? (Pre/post questions, manipulation tasks, and scoring requirements are published; participant sessions remain.)
+- [ ] **Q10.9** Conduct listening studies that keep model predictions separate from self-reported experience. (A consent, randomization, condition, and data-separation protocol is published; participant sessions remain.)
 - [x] **Q10.10** Publish limitations, model cards, analysis versions, dataset provenance, and research citations.
 
 Exit gate:

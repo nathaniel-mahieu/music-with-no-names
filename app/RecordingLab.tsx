@@ -19,6 +19,7 @@ type Corrections = {
   rangeRatings: { startSeconds: number; endSeconds: number; tension: number; significance: number }[];
 };
 type TimeRange = { start: number; end: number };
+type Diagnostics = { analysisMs: number | null; audioLatencyMs: number | null; frameMs: number | null; heapMb: number | null };
 
 function formatTime(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -76,6 +77,7 @@ export function RecordingLab() {
   const [timelineZoom, setTimelineZoom] = useState(false);
   const [rangeTension, setRangeTension] = useState(50);
   const [rangeSignificance, setRangeSignificance] = useState(50);
+  const [diagnostics, setDiagnostics] = useState<Diagnostics>({ analysisMs: null, audioLatencyMs: null, frameMs: null, heapMb: null });
   const [selectedSection, setSelectedSection] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
@@ -116,6 +118,7 @@ export function RecordingLab() {
     try {
       const context = new AudioContext();
       await context.resume();
+      setDiagnostics((current) => ({ ...current, audioLatencyMs: (context.baseLatency + ("outputLatency" in context ? context.outputLatency : 0)) * 1000 }));
       const source = context.createBufferSource();
       const gain = context.createGain();
       const compressor = context.createDynamicsCompressor();
@@ -168,7 +171,10 @@ export function RecordingLab() {
 
       setStatus("analyzing");
       setStatusMessage("Analyzing physical and temporal evidence in a background worker…");
+      const analysisStarted = performance.now();
       const result = await analyzeInWorker(mono, decoded.sampleRate, file.name, decoded.numberOfChannels);
+      const memory = performance as Performance & { memory?: { usedJSHeapSize: number } };
+      setDiagnostics((current) => ({ ...current, analysisMs: performance.now() - analysisStarted, heapMb: memory.memory ? memory.memory.usedJSHeapSize / 1024 / 1024 : null }));
       acceptAnalysis(result);
     } catch (error) {
       bufferRef.current = null;
@@ -197,7 +203,10 @@ export function RecordingLab() {
       buffer.copyToChannel(playbackSamples, 0);
       bufferRef.current = buffer;
       setHasAudio(true);
+      const analysisStarted = performance.now();
       const result = await analyzeInWorker(samples, sampleRate, "generated recurrence + rupture.wav", 1);
+      const memory = performance as Performance & { memory?: { usedJSHeapSize: number } };
+      setDiagnostics((current) => ({ ...current, analysisMs: performance.now() - analysisStarted, heapMb: memory.memory ? memory.memory.usedJSHeapSize / 1024 / 1024 : null }));
       acceptAnalysis(result);
     } catch (error) {
       bufferRef.current = null;
@@ -298,6 +307,17 @@ export function RecordingLab() {
     setCorrections((current) => ({ ...current, rangeRatings: [...current.rangeRatings, { startSeconds: currentRange.start, endSeconds: currentRange.end, tension: rangeTension, significance: rangeSignificance }] }));
   };
 
+  const profileDisplay = () => {
+    const timestamps: number[] = [];
+    const collect = (time: number) => {
+      timestamps.push(time);
+      if (timestamps.length < 31) { window.requestAnimationFrame(collect); return; }
+      const deltas = timestamps.slice(1).map((value, index) => value - timestamps[index]).sort((a, b) => a - b);
+      setDiagnostics((current) => ({ ...current, frameMs: deltas[Math.floor(deltas.length / 2)] ?? null }));
+    };
+    window.requestAnimationFrame(collect);
+  };
+
   return (
     <section className="advanced-lab recording-lab" aria-labelledby="recording-title">
       <div className="lab-intro recording-intro">
@@ -340,6 +360,8 @@ export function RecordingLab() {
               {hasAudio ? (isPlaying ? "■ Stop local audio" : "▶ Hear local audio") : "Audio not loaded"}
             </button>
           </div>
+
+          <div className="performance-strip" aria-label="Local performance diagnostics"><div><span>Worker analysis</span><strong>{diagnostics.analysisMs === null ? "run a fixture" : `${diagnostics.analysisMs.toFixed(0)} ms`}</strong><small>{diagnostics.analysisMs && analysis ? `${(analysis.source.durationSeconds / (diagnostics.analysisMs / 1000)).toFixed(1)}× realtime` : "background thread"}</small></div><div><span>Audio scheduling</span><strong>{diagnostics.audioLatencyMs === null ? "play to measure" : `${diagnostics.audioLatencyMs.toFixed(1)} ms`}</strong><small>browser-reported context latency</small></div><div><span>Display frame</span><strong>{diagnostics.frameMs === null ? "not measured" : `${diagnostics.frameMs.toFixed(1)} ms`}</strong><small>median over 30 frames</small></div><div><span>JS heap</span><strong>{diagnostics.heapMb === null ? "browser unavailable" : `${diagnostics.heapMb.toFixed(1)} MB`}</strong><small>implementation-dependent</small></div><button type="button" onClick={profileDisplay}>Measure display</button></div>
 
           <div className="recording-journey">
             <div className="recording-heading"><div><span>Recording Journey</span><h3>Physical and perceptual evidence over time</h3></div><p>{fineFrames.length.toLocaleString()} fine frames · {mediumFrames.length.toLocaleString()} medium · {coarseFrames.length.toLocaleString()} whole-form</p></div>

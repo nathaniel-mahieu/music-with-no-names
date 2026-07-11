@@ -111,6 +111,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(recordingLab, /Export analysis JSON/);
   assert.match(recordingLab, /Follow microscope/);
   assert.match(recordingLab, /Partial-collision hypothesis/);
+  assert.match(recordingLab, /Local performance diagnostics/);
   assert.match(atlasLab, /There is no universal good region/);
   assert.match(atlasLab, /preference proximity/);
   assert.match(atlasLab, /is a path, not a point/);

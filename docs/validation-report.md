@@ -19,4 +19,8 @@ This is **not** a reproduction of the original listener experiment. The project 
 - Calibrate auditory filters and level-dependent loudness against suitable published conditions.
 - Validate mixed-tone descriptors against expert annotations without treating agreement as musical truth.
 - Run preregistered listening and comprehension studies with listener reports separated from predictions.
-- Profile long recordings and real audio devices.
+- Profile additional long-file formats and real audio devices beyond the generated performance budget.
+
+## Performance budgets
+
+The automated suite analyzes a generated two-minute, 12 kHz fixture and requires completion within five seconds, less than 256 MB of heap growth, and bounded multi-resolution frame counts. Recording Lab additionally exposes device-local worker throughput, browser-reported audio scheduling latency, median display-frame duration, and JavaScript heap when the browser provides it. These diagnostics do not replace real-device testing.

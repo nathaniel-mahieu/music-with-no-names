@@ -39,19 +39,22 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
 button,
 a,
-input {
+input,
+select {
   -webkit-tap-highlight-color: transparent;
 }
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid rgba(242, 196, 92, 0.72);
   outline-offset: 3px;
 }
@@ -4022,6 +4025,24 @@ footer a {
   opacity: 0.38;
 }
 
+.performance-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 30px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.performance-strip span,
+.performance-strip strong,
+.performance-strip small { display: block; }
+.performance-strip span { color: var(--muted); font-size: 0.55rem; text-transform: uppercase; }
+.performance-strip strong { margin-top: 4px; color: var(--recording-gold); font-family: var(--font-mono), monospace; font-size: 0.68rem; }
+.performance-strip small { margin-top: 3px; color: var(--faint); font-size: 0.54rem; }
+.performance-strip button { min-height: 34px; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--foreground); background: transparent; font: inherit; font-size: 0.6rem; cursor: pointer; }
+
 .recording-journey,
 .recording-microscope,
 .hypothesis-editor {
@@ -4456,6 +4477,10 @@ footer a {
     grid-template-columns: 1fr 1fr;
   }
 
+  .performance-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .recording-range-report {
     grid-template-columns: 1fr 1fr;
   }
@@ -4480,6 +4505,7 @@ footer a {
 @media (max-width: 700px) {
   .recording-import,
   .recording-summary,
+  .performance-strip,
   .recording-microscope-grid {
     grid-template-columns: 1fr;
   }
@@ -4545,6 +4571,7 @@ footer a {
 @media (max-width: 520px) {
   .recording-import,
   .recording-summary,
+  .performance-strip,
   .recording-journey,
   .recording-microscope,
   .hypothesis-editor,
