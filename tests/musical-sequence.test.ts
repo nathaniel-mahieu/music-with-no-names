@@ -7,9 +7,22 @@ import {
   transformedRecurrence,
   eventSimilarity,
   incrementalPredictionTrace,
+  predictionTraceWithPrior,
   selfSimilarityMatrix,
   type MusicalEvent,
 } from "../lib/musical-sequence.ts";
+
+test("keeps synthetic-corpus priors distinct from piece-local learning", () => {
+  const events = [
+    { id: "a", onsetSeconds: 0, durationSeconds: 1, ratioToReference: 1, amplitude: 1, timbre: "pure" as const, gesture: "anchor" },
+    { id: "b", onsetSeconds: 1, durationSeconds: 1, ratioToReference: 1.5, amplitude: 1, timbre: "pure" as const, gesture: "crest" },
+  ];
+  const local = incrementalPredictionTrace(events);
+  const corpus = predictionTraceWithPrior(events, { anchor: { crest: 3, turn: 1 } });
+  assert.equal(local[1].probability, null);
+  assert.equal(corpus[1].probability, 0.75);
+  assert.ok(corpus[1].uncertaintyBits > 0);
+});
 
 function event(id: string, onsetSeconds: number, ratioToReference: number, gesture: string): MusicalEvent {
   return { id, onsetSeconds, durationSeconds: 0.5, ratioToReference, amplitude: 0.7, timbre: "harmonic", gesture };

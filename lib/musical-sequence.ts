@@ -116,8 +116,17 @@ export type PredictionTracePoint = {
   alternatives: { gesture: string; probability: number }[];
 };
 
-export function incrementalPredictionTrace(events: MusicalEvent[]): PredictionTracePoint[] {
+export type GestureTransitionCorpus = Record<string, Record<string, number>>;
+
+export function predictionTraceWithPrior(events: MusicalEvent[], prior: GestureTransitionCorpus = {}): PredictionTracePoint[] {
   const transitions = new Map<string, Map<string, number>>();
+  Object.entries(prior).forEach(([from, row]) => {
+    const counts = new Map<string, number>();
+    Object.entries(row).forEach(([to, count]) => {
+      if (Number.isFinite(count) && count > 0) counts.set(to, count);
+    });
+    if (counts.size) transitions.set(from, counts);
+  });
   return events.map((event, index) => {
     const previous = index > 0 ? events[index - 1].gesture : null;
     const row = previous ? transitions.get(previous) : undefined;
@@ -144,4 +153,8 @@ export function incrementalPredictionTrace(events: MusicalEvent[]): PredictionTr
     }
     return point;
   });
+}
+
+export function incrementalPredictionTrace(events: MusicalEvent[]): PredictionTracePoint[] {
+  return predictionTraceWithPrior(events);
 }

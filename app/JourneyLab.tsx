@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   eventsInSelection,
   incrementalPredictionTrace,
   localGesturePrediction,
+  predictionTraceWithPrior,
   selfSimilarityMatrix,
   transformedRecurrence,
   type EventSelection,
@@ -12,8 +13,20 @@ import {
 } from "@/lib/musical-sequence";
 
 type Lens = "original" | "smooth" | "delay";
+type PredictionModel = "piece" | "synthetic";
+type ResponsePoint = { sectionId: string; type: string; intensity: number; recordedAt: string };
 
 const DURATION_SECONDS = 16;
+const RESPONSE_STORAGE_KEY = "mwno.journey.responses.v1";
+const SYNTHETIC_TRANSITIONS = {
+  anchor: { rise: 12, anchor: 3, turn: 2 },
+  rise: { crest: 11, turn: 4, break: 1 },
+  crest: { turn: 8, anchor: 5, break: 2 },
+  turn: { anchor: 10, rise: 2 },
+  break: { search: 9, anchor: 3 },
+  search: { rise: 6, search: 3, anchor: 4 },
+  return: { anchor: 8 },
+} as const;
 
 const EVENTS: MusicalEvent[] = [
   { id: "e1", onsetSeconds: 0, durationSeconds: 0.8, ratioToReference: 1, amplitude: 0.72, timbre: "harmonic", gesture: "anchor" },
@@ -78,6 +91,8 @@ export function JourneyLab() {
   const [lens, setLens] = useState<Lens>("original");
   const [annotation, setAnnotation] = useState("surprise");
   const [feltTension, setFeltTension] = useState(68);
+  const [predictionModel, setPredictionModel] = useState<PredictionModel>("piece");
+  const [responses, setResponses] = useState<ResponsePoint[]>([]);
   const [hypothesisResponses, setHypothesisResponses] = useState<Record<string, "confirm" | "reject">>({});
   const selectedEvents = eventsInSelection(EVENTS, selectedSection.selection);
   const predict = useMemo(() => localGesturePrediction(EVENTS), []);
@@ -88,7 +103,34 @@ export function JourneyLab() {
   const recurrence = transformedRecurrence(firstPhrase, repeatedPhrase);
   const similarity = useMemo(() => selfSimilarityMatrix(EVENTS), []);
   const predictionTrace = useMemo(() => incrementalPredictionTrace(EVENTS), []);
+  const syntheticPredictionTrace = useMemo(() => predictionTraceWithPrior(EVENTS, SYNTHETIC_TRANSITIONS), []);
+  const visiblePredictionTrace = predictionModel === "piece" ? predictionTrace : syntheticPredictionTrace;
+  const responseBySection = useMemo(() => Object.fromEntries(SECTIONS.map((section) => {
+    const latest = [...responses].reverse().find((response) => response.sectionId === section.id);
+    return [section.id, latest?.intensity ?? 0];
+  })), [responses]);
   const meanRatio = selectedEvents.reduce((sum, event) => sum + event.ratioToReference, 0) / Math.max(1, selectedEvents.length);
+
+  useEffect(() => {
+    let saved: ResponsePoint[] = [];
+    try {
+      const parsed: unknown = JSON.parse(window.localStorage.getItem(RESPONSE_STORAGE_KEY) ?? "[]");
+      if (Array.isArray(parsed)) saved = parsed.filter((item): item is ResponsePoint => typeof item?.sectionId === "string" && typeof item?.intensity === "number");
+    } catch { /* A malformed local record should not block the lab. */ }
+    const timer = window.setTimeout(() => setResponses(saved), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const saveResponse = () => {
+    const next = [...responses, { sectionId: selectedSection.id, type: annotation, intensity: feltTension, recordedAt: new Date().toISOString() }];
+    setResponses(next);
+    window.localStorage.setItem(RESPONSE_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const clearResponses = () => {
+    setResponses([]);
+    window.localStorage.removeItem(RESPONSE_STORAGE_KEY);
+  };
 
   return (
     <section className="advanced-lab journey-lab" aria-labelledby="journey-title">
@@ -162,6 +204,12 @@ export function JourneyLab() {
               </div>
             </div>
           ))}
+          <div className="feature-lane response-lane">
+            <span className="lane-label">Your saved rating</span>
+            <div role="img" aria-label="Latest saved listener rating for each four-second section">
+              {SECTIONS.flatMap((section) => Array.from({ length: 8 }, (_, index) => <i key={`${section.id}-${index}`} style={{ height: `${responseBySection[section.id]}%` }} />))}
+            </div>
+          </div>
         </div>
         <div className="time-axis" aria-hidden="true"><span>0 s</span><span>4</span><span>8</span><span>12</span><span>16 s</span></div>
       </div>
@@ -176,15 +224,15 @@ export function JourneyLab() {
         </article>
 
         <article className="prediction-trace-card">
-          <div className="journey-heading"><div><span>Prediction · incremental piece-local model</span><h3>Before uncertainty, after surprise</h3></div><p>bits of information</p></div>
-          <div className="prediction-trace" role="img" aria-label="Uncertainty before and surprise after each generated musical event">
+          <div className="journey-heading"><div><span>Prediction · declared model comparison</span><h3>Before uncertainty, after surprise</h3></div><div className="prediction-model-picker" role="group" aria-label="Prediction model"><button type="button" aria-pressed={predictionModel === "piece"} onClick={() => setPredictionModel("piece")}>Piece-local</button><button type="button" aria-pressed={predictionModel === "synthetic"} onClick={() => setPredictionModel("synthetic")}>Synthetic corpus</button></div></div>
+          <div className="prediction-trace" role="img" aria-label={`Uncertainty before and surprise after each generated musical event under the ${predictionModel} model`}>
             <div className="trace-label">uncertainty before</div>
-            <div className="trace-bars uncertainty-bars">{predictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, point.uncertaintyBits / 2 * 100))}%` }} title={`event ${index + 1}: ${point.uncertaintyBits.toFixed(2)} bits uncertainty`} />)}</div>
+            <div className="trace-bars uncertainty-bars">{visiblePredictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, point.uncertaintyBits / 2 * 100))}%` }} title={`event ${index + 1}: ${point.uncertaintyBits.toFixed(2)} bits uncertainty`} />)}</div>
             <div className="trace-label">surprise after</div>
-            <div className="trace-bars surprise-bars">{predictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, (point.surpriseBits ?? 0) / 6 * 100))}%` }} title={`event ${index + 1}: ${point.surpriseBits === null ? "unlearned" : `${point.surpriseBits.toFixed(2)} bits surprise`}`} />)}</div>
-            <div className="trace-events">{predictionTrace.map((point, index) => <span key={point.eventId}>{index + 1}</span>)}</div>
+            <div className="trace-bars surprise-bars">{visiblePredictionTrace.map((point, index) => <i key={point.eventId} style={{ height: `${Math.max(2, Math.min(100, (point.surpriseBits ?? 0) / 6 * 100))}%` }} title={`event ${index + 1}: ${point.surpriseBits === null ? "unlearned" : `${point.surpriseBits.toFixed(2)} bits surprise`}`} />)}</div>
+            <div className="trace-events">{visiblePredictionTrace.map((point, index) => <span key={point.eventId}>{index + 1}</span>)}</div>
           </div>
-          <p>The predictor learns transition counts only from earlier events. A wide distribution raises uncertainty before an event; a low-probability realized event raises surprise afterward.</p>
+          <p>{predictionModel === "piece" ? "The piece-local predictor learns transition counts only from earlier events in this sequence." : "The synthetic corpus is a small, declared teaching prior—not a claim about any musical culture or genre."} A wide distribution raises uncertainty before an event; a low-probability realized event raises surprise afterward.</p>
         </article>
       </div>
 
@@ -246,6 +294,7 @@ export function JourneyLab() {
           <input type="range" min="0" max="100" value={feltTension} aria-label="Felt annotation intensity" onChange={(event) => setFeltTension(Number(event.target.value))} />
         </label>
         <p>Human annotation: <strong>{annotation}</strong> at {feltTension}/100. Kept visually separate from the modeled lanes above.</p>
+        <div className="journey-response-actions"><button type="button" className="save-journey-response" onClick={saveResponse}>Save to response lane</button><button type="button" disabled={responses.length === 0} onClick={clearResponses}>Clear saved ratings</button></div>
       </div>
     </section>
   );

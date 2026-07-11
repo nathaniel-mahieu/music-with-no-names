@@ -3023,6 +3023,11 @@ footer a {
   opacity: 0.72;
 }
 
+.response-lane > div i {
+  background: linear-gradient(180deg, #ffffff, var(--journey-coral));
+  opacity: 0.88;
+}
+
 .time-axis {
   display: flex;
   justify-content: space-between;
@@ -3048,6 +3053,57 @@ footer a {
 
 .structure-inspector .journey-heading {
   margin-bottom: 24px;
+}
+
+.prediction-model-picker {
+  display: flex;
+  gap: 5px;
+}
+
+.prediction-model-picker button,
+.save-journey-response {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.6rem;
+  cursor: pointer;
+}
+
+.journey-response-actions {
+  display: flex !important;
+  gap: 7px !important;
+}
+
+.journey-response-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.6rem;
+  cursor: pointer;
+}
+
+.journey-response-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.journey-response-actions .save-journey-response {
+  border-color: var(--journey-coral);
+  color: var(--journey-coral);
+}
+
+.prediction-model-picker button[aria-pressed="true"] {
+  border-color: #bb9bea;
+  color: var(--foreground);
+  background: color-mix(in srgb, #bb9bea 10%, transparent);
 }
 
 .structure-inspector > article > p {
@@ -3333,6 +3389,12 @@ footer a {
   color: var(--muted);
   font-size: 0.67rem;
   line-height: 1.55;
+}
+
+.save-journey-response {
+  min-width: 145px;
+  border-color: var(--journey-coral);
+  color: var(--journey-coral);
 }
 
 @media (max-width: 820px) {

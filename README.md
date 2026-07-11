@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Recording Microscope v1.5**. It provides:
+The current milestone is **Prediction + Response Braid v1.6**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -39,6 +39,8 @@ The current milestone is **Recording Microscope v1.5**. It provides:
 - Low/medium/high syncopation comparisons plus optional listener tapping and consistency feedback.
 - A motif self-similarity matrix that detects recurrence beyond absolute event time.
 - An incremental piece-local prediction trace separating uncertainty before from surprise after events.
+- A side-by-side switch between piece-local learning and a small declared synthetic-corpus prior.
+- A local, persisted listener-response lane aligned with the generated Journey and removable at any time.
 - Listener confirmation or rejection of section-level tension hypotheses.
 - A versioned landmark schema with provenance, licensing, and no bundled commercial audio.
 - Selectable Atlas axes and whole-recording/composition/performance/production views.
