@@ -11,11 +11,13 @@ const metadataBase = new URL(
     "https://nathaniel-mahieu.github.io/music-with-no-names/",
 );
 const imageUrl = new URL("og.png", metadataBase).toString();
+const iconUrl = new URL("favicon.svg", metadataBase).toString();
 
 export const metadata: Metadata = {
   metadataBase,
   title,
   description,
+  icons: { icon: iconUrl },
   openGraph: {
     title,
     description,
