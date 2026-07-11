@@ -11,6 +11,10 @@ import {
   primeExponentCoordinates,
   voiceLeadingDistance,
 } from "@/lib/music-math";
+import {
+  sonorityAffordances,
+  sonorityPerceptionModel,
+} from "@/lib/sonority-model";
 
 type HarmonyAudioNodes = {
   context: AudioContext;
@@ -25,27 +29,27 @@ const HARMONY_PRESETS = [
   {
     label: "4:5:6:7",
     ratios: [1, 5 / 4, 3 / 2, 7 / 4],
-    note: "four consecutive harmonics",
+    note: "dense shared origin · colored glow",
   },
   {
     label: "4:5:6",
     ratios: [1, 5 / 4, 3 / 2],
-    note: "consecutive harmonics",
+    note: "compact shared origin · grounded blend",
   },
   {
     label: "10:12:15",
     ratios: [1, 6 / 5, 3 / 2],
-    note: "shared but wider basis",
+    note: "wider shared origin · stable and open",
   },
   {
     label: "8:9:12",
     ratios: [1, 9 / 8, 3 / 2],
-    note: "open, center-light field",
+    note: "competing centers · suspended openness",
   },
   {
     label: "1:√2:3/2",
     ratios: [1, Math.SQRT2, 3 / 2],
-    note: "no short common basis",
+    note: "weak shared origin · exposed ambiguity",
   },
 ] as const;
 
@@ -191,6 +195,24 @@ export function HarmonyLab() {
   const pairwise = useMemo(() => ratios.slice(1).map((ratio, index) => centsFromRatio(ratio / ratios[index])), [ratios]);
   const motionDistance = useMemo(() => previousRatios.length === ratios.length ? voiceLeadingDistance(previousRatios, ratios) : 0, [previousRatios, ratios]);
   const primeCoordinates = useMemo(() => justRatios.map((ratio) => primeExponentCoordinates(ratio, 32)), [justRatios]);
+  const perception = useMemo(() => sonorityPerceptionModel(audioVoices, motionDistance), [audioVoices, motionDistance]);
+  const previousPerception = useMemo(() => sonorityPerceptionModel(
+    previousRatios.map((ratio, index) => ({
+      frequencyHz: referenceHz * ratio * 2 ** (voiceSettings[index]?.octave ?? 0),
+      amplitude: voiceSettings[index]?.amplitude ?? 0.7,
+      partialCount: voiceSettings[index]?.partialCount ?? 9,
+    })),
+    0,
+  ), [previousRatios, referenceHz, voiceSettings]);
+  const affordances = useMemo(() => sonorityAffordances(perception), [perception]);
+  const landmarkModels = useMemo(() => HARMONY_PRESETS.map((preset) => ({
+    ...preset,
+    model: sonorityPerceptionModel(preset.ratios.map((ratio) => ({
+      frequencyHz: referenceHz * ratio,
+      amplitude: 0.7,
+      partialCount: 9,
+    }))),
+  })), [referenceHz]);
 
   const spectrum = useMemo(() => {
     const partials = voicesHz.flatMap((frequencyHz, voiceIndex) =>
@@ -483,9 +505,107 @@ export function HarmonyLab() {
             </div>
           </article>
 
+          <article className="analysis-card sonority-meaning-card">
+            <div className="analysis-heading">
+              <div>
+                <span>C · From vibration to felt possibility</span>
+                <h3>Trace the chain—do not skip a layer</h3>
+              </div>
+              <small>transparent educational model · not an emotion verdict</small>
+            </div>
+
+            <div className="causal-chain" aria-label="Causal explanation from physical sound to emotional affordance">
+              <div>
+                <span>1 · physical</span>
+                <strong>{ratios.length} sources · {Math.log2(Math.max(...voicesHz) / Math.min(...voicesHz)).toFixed(2)} octaves</strong>
+                <p>{spectrum.alignments.length} partial-alignment zones in this realization.</p>
+              </div>
+              <i aria-hidden="true">→</i>
+              <div>
+                <span>2 · auditory evidence</span>
+                <strong>{Math.round(perception.roughness * 100)} friction · {Math.round(perception.fusion * 100)} fusion</strong>
+                <p>The same ratios change here with register, amplitude, and partial count.</p>
+              </div>
+              <i aria-hidden="true">→</i>
+              <div>
+                <span>3 · structural reading</span>
+                <strong>{basis ? `${basis.join(":")} shared origin` : "several plausible origins"}</strong>
+                <p>{Math.round(perception.ambiguity * 100)} ambiguity · {motionDistance.toFixed(0)}¢ recent motion.</p>
+              </div>
+              <i aria-hidden="true">→</i>
+              <div>
+                <span>4 · felt possibility</span>
+                <strong>{affordances.slice().sort((first, second) => second.value - first.value)[0].label}</strong>
+                <p>What it becomes still depends on sequence, memory, style, body, and purpose.</p>
+              </div>
+            </div>
+
+            <div className="meaning-map-layout">
+              <div>
+                <div className="meaning-map-heading">
+                  <span>Sonority field</span>
+                  <strong>where this realization sits</strong>
+                </div>
+                <div
+                  className="sonority-map"
+                  role="img"
+                  aria-label={`Current field: ${Math.round(perception.tension * 100)} percent tension and ${Math.round(perception.fusion * 100)} percent fusion. Preset landmarks show comparison fields.`}
+                >
+                  <span className="map-axis map-axis-top">more activated ↑</span>
+                  <span className="map-axis map-axis-bottom">more restful</span>
+                  <span className="map-axis map-axis-left">← more fused</span>
+                  <span className="map-axis map-axis-right">more separated →</span>
+                  {landmarkModels.map((landmark) => (
+                    <i
+                      className="map-landmark"
+                      key={landmark.label}
+                      style={{
+                        left: `${8 + (1 - landmark.model.fusion) * 84}%`,
+                        bottom: `${10 + landmark.model.tension * 78}%`,
+                      }}
+                    >
+                      <b>{landmark.label}</b>
+                    </i>
+                  ))}
+                  <i
+                    className="map-current"
+                    style={{
+                      left: `${8 + (1 - perception.fusion) * 84}%`,
+                      bottom: `${10 + perception.tension * 78}%`,
+                    }}
+                  >
+                    <b>you are here</b>
+                  </i>
+                </div>
+              </div>
+
+              <div className="affordance-field">
+                <div className="meaning-map-heading">
+                  <span>Conditional affordances</span>
+                  <strong>what this sound may make available</strong>
+                </div>
+                {affordances.map((affordance) => (
+                  <div key={affordance.key}>
+                    <span><strong>{affordance.label}</strong><output>{Math.round(affordance.value * 100)}</output></span>
+                    <i><b style={{ width: `${Math.round(affordance.value * 100)}%` }} /></i>
+                    <p>{affordance.direction} · {affordance.drivers}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="meaning-delta" aria-live="polite">
+              <span>Compared with the previous field</span>
+              <strong>
+                tension {perception.tension - previousPerception.tension >= 0 ? "+" : ""}{Math.round((perception.tension - previousPerception.tension) * 100)} · fusion {perception.fusion - previousPerception.fusion >= 0 ? "+" : ""}{Math.round((perception.fusion - previousPerception.fusion) * 100)}
+              </strong>
+              <p>Move one ratio, register, amplitude, or partial control and watch which link in the chain changes first.</p>
+            </div>
+          </article>
+
           <article className="analysis-card prime-lattice-card">
             <div className="analysis-heading">
-              <div><span>C · Low-prime coordinates</span><h3>Relationships as exponent vectors</h3></div>
+              <div><span>D · Low-prime coordinates</span><h3>Relationships as exponent vectors</h3></div>
               <div className="fold-choice" role="group" aria-label="Octave folding view"><button type="button" aria-pressed={foldOctaves} onClick={() => setFoldOctaves(true)}>fold octaves</button><button type="button" aria-pressed={!foldOctaves} onClick={() => setFoldOctaves(false)}>show octave axis</button></div>
             </div>
             <div className={`prime-lattice ${foldOctaves ? "is-folded" : ""}`} role="img" aria-label={`Prime exponent coordinates for ${justRatios.length} voices; octave axis ${foldOctaves ? "folded" : "visible"}`}>
@@ -528,10 +648,11 @@ export function HarmonyLab() {
       </div>
 
       <div className="lab-learning-note">
-        <strong>Contextual stability is separate:</strong> use the sequence from Origin to
-        Open. The moved voice can form familiar local relationships while the original
-        shared template and expectation disappear. Return restores the learned field,
-        so stability belongs to motion and memory—not only the sonority in isolation.
+        <strong>Emotion is not inside a ratio:</strong> the map predicts sensory and structural
+        affordances, not what you must feel. Use Origin → Open → Return to hear how the same
+        instant can become departure, suspense, or arrival through memory. Cultural familiarity,
+        timbre, tempo, dynamics, lyrics, personal association, and listening purpose can reverse
+        or outweigh the static-field tendencies.
       </div>
     </section>
   );

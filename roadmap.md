@@ -1,7 +1,7 @@
 # Music With No Names — Development Roadmap
 
 Status: implementation underway
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
 ## North star
 
@@ -298,6 +298,7 @@ Objective: move from dyads to global spectral organization and voice motion with
 - [x] **H3.8** Add instructive fields such as 4:5:6, 10:12:15, 4:5:6:7, and deliberately inharmonic sets.
 - [x] **H3.9** Create a sequence mode in which one or more voices move while others remain fixed.
 - [x] **H3.10** Show why an internally smooth sonority can still feel contextually unstable.
+- [x] **H3.11** Link physical realization → auditory evidence → structural reading → conditional emotional affordances, with inspectable drivers, comparison landmarks, and no universal emotion assignment.
 
 Exit gate:
 

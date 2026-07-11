@@ -19,6 +19,16 @@ These cards describe educational models used by Music With No Names. A model out
 - **Confidence:** template confidence is relative fit inside the searched candidate set. It is not a calibrated probability that the listener hears one pitch.
 - **Limits:** no individualized auditory filters, calibrated SPL, masking model, binaural model, or hearing-profile correction.
 
+## Harmony affordance model
+
+- **Version:** `mwno-sonority-1`.
+- **Inputs:** absolute frequency, amplitude, partial count, normalized ratio field, and recent voice-leading distance.
+- **Auditory outputs:** aggregate roughness, strongest harmonic-template fit, competing-template ambiguity, pairwise spectral overlap, amplitude-weighted spectral height, fusion, and outer-voice spread.
+- **Structural outputs:** repose combines 42% harmonic fit, 33% inverse roughness, and 25% low recent motion. Tension combines 42% roughness, 24% competing-center ambiguity, 22% recent motion, and 12% spectral brightness.
+- **Affordances:** repose/groundedness, friction/activation, openness/spaciousness, and brightness/lift are kept as separate dimensions. Each is phrased as something a sound *may support*, never an emotion it contains.
+- **Confidence:** values are bounded educational indices with visible drivers. They are not probabilities, preference estimates, emotion classifiers, or a consonance score.
+- **Limits:** no familiarity corpus, individualized hearing model, temporal expectation beyond one previous field, tempo, dynamics, articulation, spatialization, semantic content, culture, or personal association. Formula weights are explanatory choices, not fitted coefficients.
+
 ## Rhythm and pulse models
 
 - **Version:** `mwno-rhythm-1`.

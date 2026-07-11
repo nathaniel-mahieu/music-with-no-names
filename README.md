@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **Performance + Accessibility Diagnostics v1.16**. It provides:
+The current milestone is **Sonority Meaning Map v1.17**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -11,6 +11,8 @@ The current milestone is **Performance + Accessibility Diagnostics v1.16**. It p
 - Synchronized waveform, spectrum, and cycle-against-cycle views.
 - Explanations that keep harmonicity, roughness, fusion, and musical goodness distinct.
 - A three-voice Harmony Lab with shared-basis and aggregate-spectrum views.
+- A causal sonority view linking physical spectra, auditory friction and fusion, structural ambiguity and motion, and conditional felt affordances.
+- A live field map comparing current and landmark ratio combinations by activation and source fusion, plus an explicit previous-field delta.
 - A twelve-position Rhythm Lab with onset-spacing ratios, tempo, and microtiming bias.
 - An interactive map of pop, blues, and classical landmarks as experiential trajectories.
 - Listener- and goal-conditioned preference proximity with an inspectable component profile.

@@ -14,6 +14,10 @@ where `scale = 0.24 / (0.021 × lowerHz + 19)`. Automated tests numerically reco
 
 This is **not** a reproduction of the original listener experiment. The project does not reproduce its participants, apparatus, calibrated levels, stimulus protocol, response scale, or statistical analysis. The check supports only the limited claim that the demonstrator has the intended critical-band-relative simple-tone behavior. See [research-ledger.md](./research-ledger.md) for the evidence anchor and prohibited claims.
 
+## Sonority-affordance invariants
+
+The sonority-model fixtures require all dimensions to remain separately bounded, a compact 4:5:6 field to show stronger harmonic fit and less ambiguity than a field containing √2, higher realizations to show greater spectral brightness, wider voicings to show greater openness, and recent motion to raise modeled activation while lowering modeled repose. These direction checks verify the declared explanatory logic; they do not validate an emotion prediction against listeners.
+
 ## Open validation work
 
 - Calibrate auditory filters and level-dependent loudness against suitable published conditions.

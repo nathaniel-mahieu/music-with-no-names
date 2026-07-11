@@ -17,6 +17,16 @@ This ledger ties empirical claims to research anchors and marks where the produc
 - **Product claim prohibited:** One inferred pulse proves meter or groove.
 - **Implementation status:** Rhythm Lab exposes multiple pulse hypotheses, nested phase, microtiming, syncopation, tempo, and listener tapping. Recording Journey adds autocorrelation candidates, onset phase, a local tempo envelope, and syncopation evidence. These remain educational estimators rather than validated meter or groove models.
 
+## Sonority, consonance, and emotional affordance
+
+- **Evidence anchor:** Eerola and Lahdelma found that roughness, harmonicity/familiarity, and spectral-envelope descriptors contribute to consonance ratings across several chord datasets, while also documenting strong predictor collinearity and stimulus limitations. DOI: [10.1177/20592043211030471](https://doi.org/10.1177/20592043211030471).
+- **Register evidence:** Lahdelma and Eerola found a curved relationship between chord register and consonance ratings, consistent with low-register roughness and high-register sharpness both contributing. DOI: [10.3758/s13423-021-02033-5](https://doi.org/10.3758/s13423-021-02033-5).
+- **Unfamiliar-system evidence:** Smit and colleagues found that roughness, harmonicity, spectral entropy, mean pitch, and cultural-system dissimilarity all contributed to affect ratings of unfamiliar Bohlen–Pierce chords. DOI: [10.1371/journal.pone.0218570](https://doi.org/10.1371/journal.pone.0218570).
+- **Cross-cultural guardrail:** Smit and colleagues found that major/minor happiness associations were strongest where listeners had exposure to Western-influenced music and negligible in the least-exposed group, while noting uncertainty about universality. DOI: [10.1371/journal.pone.0269597](https://doi.org/10.1371/journal.pone.0269597).
+- **Product claim allowed:** A realized sonority can make sensory and structural qualities—such as friction, fusion, openness, brightness, ambiguity, or repose—more or less available under declared assumptions.
+- **Product claim prohibited:** A ratio set contains a fixed emotion, predicts what a listener must feel, or has an intrinsic goodness value.
+- **Implementation status:** Harmony Lab v1.17 links realized spectra to auditory evidence, structural readings, and four explicitly conditional affordances. The displayed weights are inspectable educational heuristics, not fitted emotion estimates. The map changes with register, voicing, amplitude, spectrum, and recent motion; listener, culture, sequence, rhythm, dynamics, lyrics, and purpose remain outside this static model.
+
 ## Anticipation and musical reward
 
 - **Evidence anchor:** Salimpoor and colleagues reported distinct striatal involvement during anticipation and peak pleasurable experience in a selected listener/stimulus design. DOI: [10.1038/nn.2726](https://doi.org/10.1038/nn.2726).
