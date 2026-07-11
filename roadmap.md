@@ -465,11 +465,17 @@ Objective: teach scales as octave-closing relationship patterns, using movable s
 - [x] **S2.5.4** Show equal-division ratios beside nearby small-integer landmarks without presenting the approximation as the scale’s identity.
 - [x] **S2.5.5** Add a safe listen–imagine–reveal exercise for inner hearing.
 - [x] **S2.5.6** Test octave closure, cyclic rotation, transposition invariance, responsive layout, keyboard semantics, and forced-color states.
+- [x] **S2.5.7** Replace the explanatory dashboard with a progressive feel-home → walk-distance → predict-motion lesson.
+- [x] **S2.5.8** Correct the five-step chromatic solfège overlay and distinguish true transposition from modal re-centering.
+- [x] **S2.5.9** Make gap categories physically invariant across presets and disclose the 2:1 octave / twelve-equal-slice coordinate choice.
+- [x] **S2.5.10** Match harmonic-complex playback to simultaneous-spectrum evidence and keep it separate from melodic-interval explanation.
+- [x] **S2.5.11** Add context A/B listening with learner reports before interpretation.
+- [x] **S2.5.12** Replace modulo-wrapped passive reveals with scale-specific retrieval-and-correction phrases.
 
 Exit gate:
 
 - A learner can move Do or its absolute frequency and explain what remains invariant.
-- A learner can read wide and narrow scale gaps without translating them into note letters.
+- A learner can read close, middle, and open scale gaps without translating them into note letters.
 - No physical metric is presented as a universal measure of stability, emotion, or goodness.
 
 ### Q10 — Validation, accessibility, and release hardening

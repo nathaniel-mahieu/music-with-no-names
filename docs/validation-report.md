@@ -18,6 +18,12 @@ This is **not** a reproduction of the original listener experiment. The project 
 
 The sonority-model fixtures require all dimensions to remain separately bounded, a compact 4:5:6 field to show stronger harmonic fit and less ambiguity than a field containing √2, higher realizations to show greater spectral brightness, wider voicings to show greater openness, and recent motion to raise modeled activation while lowering modeled repose. These direction checks verify the declared explanatory logic; they do not validate an emotion prediction against listeners.
 
+## Scale-learning invariants
+
+The Scale Lab fixtures require every preset to close at an exact 2:1 octave, preserve its ratio structure under transposition, keep identical physical gaps in the same close/middle/open category, and spell the 3 · 2 · 2 · 3 · 2 orbit as Do · Me · Fa · Sol · Te in the declared chromatic movable-Do convention. Every inner-hearing path is authored for its specific scale, uses valid degree indices without modulo wrapping, varies the missing position, and avoids a target identical to either neighbor.
+
+The browser review additionally checks that the model’s ten-partial harmonic spectrum is the spectrum synthesized for simultaneous examples, while melodic examples explicitly exclude simultaneous roughness as their explanation. Context and inner-hearing tasks collect a learner response before interpretation. These checks validate internal consistency and interaction behavior; they do not demonstrate learning gains in recruited participants.
+
 ## Open validation work
 
 - Calibrate auditory filters and level-dependent loudness against suitable published conditions.

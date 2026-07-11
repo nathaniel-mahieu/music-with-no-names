@@ -5728,6 +5728,174 @@ footer a {
   .degree-inspector dl > div { grid-template-columns: 1fr; gap: 7px; }
 }
 
+/* Scale lesson v1.22: perception → prediction → explanation. */
+.learning-scale .scale-intro { padding-top: 48px; padding-bottom: 48px; }
+.learning-scale .scale-intro h2 { max-width: 18ch; font-size: clamp(2.35rem, 4.4vw, 4.5rem); }
+.scale-lesson-nav { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+.scale-lesson-nav button { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; min-height: 96px; padding: 20px clamp(16px, 3vw, 38px); border: 0; border-right: 1px solid var(--line); border-radius: 0; text-align: left; }
+.scale-lesson-nav button:last-child { border-right: 0; }
+.scale-lesson-nav button > span { grid-row: 1 / 3; color: var(--muted); font-size: .72rem; }
+.scale-lesson-nav button > strong { font-size: 1rem; }
+.scale-lesson-nav button > small { color: var(--muted); font-size: .72rem; }
+.scale-lesson-nav button.is-selected { background: var(--foreground); color: var(--background); }
+.scale-lesson-nav button.is-selected > span, .scale-lesson-nav button.is-selected > small { color: color-mix(in srgb, var(--background) 72%, transparent); }
+.scale-lesson { min-width: 0; }
+.lesson-heading { display: grid; grid-template-columns: .38fr 1fr 1fr; gap: 28px; align-items: end; padding: 40px clamp(24px, 5vw, 72px); border-bottom: 1px solid var(--line); }
+.lesson-heading > span { align-self: start; color: var(--accent); font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.lesson-heading h3 { margin: 0; font-size: clamp(1.75rem, 3.5vw, 3.4rem); line-height: 1; letter-spacing: -.045em; }
+.lesson-heading p { max-width: 58ch; margin: 0; color: var(--muted); line-height: 1.6; }
+.home-lesson-grid { display: grid; grid-template-columns: .72fr 1.28fr; border-bottom: 1px solid var(--line); }
+.scale-shape-choices { display: grid; align-content: start; margin: 0; padding: 36px clamp(24px, 4vw, 54px); border: 0; border-right: 1px solid var(--line); }
+.scale-shape-choices legend, .degree-guess legend { margin-bottom: 14px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.scale-shape-choices label { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 17px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.scale-shape-choices label input { grid-row: 1 / 3; align-self: start; margin-top: 3px; accent-color: var(--accent); }
+.scale-shape-choices label strong { line-height: 1.25; }
+.scale-shape-choices label small { color: var(--muted); line-height: 1.45; }
+.scale-shape-choices label.is-selected strong { color: var(--accent); }
+.home-route { min-width: 0; padding: 38px clamp(24px, 5vw, 66px); }
+.home-route-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 78px; }
+.home-route-line strong { display: grid; place-items: center; flex: 0 0 58px; width: 58px; height: 58px; border: 1px solid var(--accent); border-radius: 50%; }
+.home-route-line em { color: var(--muted); font-style: normal; text-align: center; }
+.home-playhead { display: flex; justify-content: center; gap: 10px; align-items: baseline; margin-top: 8px; }
+.home-playhead span { color: var(--muted); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.home-playhead strong { color: var(--accent); font-size: 1.1rem; }
+.home-route > p { max-width: 66ch; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.learning-scale .step-fingerprint { display: flex; align-items: stretch; min-height: 88px; margin: 20px 0 10px; padding: 0; border-bottom: 1px solid var(--line-strong); list-style: none; }
+.learning-scale .step-fingerprint > li { display: grid; grid-template-rows: auto 16px auto; gap: 5px; min-width: 0; text-align: center; }
+.learning-scale .step-fingerprint > li span { color: var(--muted); font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; }
+.learning-scale .step-fingerprint > li i { display: block; height: 8px; margin: 4px 2px; background: var(--line-strong); }
+.learning-scale .step-fingerprint > li.is-on-path i { background: var(--accent); }
+.learning-scale .step-fingerprint > li small { overflow: hidden; color: var(--muted); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
+.fingerprint-summary { display: none; }
+.primary-listen-actions, .context-actions, .inner-hearing-actions, .response-choices { display: flex; gap: 9px; flex-wrap: wrap; }
+.primary-listen-actions button, .context-actions button, .inner-hearing-actions button, .response-choices button { padding: 10px 14px; border: 1px solid var(--line-strong); }
+.primary-listen-actions button:first-child, .context-actions button:nth-child(2), .inner-hearing-actions button:first-child { background: var(--foreground); color: var(--background); }
+.audio-status { min-height: 1.2em; color: var(--muted); font-size: .75rem; }
+.prediction-prompt { display: grid; grid-template-columns: .7fr 1.3fr; gap: 24px 42px; align-items: center; padding: 32px clamp(24px, 5vw, 72px); border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+.prediction-prompt > div:first-child { display: grid; gap: 4px; }
+.prediction-prompt > div:first-child span { color: var(--accent); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.response-choices button[aria-pressed="true"] { background: var(--foreground); color: var(--background); }
+.response-feedback { grid-column: 2; max-width: 70ch; margin: 0; padding-left: 15px; border-left: 2px solid var(--accent); color: var(--muted); line-height: 1.55; }
+.transpose-experiment { display: grid; grid-template-columns: 1fr .85fr auto; gap: 32px; align-items: center; padding: 38px clamp(24px, 5vw, 72px); border-bottom: 1px solid var(--line); }
+.transpose-experiment h3 { margin: 4px 0 8px; font-size: clamp(1.4rem, 2.6vw, 2.25rem); letter-spacing: -.035em; }
+.transpose-experiment > div > span { color: var(--accent); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.transpose-experiment p { margin: 0; color: var(--muted); line-height: 1.5; }
+.transpose-experiment label { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; color: var(--muted); font-size: .8rem; }
+.transpose-experiment output { color: var(--foreground); font-weight: 700; }
+.transpose-experiment input { grid-column: 1 / 3; width: 100%; accent-color: var(--accent); }
+.lesson-next { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding: 26px clamp(24px, 5vw, 72px); background: var(--foreground); color: var(--background); }
+.lesson-next span { color: color-mix(in srgb, var(--background) 72%, transparent); }
+.lesson-next button { border-color: color-mix(in srgb, var(--background) 50%, transparent); background: var(--background); color: var(--foreground); }
+.learning-scale .scale-workbench { align-items: stretch; }
+.learning-scale .scale-orbit { margin-top: 46px; padding: 0; }
+.learning-scale .scale-orbit > legend { position: absolute; }
+.learning-scale .scale-orbit > label { --orbit-radius: 164px; position: absolute; top: 50%; left: 50%; z-index: 2; display: grid; place-content: center; width: 66px; height: 66px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface-raised); text-align: center; cursor: pointer; transform: translate(-50%, -50%) rotate(var(--orbit-angle)) translateY(calc(var(--orbit-radius) * -1)) rotate(calc(var(--orbit-angle) * -1)); box-shadow: 0 5px 18px color-mix(in srgb, var(--foreground) 10%, transparent); }
+.learning-scale .scale-orbit > label input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.learning-scale .scale-orbit > label strong { font-size: 1rem; }
+.learning-scale .scale-orbit > label span { color: var(--muted); font-size: .62rem; }
+.learning-scale .scale-orbit > label.is-selected { background: var(--accent); color: var(--background); border-color: var(--accent); }
+.learning-scale .scale-orbit > label.is-selected span { color: inherit; }
+.learning-scale .scale-orbit > label.is-sounding { outline: 4px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 3px; }
+.learning-scale .scale-orbit > label:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 4px; }
+.interval-recipe { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: baseline; margin-top: 16px; }
+.interval-recipe span { color: var(--muted); font-size: .75rem; text-transform: uppercase; }
+.interval-recipe strong { font-size: 1.05rem; }
+.degree-inspector { align-content: start; }
+.presentation-contrast { display: grid; grid-template-columns: 1fr 1fr; margin: 28px 0 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.presentation-contrast article { display: grid; align-content: start; gap: 7px; padding: 22px 20px 22px 0; }
+.presentation-contrast article + article { padding-left: 20px; border-left: 1px solid var(--line); }
+.presentation-contrast article > span, .neighbor-geometry > span { color: var(--accent); font-size: .67rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.presentation-contrast article p { min-height: 4.3em; margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+.presentation-contrast article button { align-self: end; margin-top: 8px; }
+.stop-audio { margin-bottom: 8px; }
+.neighbor-geometry { margin: 24px 0; padding: 18px 0 18px 16px; border-left: 2px solid var(--line-strong); }
+.neighbor-geometry p { margin: 7px 0 0; color: var(--muted); font-size: .84rem; line-height: 1.55; }
+.neighbor-geometry p strong { color: var(--foreground); }
+.physics-details { margin-top: 24px; border-top: 1px solid var(--line); }
+.physics-details summary { min-height: 44px; padding: 16px 0; color: var(--muted); cursor: pointer; }
+.physics-details dl { margin-top: 0; }
+.theory-bridge { margin: 0; padding: 0 clamp(24px, 5vw, 72px); border-bottom: 1px solid var(--line); }
+.theory-bridge > div { display: grid; grid-template-columns: .45fr .7fr 1fr; gap: 24px; align-items: start; padding: 0 0 24px; }
+.theory-bridge > div > span { color: var(--accent); font-size: .67rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.theory-bridge > div > strong { font-size: 1.15rem; }
+.theory-bridge > div > p { margin: 0; color: var(--muted); line-height: 1.55; }
+.context-experiment { padding: 42px clamp(24px, 5vw, 72px); border-bottom: 1px solid var(--line); }
+.context-path { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 0 auto 28px; }
+.context-path > div, .hearing-path > div { position: relative; display: grid; place-content: center; flex: 0 1 76px; width: 76px; aspect-ratio: 1; border: 1px solid var(--line-strong); border-radius: 50%; text-align: center; }
+.context-path > div:not(:last-child)::after { content: ""; position: absolute; top: 50%; left: 100%; width: 13px; border-top: 1px solid var(--line); }
+.context-path > div.is-target { border: 2px solid var(--accent); }
+.context-path > div.is-possible { border-style: dashed; }
+.context-path span { font-weight: 700; }
+.context-path small { color: var(--muted); font-size: .58rem; }
+.context-path > i { color: var(--accent); font-style: normal; }
+.context-actions { justify-content: center; }
+.context-experiment > .audio-status { text-align: center; }
+.context-experiment .prediction-prompt { margin: 32px calc(clamp(24px, 5vw, 72px) * -1) -42px; }
+.learning-scale .inner-hearing { grid-template-columns: .72fr 1.28fr; align-items: start; }
+.inner-hearing-copy ol { margin: 20px 0 0; padding-left: 1.2rem; color: color-mix(in srgb, var(--background) 78%, transparent); }
+.inner-hearing-copy li { margin: 7px 0; line-height: 1.4; }
+.hearing-practice { min-width: 0; }
+.learning-scale .hearing-path { grid-column: auto; grid-row: auto; }
+.degree-guess { display: flex; gap: 7px; flex-wrap: wrap; margin: 22px 0; padding: 0; border: 0; }
+.degree-guess legend { width: 100%; color: color-mix(in srgb, var(--background) 68%, transparent); }
+.degree-guess label { min-width: 48px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--background) 42%, transparent); text-align: center; cursor: pointer; }
+.degree-guess label input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.degree-guess label.is-selected { background: var(--background); color: var(--foreground); }
+.degree-guess label:has(input:focus-visible) { outline: 3px solid var(--background); outline-offset: 3px; }
+.learning-scale .inner-hearing-actions { grid-column: auto; justify-content: flex-start; margin-top: 18px; }
+.learning-scale .inner-hearing-actions button { border-color: color-mix(in srgb, var(--background) 50%, transparent); }
+.learning-scale .inner-hearing .response-feedback { grid-column: auto; margin-top: 18px; color: color-mix(in srgb, var(--background) 78%, transparent); }
+.learning-scale .scale-takeaway { padding-top: 44px; }
+
+@media (max-width: 980px) {
+  .lesson-heading { grid-template-columns: .28fr 1fr; }
+  .lesson-heading p { grid-column: 2; }
+  .home-lesson-grid { grid-template-columns: 1fr; }
+  .scale-shape-choices { border-right: 0; border-bottom: 1px solid var(--line); }
+  .transpose-experiment { grid-template-columns: 1fr 1fr; }
+  .transpose-experiment > button { justify-self: start; }
+  .learning-scale .inner-hearing { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 680px) {
+  .scale-lesson-nav button { grid-template-columns: 1fr; gap: 2px; min-height: 88px; padding: 14px 10px; }
+  .scale-lesson-nav button > span { grid-row: auto; }
+  .scale-lesson-nav button > small { display: none; }
+  .lesson-heading { grid-template-columns: 1fr; gap: 12px; padding: 32px 18px; }
+  .lesson-heading p { grid-column: 1; }
+  .scale-shape-choices, .home-route, .context-experiment { padding-right: 18px; padding-left: 18px; }
+  .home-route-line em { font-size: .75rem; }
+  .learning-scale .step-fingerprint { min-height: 52px; }
+  .learning-scale .step-fingerprint > li { grid-template-rows: 16px; }
+  .learning-scale .step-fingerprint > li small { display: none; }
+  .learning-scale .step-fingerprint > li span { display: none; }
+  .fingerprint-summary { display: block; margin: 5px 0 18px; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+  .prediction-prompt { grid-template-columns: 1fr; padding: 26px 18px; }
+  .response-feedback { grid-column: 1; }
+  .transpose-experiment { grid-template-columns: 1fr; padding: 32px 18px; }
+  .lesson-next { align-items: stretch; flex-direction: column; padding: 24px 18px; }
+  .lesson-next button { width: 100%; }
+  .learning-scale .scale-orbit > label { --orbit-radius: 128px; width: 58px; height: 58px; }
+  .presentation-contrast { grid-template-columns: 1fr; }
+  .presentation-contrast article { padding: 20px 0; }
+  .presentation-contrast article + article { padding-left: 0; border-top: 1px solid var(--line); border-left: 0; }
+  .presentation-contrast article p { min-height: 0; }
+  .context-path { gap: 5px; }
+  .context-path > div, .hearing-path > div { min-width: 0; width: auto; flex: 1 1 0; }
+  .context-path > div:not(:last-child)::after { width: 6px; }
+  .context-experiment .prediction-prompt { margin-right: -18px; margin-left: -18px; }
+  .theory-bridge { padding-right: 18px; padding-left: 18px; }
+  .theory-bridge > div { grid-template-columns: 1fr; gap: 8px; }
+  .learning-scale .inner-hearing { padding-right: 18px; padding-left: 18px; }
+  .learning-scale .inner-hearing-actions { display: grid; }
+}
+
+@media (max-width: 380px) {
+  .learning-scale .scale-orbit > label { --orbit-radius: 96px; width: 50px; height: 50px; }
+  .context-path small { display: none; }
+  .degree-guess label { min-width: 44px; padding: 9px; }
+}
+
 @media (forced-colors: active) {
   :root {
     --background: Canvas;
@@ -5909,6 +6077,18 @@ footer a {
   }
 
   .step-fingerprint > div i { background: Highlight !important; opacity: 1; }
+
+  .scale-lesson-nav button.is-selected,
+  .scale-shape-choices label.is-selected,
+  .learning-scale .scale-orbit > label.is-selected,
+  .degree-guess label.is-selected {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+
+  .learning-scale .scale-orbit > label.is-sounding { outline: 4px double Highlight; }
+  .learning-scale .step-fingerprint > li.is-on-path i { background: Highlight !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {

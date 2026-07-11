@@ -21,29 +21,49 @@ export type ScaleDegree = {
   ratio: number;
 };
 
+export type ScaleHearingChallenge = { path: number[]; missingPosition: number };
+
 export const SCALE_PRESETS: ScalePreset[] = [
   {
     id: "seven",
-    name: "seven-degree orbit",
+    name: "seven-step asymmetric orbit",
     character: "Unequal steps create strong landmarks and a small closing step back to Do.",
     steps: [2, 2, 1, 2, 2, 2, 1],
     syllables: ["Do", "Re", "Mi", "Fa", "Sol", "La", "Ti"],
   },
   {
     id: "five",
-    name: "five-degree orbit",
-    character: "The 3 · 2 · 2 · 3 · 2 fingerprint uses wider gaps and leaves more open space.",
+    name: "five-step open orbit",
+    character: "Open · middle · middle · open · middle leaves more space and a broad return to Do.",
     steps: [3, 2, 2, 3, 2],
-    syllables: ["Do", "Re", "Mi", "Sol", "La"],
+    syllables: ["Do", "Me", "Fa", "Sol", "Te"],
   },
   {
     id: "whole",
-    name: "six-degree even orbit",
+    name: "six-step even orbit",
     character: "Every step is equal, so the orbit supplies fewer unequal landmarks for a center.",
     steps: [2, 2, 2, 2, 2, 2],
     syllables: ["Do", "Re", "Mi", "Fi", "Si", "Li"],
   },
 ];
+
+export const SCALE_HEARING_PATHS: Record<ScalePreset["id"], ScaleHearingChallenge[]> = {
+  seven: [
+    { path: [0, 2, 1, 4, 3, 0], missingPosition: 4 },
+    { path: [0, 1, 3, 5, 6, 0], missingPosition: 2 },
+    { path: [0, 4, 5, 2, 1, 0], missingPosition: 3 },
+  ],
+  five: [
+    { path: [0, 2, 1, 3, 4, 0], missingPosition: 4 },
+    { path: [0, 1, 3, 2, 1, 0], missingPosition: 2 },
+    { path: [0, 3, 2, 4, 3, 0], missingPosition: 3 },
+  ],
+  whole: [
+    { path: [0, 2, 1, 4, 3, 0], missingPosition: 4 },
+    { path: [0, 1, 3, 2, 5, 0], missingPosition: 2 },
+    { path: [0, 4, 2, 3, 1, 0], missingPosition: 3 },
+  ],
+};
 
 function assertSteps(steps: number[]) {
   if (steps.length < 2 || steps.some((step) => !Number.isFinite(step) || step <= 0)) {
@@ -93,10 +113,23 @@ export function degreeEvidence(referenceHz: number, degree: ScaleDegree) {
 export function scaleFingerprint(steps: number[]) {
   assertSteps(steps);
   const total = steps.reduce((sum, step) => sum + step, 0);
-  const average = total / steps.length;
   return steps.map((step) => ({
     step,
     share: step / total,
-    width: Math.abs(step - average) < 1e-9 ? "even" as const : step < average ? "narrow" as const : "wide" as const,
+    width: (1200 * step) / total <= 125 ? "close" as const : (1200 * step) / total <= 225 ? "middle" as const : "open" as const,
   }));
+}
+
+export function stepFrequencyRatio(step: number, octaveUnits = 12) {
+  if (!Number.isFinite(step) || step <= 0) throw new RangeError("Step size must be positive.");
+  if (!Number.isFinite(octaveUnits) || octaveUnits <= 0) throw new RangeError("Octave units must be positive.");
+  return 2 ** (step / octaveUnits);
+}
+
+export function intervalStepRecipe(steps: number[], degreeIndex: number) {
+  assertSteps(steps);
+  if (!Number.isInteger(degreeIndex) || degreeIndex < 0 || degreeIndex >= steps.length) {
+    throw new RangeError("Degree index must identify a degree in the scale.");
+  }
+  return scaleFingerprint(steps).slice(0, degreeIndex);
 }
