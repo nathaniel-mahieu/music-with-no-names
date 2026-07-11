@@ -21,15 +21,17 @@ import { RhythmLab } from "./RhythmLab";
 import { AtlasLab } from "./AtlasLab";
 import { PersonalLab } from "./PersonalLab";
 import { JourneyLab } from "./JourneyLab";
+import { RecordingLab } from "./RecordingLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "ratio" | "harmony" | "rhythm" | "journey" | "atlas" | "personal";
+type LabId = "ratio" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "ratio", label: "Ratio" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
   { id: "journey", label: "Journey" },
+  { id: "recording", label: "Recording" },
   { id: "atlas", label: "Atlas" },
   { id: "personal", label: "Personal Lens" },
 ];
@@ -80,6 +82,15 @@ const LAB_COPY: Record<
     principleTop: "Local evidence",
     principleMain: "→ arc",
     principleBottom: "recurrence, violation, return",
+  },
+  recording: {
+    eyebrow: "Your recording, analyzed without upload",
+    title: "Trace real sound from evidence to experience.",
+    description:
+      "Load audio locally, inspect versioned multi-resolution evidence, correct model hypotheses, and export a portable profile that never contains the recording.",
+    principleTop: "Private audio",
+    principleMain: "→ evidence",
+    principleBottom: "measured, modeled, correctable",
   },
   atlas: {
     eyebrow: "Existing music as navigational landmarks",
@@ -625,7 +636,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.6
+          {activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v0.7
         </div>
       </header>
 
@@ -864,6 +875,8 @@ export function RatioLab() {
           <RhythmLab />
         ) : activeLab === "journey" ? (
           <JourneyLab />
+        ) : activeLab === "recording" ? (
+          <RecordingLab />
         ) : activeLab === "atlas" ? (
           <AtlasLab />
         ) : (
@@ -873,7 +886,7 @@ export function RatioLab() {
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Roadmap phases R1 · H3 · T4 · L8 · G9</span>
+        <span>Roadmap phases R1 · H3 · T4 · P5 · I6 · J7 · L8 · G9</span>
       </footer>
     </main>
   );

@@ -2,7 +2,7 @@
 
 An audible, visual exploration of music through frequency ratios, spectra, time, perception, and expectation—without treating note names or piano geometry as the fundamental objects.
 
-The current milestone is **First vertical slice v0.6**. It provides:
+The current milestone is **Private Recording Journey v0.7**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A continuous frequency-ratio control from 1:1 through 2:1.
@@ -20,6 +20,9 @@ The current milestone is **First vertical slice v0.6**. It provides:
 - Section selection that preserves event identity while opening an evidence-backed Acoustic Microscope.
 - Inspectable piece-local predictions, transformed-recurrence evidence, annotations, and counterfactual views.
 - Shareable Ratio Lab URLs that preserve relationship, physical register, and timbre.
+- Local-only recording import with safe playback and background-worker analysis.
+- Versioned fine, medium, and whole-form feature frames with continuous frequency evidence.
+- Editable pulse and section hypotheses plus portable analysis JSON that contains no audio.
 
 ## Run locally
 

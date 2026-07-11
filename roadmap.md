@@ -353,16 +353,16 @@ Exit gate:
 
 Objective: connect the controlled labs to real recordings while preserving uncertainty and provenance.
 
-- [ ] **I6.1** Add explicit local-file audio import. Do not upload audio for the MVP.
-- [ ] **I6.2** Decode audio and compute versioned, multi-resolution analysis frames in a worker.
-- [ ] **I6.3** Extract loudness, spectral balance, spectral flux, onset strength, and auditory-band energy.
+- [x] **I6.1** Add explicit local-file audio import. Do not upload audio for the MVP.
+- [x] **I6.2** Decode audio and compute versioned, multi-resolution analysis frames in a worker.
+- [x] **I6.3** Extract loudness, spectral balance, spectral flux, onset strength, and auditory-band energy.
 - [ ] **I6.4** Estimate periodicity, harmonicity candidates, pitch salience, and roughness with confidence values.
 - [ ] **I6.5** Estimate pulse candidates, onset phase, tempo changes, and syncopation.
 - [ ] **I6.6** Detect recurrence and candidate section boundaries.
-- [ ] **I6.7** Preserve continuous frequency evidence; do not reduce the master representation immediately to twelve chroma bins.
+- [x] **I6.7** Preserve continuous frequency evidence; do not reduce the master representation immediately to twelve chroma bins.
 - [ ] **I6.8** Add user-correctable hypotheses for pulse, center, sections, and source events.
-- [ ] **I6.9** Export and re-import a portable analysis JSON file without the copyrighted audio.
-- [ ] **I6.10** Build test fixtures from generated mixtures and openly licensed recordings with known provenance.
+- [x] **I6.9** Export and re-import a portable analysis JSON file without the copyrighted audio.
+- [ ] **I6.10** Build test fixtures from generated mixtures and openly licensed recordings with known provenance. (Generated fixtures exist; openly licensed recording fixtures remain.)
 
 Exit gate:
 
@@ -596,5 +596,6 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Personal Lens ratings, uncertainty, local export, and deletion implemented.
 - [x] Generated Journey, inspectable local prediction, and Acoustic Microscope implemented.
 - [x] First vertical slice completed with shareable ratio/register/timbre state.
+- [x] Private local recording import, worker analysis, correction controls, and portable profiles implemented.
 
 The next executable task is **F0.1: scaffold the TypeScript application and verification tooling**.
