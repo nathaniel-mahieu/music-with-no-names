@@ -6,7 +6,7 @@
 - Native buttons, range inputs, selects, details, and links provide keyboard operation without custom key handlers.
 - Focus-visible outlines cover links, buttons, inputs, and selects.
 - Dynamic audio and analysis status uses polite live regions.
-- The Piano Lab uses native buttons for every silent on-screen key, a native MIDI-device select, text-redundant scale and active-key states, labeled progress values for every live evidence meter, a named descriptor trace, and text alternatives for held notes on the fifths map.
+- The Piano Lab uses native buttons for every silent on-screen key and every selectable event, a native MIDI-device select, text-redundant held/sustained/scale states, named SVG summaries for staff, frequency, fifths, interval, and evidence views, a concise polite live explanation, and line styles as well as color for each perceptual trace.
 - Canvas and dense visualizations provide accessible names or adjacent textual interpretations.
 - Reduced-motion preferences disable smooth scrolling and collapse animation/transition duration.
 - Color is redundant with text labels, position, marker shape, border style, or fill pattern. Atlas corpus clouds use dashed, dotted, and double borders plus distinct patterns.

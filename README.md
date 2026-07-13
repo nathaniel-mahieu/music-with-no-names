@@ -4,17 +4,18 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Silent MIDI Musicality Explorer v1.25**. It provides:
+The current milestone is **Single-Surface MIDI Piano HUD v1.26**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
-- A Piano Lab that translates those relationships onto a two-octave keyboard without treating key geometry as the underlying theory.
+- A single persistent Piano HUD that aligns the last seven note attacks across grand staff notation, log-frequency height, a fixed circle of fifths, changing scale frames, chord identity, nearby scale chords, interval texture, and separate perceptual traces.
 - Local Web MIDI input with permission-aware device selection, note-on/off, velocity, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and no MIDI data is uploaded.
 - Movable-Do overlays for every piano key, with conventional note, scale, and interval names available only as an optional translation layer.
 - A live scale walk for bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes.
 - A held-note interval network plus separate common-period fit, modeled spectral crunch, pull toward the selected Do, repose/arrival evidence, and a recent-state trajectory—never a combined listenability or quality score.
 - A scale-and-center finder that ranks multiple compatible frames from recent pitch classes while making ambiguity and limited evidence visible.
-- Live circle-of-fifths mapping that marks every held pitch class and follows the newest MIDI note around the repeated-fifths path.
+- Live circle-of-fifths mapping that marks held pitch classes and numbers recent attacks, plus a deliberately cautious scale-frame detector that waits for four distinct pitch classes before changing its stable frame.
+- Exact chord matching kept separate from incomplete outlines, with nearby scale-derived moves ranked by common tones instead of a claim about what should sound good.
 - Controlled chord fields that connect physical differences to conditional possibilities such as fusion, weight, openness, or pressure without assigning fixed emotions.
 - A circle of fifths derived from repeated 3:2 moves, octave folding, equal-key approximation, and the visible pure-tuning closure mismatch.
 - Physical step geometry for seven-, five-, and six-degree scales, including the 3 · 2 · 2 · 3 · 2 fingerprint.

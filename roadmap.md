@@ -493,6 +493,7 @@ Objective: introduce a piano as a silent, interactive translation of the existin
 - [x] **K2.6.9** Allow any fifths position to become the new movable Do while preserving the relationship-first representation.
 - [x] **K2.6.10** Test MIDI parsing, transposition invariance, scale closure, interval landmarks, fifths geometry, semantic interaction, forced colors, and responsive layout contracts.
 - [x] **K2.6.11** Add ranked scale-and-center compatibility, held-note fifths highlighting, modeled crunch, tonal pull, repose/arrival evidence, and a multi-state descriptor trace while keeping every output separate from musical quality.
+- [x] **K2.6.12** Consolidate Piano Lab into one always-visible HUD: preserve the last seven note-on attacks (including repetitions), align staff and log-frequency plots, number visits on a fixed fifths compass, stabilize changing scale frames, distinguish exact chords from outlines, rank nearby chord moves by retained tones, visualize sustain, and coordinate separate crunch, pull, arrival, leap, and voice-motion traces.
 
 Exit gate:
 

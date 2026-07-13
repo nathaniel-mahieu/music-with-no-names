@@ -32,7 +32,9 @@ The fifths fixtures generate the order Do → Sol → Re → La by repeated 3:2 
 
 Scale-candidate fixtures require a complete bright seven-position route to rank its matching Do frame at full compatibility while retaining other candidates. Tonal-tendency fixtures keep unresolved pull separate from home/arrival evidence, and sequential fixtures distinguish motion toward repose, away from repose, and small ambiguous changes. Source contracts also prohibit `AudioContext`, oscillators, and synthesizer activation inside Piano Lab so MIDI remains visualization-only.
 
-Source-level accessibility contracts require a named piano region, native on-screen key buttons, polite live status, accessible meter values, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
+The v1.26 HUD fixtures additionally require a strict seven-event note-on buffer that preserves repeated attacks, prevent the automatic scale frame from stabilizing before four distinct pitch classes, recognize chord inversions despite doubled notes, keep incomplete chord outlines explicit, and rank nearby scale chords by retained pitch classes with a concrete one-voice move when available.
+
+Source-level accessibility contracts require a named piano region, native on-screen key and event buttons, polite live status, named SVG summaries, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
 
 ## Playback-level invariants
 

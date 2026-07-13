@@ -5,13 +5,17 @@ import {
   fifthStepForPitchClass,
   fifthsCircle,
   frequencyFromMidi,
+  identifyChordCandidates,
   inferScaleCandidates,
   intervalLandmark,
+  nearbyScaleChords,
   noteContext,
   pairwiseIntervals,
   parseMidiMessage,
   scaleCoverage,
+  scaleFrameTimeline,
   scaleSemitones,
+  pushRollingNoteEvent,
   resolutionDirection,
   tonalTendency,
 } from "../lib/piano-model.ts";
@@ -71,6 +75,41 @@ test("ranks compatible scale and center frames without claiming certainty", () =
   assert.ok(Math.abs(candidates[0].fit - 1) < 1e-12);
   assert.equal(candidates[0].uniqueNoteCount, 7);
   assert.deepEqual(inferScaleCandidates([], 4), []);
+});
+
+test("keeps repeated attacks in a strict seven-event rolling trace", () => {
+  const events = Array.from({ length: 8 }, (_, index) => ({ note: index === 7 ? 66 : 60 + index, id: index }));
+  const trace = events.reduce((current, event) => pushRollingNoteEvent(current, event, 7), [] as typeof events);
+  assert.equal(trace.length, 7);
+  assert.deepEqual(trace.map((event) => event.id), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(pushRollingNoteEvent([{ note: 60 }], { note: 60 }, 7).length, 2);
+});
+
+test("waits for enough distinct evidence before stabilizing a scale frame", () => {
+  const timeline = scaleFrameTimeline([60, 62, 64, 65, 67, 69, 71]);
+  assert.equal(timeline[2].stable, null);
+  assert.equal(timeline[2].evidenceLabel, "little evidence");
+  assert.equal(timeline[3].changed, true);
+  assert.equal(timeline.at(-1)?.stable?.scale.id, "bright-seven");
+  assert.equal(timeline.at(-1)?.stable?.rootPitchClass, 0);
+});
+
+test("separates exact chord identity, inversion, and incomplete outlines", () => {
+  const candidates = identifyChordCandidates([64, 67, 72, 72], 3);
+  assert.equal(candidates[0].exact, true);
+  assert.equal(candidates[0].template.id, "major");
+  assert.equal(candidates[0].rootPitchClass, 0);
+  assert.equal(candidates[0].inversion, 1);
+  assert.equal(candidates[1].exact, false);
+  assert.ok(candidates[1].missingPitchClasses.length > 0);
+});
+
+test("ranks nearby scale chords by retained tones and names the concrete move", () => {
+  const neighbors = nearbyScaleChords([60, 64, 67], 60, PIANO_SCALES[0], 3);
+  assert.equal(neighbors.length, 3);
+  assert.equal(neighbors[0].commonPitchClasses.length, 2);
+  assert.match(neighbors[0].instruction, /^keep 2 · move /);
+  assert.equal(neighbors[0].candidate?.exact, true);
 });
 
 test("separates pull toward Do from evidence that Do has arrived", () => {

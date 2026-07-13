@@ -16,24 +16,26 @@ import {
   fifthStepForPitchClass,
   fifthsCircle,
   frequencyFromMidi,
-  inferScaleCandidates,
+  identifyChordCandidates,
   intervalLandmark,
+  nearbyScaleChords,
   nearestMidiForPitchClass,
   noteContext,
   pairwiseIntervals,
   parseMidiMessage,
   pitchClassFromMidi,
-  scaleCoverage,
-  scaleSemitones,
+  pushRollingNoteEvent,
   resolutionDirection,
+  scaleFrameTimeline,
+  scaleSemitones,
   tonalTendency,
+  type ChordCandidate,
+  type NearbyChord,
   type PianoScale,
   type ScaleCandidate,
 } from "@/lib/piano-model";
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
 
-type PianoStage = "map" | "combine" | "fifths";
-type ScaleId = PianoScale["id"];
 type MidiInputLike = {
   id: string;
   name?: string | null;
@@ -41,563 +43,578 @@ type MidiInputLike = {
   state?: string;
   onmidimessage: ((event: { data: Uint8Array }) => void) | null;
 };
-type MidiAccessLike = {
-  inputs: Map<string, MidiInputLike>;
-  onstatechange: (() => void) | null;
-};
+type MidiAccessLike = { inputs: Map<string, MidiInputLike>; onstatechange: (() => void) | null };
 type NavigatorWithMidi = Navigator & {
   requestMIDIAccess?: (options?: { sysex?: boolean }) => Promise<MidiAccessLike>;
 };
-
-type AnalysisPoint = {
-  index: number;
-  signature: string;
-  label: string;
-  crunch: number;
+type HudNoteEvent = {
+  id: number;
+  note: number;
+  velocity: number;
+  channel: number;
+  source: "midi" | "screen";
+  onsetMs: number;
+  fieldNotes: number[];
+};
+type EventMeasure = {
+  event: HudNoteEvent;
+  crunch: number | null;
   pull: number;
   arrival: number;
+  novelty: number;
+  motion: number;
 };
-
-const STAGES: { id: PianoStage; number: string; title: string; promise: string }[] = [
-  { id: "map", number: "01", title: "Map the keys", promise: "Do, scale positions, and physical distance" },
-  { id: "combine", number: "02", title: "Combine notes", promise: "intervals, chords, and separate evidence" },
-  { id: "fifths", number: "03", title: "Walk by fifths", promise: "derive the circle from repeated 3:2 moves" },
-];
-
-const SONORITY_SETS = [
-  { label: "Compact aligned field", offsets: [0, 4, 7], relation: "near 4:5:6", possibility: "may support fusion or arrival" },
-  { label: "Lowered-middle field", offsets: [0, 3, 7], relation: "near 10:12:15", possibility: "may support weight, warmth, or shadow in familiar styles" },
-  { label: "Held-open field", offsets: [0, 5, 7], relation: "two linked spans", possibility: "may invite motion when a style makes one likely" },
-  { label: "Close cluster", offsets: [0, 1, 2], relation: "adjacent keyboard steps", possibility: "may support pressure, bite, or dense color" },
-] as const;
+type FrameMode = "discover" | "locked";
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const VISIBLE_NOTES = Array.from({ length: 25 }, (_, index) => 48 + index);
 const WHITE_NOTES = VISIBLE_NOTES.filter((note) => WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note)));
+const DEFAULT_SCALE = PIANO_SCALES[0];
+const FIFTHS_ORDER = fifthsCircle();
+const EVENT_X = (slot: number) => 84 + slot * 88;
 
 function formatHz(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
 }
 
-function useMidiKeyboard(onNoteOn: (note: number) => void, onNotesChange: (notes: Map<number, number>) => void) {
+function uniqueSorted(notes: number[]) {
+  return [...new Set(notes.map(Math.round))].sort((first, second) => first - second);
+}
+
+function relativeSyllable(note: number, doMidi: number, scale: PianoScale) {
+  return noteContext(note, doMidi, scale).syllable;
+}
+
+function candidateKey(candidate: ScaleCandidate | null) {
+  return candidate ? `${candidate.rootPitchClass}:${candidate.scale.id}` : "";
+}
+
+function useMidiKeyboard(onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[]) => void) {
   const accessRef = useRef<MidiAccessLike | null>(null);
   const pressedRef = useRef(new Set<number>());
-  const sustainRef = useRef(false);
+  const sustainedRef = useRef(new Set<number>());
+  const sustainDownRef = useRef(false);
   const notesRef = useRef(new Map<number, number>());
-  const onNoteOnRef = useRef(onNoteOn);
-  const onNotesChangeRef = useRef(onNotesChange);
+  const onAttackRef = useRef(onAttack);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [inputs, setInputs] = useState<MidiInputLike[]>([]);
   const [selectedInputId, setSelectedInputId] = useState("");
   const [notes, setNotes] = useState<Map<number, number>>(new Map());
-  const [status, setStatus] = useState("Connect a MIDI keyboard, or use the on-screen keys.");
+  const [pressed, setPressed] = useState<Set<number>>(new Set());
+  const [sustained, setSustained] = useState<Set<number>>(new Set());
+  const [status, setStatus] = useState("Connect a MIDI keyboard, or use the silent on-screen keys.");
 
-  useEffect(() => {
-    onNoteOnRef.current = onNoteOn;
-    onNotesChangeRef.current = onNotesChange;
-  }, [onNoteOn, onNotesChange]);
+  useEffect(() => { onAttackRef.current = onAttack; }, [onAttack]);
+
+  const publish = useCallback(() => {
+    setNotes(new Map(notesRef.current));
+    setPressed(new Set(pressedRef.current));
+    setSustained(new Set(sustainedRef.current));
+  }, []);
+
+  const clear = useCallback(() => {
+    pressedRef.current.clear();
+    sustainedRef.current.clear();
+    sustainDownRef.current = false;
+    notesRef.current.clear();
+    publish();
+  }, [publish]);
 
   const refreshInputs = useCallback((access: MidiAccessLike) => {
     const next = Array.from(access.inputs.values()).filter((input) => input.state !== "disconnected");
     setInputs(next);
     setSelectedInputId((current) => next.some((input) => input.id === current) ? current : next[0]?.id ?? "");
-    setStatus(next.length > 0 ? `${next.length} MIDI input${next.length === 1 ? "" : "s"} available.` : "Permission granted, but no MIDI input is visible yet.");
+    setStatus(next.length ? `${next.length} MIDI input${next.length === 1 ? "" : "s"} available.` : "Permission is ready; connect or power on a MIDI keyboard.");
   }, []);
 
   const connect = useCallback(async () => {
     const request = (navigator as NavigatorWithMidi).requestMIDIAccess;
     if (!request) {
       setSupported(false);
-      setStatus("This browser does not expose MIDI input. The on-screen piano still works.");
+      setStatus("This browser does not expose MIDI input. The silent on-screen keys still work.");
       return;
     }
     setStatus("Waiting for MIDI permission…");
     try {
       const access = await request.call(navigator, { sysex: false });
       accessRef.current = access;
+      setSupported(true);
       refreshInputs(access);
       access.onstatechange = () => refreshInputs(access);
     } catch {
-      setStatus("MIDI permission was not granted. You can retry or use the on-screen piano.");
+      setStatus("MIDI permission was not granted. Retry, or use the silent on-screen keys.");
     }
   }, [refreshInputs]);
 
-  const clear = useCallback(() => {
-    pressedRef.current.clear();
-    sustainRef.current = false;
-    notesRef.current = new Map();
-    setNotes(notesRef.current);
-  }, []);
-
   useEffect(() => {
-    const access = accessRef.current;
-    const input = access?.inputs.get(selectedInputId);
+    const input = accessRef.current?.inputs.get(selectedInputId);
     if (!input) return;
     clear();
-    setStatus(`Listening to ${input.name || "MIDI input"}. Press a key to place it in every view.`);
+    setStatus(`Visualizing ${input.name || "MIDI input"}. No sound is generated or recorded.`);
     input.onmidimessage = (event) => {
       const message = parseMidiMessage(event.data);
       if (message.type === "note-on") {
         pressedRef.current.add(message.note);
-        const next = new Map(notesRef.current);
-        next.set(message.note, message.velocity);
-        notesRef.current = next;
-        setNotes(next);
-        onNoteOnRef.current(message.note);
-        onNotesChangeRef.current(next);
+        sustainedRef.current.delete(message.note);
+        notesRef.current.set(message.note, message.velocity);
+        publish();
+        onAttackRef.current(message.note, message.velocity, message.channel, uniqueSorted(Array.from(notesRef.current.keys())));
       } else if (message.type === "note-off") {
         pressedRef.current.delete(message.note);
-        if (!sustainRef.current) {
-          const next = new Map(notesRef.current);
-          next.delete(message.note);
-          notesRef.current = next;
-          setNotes(next);
-          onNotesChangeRef.current(next);
-        }
+        if (sustainDownRef.current) sustainedRef.current.add(message.note);
+        else notesRef.current.delete(message.note);
+        publish();
       } else if (message.type === "sustain") {
-        sustainRef.current = message.down;
+        sustainDownRef.current = message.down;
         if (!message.down) {
-          const next = new Map(Array.from(notesRef.current.entries()).filter(([note]) => pressedRef.current.has(note)));
-          notesRef.current = next;
-          setNotes(next);
-          onNotesChangeRef.current(next);
+          sustainedRef.current.forEach((note) => {
+            if (!pressedRef.current.has(note)) notesRef.current.delete(note);
+          });
+          sustainedRef.current.clear();
         }
+        publish();
       }
     };
-    return () => {
-      input.onmidimessage = null;
-    };
-  }, [clear, selectedInputId]);
+    return () => { input.onmidimessage = null; };
+  }, [clear, publish, selectedInputId]);
 
-  useEffect(() => () => {
-    if (accessRef.current) accessRef.current.onstatechange = null;
-  }, []);
+  useEffect(() => () => { if (accessRef.current) accessRef.current.onstatechange = null; }, []);
 
-  return { clear, connect, inputs, notes, selectedInputId, setSelectedInputId, status, supported };
+  return { clear, connect, inputs, notes, pressed, selectedInputId, setSelectedInputId, status, supported, sustained };
 }
 
-function EvidenceMeter({ label, value, note }: { label: string; value: number | null; note: string }) {
-  const percent = value == null ? 0 : Math.round(value * 100);
+function diatonicIndex(note: number) {
+  const letterByPitchClass = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+  return (Math.floor(note / 12) - 1) * 7 + letterByPitchClass[pitchClassFromMidi(note)];
+}
+
+function staffY(note: number) {
+  const index = diatonicIndex(note);
+  return note >= 60 ? 88 - (index - 30) * 6 : 186 - (index - 18) * 6;
+}
+
+function ledgerLines(note: number) {
+  const y = staffY(note);
+  const lines: number[] = [];
+  const limits = note >= 60 ? { top: 40, bottom: 88 } : { top: 138, bottom: 186 };
+  if (y < limits.top) for (let line = limits.top - 12; line >= y - 1; line -= 12) lines.push(line);
+  if (y > limits.bottom) for (let line = limits.bottom + 12; line <= y + 1; line += 12) lines.push(line);
+  return lines;
+}
+
+function StaffView({ events, doMidi, scale, focusedId, showConventions }: {
+  events: HudNoteEvent[]; doMidi: number; scale: PianoScale; focusedId: number | null; showConventions: boolean;
+}) {
   return (
-    <article className="piano-evidence-meter">
-      <div><span>{label}</span><strong>{value == null ? "—" : `${percent}%`}</strong></div>
-      <i role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value == null ? undefined : percent}><b style={{ width: `${percent}%` }} /></i>
-      <p>{note}</p>
-    </article>
+    <div className="hud-plot hud-staff-plot">
+      <div className="hud-panel-heading"><span>Last seven attacks</span><strong>Grand staff</strong><small>Onset order is measured; note lengths are not inferred.</small></div>
+      <svg viewBox="0 0 720 224" role="img" aria-label={events.length ? `Grand staff showing ${events.map((event) => relativeSyllable(event.note, doMidi, scale)).join(", ")}` : "Empty grand staff waiting for note attacks"}>
+        <title>Last seven note attacks on a grand staff</title>
+        {[40, 52, 64, 76, 88, 138, 150, 162, 174, 186].map((y) => <line key={y} x1="52" x2="700" y1={y} y2={y} className="hud-grid-line" />)}
+        <text x="14" y="82" className="hud-clef">𝄞</text><text x="18" y="178" className="hud-clef hud-bass-clef">𝄢</text>
+        {events.map((event, slot) => {
+          const x = EVENT_X(slot);
+          const y = staffY(event.note);
+          const context = noteContext(event.note, doMidi, scale);
+          const black = !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(event.note));
+          return <g key={event.id} className={event.id === focusedId ? "is-focused" : ""}>
+            {ledgerLines(event.note).map((lineY) => <line key={lineY} x1={x - 12} x2={x + 12} y1={lineY} y2={lineY} className="hud-ledger-line" />)}
+            <ellipse cx={x} cy={y} rx="9" ry="6" className="hud-note-head" transform={`rotate(-14 ${x} ${y})`} />
+            <line x1={x + 8} x2={x + 8} y1={y} y2={y - 31} className="hud-note-stem" />
+            {black ? <text x={x - 18} y={y + 5} className="hud-accidental">♯</text> : null}
+            <text x={x} y="214" className="hud-event-label">{slot + 1} · {showConventions ? conventionalPitchName(event.note) : context.syllable}</text>
+          </g>;
+        })}
+        {!events.length ? <text x="376" y="116" className="hud-empty-label">Play a key to begin the shared seven-event trace</text> : null}
+      </svg>
+    </div>
   );
 }
 
-function tracePoints(points: AnalysisPoint[], key: "crunch" | "pull" | "arrival") {
-  if (points.length === 0) return "";
-  return points.map((point, index) => {
-    const x = points.length === 1 ? 320 : 42 + (index / (points.length - 1)) * 574;
-    const y = 138 - point[key] * 108;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
+function FrequencyView({ events, doMidi, scale, focusedId, showConventions }: {
+  events: HudNoteEvent[]; doMidi: number; scale: PianoScale; focusedId: number | null; showConventions: boolean;
+}) {
+  const notes = events.map((event) => event.note);
+  const minimum = notes.length ? Math.min(...notes, doMidi) : doMidi - 12;
+  const maximum = notes.length ? Math.max(...notes, doMidi) : doMidi + 12;
+  const center = (minimum + maximum) / 2;
+  const range = Math.max(24, maximum - minimum + 6);
+  const low = center - range / 2;
+  const high = center + range / 2;
+  const yFor = (note: number) => 132 - ((note - low) / (high - low)) * 104;
+  const points = events.map((event, slot) => `${EVENT_X(slot)},${yFor(event.note)}`).join(" ");
+  return (
+    <div className="hud-plot hud-frequency-plot">
+      <div className="hud-panel-heading"><span>Same attacks</span><strong>Log-frequency height</strong><small>Equal vertical steps mean equal frequency ratios.</small></div>
+      <svg viewBox="0 0 720 162" role="img" aria-label={events.length ? `Frequency trace from ${formatHz(frequencyFromMidi(events[0].note))} to ${formatHz(frequencyFromMidi(events.at(-1)!.note))}` : "Empty frequency trace"}>
+        <title>Frequency trace aligned to the grand staff</title>
+        {[0, 1, 2, 3, 4].map((tick) => { const note = low + (tick / 4) * (high - low); return <g key={tick}><line x1="52" x2="700" y1={yFor(note)} y2={yFor(note)} className="hud-grid-line" /><text x="7" y={yFor(note) + 4} className="hud-axis-label">{Math.round(frequencyFromMidi(note))}</text></g>; })}
+        <text x="7" y="14" className="hud-axis-unit">Hz</text>
+        {points ? <polyline points={points} className="hud-frequency-line" /> : null}
+        {events.map((event, slot) => {
+          const context = noteContext(event.note, doMidi, scale);
+          const landmark = intervalLandmark(event.note - doMidi);
+          return <g key={event.id} className={event.id === focusedId ? "is-focused" : ""}>
+            <circle cx={EVENT_X(slot)} cy={yFor(event.note)} r="6" className="hud-frequency-dot" />
+            <text x={EVENT_X(slot)} y={Math.max(14, yFor(event.note) - 10)} className="hud-point-label">{showConventions ? conventionalPitchName(event.note) : context.syllable}</text>
+            <text x={EVENT_X(slot)} y="153" className="hud-event-label">{event.note === doMidi ? "1:1" : landmark.landmarkLabel}</text>
+          </g>;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function FifthsCompass({ events, activeNotes, doMidi, scale, focusedNote, showConventions }: {
+  events: HudNoteEvent[]; activeNotes: number[]; doMidi: number; scale: PianoScale; focusedNote: number | null; showConventions: boolean;
+}) {
+  const visits = new Map<number, number[]>();
+  events.forEach((event, index) => {
+    const step = fifthStepForPitchClass(pitchClassFromMidi(event.note));
+    visits.set(step, [...(visits.get(step) ?? []), index + 1]);
+  });
+  const activeSteps = new Set(activeNotes.map((note) => fifthStepForPitchClass(pitchClassFromMidi(note))));
+  const focusedStep = focusedNote == null ? -1 : fifthStepForPitchClass(pitchClassFromMidi(focusedNote));
+  const doStep = fifthStepForPitchClass(pitchClassFromMidi(doMidi));
+  return (
+    <div className="hud-circle-panel">
+      <div className="hud-panel-heading"><span>Absolute pitch geography</span><strong>Fifths compass</strong><small>Clockwise neighbors differ by the near-3:2 relation.</small></div>
+      <div className="hud-fifths-circle" role="img" aria-label="Circle of fifths with the last seven event numbers and current active notes">
+        <div className="hud-fifths-center"><span>current frame</span><strong>Do</strong><small>{showConventions ? CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi)] : scale.name.replace(" route", "")}</small></div>
+        {FIFTHS_ORDER.nodes.map((node) => {
+          const absolutePc = node.pitchClass;
+          const relative = CHROMATIC_SOLFEGE[pitchClassFromMidi(absolutePc - pitchClassFromMidi(doMidi))];
+          const eventVisits = visits.get(node.step) ?? [];
+          const className = ["hud-fifth-node", node.step === doStep ? "is-home" : "", activeSteps.has(node.step) ? "is-active" : "", node.step === focusedStep ? "is-focused" : ""].filter(Boolean).join(" ");
+          return <div key={node.step} className={className} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties}>
+            <strong>{showConventions ? CONVENTIONAL_PITCH_CLASSES[absolutePc] : relative}</strong>
+            <span>{eventVisits.length ? eventVisits.join("·") : "·"}</span>
+          </div>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ScaleLens({ events, snapshots, frame, doMidi, showConventions, onAdopt }: {
+  events: HudNoteEvent[];
+  snapshots: ReturnType<typeof scaleFrameTimeline>;
+  frame: ScaleCandidate;
+  doMidi: number;
+  showConventions: boolean;
+  onAdopt: (candidate: ScaleCandidate) => void;
+}) {
+  const latest = snapshots.at(-1);
+  const positions = new Set(scaleSemitones(frame.scale));
+  const observed = new Set(events.map((event) => pitchClassFromMidi(event.note - doMidi)));
+  const compatibleCount = [...observed].filter((position) => positions.has(position)).length;
+  const candidates = latest ? [latest.leading, ...latest.runnersUp].filter((candidate): candidate is ScaleCandidate => Boolean(candidate)) : [];
+  return (
+    <div className="hud-scale-panel">
+      <div className="hud-panel-heading"><span>Changing hypothesis</span><strong>Scale lens</strong><small>{latest?.evidenceLabel ?? "no evidence"} · compatibility, not certainty</small></div>
+      <div className="hud-scale-current">
+        <span>{showConventions ? `Do = ${CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi)]}` : "movable Do"}</span>
+        <strong>{showConventions ? frame.scale.conventionalName : frame.scale.name}</strong>
+        <small>{observed.size ? `${compatibleCount}/${observed.size} observed positions fit this route` : "Play four distinct positions before automatic reframing."}</small>
+      </div>
+      <div className="hud-scale-rail" role="img" aria-label="Twelve equal key positions showing scale membership and observed positions">
+        {Array.from({ length: 12 }, (_, position) => {
+          const inScale = positions.has(position);
+          const seen = observed.has(position);
+          const context = noteContext(doMidi + position, doMidi, frame.scale);
+          return <div key={position} className={`${inScale ? "is-in-scale" : ""} ${seen ? "is-seen" : ""}`}><span>{showConventions ? CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi + position)] : inScale ? context.syllable : "·"}</span><i>{seen ? "seen" : inScale ? "route" : ""}</i></div>;
+        })}
+      </div>
+      <ol className="hud-frame-candidates" aria-label="Compatible scale frames">
+        {candidates.slice(0, 3).map((candidate, index) => <li key={candidateKey(candidate)}>
+          <button type="button" onClick={() => onAdopt(candidate)} aria-label={`Lock ${candidate.scale.name} with ${CONVENTIONAL_PITCH_CLASSES[candidate.rootPitchClass]} as Do`}>
+            <span>{index === 0 ? "leading" : "also fits"}</span>
+            <strong>{showConventions ? `${CONVENTIONAL_PITCH_CLASSES[candidate.rootPitchClass]} · ${candidate.scale.conventionalName}` : `${CHROMATIC_SOLFEGE[pitchClassFromMidi(candidate.rootPitchClass - pitchClassFromMidi(doMidi))]} as Do · ${candidate.scale.name}`}</strong>
+            <small>{candidate.inScaleCount}/{candidate.uniqueNoteCount} observed inside</small>
+          </button>
+        </li>)}
+        {!candidates.length ? <li className="hud-empty-copy">Candidate frames appear as you play.</li> : null}
+      </ol>
+      <div className="hud-frame-history" aria-label="Frame stability across the seven events">
+        {events.map((event, index) => <span key={event.id} className={snapshots[index]?.changed ? "is-change" : ""}>{index + 1}<i>{snapshots[index]?.changed ? "frame" : "·"}</i></span>)}
+      </div>
+    </div>
+  );
+}
+
+function chordLabel(candidate: ChordCandidate, doMidi: number, showConventions: boolean) {
+  const root = showConventions ? CONVENTIONAL_PITCH_CLASSES[candidate.rootPitchClass] : CHROMATIC_SOLFEGE[pitchClassFromMidi(candidate.rootPitchClass - pitchClassFromMidi(doMidi))];
+  if (showConventions) return `${root}${candidate.template.symbol || ""}`;
+  return `${root} · ${candidate.template.name}`;
+}
+
+function RelationshipTexture({ notes, doMidi, scale, showConventions }: { notes: number[]; doMidi: number; scale: PianoScale; showConventions: boolean }) {
+  const unique = uniqueSorted(notes);
+  const pairs = pairwiseIntervals(unique);
+  const xFor = (note: number) => unique.length <= 1 ? 180 : 46 + (unique.indexOf(note) / (unique.length - 1)) * 268;
+  const pairScore = (semitones: number) => {
+    const distance = intervalLandmark(semitones);
+    return Math.max(0.15, 1 - Math.min(1, Math.abs(distance.errorCents) / 35));
+  };
+  return (
+    <div className="hud-texture-panel">
+      <div className="hud-panel-heading"><span>Inside the held field</span><strong>Interval texture</strong><small>Thicker arcs sit nearer simple ratio landmarks.</small></div>
+      <svg viewBox="0 0 360 168" role="img" aria-label={pairs.length ? `${pairs.length} pairwise interval relationships` : "Interval texture needs two simultaneous notes"}>
+        <title>Pairwise interval texture</title>
+        {pairs.map((pair) => {
+          const x1 = xFor(pair.lower); const x2 = xFor(pair.upper); const peak = 126 - Math.min(90, (x2 - x1) * 0.38);
+          return <path key={`${pair.lower}-${pair.upper}`} d={`M ${x1} 126 Q ${(x1 + x2) / 2} ${peak} ${x2} 126`} className="hud-texture-arc" style={{ "--arc-strength": pairScore(pair.upper - pair.lower) } as CSSProperties}><title>{pair.distance.relationship}, {pair.distance.cents} cents</title></path>;
+        })}
+        {unique.map((note) => <g key={note}><circle cx={xFor(note)} cy="126" r="9" className="hud-texture-node" /><text x={xFor(note)} y="151" className="hud-point-label">{showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale)}</text></g>)}
+        {unique.length < 2 ? <text x="180" y="78" className="hud-empty-label">Hold two notes to expose their interval</text> : null}
+      </svg>
+    </div>
+  );
+}
+
+function EvidenceTrace({ measures }: { measures: EventMeasure[] }) {
+  const series: Array<{ key: keyof Pick<EventMeasure, "crunch" | "pull" | "arrival" | "novelty" | "motion">; label: string; className: string }> = [
+    { key: "crunch", label: "crunch", className: "is-crunch" },
+    { key: "pull", label: "pull", className: "is-pull" },
+    { key: "arrival", label: "arrival", className: "is-arrival" },
+    { key: "novelty", label: "pitch novelty", className: "is-novelty" },
+    { key: "motion", label: "voice motion", className: "is-motion" },
+  ];
+  const pathFor = (key: typeof series[number]["key"]) => measures.map((measure, slot) => {
+    const value = measure[key];
+    return value == null ? null : `${EVENT_X(slot)},${128 - value * 96}`;
+  });
+  return (
+    <div className="hud-evidence-panel">
+      <div className="hud-panel-heading"><span>Separate evidence, shared time</span><strong>Perceptual motion</strong><small>No overall goodness score: each trace answers a different question.</small></div>
+      <div className="hud-trace-legend" aria-hidden="true">{series.map((item) => <span key={item.key} className={item.className}>{item.label}</span>)}</div>
+      <svg viewBox="0 0 720 156" role="img" aria-label={measures.length ? `Evidence traces across ${measures.length} note attacks` : "Empty evidence trace"}>
+        <title>Crunch, tonal pull, arrival evidence, melodic leap, and voice motion</title>
+        {[32, 80, 128].map((y, index) => <g key={y}><line x1="52" x2="700" y1={y} y2={y} className="hud-grid-line" /><text x="11" y={y + 4} className="hud-axis-label">{["more", "mid", "less"][index]}</text></g>)}
+        {series.map((item) => {
+          const points = pathFor(item.key);
+          const chunks: string[] = []; let current: string[] = [];
+          points.forEach((point) => { if (point) current.push(point); else if (current.length) { chunks.push(current.join(" ")); current = []; } });
+          if (current.length) chunks.push(current.join(" "));
+          return <g key={item.key} className={`hud-trace-series ${item.className}`}>{chunks.map((pointsChunk, index) => <polyline key={index} points={pointsChunk} />)}{points.map((point, index) => point ? <circle key={index} cx={Number(point.split(",")[0])} cy={Number(point.split(",")[1])} r="3.5" /> : null)}</g>;
+        })}
+        {measures.map((measure, slot) => <text key={measure.event.id} x={EVENT_X(slot)} y="151" className="hud-event-label">{slot + 1}</text>)}
+      </svg>
+    </div>
+  );
+}
+
+function nearbyLabel(chord: NearbyChord, doMidi: number, showConventions: boolean) {
+  if (chord.candidate) return chordLabel(chord.candidate, doMidi, showConventions);
+  return showConventions ? CONVENTIONAL_PITCH_CLASSES[chord.rootPitchClass] : chord.syllable;
 }
 
 export function PianoLab() {
-  const [stage, setStage] = useState<PianoStage>("map");
-  const [scaleId, setScaleId] = useState<ScaleId>("bright-seven");
-  const [doMidi, setDoMidi] = useState(60);
-  const [showConventions, setShowConventions] = useState(false);
+  const [events, setEvents] = useState<HudNoteEvent[]>([]);
+  const [focusedId, setFocusedId] = useState<number | null>(null);
   const [latchedNotes, setLatchedNotes] = useState<Map<number, number>>(new Map());
-  const [newestNote, setNewestNote] = useState(60);
-  const [practiceIndex, setPracticeIndex] = useState(0);
-  const [playedHistory, setPlayedHistory] = useState<number[]>([]);
-  const [analysisTrail, setAnalysisTrail] = useState<AnalysisPoint[]>([]);
-  const [fifthStep, setFifthStep] = useState(1);
-  const practiceBaseRef = useRef<number | null>(null);
+  const [showConventions, setShowConventions] = useState(false);
+  const [frozen, setFrozen] = useState(false);
+  const [frameMode, setFrameMode] = useState<FrameMode>("discover");
+  const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
+  const [lockedDoMidi, setLockedDoMidi] = useState(60);
+  const nextIdRef = useRef(1);
+  const frozenRef = useRef(false);
+  const eventsRef = useRef<HudNoteEvent[]>([]);
+  const [rememberedFrame, setRememberedFrame] = useState<ScaleCandidate | null>(null);
 
-  const scale = PIANO_SCALES.find((item) => item.id === scaleId) ?? PIANO_SCALES[0];
-  const scalePositions = useMemo(() => scaleSemitones(scale), [scale]);
-  const practicePattern = useMemo(() => [...scalePositions, 12], [scalePositions]);
+  useEffect(() => { frozenRef.current = frozen; }, [frozen]);
 
-  const recordField = useCallback((field: Map<number, number>) => {
-    const noteNumbers = Array.from(field.keys()).sort((first, second) => first - second);
-    if (noteNumbers.length === 0) return;
-    const model = sonorityPerceptionModel(noteNumbers.map((note) => ({
-      frequencyHz: frequencyFromMidi(note),
-      amplitude: Math.max(0.12, (field.get(note) ?? 96) / 127),
-      partialCount: 9,
-    })));
-    const tonal = tonalTendency(noteNumbers, doMidi, scale);
-    const arrival = model.repose * 0.55 + tonal.homeEvidence * 0.45;
-    const signature = noteNumbers.map((note) => `${note}:${field.get(note) ?? 0}`).join("|");
-    const label = noteNumbers.map((note) => noteContext(note, doMidi, scale).syllable).join(" + ");
-    setAnalysisTrail((current) => {
-      if (current.at(-1)?.signature === signature) return current;
-      return [...current, {
-        index: (current.at(-1)?.index ?? 0) + 1,
-        signature,
-        label,
-        crunch: model.roughness,
-        pull: tonal.homePull,
-        arrival,
-      }].slice(-12);
-    });
-  }, [doMidi, scale]);
+  const addEvent = useCallback((note: number, velocity: number, channel: number, source: HudNoteEvent["source"], fieldNotes: number[]) => {
+    if (frozenRef.current) return;
+    const event: HudNoteEvent = { id: nextIdRef.current, note, velocity, channel, source, onsetMs: performance.now(), fieldNotes: uniqueSorted(fieldNotes) };
+    nextIdRef.current += 1;
+    const nextEvents = pushRollingNoteEvent(eventsRef.current, event, 7);
+    eventsRef.current = nextEvents;
+    setEvents(nextEvents);
+    const nextStable = scaleFrameTimeline(nextEvents.map((item) => item.note)).at(-1)?.stable;
+    if (nextStable) setRememberedFrame(nextStable);
+    setFocusedId(event.id);
+  }, []);
 
-  const registerPlayedNote = useCallback((note: number) => {
-    setNewestNote(note);
-    setPlayedHistory((current) => [...current, note].slice(-10));
-    setFifthStep(fifthStepForPitchClass(pitchClassFromMidi(note - doMidi)));
-    setPracticeIndex((current) => {
-      const isDo = pitchClassFromMidi(note) === pitchClassFromMidi(doMidi);
-      if (current === 0 || current >= practicePattern.length || practiceBaseRef.current == null) {
-        if (!isDo) {
-          practiceBaseRef.current = null;
-          return 0;
-        }
-        practiceBaseRef.current = note;
-        return 1;
-      }
-      const offset = note - practiceBaseRef.current;
-      if (offset === practicePattern[current]) return Math.min(practicePattern.length, current + 1);
-      if (isDo) {
-        practiceBaseRef.current = note;
-        return 1;
-      }
-      practiceBaseRef.current = null;
-      return 0;
-    });
-  }, [doMidi, practicePattern]);
+  const midiAttack = useCallback((note: number, velocity: number, channel: number, midiField: number[]) => {
+    const combined = new Set([...latchedNotes.keys(), ...midiField]);
+    addEvent(note, velocity, channel, "midi", Array.from(combined));
+  }, [addEvent, latchedNotes]);
+  const midi = useMidiKeyboard(midiAttack);
 
-  const registerMidiField = useCallback((midiField: Map<number, number>) => {
-    const combined = new Map(latchedNotes);
-    midiField.forEach((velocity, note) => combined.set(note, velocity));
-    recordField(combined);
-  }, [latchedNotes, recordField]);
-  const midi = useMidiKeyboard(registerPlayedNote, registerMidiField);
-  const activeNotes = useMemo(() => {
+  const snapshots = useMemo(() => scaleFrameTimeline(events.map((event) => event.note)), [events]);
+  const latestSnapshot = snapshots.at(-1);
+  const discovered = latestSnapshot?.stable ?? rememberedFrame;
+  const lockedScale = PIANO_SCALES.find((scale) => scale.id === lockedScaleId) ?? DEFAULT_SCALE;
+  const frame: ScaleCandidate = frameMode === "locked"
+    ? { scale: lockedScale, rootPitchClass: pitchClassFromMidi(lockedDoMidi), uniqueNoteCount: 0, inScaleCount: 0, routeCoveredCount: 0, matchFraction: 0, coverageFraction: 0, homePresent: false, fit: 0 }
+    : discovered ?? { scale: DEFAULT_SCALE, rootPitchClass: 0, uniqueNoteCount: 0, inScaleCount: 0, routeCoveredCount: 0, matchFraction: 0, coverageFraction: 0, homePresent: false, fit: 0 };
+  const doMidi = nearestMidiForPitchClass(frame.rootPitchClass, 60);
+  const scale = frame.scale;
+
+  const activeNotesMap = useMemo(() => {
     const combined = new Map(latchedNotes);
     midi.notes.forEach((velocity, note) => combined.set(note, velocity));
     return combined;
   }, [latchedNotes, midi.notes]);
-  const activeNoteNumbers = useMemo(() => Array.from(activeNotes.keys()).sort((a, b) => a - b), [activeNotes]);
-  const focusNote = activeNotes.has(newestNote) || playedHistory.length > 0 ? newestNote : doMidi;
-  const focus = noteContext(focusNote, doMidi, scale);
-  const focusInterval = intervalLandmark(focus.rawStepsFromDo);
-  const coverage = useMemo(() => scaleCoverage(activeNoteNumbers, doMidi, scale), [activeNoteNumbers, doMidi, scale]);
-  const intervals = useMemo(() => pairwiseIntervals(activeNoteNumbers), [activeNoteNumbers]);
-  const perception = useMemo(() => sonorityPerceptionModel(activeNoteNumbers.map((note) => ({
-    frequencyHz: frequencyFromMidi(note),
-    amplitude: Math.max(0.12, (activeNotes.get(note) ?? 96) / 127),
-    partialCount: 9,
-  }))), [activeNoteNumbers, activeNotes]);
-  const tendency = useMemo(() => tonalTendency(activeNoteNumbers, doMidi, scale), [activeNoteNumbers, doMidi, scale]);
-  const arrivalEvidence = activeNoteNumbers.length > 0
-    ? perception.repose * 0.55 + tendency.homeEvidence * 0.45
-    : 0;
-  const activeSignature = activeNoteNumbers.map((note) => `${note}:${activeNotes.get(note) ?? 0}`).join("|");
-  const evidenceNotes = useMemo(() => [...playedHistory.slice(-10), ...activeNoteNumbers], [playedHistory, activeNoteNumbers]);
-  const scaleCandidates = useMemo(() => inferScaleCandidates(evidenceNotes, 4), [evidenceNotes]);
-  const circle = useMemo(() => fifthsCircle(), []);
-  const selectedFifth = circle.nodes[fifthStep];
-  const enoughForSonority = activeNoteNumbers.length >= 2;
-  const activeFifthSteps = useMemo(() => new Set(activeNoteNumbers.map((note) => (
-    fifthStepForPitchClass(pitchClassFromMidi(note - doMidi))
-  ))), [activeNoteNumbers, doMidi]);
+  const activeNoteNumbers = useMemo(() => uniqueSorted(Array.from(activeNotesMap.keys())), [activeNotesMap]);
+  const lastField = events.at(-1)?.fieldNotes ?? [];
+  const fieldNotes = activeNoteNumbers.length ? activeNoteNumbers : lastField;
+  const fieldIsLive = activeNoteNumbers.length > 0;
+  const fieldPitchClassCount = new Set(fieldNotes.map((note) => pitchClassFromMidi(note))).size;
+  const chordCandidates = useMemo(() => identifyChordCandidates(fieldNotes, 3), [fieldNotes]);
+  const nearby = useMemo(() => nearbyScaleChords(fieldNotes, doMidi, scale, 3), [fieldNotes, doMidi, scale]);
+  const focusedEvent = events.find((event) => event.id === focusedId) ?? events.at(-1) ?? null;
 
-  const currentRecorded = analysisTrail.at(-1)?.signature === activeSignature;
-  const previousPoint = currentRecorded ? analysisTrail.at(-2) : analysisTrail.at(-1);
-  const resolution = resolutionDirection(previousPoint?.arrival ?? null, arrivalEvidence);
+  const measures = useMemo<EventMeasure[]>(() => events.map((event, index) => {
+    const notes = uniqueSorted(event.fieldNotes);
+    const perception = notes.length >= 2 ? sonorityPerceptionModel(notes.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: Math.max(0.12, (note === event.note ? event.velocity : 88) / 127), partialCount: 9 }))) : null;
+    const tendency = tonalTendency(notes, doMidi, scale);
+    const previous = events[index - 1];
+    const interval = previous ? Math.abs(event.note - previous.note) : 0;
+    return {
+      event,
+      crunch: perception?.roughness ?? null,
+      pull: tendency.homePull,
+      arrival: (perception?.repose ?? 0.5) * 0.55 + tendency.homeEvidence * 0.45,
+      novelty: previous ? (events.slice(0, index).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? Math.min(0.35, interval / 36) : Math.min(1, 0.72 + interval / 48)) : 0,
+      motion: previous ? Math.min(1, interval / 7) : 0,
+    };
+  }), [doMidi, events, scale]);
 
-  const resetPractice = () => {
-    practiceBaseRef.current = null;
-    setPracticeIndex(0);
-    setPlayedHistory([]);
-  };
+  const currentMeasure = measures.at(-1);
+  const previousMeasure = measures.at(-2);
+  const resolution = currentMeasure ? resolutionDirection(previousMeasure?.arrival ?? null, currentMeasure.arrival) : null;
+  const latestInterval = events.length >= 2 ? intervalLandmark(events.at(-1)!.note - events.at(-2)!.note) : null;
 
-  const clearNotes = () => {
-    setLatchedNotes(new Map());
-    midi.clear();
-    setPlayedHistory([]);
-    setAnalysisTrail([]);
-  };
-
-  const chooseScale = (id: ScaleId) => {
-    setScaleId(id);
-    clearNotes();
-    resetPractice();
-  };
-
-  const makeDo = (note: number) => {
-    const visibleDo = nearestMidiForPitchClass(pitchClassFromMidi(note), 55);
-    setDoMidi(visibleDo);
-    setNewestNote(visibleDo);
-    setFifthStep(1);
-    clearNotes();
-    resetPractice();
-  };
-
-  const toggleKey = (note: number) => {
-    if (!latchedNotes.has(note)) registerPlayedNote(note);
+  const toggleScreenKey = (note: number) => {
     const next = new Map(latchedNotes);
     if (next.has(note)) next.delete(note);
-    else next.set(note, 104);
+    else {
+      next.set(note, 104);
+      const combined = new Set([...next.keys(), ...midi.notes.keys()]);
+      addEvent(note, 104, 0, "screen", Array.from(combined));
+    }
     setLatchedNotes(next);
-    const combined = new Map(next);
-    midi.notes.forEach((velocity, midiNote) => combined.set(midiNote, velocity));
-    recordField(combined);
   };
 
-  const loadSet = (offsets: readonly number[]) => {
-    const next = new Map<number, number>();
-    offsets.forEach((offset) => next.set(doMidi + offset, 100));
+  const clearAll = () => {
+    eventsRef.current = [];
+    setEvents([]);
+    setFocusedId(null);
+    setRememberedFrame(null);
+    setLatchedNotes(new Map());
+    midi.clear();
+  };
+
+  const lockCandidate = (candidate: ScaleCandidate) => {
+    setLockedScaleId(candidate.scale.id);
+    setLockedDoMidi(nearestMidiForPitchClass(candidate.rootPitchClass, 60));
+    setFrameMode("locked");
+  };
+
+  const toggleFrameMode = () => {
+    if (frameMode === "discover") {
+      setLockedScaleId(scale.id);
+      setLockedDoMidi(doMidi);
+      setFrameMode("locked");
+    } else setFrameMode("discover");
+  };
+
+  const placeNearbyChord = (chord: NearbyChord) => {
+    const center = fieldNotes.length ? fieldNotes.reduce((sum, note) => sum + note, 0) / fieldNotes.length : 60;
+    const notes = chord.pitchClasses.map((pitchClass) => nearestMidiForPitchClass(pitchClass, center)).sort((a, b) => a - b);
+    const next = new Map(notes.map((note) => [note, 96]));
     setLatchedNotes(next);
-    setNewestNote(doMidi + offsets[offsets.length - 1]);
-    offsets.forEach((offset) => registerPlayedNote(doMidi + offset));
-    const combined = new Map(next);
-    midi.notes.forEach((velocity, midiNote) => combined.set(midiNote, velocity));
-    recordField(combined);
+    notes.forEach((note) => addEvent(note, 96, 0, "screen", notes));
   };
 
-  const adoptScaleCandidate = (candidate: ScaleCandidate) => {
-    setScaleId(candidate.scale.id);
-    makeDo(nearestMidiForPitchClass(candidate.rootPitchClass, 55));
-  };
-
-  const setSelectedAsDo = () => {
-    const absolutePitchClass = (pitchClassFromMidi(doMidi) + selectedFifth.pitchClass) % 12;
-    makeDo(nearestMidiForPitchClass(absolutePitchClass, 55));
-  };
+  const newestInsight = focusedEvent ? (() => {
+    const context = noteContext(focusedEvent.note, doMidi, scale);
+    const fieldCandidate = fieldPitchClassCount <= 5 ? chordCandidates[0] : undefined;
+    const intervalCopy = latestInterval ? `${latestInterval.relationship} from the prior attack` : "the first attack in this trace";
+    const routeCopy = context.inScale ? `inside the current ${scale.name}` : `outside the current route`;
+    const motionCopy = resolution?.label ?? "building a baseline";
+    const chordCopy = fieldCandidate ? fieldCandidate.exact ? `The ${fieldIsLive ? "held" : "last"} field forms ${chordLabel(fieldCandidate, doMidi, showConventions)}.` : `The field may outline ${chordLabel(fieldCandidate, doMidi, showConventions)}; tones are missing or added.` : fieldPitchClassCount > 5 ? `The ${fieldPitchClassCount}-position field is scale-like, so no chord label is forced.` : "Hold another note to expose chord relationships.";
+    return `${showConventions ? conventionalPitchName(focusedEvent.note) : context.syllable} arrived as ${intervalCopy}, ${routeCopy}; modeled evidence is ${motionCopy}. ${chordCopy}`;
+  })() : "Play a MIDI or on-screen key. One note attack will appear in every view at once.";
 
   const renderKey = (note: number, black: boolean) => {
     const context = noteContext(note, doMidi, scale);
-    const active = activeNotes.has(note);
+    const active = activeNotesMap.has(note);
+    const pressed = midi.pressed.has(note);
+    const sustained = midi.sustained.has(note);
+    const focused = focusedEvent?.note === note;
     const home = context.stepsWithinOctave === 0;
-    const circleTarget = stage === "fifths" && context.stepsWithinOctave === selectedFifth.pitchClass;
-    const conventional = showConventions ? conventionalPitchName(note) : null;
-    const className = [
-      "piano-key",
-      black ? "is-black" : "is-white",
-      context.inScale ? "is-in-scale" : "",
-      active ? "is-active" : "",
-      home ? "is-home" : "",
-      circleTarget ? "is-circle-target" : "",
-    ].filter(Boolean).join(" ");
+    const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
-      "--key-left": black
-        ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%`
-        : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
+      "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
       "--key-width": `${100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
-    return (
-      <button
-        key={note}
-        type="button"
-        className={className}
-        style={style}
-        aria-pressed={active}
-        aria-label={`${context.syllable}, ${context.inScale ? "in the selected scale" : "outside the selected scale"}, ${formatHz(context.frequencyHz)}${conventional ? `, conventionally ${conventional}` : ""}`}
-        onClick={() => toggleKey(note)}
-      >
-        <span>{context.inScale || active || home ? context.syllable : "·"}</span>
-        {conventional ? <small>{conventional}</small> : null}
-      </button>
-    );
+    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
   };
 
+  const exactChord = chordCandidates.find((candidate) => candidate.exact);
+  const leadingChord = fieldPitchClassCount <= 5 ? exactChord ?? chordCandidates[0] : undefined;
+
   return (
-    <section className="advanced-lab piano-lab" aria-labelledby="piano-title">
-      <div className="piano-intro">
-        <div>
-          <p className="section-kicker">Piano companion · relationships translated onto keys</p>
-          <h2 id="piano-title">Let the keyboard reveal the map—not replace it.</h2>
-          <p>Choose Do, then every key becomes a distance, a movable syllable, and a possible role in a scale. MIDI and on-screen keys act only as analytical input: add notes to reveal intervals, candidate scales, fifths position, modeled crunch, and motion toward or away from repose.</p>
+    <section className="advanced-lab piano-lab piano-hud" aria-labelledby="piano-hud-title">
+      <header className="piano-hud-header">
+        <div><p className="section-kicker">Silent MIDI piano companion · one coordinated view</p><h2 id="piano-hud-title">See the musical relationships while your hands play.</h2><p>Each attack occupies the same numbered column across notation, frequency, scale, fifths, and perception. The keyboard sends data only: this page does not synthesize, route, or record audio, and nothing is uploaded.</p></div>
+        <div className="piano-hud-controls" aria-label="HUD controls">
+          <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{midi.status}</strong></div></div>
+          {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
+          <button type="button" aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{frozen ? "Resume trace" : "Freeze trace"}</button>
+          <button type="button" aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{frameMode === "locked" ? "Unlock Do" : "Lock Do"}</button>
+          <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>Theory names</span></label>
+          <button type="button" onClick={clearAll}>Clear</button>
         </div>
-        <aside>
-          <span>Keep the layers visible</span>
-          <strong>Key position → frequency relationship → hearing model → scale context → your response</strong>
-          <p>The first four can be visualized without generating or capturing sound. Whether the result is good, moving, or right for the moment remains a listener-and-context question.</p>
-        </aside>
+      </header>
+
+      <div className="piano-hud-statebar">
+        <span className={frameMode === "locked" ? "is-locked" : ""}>{frameMode === "locked" ? "Locked frame" : "Discovering frame"}</span>
+        <strong>Do · {formatHz(frequencyFromMidi(doMidi))}{showConventions ? ` · ${conventionalPitchName(doMidi)}` : ""}</strong>
+        <small>{latestSnapshot?.evidenceLabel ?? "Play four distinct positions before the frame can move."}</small>
+        <em>{frozen ? "Trace frozen; held keys still show below." : `${events.length}/7 attacks in view`}</em>
       </div>
 
-      <nav className="piano-stage-nav" aria-label="Piano companion stages">
-        {STAGES.map((item) => (
-          <button key={item.id} type="button" className={stage === item.id ? "is-selected" : ""} aria-current={stage === item.id ? "step" : undefined} onClick={() => setStage(item.id)}>
-            <span>{item.number}</span><strong>{item.title}</strong><small>{item.promise}</small>
-          </button>
-        ))}
-      </nav>
-
-      <div className="piano-context-bar">
-        <label htmlFor="piano-scale">
-          <span>Scale route from Do</span>
-          <select id="piano-scale" value={scaleId} onChange={(event) => chooseScale(event.target.value as ScaleId)}>
-            {PIANO_SCALES.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.steps.join(" · ")}</option>)}
-          </select>
-          <small>{showConventions ? scale.conventionalName : scale.character}</small>
-        </label>
-        <label className="piano-convention-toggle">
-          <input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} />
-          <span>Show note and theory names</span>
-          <small>Optional translation layer</small>
-        </label>
-        <div className="piano-home-readout">
-          <span>Current home</span><strong>Do · {formatHz(frequencyFromMidi(doMidi))}</strong>
-          <small>{showConventions ? conventionalPitchName(doMidi) : "movable, not fixed"}</small>
+      <div className="piano-hud-main">
+        <div className="hud-phrase-stack">
+          <StaffView events={events} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
+          <div className="hud-event-selector" aria-label="Select an event across every view">{events.map((event, index) => <button key={event.id} type="button" aria-pressed={focusedEvent?.id === event.id} onClick={() => setFocusedId(event.id)}><strong>{index + 1}</strong><span>{showConventions ? conventionalPitchName(event.note) : relativeSyllable(event.note, doMidi, scale)}</span><small>{index ? `${Math.round(event.onsetMs - events[index - 1].onsetMs)} ms` : "start"}</small></button>)}</div>
+          <FrequencyView events={events} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
+        </div>
+        <div className="hud-context-stack">
+          <FifthsCompass events={events} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
+          <ScaleLens events={events} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         </div>
       </div>
 
-      <div className="midi-connection" aria-label="Piano and MIDI controls">
-        <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI input</span><strong role="status" aria-live="polite">{midi.status}</strong></div></div>
-        {midi.inputs.length > 0 ? (
-          <label htmlFor="midi-input"><span>Input device</span><select id="midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label>
-        ) : (
-          <button type="button" onClick={() => void midi.connect()} disabled={midi.supported === false}>{midi.supported === false ? "MIDI unavailable here" : "Connect MIDI keyboard"}</button>
-        )}
-        <div className="midi-analysis-only"><strong>Visualization only</strong><span>No sound is generated or recorded.</span></div>
-        <button type="button" onClick={clearNotes} disabled={activeNoteNumbers.length === 0 && analysisTrail.length === 0}>Clear held notes + trace</button>
-        <details><summary>MIDI setup help</summary><p>The browser asks before reading your keyboard. Choose an input after permission. Note-on, note-off, velocity, and sustain pedal messages are analyzed locally; nothing is uploaded. This page does not synthesize, record, or route audio. If MIDI is unavailable, the on-screen keys provide the same analytical views.</p></details>
+      <div className="piano-hud-keyboard-wrap">
+        <div className="hud-panel-heading"><span>Hands and pedal</span><strong>Persistent keyboard field</strong><small>solid = held · ring = sustain · outlined = route · double mark = Do</small></div>
+        <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
       </div>
 
-      <div className="piano-instrument">
-        <div className="piano-instrument-heading">
-          <div><span>{stage === "map" ? "Press one key, then walk the route" : stage === "combine" ? "Hold notes together or click to latch them" : "The selected fifths target is outlined on the keys"}</span><strong>{activeNoteNumbers.length === 0 ? "No notes held" : `${activeNoteNumbers.length} note${activeNoteNumbers.length === 1 ? "" : "s"} held`}</strong></div>
-          <button type="button" onClick={() => makeDo(activeNoteNumbers[0] ?? newestNote)} disabled={activeNoteNumbers.length === 0 && playedHistory.length === 0}>Make {activeNoteNumbers.length ? "lowest active note" : "newest note"} Do</button>
-        </div>
-        <div className="piano-keyboard" role="group" aria-label="Two-octave on-screen piano; click keys to visualize, latch, and release notes without sound">
-          <div className="piano-keys">{VISIBLE_NOTES.map((note) => renderKey(note, !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))))}</div>
-        </div>
-        <div className="chromatic-degree-strip" role="img" aria-label={`Twelve equal keyboard steps from Do. Scale route: ${scale.solfege.join(", ")}. Active positions are marked.`}>
-          {CHROMATIC_SOLFEGE.map((syllable, step) => {
-            const degreeIndex = scalePositions.indexOf(step);
-            const active = activeNoteNumbers.some((note) => noteContext(note, doMidi, scale).stepsWithinOctave === step);
-            return <div key={syllable} className={`${degreeIndex >= 0 ? "is-in-scale" : ""} ${active ? "is-active" : ""}`}><span>{step}</span><strong>{degreeIndex >= 0 ? scale.solfege[degreeIndex] : syllable}</strong><small>{degreeIndex >= 0 ? `degree ${degreeIndex + 1}` : "between route"}</small></div>;
-          })}
-        </div>
+      <div className="piano-hud-analysis">
+        <section className="hud-chord-panel" aria-labelledby="hud-chord-title">
+          <div className="hud-panel-heading"><span>{fieldIsLive ? "Held now" : events.length ? "Last outlined field" : "Waiting for a field"}</span><strong id="hud-chord-title">Chord identity</strong><small>Duplicates and inversions are retained in the played register.</small></div>
+          {leadingChord ? <div className="hud-chord-result"><span>{leadingChord.exact ? "exact pitch-class match" : "possible outline"}</span><strong>{chordLabel(leadingChord, doMidi, showConventions)}</strong><small>{leadingChord.inversion > 0 ? `inversion ${leadingChord.inversion} · ` : ""}{leadingChord.missingPitchClasses.length ? `${leadingChord.missingPitchClasses.length} missing · ` : ""}{leadingChord.extraPitchClasses.length ? `${leadingChord.extraPitchClasses.length} added` : "no added tones"}</small></div> : fieldPitchClassCount > 5 ? <div className="hud-chord-result"><span>scale-like pitch field</span><strong>{fieldPitchClassCount} distinct positions</strong><small>Too many simultaneous positions for a useful chord-template label; inspect the interval texture and scale lens instead.</small></div> : <p className="hud-empty-copy">Hold two or more notes. The HUD will name exact matches separately from incomplete outlines.</p>}
+          <div className="hud-field-notes">{fieldNotes.map((note) => <span key={note}><strong>{relativeSyllable(note, doMidi, scale)}</strong><small>{showConventions ? conventionalPitchName(note) : formatHz(frequencyFromMidi(note))}</small></span>)}</div>
+        </section>
+
+        <section className="hud-nearby-panel" aria-labelledby="hud-nearby-title">
+          <div className="hud-panel-heading"><span>One economical next move</span><strong id="hud-nearby-title">Nearby scale chords</strong><small>Ranked by shared tones and changed pitch classes.</small></div>
+          <ol>{nearby.map((chord) => <li key={`${chord.rootPitchClass}-${chord.degreeIndex}`}><button type="button" onClick={() => placeNearbyChord(chord)}><span>{chord.syllable} · degree {chord.degreeIndex + 1}</span><strong>{nearbyLabel(chord, doMidi, showConventions)}</strong><small>{chord.instruction}</small></button></li>)}</ol>
+          {!nearby.length ? <p className="hud-empty-copy">Play a field to compare close, scale-derived chord moves.</p> : null}
+        </section>
+
+        <RelationshipTexture notes={fieldNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} />
       </div>
 
-      <section className="live-sonority piano-live-reading" aria-labelledby="piano-live-reading-title">
-        <div className="live-sonority-heading">
-          <div><span>Live analytical reading · {activeNoteNumbers.length} held</span><h3 id="piano-live-reading-title">What pattern is this field making available?</h3></div>
-          <p>MIDI supplies key number, velocity, release, and sustain—not audio. Spectral values use the same declared nine-partial teaching proxy as the earlier labs. No total “listenability” or quality score is computed.</p>
-        </div>
-        <div className="piano-evidence-grid">
-          <EvidenceMeter label="Common periodic fit" value={enoughForSonority ? perception.harmonicity : null} note="Higher modeled alignment may support fusion; it does not guarantee consonance or liking." />
-          <EvidenceMeter label="Modeled spectral crunch" value={enoughForSonority ? perception.roughness : null} note="Partial interference may support bite or crowding under the standardized spectrum proxy." />
-          <EvidenceMeter label="Pull toward selected Do" value={activeNoteNumbers.length ? tendency.homePull : null} note={`${tendency.directNeighborCount ? `${tendency.directNeighborCount} adjacent pitch${tendency.directNeighborCount === 1 ? " intensifies" : "es intensify"}` : "Step distance and fifth relation shape"} this transparent tonal-frame heuristic.`} />
-          <EvidenceMeter label="Repose / arrival evidence" value={activeNoteNumbers.length ? arrivalEvidence : null} note={activeNoteNumbers.length ? `${resolution.label}${resolution.delta == null ? "" : ` · ${resolution.delta >= 0 ? "+" : ""}${Math.round(resolution.delta * 100)} points`}` : "Play or place a field to establish the first point."} />
-        </div>
-        <div className="piano-analysis-body">
-          <div className="piano-analysis-trace">
-            <div><span>Recent held fields</span><strong>Descriptor trace—not a musical-goodness plot</strong><small>{analysisTrail.length ? `Latest: ${analysisTrail.at(-1)?.label}` : "Hold notes to begin the trace."}</small></div>
-            <svg viewBox="0 0 640 166" role="img" aria-label={analysisTrail.length ? `Recent modeled crunch, pull toward Do, and arrival evidence across ${analysisTrail.length} held-note states.` : "No held-note analysis states yet."}>
-              <line x1="42" y1="30" x2="616" y2="30" className="analysis-grid-line" />
-              <line x1="42" y1="84" x2="616" y2="84" className="analysis-grid-line" />
-              <line x1="42" y1="138" x2="616" y2="138" className="analysis-grid-line" />
-              <text x="5" y="34">100</text><text x="13" y="88">50</text><text x="21" y="142">0</text>
-              {analysisTrail.length ? <>
-                <polyline points={tracePoints(analysisTrail, "crunch")} className="analysis-line is-crunch" />
-                <polyline points={tracePoints(analysisTrail, "pull")} className="analysis-line is-pull" />
-                <polyline points={tracePoints(analysisTrail, "arrival")} className="analysis-line is-arrival" />
-              </> : null}
-            </svg>
-            <div className="analysis-legend" aria-hidden="true"><span className="is-crunch">crunch</span><span className="is-pull">pull to Do</span><span className="is-arrival">arrival evidence</span></div>
-          </div>
-          <div className="piano-scale-candidates">
-            <div><span>Scale + center finder</span><strong>{scaleCandidates.length ? "Several frames can fit the same notes." : "Play a short phrase or chord."}</strong><small>Ranked only by pitch-class membership, route coverage, and whether the candidate home appeared. More distinct notes make the comparison more informative.</small></div>
-            <ol>
-              {scaleCandidates.map((candidate) => {
-                const relativeRoot = CHROMATIC_SOLFEGE[pitchClassFromMidi(candidate.rootPitchClass - pitchClassFromMidi(doMidi))];
-                const conventionalRoot = CONVENTIONAL_PITCH_CLASSES[candidate.rootPitchClass];
-                return <li key={`${candidate.rootPitchClass}-${candidate.scale.id}`}><button type="button" onClick={() => adoptScaleCandidate(candidate)}><span>{Math.round(candidate.fit * 100)}% pattern fit</span><strong>Do = {relativeRoot}{showConventions ? ` (${conventionalRoot})` : ""} · {candidate.scale.name}</strong><small>{candidate.inScaleCount}/{candidate.uniqueNoteCount} observed positions inside · {candidate.routeCoveredCount}/{candidate.scale.solfege.length} route positions seen</small></button></li>;
-              })}
-            </ol>
-            <p>{scaleCandidates.length ? "Choose a candidate to re-center Do and load that route. A high fit means compatible, not proven." : "The finder deliberately waits for note evidence; it does not assume the selected route is what you meant."}</p>
-          </div>
-        </div>
-      </section>
+      <EvidenceTrace measures={measures} />
 
-      {stage === "map" ? (
-        <div className="piano-map-stage">
-          <section className="piano-note-inspector" aria-labelledby="piano-note-title">
-            <div><span>Newest pitch</span><h3 id="piano-note-title">{focus.syllable}{showConventions ? ` · ${conventionalPitchName(focus.note)}` : ""}</h3><p>{focus.inScale ? `${focus.syllable} is degree ${focus.degreeIndex + 1} in this route.` : `${focus.syllable} sits between the selected scale positions. It is still available for color, approach, or a different route.`}</p></div>
-            <dl>
-              <div><dt>physical frequency</dt><dd><strong>{formatHz(focus.frequencyHz)}</strong><span>changes when the route moves</span></dd></div>
-              <div><dt>distance from Do</dt><dd><strong>{focus.rawStepsFromDo === 0 ? "same pitch" : `${Math.abs(focus.centsFromDo)} cents ${focus.rawStepsFromDo > 0 ? "above" : "below"}`}</strong><span>{Math.abs(focus.rawStepsFromDo)} equal keyboard steps</span></dd></div>
-              <div><dt>frequency relation</dt><dd><strong>{focus.ratioToDo.toFixed(4)} × Do</strong><span>nearest landmark: {focusInterval.landmarkLabel}</span></dd></div>
-              <div><dt>interval language</dt><dd><strong>{focusInterval.relationship}</strong><span>{showConventions ? focusInterval.conventionalName : "physical description shown"}</span></dd></div>
-            </dl>
-          </section>
-
-          <section className="scale-walk" aria-labelledby="scale-walk-title">
-            <div className="scale-walk-heading"><span>Practice with feedback</span><h3 id="scale-walk-title">Walk from Do to upper Do.</h3><p>Play each movable syllable in order. The highlighted step follows your note-on events; octave placement matters for the final Do.</p></div>
-            <div className="scale-walk-steps" aria-label={`Practice progress ${practiceIndex} of ${practicePattern.length}`}>
-              {[...scale.solfege, "Do↑"].map((syllable, index) => <div key={`${syllable}-${index}`} className={`${index < practiceIndex ? "is-complete" : ""} ${index === practiceIndex ? "is-current" : ""}`}><span>{index + 1}</span><strong>{syllable}</strong><small>{index < scale.steps.length ? `${scale.steps[index]} ${scale.steps[index] === 1 ? "step" : "steps"} next` : "octave"}</small></div>)}
-            </div>
-            <p className="practice-feedback" role="status" aria-live="polite">{practiceIndex === practicePattern.length ? "Route complete. You kept the gap pattern while the keyboard supplied the physical pitches." : practiceIndex === 0 ? "Begin on Do. A different note restarts the path without penalty." : `${practiceIndex} of ${practicePattern.length} positions matched. Next: ${practiceIndex === scale.solfege.length ? "upper Do" : scale.solfege[practiceIndex]}.`}</p>
-            <button type="button" onClick={resetPractice}>Restart scale walk</button>
-          </section>
-
-          <div className="piano-gap-route">
-            <div><span>Physical fingerprint</span><strong>{scale.steps.join(" · ")}</strong><p>Each number counts equal keyboard steps. Their order—not the name of the starting key—is the scale shape.</p></div>
-            <ol>{scale.steps.map((step, index) => <li key={`${step}-${index}`} style={{ flexGrow: step }}><i /><span>{scale.solfege[index]} → {index === scale.solfege.length - 1 ? "Do" : scale.solfege[index + 1]}</span><strong>{step}</strong></li>)}</ol>
-          </div>
-        </div>
-      ) : stage === "combine" ? (
-        <div className="piano-combine-stage">
-          <section className="sonority-recipes" aria-labelledby="sonority-recipes-title">
-            <div><span>Controlled comparisons</span><h3 id="sonority-recipes-title">Change one interval inside the whole.</h3><p>These are analytical starting fields, not emotion buttons. Compare how each relationship changes the live evidence and trace; the page remains silent.</p></div>
-            <div>{SONORITY_SETS.map((set) => <button key={set.label} type="button" onClick={() => loadSet(set.offsets)}><strong>{set.label}</strong><span>{set.relation}</span><small>{set.possibility}</small></button>)}</div>
-          </section>
-
-          <section className="interval-network" aria-labelledby="interval-network-title">
-            <div><span>Every pair inside the chord</span><h3 id="interval-network-title">A chord is an interval network.</h3><p>{intervals.length === 0 ? "Add at least two notes to reveal the relationships between them." : `${intervals.length} pairwise relationship${intervals.length === 1 ? " is" : "s are"} active. The whole-field model above also includes how all partials combine.`}</p></div>
-            <div className="active-note-row">{activeNoteNumbers.map((note) => { const context = noteContext(note, doMidi, scale); return <span key={note}><strong>{context.syllable}</strong><small>{showConventions ? conventionalPitchName(note) : formatHz(context.frequencyHz)}</small></span>; })}</div>
-            <ol>{intervals.slice(0, 15).map((pair) => { const lower = noteContext(pair.lower, doMidi, scale); const upper = noteContext(pair.upper, doMidi, scale); return <li key={`${pair.lower}-${pair.upper}`}><span>{lower.syllable} → {upper.syllable}</span><strong>{pair.distance.cents}¢ · {pair.distance.relationship}</strong><small>equal keyboard {pair.distance.equalKeyboardRatio.toFixed(4)}:1 · landmark {pair.distance.landmarkLabel}{showConventions ? ` · ${pair.distance.conventionalName}` : ""}</small></li>; })}</ol>
-            {intervals.length > 15 ? <p>Showing the first 15 of {intervals.length} pairs. Release notes to inspect a smaller field.</p> : null}
-          </section>
-
-          <div className="piano-causal-chain">
-            <div><span>1 · physical</span><strong>{activeNoteNumbers.length ? activeNoteNumbers.map((note) => formatHz(frequencyFromMidi(note))).join(" · ") : "press or choose notes"}</strong><p>Frequencies, velocities, register, and overtone spectra.</p></div>
-            <i aria-hidden="true">→</i>
-            <div><span>2 · auditory proxy</span><strong>{enoughForSonority ? `${Math.round(perception.harmonicity * 100)}% periodic fit · ${Math.round(perception.roughness * 100)}% crunch` : "needs overlapping notes"}</strong><p>A standardized nine-partial model—not sound captured from your keyboard.</p></div>
-            <i aria-hidden="true">→</i>
-            <div><span>3 · scale context</span><strong>{activeNoteNumbers.length ? `${coverage.inScaleCount}/${coverage.noteCount} in route${coverage.hasHome ? " · Do present" : ""}` : "no active context"}</strong><p>Membership describes the chosen frame, not correctness.</p></div>
-            <i aria-hidden="true">→</i>
-            <div><span>4 · lived musicality</span><strong>interpret in sequence</strong><p>Style, rhythm, memory, purpose, and the listener determine what the field becomes.</p></div>
-          </div>
-        </div>
-      ) : (
-        <div className="piano-fifths-stage">
-          <section className="fifths-explainer" aria-labelledby="fifths-title">
-            <div className="fifths-heading"><span>One operation repeated</span><h3 id="fifths-title">Multiply by 3:2, then fold back into one octave.</h3><p>The circle is not an arbitrary wheel of letters. It traces repeated near-3:2 relationships. The piano uses equal steps, so each fifth is a close approximation and the twelfth is deliberately made to close.</p></div>
-            <div className="fifths-workbench">
-              <div className="fifths-circle" role="group" aria-label="Circle of fifths in movable-Do syllables">
-                <div className="fifths-center"><span>12 × 3:2</span><strong>≈ 7 octaves</strong><small>pure mismatch<br />{circle.closureDriftCents.toFixed(1)} cents</small></div>
-                {circle.nodes.map((node) => {
-                  const absolutePitchClass = (pitchClassFromMidi(doMidi) + node.pitchClass) % 12;
-                  return <button key={node.step} type="button" className={`${fifthStep === node.step ? "is-selected" : ""} ${activeFifthSteps.has(node.step) ? "is-active" : ""}`} aria-pressed={fifthStep === node.step} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties} onClick={() => setFifthStep(node.step)}><strong>{node.syllable}</strong><span>{activeFifthSteps.has(node.step) ? "held now" : node.step === 0 ? "home" : `${node.step} × fifth`}</span>{showConventions ? <small>{CONVENTIONAL_PITCH_CLASSES[absolutePitchClass]}</small> : null}</button>;
-                })}
-              </div>
-              <div className="fifths-inspector">
-                <span>Selected · {selectedFifth.syllable}</span>
-                <h3>{fifthStep === 0 ? "The starting Do" : `${fifthStep} repeated 3:2 move${fifthStep === 1 ? "" : "s"}`}</h3>
-                <p>{fifthStep === 0 ? "Choose another point to follow the repeated operation." : `After octave folding, ${selectedFifth.syllable} lands ${selectedFifth.keyboardCents} cents above Do on the equal-step keyboard.`}</p>
-                <dl>
-                  <div><dt>pure stacked relation</dt><dd><strong>{selectedFifth.foldedRatio.toFixed(4)} × Do</strong><span>{selectedFifth.pureCents.toFixed(1)} cents after folding</span></dd></div>
-                  <div><dt>equal-key placement</dt><dd><strong>{(2 ** (selectedFifth.pitchClass / 12)).toFixed(4)} × Do</strong><span>{selectedFifth.keyboardCents} cents</span></dd></div>
-                  <div><dt>accumulated difference</dt><dd><strong>{selectedFifth.driftCents >= 0 ? "+" : ""}{selectedFifth.driftCents.toFixed(1)} cents</strong><span>pure chain versus this keyboard</span></dd></div>
-                  <div><dt>movable role</dt><dd><strong>{selectedFifth.syllable}</strong><span>{showConventions ? CONVENTIONAL_PITCH_CLASSES[(pitchClassFromMidi(doMidi) + selectedFifth.pitchClass) % 12] : "relative to current Do"}</span></dd></div>
-                </dl>
-                <div>
-                  <button type="button" onClick={() => loadSet(fifthStep === 0 ? [0, 12] : [0, selectedFifth.pitchClass])}>Place Do + {fifthStep === 0 ? "upper Do" : selectedFifth.syllable}</button>
-                  <button type="button" disabled={fifthStep === 0} onClick={setSelectedAsDo}>Make {selectedFifth.syllable} the new Do</button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <div className="fifths-path" aria-label="Movable-Do circle order">
-            {circle.nodes.map((node, index) => <button key={node.step} type="button" className={`${fifthStep === index ? "is-selected" : ""} ${activeFifthSteps.has(index) ? "is-active" : ""}`} onClick={() => setFifthStep(index)}><span>{index}</span><strong>{node.syllable}</strong><small>{activeFifthSteps.has(index) ? "held now" : `${node.pitchClass * 100}¢ from Do`}</small></button>)}
-          </div>
-
-          <div className="fifths-takeaway"><span>Why musicians use this map</span><strong>Nearby points preserve many scale tones while moving the center; distant points replace more of the route.</strong><p>That makes the circle useful for transposition, chord motion, and scale comparison. It does not say which path is emotionally right. Repetition, voice leading, rhythm, timbre, style, and expectation turn the geometry into musical experience.</p></div>
-        </div>
-      )}
+      <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>Crunch uses a standardized nine-partial auditory proxy. Pull and arrival depend on the current frame. Musical goodness still depends on timing, style, memory, intention, and your response.</small></footer>
     </section>
   );
 }

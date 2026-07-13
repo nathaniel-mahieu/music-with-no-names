@@ -24,11 +24,12 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(scale, /name="scale-degree"/);
   assert.match(scale, /aria-live="polite"/);
   assert.match(scale, /<ol className="step-fingerprint"/);
-  assert.match(piano, /aria-label="Two-octave on-screen piano/);
+  assert.match(piano, /aria-label="Silent two-octave on-screen piano/);
   assert.match(piano, /aria-live="polite"/);
-  assert.match(piano, /role="progressbar"/);
-  assert.match(piano, /Recent modeled crunch, pull toward Do, and arrival evidence/);
-  assert.match(piano, /Circle of fifths in movable-Do syllables/);
+  assert.match(piano, /Grand staff showing/);
+  assert.match(piano, /Evidence traces across/);
+  assert.match(piano, /Circle of fifths with the last seven event numbers/);
+  assert.match(piano, /Select an event across every view/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);

@@ -35,6 +35,50 @@ export type TonalTendency = {
   fifthPresent: boolean;
 };
 
+export type RollingNoteEvent = {
+  note: number;
+};
+
+export type ScaleFrameSnapshot = {
+  eventIndex: number;
+  leading: ScaleCandidate | null;
+  runnersUp: ScaleCandidate[];
+  stable: ScaleCandidate | null;
+  changed: boolean;
+  distinctPitchClasses: number;
+  evidenceLabel: "no evidence" | "little evidence" | "several compatible frames" | "distinct within this catalog";
+};
+
+export type ChordTemplate = {
+  id: string;
+  name: string;
+  symbol: string;
+  offsets: readonly number[];
+};
+
+export type ChordCandidate = {
+  rootPitchClass: number;
+  template: ChordTemplate;
+  exact: boolean;
+  score: number;
+  commonPitchClasses: number[];
+  missingPitchClasses: number[];
+  extraPitchClasses: number[];
+  bassPitchClass: number;
+  inversion: number;
+};
+
+export type NearbyChord = {
+  rootPitchClass: number;
+  pitchClasses: number[];
+  degreeIndex: number;
+  syllable: string;
+  commonPitchClasses: number[];
+  changedPitchClasses: number;
+  instruction: string;
+  candidate: ChordCandidate | null;
+};
+
 export const CHROMATIC_SOLFEGE = [
   "Do",
   "Di",
@@ -98,6 +142,21 @@ export const PIANO_SCALES: PianoScale[] = [
     steps: [3, 2, 1, 1, 3, 2],
     solfege: ["Do", "Me", "Fa", "Fi", "Sol", "Te"],
   },
+];
+
+export const CHORD_TEMPLATES: ChordTemplate[] = [
+  { id: "major", name: "major triad", symbol: "", offsets: [0, 4, 7] },
+  { id: "minor", name: "minor triad", symbol: "m", offsets: [0, 3, 7] },
+  { id: "diminished", name: "diminished triad", symbol: "°", offsets: [0, 3, 6] },
+  { id: "augmented", name: "augmented triad", symbol: "+", offsets: [0, 4, 8] },
+  { id: "sus2", name: "suspended second", symbol: "sus2", offsets: [0, 2, 7] },
+  { id: "sus4", name: "suspended fourth", symbol: "sus4", offsets: [0, 5, 7] },
+  { id: "major6", name: "major sixth", symbol: "6", offsets: [0, 4, 7, 9] },
+  { id: "minor6", name: "minor sixth", symbol: "m6", offsets: [0, 3, 7, 9] },
+  { id: "dominant7", name: "dominant seventh", symbol: "7", offsets: [0, 4, 7, 10] },
+  { id: "major7", name: "major seventh", symbol: "maj7", offsets: [0, 4, 7, 11] },
+  { id: "minor7", name: "minor seventh", symbol: "m7", offsets: [0, 3, 7, 10] },
+  { id: "half-diminished7", name: "half-diminished seventh", symbol: "ø7", offsets: [0, 3, 6, 10] },
 ];
 
 const INTERVAL_LANDMARKS = [
@@ -277,6 +336,167 @@ export function inferScaleCandidates(notes: number[], limit = 4): ScaleCandidate
       || Number(second.homePresent) - Number(first.homePresent)
       || PIANO_SCALES.indexOf(first.scale) - PIANO_SCALES.indexOf(second.scale)
       || first.rootPitchClass - second.rootPitchClass
+    ))
+    .slice(0, limit);
+}
+
+function sameScaleCandidate(first: ScaleCandidate | null, second: ScaleCandidate | null) {
+  return Boolean(first && second && first.rootPitchClass === second.rootPitchClass && first.scale.id === second.scale.id);
+}
+
+export function scaleFrameTimeline(notes: number[]): ScaleFrameSnapshot[] {
+  let stable: ScaleCandidate | null = null;
+  let pendingKey = "";
+  let pendingWins = 0;
+
+  return notes.map((_, eventIndex) => {
+    const prefix = notes.slice(0, eventIndex + 1);
+    const candidates = inferScaleCandidates(prefix, 3);
+    const leading = candidates[0] ?? null;
+    const distinctPitchClasses = new Set(prefix.map((note) => pitchClassFromMidi(note))).size;
+    const gap = leading && candidates[1] ? leading.fit - candidates[1].fit : 0;
+    let changed = false;
+
+    if (leading && distinctPitchClasses >= 4) {
+      const leadingKey = `${leading.rootPitchClass}:${leading.scale.id}`;
+      if (sameScaleCandidate(stable, leading)) {
+        pendingKey = "";
+        pendingWins = 0;
+      } else {
+        if (pendingKey === leadingKey) pendingWins += 1;
+        else {
+          pendingKey = leadingKey;
+          pendingWins = 1;
+        }
+        if (stable == null || gap >= 0.08 || pendingWins >= 2) {
+          stable = leading;
+          changed = true;
+          pendingKey = "";
+          pendingWins = 0;
+        }
+      }
+    }
+
+    const evidenceLabel = distinctPitchClasses === 0
+      ? "no evidence"
+      : distinctPitchClasses < 4
+        ? "little evidence"
+        : gap >= 0.08
+          ? "distinct within this catalog"
+          : "several compatible frames";
+
+    return {
+      eventIndex,
+      leading,
+      runnersUp: candidates.slice(1),
+      stable,
+      changed,
+      distinctPitchClasses,
+      evidenceLabel,
+    };
+  });
+}
+
+export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], event: T, limit = 7) {
+  if (!Number.isInteger(limit) || limit <= 0) return [];
+  return [...events, event].slice(-limit);
+}
+
+function pitchClassSet(notes: number[]) {
+  return [...new Set(notes.map((note) => pitchClassFromMidi(note)))].sort((first, second) => first - second);
+}
+
+export function identifyChordCandidates(notes: number[], limit = 3): ChordCandidate[] {
+  if (notes.length < 2 || limit <= 0) return [];
+  const active = pitchClassSet(notes);
+  const activeSet = new Set(active);
+  const bassPitchClass = pitchClassFromMidi(Math.min(...notes));
+  const candidates: ChordCandidate[] = [];
+
+  for (let rootPitchClass = 0; rootPitchClass < 12; rootPitchClass += 1) {
+    for (const template of CHORD_TEMPLATES) {
+      const target = template.offsets.map((offset) => modulo(rootPitchClass + offset, 12)).sort((first, second) => first - second);
+      const targetSet = new Set(target);
+      const commonPitchClasses = active.filter((pitchClass) => targetSet.has(pitchClass));
+      const missingPitchClasses = target.filter((pitchClass) => !activeSet.has(pitchClass));
+      const extraPitchClasses = active.filter((pitchClass) => !targetSet.has(pitchClass));
+      const templateCoverage = commonPitchClasses.length / target.length;
+      const activePurity = commonPitchClasses.length / active.length;
+      const exact = missingPitchClasses.length === 0 && extraPitchClasses.length === 0;
+      const inversion = target.indexOf(bassPitchClass);
+      candidates.push({
+        rootPitchClass,
+        template,
+        exact,
+        score: Math.min(1, templateCoverage * 0.6 + activePurity * 0.4),
+        commonPitchClasses,
+        missingPitchClasses,
+        extraPitchClasses,
+        bassPitchClass,
+        inversion: inversion < 0 ? -1 : inversion,
+      });
+    }
+  }
+
+  return candidates
+    .sort((first, second) => (
+      Number(second.exact) - Number(first.exact)
+      || second.score - first.score
+      || first.missingPitchClasses.length - second.missingPitchClasses.length
+      || first.extraPitchClasses.length - second.extraPitchClasses.length
+      || Number(second.rootPitchClass === bassPitchClass) - Number(first.rootPitchClass === bassPitchClass)
+      || first.rootPitchClass - second.rootPitchClass
+    ))
+    .slice(0, limit);
+}
+
+function chordMoveInstruction(current: number[], target: number[], common: number[]) {
+  const currentOnly = current.filter((pitchClass) => !common.includes(pitchClass));
+  const targetOnly = target.filter((pitchClass) => !common.includes(pitchClass));
+  if (currentOnly.length === 1 && targetOnly.length === 1) {
+    const upward = modulo(targetOnly[0] - currentOnly[0], 12);
+    const downward = modulo(currentOnly[0] - targetOnly[0], 12);
+    const direction = upward <= downward ? "up" : "down";
+    const distance = Math.min(upward, downward);
+    return `keep ${common.length} · move ${CONVENTIONAL_PITCH_CLASSES[currentOnly[0]]} ${direction} ${distance} key${distance === 1 ? "" : "s"}`;
+  }
+  if (currentOnly.length === 0 && targetOnly.length === 1) {
+    return `keep ${common.length} · add ${CONVENTIONAL_PITCH_CLASSES[targetOnly[0]]}`;
+  }
+  return `keep ${common.length} · change ${Math.max(currentOnly.length, targetOnly.length)} tone${Math.max(currentOnly.length, targetOnly.length) === 1 ? "" : "s"}`;
+}
+
+export function nearbyScaleChords(notes: number[], doMidi: number, scale: PianoScale, limit = 3): NearbyChord[] {
+  if (limit <= 0) return [];
+  const current = pitchClassSet(notes);
+  const positions = scaleSemitones(scale);
+  const doPitchClass = pitchClassFromMidi(doMidi);
+  const results = positions.map((position, degreeIndex) => {
+    const degreePositions = [degreeIndex, degreeIndex + 2, degreeIndex + 4].map((index) => positions[index % positions.length] + (index >= positions.length ? 12 : 0));
+    const pitchClasses = [...new Set(degreePositions.map((degreePosition) => modulo(doPitchClass + degreePosition, 12)))].sort((first, second) => first - second);
+    const commonPitchClasses = current.filter((pitchClass) => pitchClasses.includes(pitchClass));
+    const changedPitchClasses = current.filter((pitchClass) => !pitchClasses.includes(pitchClass)).length
+      + pitchClasses.filter((pitchClass) => !current.includes(pitchClass)).length;
+    const rootPitchClass = modulo(doPitchClass + position, 12);
+    const candidate = identifyChordCandidates(pitchClasses, 1)[0] ?? null;
+    return {
+      rootPitchClass,
+      pitchClasses,
+      degreeIndex,
+      syllable: scale.solfege[degreeIndex],
+      commonPitchClasses,
+      changedPitchClasses,
+      instruction: chordMoveInstruction(current, pitchClasses, commonPitchClasses),
+      candidate,
+    };
+  });
+
+  return results
+    .filter((result) => result.changedPitchClasses > 0 || current.length === 0)
+    .sort((first, second) => (
+      first.changedPitchClasses - second.changedPitchClasses
+      || second.commonPitchClasses.length - first.commonPitchClasses.length
+      || first.degreeIndex - second.degreeIndex
     ))
     .slice(0, limit);
 }
