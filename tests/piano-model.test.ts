@@ -2,14 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PIANO_SCALES,
+  fifthStepForPitchClass,
   fifthsCircle,
   frequencyFromMidi,
+  inferScaleCandidates,
   intervalLandmark,
   noteContext,
   pairwiseIntervals,
   parseMidiMessage,
   scaleCoverage,
   scaleSemitones,
+  resolutionDirection,
+  tonalTendency,
 } from "../lib/piano-model.ts";
 
 test("maps equal-tempered MIDI notes to physical frequency", () => {
@@ -58,6 +62,31 @@ test("measures scale membership without turning it into quality", () => {
   assert.equal(mixed.fraction, 2 / 3);
 });
 
+test("ranks compatible scale and center frames without claiming certainty", () => {
+  const phrase = [60, 62, 64, 65, 67, 69, 71];
+  const candidates = inferScaleCandidates(phrase, 4);
+  assert.equal(candidates.length, 4);
+  assert.equal(candidates[0].scale.id, "bright-seven");
+  assert.equal(candidates[0].rootPitchClass, 0);
+  assert.ok(Math.abs(candidates[0].fit - 1) < 1e-12);
+  assert.equal(candidates[0].uniqueNoteCount, 7);
+  assert.deepEqual(inferScaleCandidates([], 4), []);
+});
+
+test("separates pull toward Do from evidence that Do has arrived", () => {
+  const scale = PIANO_SCALES[0];
+  const away = tonalTendency([67, 71, 74], 60, scale);
+  const home = tonalTendency([60, 64, 67], 60, scale);
+  assert.equal(away.hasHome, false);
+  assert.equal(away.directNeighborCount, 1);
+  assert.ok(away.homePull > home.homePull);
+  assert.ok(home.homeEvidence > away.homeEvidence);
+
+  assert.equal(resolutionDirection(null, 0.5).label, "first field · building a baseline");
+  assert.equal(resolutionDirection(0.4, 0.52).label, "tending toward repose");
+  assert.equal(resolutionDirection(0.6, 0.49).label, "moving away from repose");
+});
+
 test("derives the circle from stacked fifths and exposes its closure mismatch", () => {
   const circle = fifthsCircle();
   assert.equal(circle.nodes.length, 12);
@@ -65,6 +94,7 @@ test("derives the circle from stacked fifths and exposes its closure mismatch", 
   assert.ok(Math.abs(circle.nodes[1].foldedRatio - 1.5) < 1e-12);
   assert.ok(Math.abs(circle.nodes[1].driftCents - 1.955) < 0.01);
   assert.ok(Math.abs(circle.closureDriftCents - 23.46) < 0.02);
+  for (const node of circle.nodes) assert.equal(fifthStepForPitchClass(node.pitchClass), node.step);
 });
 
 test("parses note, zero-velocity note-off, and sustain MIDI messages", () => {

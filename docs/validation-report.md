@@ -30,6 +30,8 @@ The piano-model fixtures pin MIDI note 69 to 440 Hz, require octave frequency do
 
 The fifths fixtures generate the order Do → Sol → Re → La by repeated 3:2 multiplication and octave folding. They recover the approximately 1.955-cent difference between one pure fifth and seven equal-key steps, and the approximately 23.46-cent mismatch after twelve pure fifths versus seven octaves. MIDI parser fixtures cover note-on, explicit and zero-velocity note-off, channel preservation, and sustain-pedal thresholds.
 
+Scale-candidate fixtures require a complete bright seven-position route to rank its matching Do frame at full compatibility while retaining other candidates. Tonal-tendency fixtures keep unresolved pull separate from home/arrival evidence, and sequential fixtures distinguish motion toward repose, away from repose, and small ambiguous changes. Source contracts also prohibit `AudioContext`, oscillators, and synthesizer activation inside Piano Lab so MIDI remains visualization-only.
+
 Source-level accessibility contracts require a named piano region, native on-screen key buttons, polite live status, accessible meter values, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
 
 ## Playback-level invariants

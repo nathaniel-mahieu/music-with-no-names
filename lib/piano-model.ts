@@ -15,6 +15,26 @@ export type MidiMessage =
   | { type: "sustain"; down: boolean; channel: number }
   | { type: "other" };
 
+export type ScaleCandidate = {
+  scale: PianoScale;
+  rootPitchClass: number;
+  uniqueNoteCount: number;
+  inScaleCount: number;
+  routeCoveredCount: number;
+  matchFraction: number;
+  coverageFraction: number;
+  homePresent: boolean;
+  fit: number;
+};
+
+export type TonalTendency = {
+  homePull: number;
+  homeEvidence: number;
+  hasHome: boolean;
+  directNeighborCount: number;
+  fifthPresent: boolean;
+};
+
 export const CHROMATIC_SOLFEGE = [
   "Do",
   "Di",
@@ -219,6 +239,90 @@ export function scaleCoverage(notes: number[], doMidi: number, scale: PianoScale
       .filter((item) => !activePositions.has(item.position))
       .map((item) => item.syllable),
   };
+}
+
+export function inferScaleCandidates(notes: number[], limit = 4): ScaleCandidate[] {
+  const pitchClasses = [...new Set(notes.map((note) => pitchClassFromMidi(note)))];
+  if (pitchClasses.length === 0 || limit <= 0) return [];
+
+  const candidates: ScaleCandidate[] = [];
+  for (let rootPitchClass = 0; rootPitchClass < 12; rootPitchClass += 1) {
+    for (const scale of PIANO_SCALES) {
+      const route = new Set(scaleSemitones(scale).map((position) => modulo(rootPitchClass + position, 12)));
+      const inScaleCount = pitchClasses.filter((pitchClass) => route.has(pitchClass)).length;
+      const routeCoveredCount = [...route].filter((pitchClass) => pitchClasses.includes(pitchClass)).length;
+      const matchFraction = inScaleCount / pitchClasses.length;
+      const coverageFraction = routeCoveredCount / route.size;
+      const homePresent = pitchClasses.includes(rootPitchClass);
+      const fit = Math.min(1, matchFraction * 0.72 + coverageFraction * 0.18 + (homePresent ? 0.1 : 0));
+      candidates.push({
+        scale,
+        rootPitchClass,
+        uniqueNoteCount: pitchClasses.length,
+        inScaleCount,
+        routeCoveredCount,
+        matchFraction,
+        coverageFraction,
+        homePresent,
+        fit,
+      });
+    }
+  }
+
+  return candidates
+    .sort((first, second) => (
+      second.fit - first.fit
+      || second.matchFraction - first.matchFraction
+      || second.coverageFraction - first.coverageFraction
+      || Number(second.homePresent) - Number(first.homePresent)
+      || PIANO_SCALES.indexOf(first.scale) - PIANO_SCALES.indexOf(second.scale)
+      || first.rootPitchClass - second.rootPitchClass
+    ))
+    .slice(0, limit);
+}
+
+const HOME_PULL_BY_POSITION = [0, 1, 0.58, 0.38, 0.32, 0.48, 0.42, 0.75, 0.38, 0.32, 0.52, 1] as const;
+
+export function tonalTendency(notes: number[], doMidi: number, scale: PianoScale): TonalTendency {
+  const positions = [...new Set(notes.map((note) => noteContext(note, doMidi, scale).stepsWithinOctave))];
+  if (positions.length === 0) {
+    return { homePull: 0, homeEvidence: 0, hasHome: false, directNeighborCount: 0, fifthPresent: false };
+  }
+
+  const hasHome = positions.includes(0);
+  const fifthPresent = positions.includes(7);
+  const directNeighborCount = positions.filter((position) => position === 1 || position === 11).length;
+  const nonHomePositions = positions.filter((position) => position !== 0);
+  const rawPull = nonHomePositions.length > 0
+    ? nonHomePositions.reduce((sum, position) => sum + HOME_PULL_BY_POSITION[position], 0) / nonHomePositions.length
+    : 0;
+  const coverage = scaleCoverage(notes, doMidi, scale);
+
+  return {
+    homePull: Math.min(1, rawPull * (hasHome ? 0.45 : 1)),
+    homeEvidence: Math.min(1, (hasHome ? 0.55 : 0) + (fifthPresent ? 0.2 : 0) + coverage.fraction * 0.25),
+    hasHome,
+    directNeighborCount,
+    fifthPresent,
+  };
+}
+
+export function resolutionDirection(previousArrival: number | null, currentArrival: number) {
+  if (previousArrival == null) {
+    return { delta: null, label: "first field · building a baseline" };
+  }
+  const delta = currentArrival - previousArrival;
+  if (delta >= 0.08) return { delta, label: "tending toward repose" };
+  if (delta <= -0.08) return { delta, label: "moving away from repose" };
+  return { delta, label: "holding a similar repose level" };
+}
+
+export function fifthStepForPitchClass(pitchClass: number) {
+  const target = modulo(Math.round(pitchClass), 12);
+  for (let step = 0; step < 12; step += 1) {
+    if (modulo(step * 7, 12) === target) return step;
+  }
+  return 0;
 }
 
 export function fifthsCircle() {

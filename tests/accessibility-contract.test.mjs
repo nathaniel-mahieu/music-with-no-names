@@ -27,6 +27,7 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Two-octave on-screen piano/);
   assert.match(piano, /aria-live="polite"/);
   assert.match(piano, /role="progressbar"/);
+  assert.match(piano, /Recent modeled crunch, pull toward Do, and arrival evidence/);
   assert.match(piano, /Circle of fifths in movable-Do syllables/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);

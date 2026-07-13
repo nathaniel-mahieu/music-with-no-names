@@ -102,8 +102,11 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Multiply by 3:2, then fold back into one octave/);
   assert.match(pianoLab, /sustain/);
   assert.match(pianoLab, /nothing is uploaded/i);
-  assert.match(pianoLab, /void synth\.enable\(\);\s*registerPlayedNote/);
-  assert.match(pianoLab, /The browser kept audio suspended/);
+  assert.match(pianoLab, /No sound is generated or recorded/);
+  assert.match(pianoLab, /Scale \+ center finder/);
+  assert.match(pianoLab, /Modeled spectral crunch/);
+  assert.match(pianoLab, /Repose \/ arrival evidence/);
+  assert.doesNotMatch(pianoLab, /AudioContext|createOscillator|synth\.enable/);
   assert.match(earLab, /Hear how timbre, register, and level change an interval/);
   assert.match(earLab, /modelPredictions/);
   assert.match(earLab, /humanRatings/);

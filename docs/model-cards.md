@@ -31,13 +31,15 @@ These cards describe educational models used by Music With No Names. A model out
 
 ## Piano and MIDI relationship bridge
 
-- **Version:** `mwno-piano-1` for the pure relationship layer; live sonority evidence reuses `mwno-sonority-1`.
+- **Version:** `mwno-piano-2` for the relationship, scale-candidate, and tonal-tendency layer; standardized spectral evidence reuses `mwno-sonority-1`.
 - **Inputs:** local MIDI note number, velocity, sustain state, selected movable Do, selected octave-closing scale route, and optional conventional-label visibility.
 - **Relational outputs:** frequency in hertz, equal-key ratio and cents from Do, movable syllable, selected-scale membership, pairwise interval landmarks, and repeated-fifths coordinates.
 - **Fifths derivation:** each pure move multiplies frequency by 3:2 and removes octaves until the result lies within one octave. The equal-key placement is shown separately, including accumulated error and the approximately 23.46-cent mismatch between twelve pure fifths and seven octaves.
-- **Live sonority outputs:** harmonic-template fit, spectral friction, outer-voice span, and selected-route membership remain separate. The interface does not average them into listenability, consonance, emotion, or quality.
-- **MIDI privacy:** permission and messages stay in the browser. Note-on, note-off, velocity, and sustain are used only for the live local view; no MIDI event log is persisted or uploaded.
-- **Limits:** equal temperament is the keyboard coordinate system, not a claim of natural superiority. Velocity is not calibrated loudness. Scale membership is not correctness. Conditional language such as “may support” is not an emotion classifier or listener prediction.
+- **Scale candidates:** all twelve possible homes are tested against four declared pitch-class routes. Fit combines 72% observed-note membership, 18% route coverage, and 10% candidate-home presence. It is a compatibility ranking, not key detection certainty.
+- **Tonal tendency outputs:** pull toward selected Do weights chromatic neighbors and the fifth relation, then reduces unresolved pull when Do is already present. Home evidence combines Do presence, fifth support, and selected-route membership. Repose/arrival evidence combines 55% `mwno-sonority-1` repose with 45% home evidence; change is compared only with the previous held field.
+- **Standardized spectral outputs:** harmonic-template fit and modeled spectral crunch assume a nine-partial harmonic teaching proxy weighted by MIDI velocity. MIDI contains no audio, so these values do not measure the actual spectrum of the connected keyboard.
+- **MIDI behavior and privacy:** permission and messages stay in the browser. Note-on, note-off, velocity, and sustain drive only the live local visualization; Piano Lab never synthesizes, records, or routes audio, and no MIDI event log is persisted or uploaded.
+- **Limits:** equal temperament is the keyboard coordinate system, not a claim of natural superiority. Velocity is not calibrated loudness. Scale membership is not correctness. Scale candidates ignore note order and duration. Tonal pull assumes the selected Do and declared scale frame. Conditional language such as “may support” is not an emotion classifier or listener prediction.
 
 ## Rhythm and pulse models
 

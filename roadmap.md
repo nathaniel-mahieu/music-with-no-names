@@ -480,10 +480,10 @@ Exit gate:
 
 ### K2.6 — Piano and MIDI relationship bridge
 
-Objective: introduce a piano as a playable translation of the existing ratio, interval, scale, and auditory models without making keyboard geometry or note letters foundational.
+Objective: introduce a piano as a silent, interactive translation of the existing ratio, interval, scale, and auditory models without making keyboard geometry or note letters foundational.
 
 - [x] **K2.6.1** Add a two-octave on-screen piano whose keys are labeled by movable-Do role relative to a changeable home.
-- [x] **K2.6.2** Add local Web MIDI input with permission-aware connection, device selection, note-on/off, velocity, and sustain-pedal handling.
+- [x] **K2.6.2** Add local, analysis-only Web MIDI input with permission-aware connection, device selection, note-on/off, velocity, and sustain-pedal handling; never synthesize, record, or route audio from Piano Lab input.
 - [x] **K2.6.3** Keep conventional note, scale, and interval names behind an optional translation layer.
 - [x] **K2.6.4** Add bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes with octave-closing physical gap fingerprints.
 - [x] **K2.6.5** Add a live ascending scale walk that accepts Do in any MIDI octave and follows note-on events with corrective feedback.
@@ -492,13 +492,16 @@ Objective: introduce a piano as a playable translation of the existing ratio, in
 - [x] **K2.6.8** Derive the circle of fifths from repeated 3:2 moves, octave folding, equal-key approximation, and the visible 23.5-cent pure closure mismatch.
 - [x] **K2.6.9** Allow any fifths position to become the new movable Do while preserving the relationship-first representation.
 - [x] **K2.6.10** Test MIDI parsing, transposition invariance, scale closure, interval landmarks, fifths geometry, semantic interaction, forced colors, and responsive layout contracts.
+- [x] **K2.6.11** Add ranked scale-and-center compatibility, held-note fifths highlighting, modeled crunch, tonal pull, repose/arrival evidence, and a multi-state descriptor trace while keeping every output separate from musical quality.
 
 Exit gate:
 
 - A learner can press a physical or on-screen key and explain its frequency, distance, syllable, and scale role relative to Do.
 - A learner can add notes and distinguish physical interaction evidence from scale context and personal musical judgment.
+- A learner can see several scale-and-center frames fit the same evidence and explain why a short note set cannot uniquely identify one scale.
+- A learner can distinguish current crunch, pull toward Do, arrival evidence, and change from the previous field without treating any one dimension as goodness.
 - A learner can explain why the equal-tempered fifths cycle closes even though twelve pure 3:2 moves do not equal exactly seven octaves.
-- MIDI data and all learning state remain local to the browser.
+- MIDI data and all learning state remain local to the browser; Piano Lab does not generate or capture sound.
 
 ### Q10 — Validation, accessibility, and release hardening
 
@@ -652,7 +655,7 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Ear Lab sensory models and independent human reports implemented.
 - [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
 - [x] Movable-Do scale orbit, physical step fingerprint, degree evidence, and inner-hearing practice implemented.
-- [x] Piano companion with local MIDI input, movable-Do key mapping, scale walk, live interval network, separated sonority evidence, and a physically derived circle of fifths implemented.
+- [x] Silent Piano companion with local MIDI input, movable-Do key mapping, scale/center inference, scale walk, live interval network, musicality-descriptor trace, held-note fifths mapping, and a physically derived circle of fifths implemented.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 - [x] Event self-similarity and incremental uncertainty/surprise trace implemented.

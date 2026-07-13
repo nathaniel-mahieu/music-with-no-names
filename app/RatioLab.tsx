@@ -92,10 +92,10 @@ const LAB_COPY: Record<
     principleBottom: "same relationships at any pitch",
   },
   piano: {
-    eyebrow: "Translate relationships onto a playable keyboard",
+    eyebrow: "Translate relationships onto a physical keyboard",
     title: "See what every key means relative to home.",
     description:
-      "Use the on-screen piano or connect a MIDI keyboard. Follow movable Do, build scales and interval networks, and derive the circle of fifths from repeated 3:2 relationships.",
+      "Use the silent on-screen analyzer or connect a MIDI keyboard. Follow movable Do, find compatible scale frames, plot crunch and resolution evidence, and map notes around the circle of fifths.",
     principleTop: "Key press",
     principleMain: "→ interval → context",
     principleBottom: "physical evidence is not a quality score",
@@ -691,7 +691,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.24
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.25
         </div>
       </header>
 

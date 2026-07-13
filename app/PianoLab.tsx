@@ -13,8 +13,10 @@ import {
   CONVENTIONAL_PITCH_CLASSES,
   PIANO_SCALES,
   conventionalPitchName,
+  fifthStepForPitchClass,
   fifthsCircle,
   frequencyFromMidi,
+  inferScaleCandidates,
   intervalLandmark,
   nearestMidiForPitchClass,
   noteContext,
@@ -23,15 +25,12 @@ import {
   pitchClassFromMidi,
   scaleCoverage,
   scaleSemitones,
+  resolutionDirection,
+  tonalTendency,
   type PianoScale,
+  type ScaleCandidate,
 } from "@/lib/piano-model";
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
-import {
-  SYNTH_MASTER_GAIN,
-  configureSafetyCompressor,
-  equalPowerMixGains,
-  rmsMatchedHarmonicCoefficients,
-} from "@/lib/audio-level";
 
 type PianoStage = "map" | "combine" | "fifths";
 type ScaleId = PianoScale["id"];
@@ -49,12 +48,14 @@ type MidiAccessLike = {
 type NavigatorWithMidi = Navigator & {
   requestMIDIAccess?: (options?: { sysex?: boolean }) => Promise<MidiAccessLike>;
 };
-type PianoVoice = { oscillator: OscillatorNode; gain: GainNode };
-type PianoGraph = {
-  context: AudioContext;
-  master: GainNode;
-  voices: Map<number, PianoVoice>;
-  wave: PeriodicWave;
+
+type AnalysisPoint = {
+  index: number;
+  signature: string;
+  label: string;
+  crunch: number;
+  pull: number;
+  arrival: number;
 };
 
 const STAGES: { id: PianoStage; number: string; title: string; promise: string }[] = [
@@ -78,11 +79,13 @@ function formatHz(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
 }
 
-function useMidiKeyboard(onNoteOn: (note: number) => void) {
+function useMidiKeyboard(onNoteOn: (note: number) => void, onNotesChange: (notes: Map<number, number>) => void) {
   const accessRef = useRef<MidiAccessLike | null>(null);
   const pressedRef = useRef(new Set<number>());
   const sustainRef = useRef(false);
+  const notesRef = useRef(new Map<number, number>());
   const onNoteOnRef = useRef(onNoteOn);
+  const onNotesChangeRef = useRef(onNotesChange);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [inputs, setInputs] = useState<MidiInputLike[]>([]);
   const [selectedInputId, setSelectedInputId] = useState("");
@@ -91,7 +94,8 @@ function useMidiKeyboard(onNoteOn: (note: number) => void) {
 
   useEffect(() => {
     onNoteOnRef.current = onNoteOn;
-  }, [onNoteOn]);
+    onNotesChangeRef.current = onNotesChange;
+  }, [onNoteOn, onNotesChange]);
 
   const refreshInputs = useCallback((access: MidiAccessLike) => {
     const next = Array.from(access.inputs.values()).filter((input) => input.state !== "disconnected");
@@ -121,7 +125,8 @@ function useMidiKeyboard(onNoteOn: (note: number) => void) {
   const clear = useCallback(() => {
     pressedRef.current.clear();
     sustainRef.current = false;
-    setNotes(new Map());
+    notesRef.current = new Map();
+    setNotes(notesRef.current);
   }, []);
 
   useEffect(() => {
@@ -134,25 +139,28 @@ function useMidiKeyboard(onNoteOn: (note: number) => void) {
       const message = parseMidiMessage(event.data);
       if (message.type === "note-on") {
         pressedRef.current.add(message.note);
-        setNotes((current) => {
-          const next = new Map(current);
-          next.set(message.note, message.velocity);
-          return next;
-        });
+        const next = new Map(notesRef.current);
+        next.set(message.note, message.velocity);
+        notesRef.current = next;
+        setNotes(next);
         onNoteOnRef.current(message.note);
+        onNotesChangeRef.current(next);
       } else if (message.type === "note-off") {
         pressedRef.current.delete(message.note);
         if (!sustainRef.current) {
-          setNotes((current) => {
-            const next = new Map(current);
-            next.delete(message.note);
-            return next;
-          });
+          const next = new Map(notesRef.current);
+          next.delete(message.note);
+          notesRef.current = next;
+          setNotes(next);
+          onNotesChangeRef.current(next);
         }
       } else if (message.type === "sustain") {
         sustainRef.current = message.down;
         if (!message.down) {
-          setNotes((current) => new Map(Array.from(current.entries()).filter(([note]) => pressedRef.current.has(note))));
+          const next = new Map(Array.from(notesRef.current.entries()).filter(([note]) => pressedRef.current.has(note)));
+          notesRef.current = next;
+          setNotes(next);
+          onNotesChangeRef.current(next);
         }
       }
     };
@@ -168,123 +176,6 @@ function useMidiKeyboard(onNoteOn: (note: number) => void) {
   return { clear, connect, inputs, notes, selectedInputId, setSelectedInputId, status, supported };
 }
 
-function usePianoSynth(activeNotes: Map<number, number>) {
-  const graphRef = useRef<PianoGraph | null>(null);
-  const [enabled, setEnabled] = useState(false);
-  const [message, setMessage] = useState("Piano sound is off. Visual MIDI input still works.");
-
-  const disable = useCallback(() => {
-    const graph = graphRef.current;
-    graphRef.current = null;
-    if (graph) {
-      const now = graph.context.currentTime;
-      graph.master.gain.cancelScheduledValues(now);
-      graph.master.gain.setValueAtTime(Math.max(0.0001, graph.master.gain.value), now);
-      graph.master.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
-      graph.voices.forEach(({ oscillator }) => {
-        try {
-          oscillator.stop(now + 0.05);
-        } catch {
-          // The voice may already be stopping.
-        }
-      });
-      window.setTimeout(() => void graph.context.close(), 65);
-    }
-    setEnabled(false);
-    setMessage("Piano sound is off. Visual MIDI input still works.");
-  }, []);
-
-  const enable = useCallback(async () => {
-    if (graphRef.current) return true;
-    if (!window.AudioContext) {
-      setMessage("This browser does not provide the audio features needed for piano sound.");
-      return false;
-    }
-    try {
-      const context = new AudioContext();
-      await Promise.race([
-        context.resume(),
-        new Promise<void>((resolve) => window.setTimeout(resolve, 900)),
-      ]);
-      if (context.state !== "running") {
-        void context.close();
-        setMessage("The browser kept audio suspended. Visual input remains available; try Start piano sound again.");
-        return false;
-      }
-      const master = context.createGain();
-      const compressor = context.createDynamicsCompressor();
-      const coefficients = rmsMatchedHarmonicCoefficients(9, 1.2);
-      const wave = context.createPeriodicWave(new Float32Array(coefficients.length), coefficients, { disableNormalization: true });
-      const now = context.currentTime;
-      configureSafetyCompressor(compressor, now);
-      master.gain.setValueAtTime(0.0001, now);
-      master.connect(compressor).connect(context.destination);
-      master.gain.exponentialRampToValueAtTime(SYNTH_MASTER_GAIN, now + 0.045);
-      graphRef.current = { context, master, voices: new Map(), wave };
-      setEnabled(true);
-      setMessage("Piano sound is on at the shared safe synthesis level.");
-      return true;
-    } catch {
-      setMessage("Piano sound could not start. Visual input remains available.");
-      return false;
-    }
-  }, []);
-
-  useEffect(() => {
-    const graph = graphRef.current;
-    if (!graph || !enabled) return;
-    const now = graph.context.currentTime;
-    const entries = Array.from(activeNotes.entries()).filter(([note]) => note >= 0 && note <= 127);
-    const activeSet = new Set(entries.map(([note]) => note));
-
-    graph.voices.forEach((voice, note) => {
-      if (activeSet.has(note)) return;
-      voice.gain.gain.cancelScheduledValues(now);
-      voice.gain.gain.setValueAtTime(Math.max(0.0001, voice.gain.gain.value), now);
-      voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
-      try {
-        voice.oscillator.stop(now + 0.045);
-      } catch {
-        // The voice may already be stopping.
-      }
-      graph.voices.delete(note);
-    });
-
-    const gains = equalPowerMixGains(entries.map(([, velocity]) => Math.max(0.12, velocity / 127)));
-    entries.forEach(([note], index) => {
-      let voice = graph.voices.get(note);
-      if (!voice) {
-        const oscillator = graph.context.createOscillator();
-        const gain = graph.context.createGain();
-        oscillator.setPeriodicWave(graph.wave);
-        oscillator.frequency.setValueAtTime(frequencyFromMidi(note), now);
-        gain.gain.setValueAtTime(0.0001, now);
-        oscillator.connect(gain).connect(graph.master);
-        oscillator.start(now);
-        voice = { oscillator, gain };
-        graph.voices.set(note, voice);
-      }
-      voice.gain.gain.setTargetAtTime(Math.max(0.0001, gains[index]), now, 0.018);
-    });
-  }, [activeNotes, enabled]);
-
-  useEffect(() => () => {
-    const graph = graphRef.current;
-    graphRef.current = null;
-    if (!graph) return;
-    graph.voices.forEach(({ oscillator }) => {
-      try {
-        oscillator.stop();
-      } catch {
-        // The voice may already be stopped.
-      }
-    });
-    void graph.context.close();
-  }, []);
-
-  return { disable, enable, enabled, message };
-}
-
 function EvidenceMeter({ label, value, note }: { label: string; value: number | null; note: string }) {
   const percent = value == null ? 0 : Math.round(value * 100);
   return (
@@ -296,6 +187,15 @@ function EvidenceMeter({ label, value, note }: { label: string; value: number | 
   );
 }
 
+function tracePoints(points: AnalysisPoint[], key: "crunch" | "pull" | "arrival") {
+  if (points.length === 0) return "";
+  return points.map((point, index) => {
+    const x = points.length === 1 ? 320 : 42 + (index / (points.length - 1)) * 574;
+    const y = 138 - point[key] * 108;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+}
+
 export function PianoLab() {
   const [stage, setStage] = useState<PianoStage>("map");
   const [scaleId, setScaleId] = useState<ScaleId>("bright-seven");
@@ -305,6 +205,7 @@ export function PianoLab() {
   const [newestNote, setNewestNote] = useState(60);
   const [practiceIndex, setPracticeIndex] = useState(0);
   const [playedHistory, setPlayedHistory] = useState<number[]>([]);
+  const [analysisTrail, setAnalysisTrail] = useState<AnalysisPoint[]>([]);
   const [fifthStep, setFifthStep] = useState(1);
   const practiceBaseRef = useRef<number | null>(null);
 
@@ -312,9 +213,35 @@ export function PianoLab() {
   const scalePositions = useMemo(() => scaleSemitones(scale), [scale]);
   const practicePattern = useMemo(() => [...scalePositions, 12], [scalePositions]);
 
+  const recordField = useCallback((field: Map<number, number>) => {
+    const noteNumbers = Array.from(field.keys()).sort((first, second) => first - second);
+    if (noteNumbers.length === 0) return;
+    const model = sonorityPerceptionModel(noteNumbers.map((note) => ({
+      frequencyHz: frequencyFromMidi(note),
+      amplitude: Math.max(0.12, (field.get(note) ?? 96) / 127),
+      partialCount: 9,
+    })));
+    const tonal = tonalTendency(noteNumbers, doMidi, scale);
+    const arrival = model.repose * 0.55 + tonal.homeEvidence * 0.45;
+    const signature = noteNumbers.map((note) => `${note}:${field.get(note) ?? 0}`).join("|");
+    const label = noteNumbers.map((note) => noteContext(note, doMidi, scale).syllable).join(" + ");
+    setAnalysisTrail((current) => {
+      if (current.at(-1)?.signature === signature) return current;
+      return [...current, {
+        index: (current.at(-1)?.index ?? 0) + 1,
+        signature,
+        label,
+        crunch: model.roughness,
+        pull: tonal.homePull,
+        arrival,
+      }].slice(-12);
+    });
+  }, [doMidi, scale]);
+
   const registerPlayedNote = useCallback((note: number) => {
     setNewestNote(note);
     setPlayedHistory((current) => [...current, note].slice(-10));
+    setFifthStep(fifthStepForPitchClass(pitchClassFromMidi(note - doMidi)));
     setPracticeIndex((current) => {
       const isDo = pitchClassFromMidi(note) === pitchClassFromMidi(doMidi);
       if (current === 0 || current >= practicePattern.length || practiceBaseRef.current == null) {
@@ -336,13 +263,17 @@ export function PianoLab() {
     });
   }, [doMidi, practicePattern]);
 
-  const midi = useMidiKeyboard(registerPlayedNote);
+  const registerMidiField = useCallback((midiField: Map<number, number>) => {
+    const combined = new Map(latchedNotes);
+    midiField.forEach((velocity, note) => combined.set(note, velocity));
+    recordField(combined);
+  }, [latchedNotes, recordField]);
+  const midi = useMidiKeyboard(registerPlayedNote, registerMidiField);
   const activeNotes = useMemo(() => {
     const combined = new Map(latchedNotes);
     midi.notes.forEach((velocity, note) => combined.set(note, velocity));
     return combined;
   }, [latchedNotes, midi.notes]);
-  const synth = usePianoSynth(activeNotes);
   const activeNoteNumbers = useMemo(() => Array.from(activeNotes.keys()).sort((a, b) => a - b), [activeNotes]);
   const focusNote = activeNotes.has(newestNote) || playedHistory.length > 0 ? newestNote : doMidi;
   const focus = noteContext(focusNote, doMidi, scale);
@@ -354,9 +285,23 @@ export function PianoLab() {
     amplitude: Math.max(0.12, (activeNotes.get(note) ?? 96) / 127),
     partialCount: 9,
   }))), [activeNoteNumbers, activeNotes]);
+  const tendency = useMemo(() => tonalTendency(activeNoteNumbers, doMidi, scale), [activeNoteNumbers, doMidi, scale]);
+  const arrivalEvidence = activeNoteNumbers.length > 0
+    ? perception.repose * 0.55 + tendency.homeEvidence * 0.45
+    : 0;
+  const activeSignature = activeNoteNumbers.map((note) => `${note}:${activeNotes.get(note) ?? 0}`).join("|");
+  const evidenceNotes = useMemo(() => [...playedHistory.slice(-10), ...activeNoteNumbers], [playedHistory, activeNoteNumbers]);
+  const scaleCandidates = useMemo(() => inferScaleCandidates(evidenceNotes, 4), [evidenceNotes]);
   const circle = useMemo(() => fifthsCircle(), []);
   const selectedFifth = circle.nodes[fifthStep];
   const enoughForSonority = activeNoteNumbers.length >= 2;
+  const activeFifthSteps = useMemo(() => new Set(activeNoteNumbers.map((note) => (
+    fifthStepForPitchClass(pitchClassFromMidi(note - doMidi))
+  ))), [activeNoteNumbers, doMidi]);
+
+  const currentRecorded = analysisTrail.at(-1)?.signature === activeSignature;
+  const previousPoint = currentRecorded ? analysisTrail.at(-2) : analysisTrail.at(-1);
+  const resolution = resolutionDirection(previousPoint?.arrival ?? null, arrivalEvidence);
 
   const resetPractice = () => {
     practiceBaseRef.current = null;
@@ -367,6 +312,8 @@ export function PianoLab() {
   const clearNotes = () => {
     setLatchedNotes(new Map());
     midi.clear();
+    setPlayedHistory([]);
+    setAnalysisTrail([]);
   };
 
   const chooseScale = (id: ScaleId) => {
@@ -385,24 +332,30 @@ export function PianoLab() {
   };
 
   const toggleKey = (note: number) => {
-    if (!latchedNotes.has(note)) {
-      void synth.enable();
-      registerPlayedNote(note);
-    }
-    setLatchedNotes((current) => {
-      const next = new Map(current);
-      if (next.has(note)) next.delete(note);
-      else next.set(note, 104);
-      return next;
-    });
+    if (!latchedNotes.has(note)) registerPlayedNote(note);
+    const next = new Map(latchedNotes);
+    if (next.has(note)) next.delete(note);
+    else next.set(note, 104);
+    setLatchedNotes(next);
+    const combined = new Map(next);
+    midi.notes.forEach((velocity, midiNote) => combined.set(midiNote, velocity));
+    recordField(combined);
   };
 
   const loadSet = (offsets: readonly number[]) => {
-    void synth.enable();
     const next = new Map<number, number>();
     offsets.forEach((offset) => next.set(doMidi + offset, 100));
     setLatchedNotes(next);
     setNewestNote(doMidi + offsets[offsets.length - 1]);
+    offsets.forEach((offset) => registerPlayedNote(doMidi + offset));
+    const combined = new Map(next);
+    midi.notes.forEach((velocity, midiNote) => combined.set(midiNote, velocity));
+    recordField(combined);
+  };
+
+  const adoptScaleCandidate = (candidate: ScaleCandidate) => {
+    setScaleId(candidate.scale.id);
+    makeDo(nearestMidiForPitchClass(candidate.rootPitchClass, 55));
   };
 
   const setSelectedAsDo = () => {
@@ -452,12 +405,12 @@ export function PianoLab() {
         <div>
           <p className="section-kicker">Piano companion · relationships translated onto keys</p>
           <h2 id="piano-title">Let the keyboard reveal the map—not replace it.</h2>
-          <p>Choose Do, then every key becomes a distance, a movable syllable, and a possible role in a scale. Play one note to locate it. Add notes to expose every interval and the way their spectra may interact.</p>
+          <p>Choose Do, then every key becomes a distance, a movable syllable, and a possible role in a scale. MIDI and on-screen keys act only as analytical input: add notes to reveal intervals, candidate scales, fifths position, modeled crunch, and motion toward or away from repose.</p>
         </div>
         <aside>
           <span>Keep the layers visible</span>
           <strong>Key position → frequency relationship → hearing model → scale context → your response</strong>
-          <p>The first four can be visualized. Whether the result is good, moving, or right for the moment remains a listener-and-context question.</p>
+          <p>The first four can be visualized without generating or capturing sound. Whether the result is good, moving, or right for the moment remains a listener-and-context question.</p>
         </aside>
       </div>
 
@@ -495,18 +448,17 @@ export function PianoLab() {
         ) : (
           <button type="button" onClick={() => void midi.connect()} disabled={midi.supported === false}>{midi.supported === false ? "MIDI unavailable here" : "Connect MIDI keyboard"}</button>
         )}
-        <button type="button" className={synth.enabled ? "is-sounding" : ""} onClick={synth.enabled ? synth.disable : () => void synth.enable()}>{synth.enabled ? "Turn piano sound off" : "Start piano sound"}</button>
-        <button type="button" onClick={clearNotes} disabled={activeNoteNumbers.length === 0}>Release all notes</button>
-        <details><summary>MIDI setup help</summary><p>The browser asks before reading your keyboard. Choose an input after permission. Note-on, note-off, velocity, and sustain pedal messages are visualized locally; nothing is uploaded. If MIDI is unavailable, the on-screen keys provide the same learning views.</p></details>
+        <div className="midi-analysis-only"><strong>Visualization only</strong><span>No sound is generated or recorded.</span></div>
+        <button type="button" onClick={clearNotes} disabled={activeNoteNumbers.length === 0 && analysisTrail.length === 0}>Clear held notes + trace</button>
+        <details><summary>MIDI setup help</summary><p>The browser asks before reading your keyboard. Choose an input after permission. Note-on, note-off, velocity, and sustain pedal messages are analyzed locally; nothing is uploaded. This page does not synthesize, record, or route audio. If MIDI is unavailable, the on-screen keys provide the same analytical views.</p></details>
       </div>
-      <p className="sr-only" role="status" aria-live="polite">{synth.message}</p>
 
       <div className="piano-instrument">
         <div className="piano-instrument-heading">
-          <div><span>{stage === "map" ? "Press one key, then walk the route" : stage === "combine" ? "Hold notes together or click to latch them" : "The selected fifths target is outlined on the keys"}</span><strong>{activeNoteNumbers.length === 0 ? "No notes sounding" : `${activeNoteNumbers.length} note${activeNoteNumbers.length === 1 ? "" : "s"} active`}</strong></div>
+          <div><span>{stage === "map" ? "Press one key, then walk the route" : stage === "combine" ? "Hold notes together or click to latch them" : "The selected fifths target is outlined on the keys"}</span><strong>{activeNoteNumbers.length === 0 ? "No notes held" : `${activeNoteNumbers.length} note${activeNoteNumbers.length === 1 ? "" : "s"} held`}</strong></div>
           <button type="button" onClick={() => makeDo(activeNoteNumbers[0] ?? newestNote)} disabled={activeNoteNumbers.length === 0 && playedHistory.length === 0}>Make {activeNoteNumbers.length ? "lowest active note" : "newest note"} Do</button>
         </div>
-        <div className="piano-keyboard" role="group" aria-label="Two-octave on-screen piano; click keys to latch and release notes">
+        <div className="piano-keyboard" role="group" aria-label="Two-octave on-screen piano; click keys to visualize, latch, and release notes without sound">
           <div className="piano-keys">{VISIBLE_NOTES.map((note) => renderKey(note, !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))))}</div>
         </div>
         <div className="chromatic-degree-strip" role="img" aria-label={`Twelve equal keyboard steps from Do. Scale route: ${scale.solfege.join(", ")}. Active positions are marked.`}>
@@ -517,6 +469,47 @@ export function PianoLab() {
           })}
         </div>
       </div>
+
+      <section className="live-sonority piano-live-reading" aria-labelledby="piano-live-reading-title">
+        <div className="live-sonority-heading">
+          <div><span>Live analytical reading · {activeNoteNumbers.length} held</span><h3 id="piano-live-reading-title">What pattern is this field making available?</h3></div>
+          <p>MIDI supplies key number, velocity, release, and sustain—not audio. Spectral values use the same declared nine-partial teaching proxy as the earlier labs. No total “listenability” or quality score is computed.</p>
+        </div>
+        <div className="piano-evidence-grid">
+          <EvidenceMeter label="Common periodic fit" value={enoughForSonority ? perception.harmonicity : null} note="Higher modeled alignment may support fusion; it does not guarantee consonance or liking." />
+          <EvidenceMeter label="Modeled spectral crunch" value={enoughForSonority ? perception.roughness : null} note="Partial interference may support bite or crowding under the standardized spectrum proxy." />
+          <EvidenceMeter label="Pull toward selected Do" value={activeNoteNumbers.length ? tendency.homePull : null} note={`${tendency.directNeighborCount ? `${tendency.directNeighborCount} adjacent pitch${tendency.directNeighborCount === 1 ? " intensifies" : "es intensify"}` : "Step distance and fifth relation shape"} this transparent tonal-frame heuristic.`} />
+          <EvidenceMeter label="Repose / arrival evidence" value={activeNoteNumbers.length ? arrivalEvidence : null} note={activeNoteNumbers.length ? `${resolution.label}${resolution.delta == null ? "" : ` · ${resolution.delta >= 0 ? "+" : ""}${Math.round(resolution.delta * 100)} points`}` : "Play or place a field to establish the first point."} />
+        </div>
+        <div className="piano-analysis-body">
+          <div className="piano-analysis-trace">
+            <div><span>Recent held fields</span><strong>Descriptor trace—not a musical-goodness plot</strong><small>{analysisTrail.length ? `Latest: ${analysisTrail.at(-1)?.label}` : "Hold notes to begin the trace."}</small></div>
+            <svg viewBox="0 0 640 166" role="img" aria-label={analysisTrail.length ? `Recent modeled crunch, pull toward Do, and arrival evidence across ${analysisTrail.length} held-note states.` : "No held-note analysis states yet."}>
+              <line x1="42" y1="30" x2="616" y2="30" className="analysis-grid-line" />
+              <line x1="42" y1="84" x2="616" y2="84" className="analysis-grid-line" />
+              <line x1="42" y1="138" x2="616" y2="138" className="analysis-grid-line" />
+              <text x="5" y="34">100</text><text x="13" y="88">50</text><text x="21" y="142">0</text>
+              {analysisTrail.length ? <>
+                <polyline points={tracePoints(analysisTrail, "crunch")} className="analysis-line is-crunch" />
+                <polyline points={tracePoints(analysisTrail, "pull")} className="analysis-line is-pull" />
+                <polyline points={tracePoints(analysisTrail, "arrival")} className="analysis-line is-arrival" />
+              </> : null}
+            </svg>
+            <div className="analysis-legend" aria-hidden="true"><span className="is-crunch">crunch</span><span className="is-pull">pull to Do</span><span className="is-arrival">arrival evidence</span></div>
+          </div>
+          <div className="piano-scale-candidates">
+            <div><span>Scale + center finder</span><strong>{scaleCandidates.length ? "Several frames can fit the same notes." : "Play a short phrase or chord."}</strong><small>Ranked only by pitch-class membership, route coverage, and whether the candidate home appeared. More distinct notes make the comparison more informative.</small></div>
+            <ol>
+              {scaleCandidates.map((candidate) => {
+                const relativeRoot = CHROMATIC_SOLFEGE[pitchClassFromMidi(candidate.rootPitchClass - pitchClassFromMidi(doMidi))];
+                const conventionalRoot = CONVENTIONAL_PITCH_CLASSES[candidate.rootPitchClass];
+                return <li key={`${candidate.rootPitchClass}-${candidate.scale.id}`}><button type="button" onClick={() => adoptScaleCandidate(candidate)}><span>{Math.round(candidate.fit * 100)}% pattern fit</span><strong>Do = {relativeRoot}{showConventions ? ` (${conventionalRoot})` : ""} · {candidate.scale.name}</strong><small>{candidate.inScaleCount}/{candidate.uniqueNoteCount} observed positions inside · {candidate.routeCoveredCount}/{candidate.scale.solfege.length} route positions seen</small></button></li>;
+              })}
+            </ol>
+            <p>{scaleCandidates.length ? "Choose a candidate to re-center Do and load that route. A high fit means compatible, not proven." : "The finder deliberately waits for note evidence; it does not assume the selected route is what you meant."}</p>
+          </div>
+        </div>
+      </section>
 
       {stage === "map" ? (
         <div className="piano-map-stage">
@@ -547,18 +540,8 @@ export function PianoLab() {
       ) : stage === "combine" ? (
         <div className="piano-combine-stage">
           <section className="sonority-recipes" aria-labelledby="sonority-recipes-title">
-            <div><span>Controlled comparisons</span><h3 id="sonority-recipes-title">Change one interval inside the whole.</h3><p>These are starting fields, not emotion buttons. Listen for what the physical change makes possible, then decide what it does for you.</p></div>
+            <div><span>Controlled comparisons</span><h3 id="sonority-recipes-title">Change one interval inside the whole.</h3><p>These are analytical starting fields, not emotion buttons. Compare how each relationship changes the live evidence and trace; the page remains silent.</p></div>
             <div>{SONORITY_SETS.map((set) => <button key={set.label} type="button" onClick={() => loadSet(set.offsets)}><strong>{set.label}</strong><span>{set.relation}</span><small>{set.possibility}</small></button>)}</div>
-          </section>
-
-          <section className="live-sonority" aria-labelledby="live-sonority-title">
-            <div className="live-sonority-heading"><div><span>Live evidence · {activeNoteNumbers.length} active</span><h3 id="live-sonority-title">What changed when the notes met?</h3></div><p>No total “listenability” or quality score is computed. The measures below answer different questions and may disagree.</p></div>
-            <div className="piano-evidence-grid">
-              <EvidenceMeter label="Common periodic fit" value={enoughForSonority ? perception.harmonicity : null} note="Higher fit may support fusion or groundedness with this timbre." />
-              <EvidenceMeter label="Spectral friction" value={enoughForSonority ? perception.roughness : null} note="Higher interaction may support bite, urgency, shimmer, or unwanted crowding." />
-              <EvidenceMeter label="Pitch-span openness" value={enoughForSonority ? perception.openness : null} note="A wider logarithmic span may support breadth or exposure." />
-              <EvidenceMeter label="Selected-route membership" value={activeNoteNumbers.length ? coverage.fraction : null} note="Familiarity with this route may support coherence; outside notes can be expressive." />
-            </div>
           </section>
 
           <section className="interval-network" aria-labelledby="interval-network-title">
@@ -571,11 +554,11 @@ export function PianoLab() {
           <div className="piano-causal-chain">
             <div><span>1 · physical</span><strong>{activeNoteNumbers.length ? activeNoteNumbers.map((note) => formatHz(frequencyFromMidi(note))).join(" · ") : "press or choose notes"}</strong><p>Frequencies, velocities, register, and overtone spectra.</p></div>
             <i aria-hidden="true">→</i>
-            <div><span>2 · auditory model</span><strong>{enoughForSonority ? `${Math.round(perception.harmonicity * 100)}% periodic fit · ${Math.round(perception.roughness * 100)}% friction` : "needs overlapping notes"}</strong><p>One educational model of partial fit and interference.</p></div>
+            <div><span>2 · auditory proxy</span><strong>{enoughForSonority ? `${Math.round(perception.harmonicity * 100)}% periodic fit · ${Math.round(perception.roughness * 100)}% crunch` : "needs overlapping notes"}</strong><p>A standardized nine-partial model—not sound captured from your keyboard.</p></div>
             <i aria-hidden="true">→</i>
             <div><span>3 · scale context</span><strong>{activeNoteNumbers.length ? `${coverage.inScaleCount}/${coverage.noteCount} in route${coverage.hasHome ? " · Do present" : ""}` : "no active context"}</strong><p>Membership describes the chosen frame, not correctness.</p></div>
             <i aria-hidden="true">→</i>
-            <div><span>4 · lived musicality</span><strong>listen, compare, report</strong><p>Style, sequence, memory, purpose, and you determine what the field becomes.</p></div>
+            <div><span>4 · lived musicality</span><strong>interpret in sequence</strong><p>Style, rhythm, memory, purpose, and the listener determine what the field becomes.</p></div>
           </div>
         </div>
       ) : (
@@ -587,7 +570,7 @@ export function PianoLab() {
                 <div className="fifths-center"><span>12 × 3:2</span><strong>≈ 7 octaves</strong><small>pure mismatch<br />{circle.closureDriftCents.toFixed(1)} cents</small></div>
                 {circle.nodes.map((node) => {
                   const absolutePitchClass = (pitchClassFromMidi(doMidi) + node.pitchClass) % 12;
-                  return <button key={node.step} type="button" className={fifthStep === node.step ? "is-selected" : ""} aria-pressed={fifthStep === node.step} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties} onClick={() => setFifthStep(node.step)}><strong>{node.syllable}</strong><span>{node.step === 0 ? "home" : `${node.step} × fifth`}</span>{showConventions ? <small>{CONVENTIONAL_PITCH_CLASSES[absolutePitchClass]}</small> : null}</button>;
+                  return <button key={node.step} type="button" className={`${fifthStep === node.step ? "is-selected" : ""} ${activeFifthSteps.has(node.step) ? "is-active" : ""}`} aria-pressed={fifthStep === node.step} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties} onClick={() => setFifthStep(node.step)}><strong>{node.syllable}</strong><span>{activeFifthSteps.has(node.step) ? "held now" : node.step === 0 ? "home" : `${node.step} × fifth`}</span>{showConventions ? <small>{CONVENTIONAL_PITCH_CLASSES[absolutePitchClass]}</small> : null}</button>;
                 })}
               </div>
               <div className="fifths-inspector">
@@ -609,7 +592,7 @@ export function PianoLab() {
           </section>
 
           <div className="fifths-path" aria-label="Movable-Do circle order">
-            {circle.nodes.map((node, index) => <button key={node.step} type="button" className={fifthStep === index ? "is-selected" : ""} onClick={() => setFifthStep(index)}><span>{index}</span><strong>{node.syllable}</strong><small>{node.pitchClass * 100}¢ from Do</small></button>)}
+            {circle.nodes.map((node, index) => <button key={node.step} type="button" className={`${fifthStep === index ? "is-selected" : ""} ${activeFifthSteps.has(index) ? "is-active" : ""}`} onClick={() => setFifthStep(index)}><span>{index}</span><strong>{node.syllable}</strong><small>{activeFifthSteps.has(index) ? "held now" : `${node.pitchClass * 100}¢ from Do`}</small></button>)}
           </div>
 
           <div className="fifths-takeaway"><span>Why musicians use this map</span><strong>Nearby points preserve many scale tones while moving the center; distant points replace more of the route.</strong><p>That makes the circle useful for transposition, chord motion, and scale comparison. It does not say which path is emotionally right. Repetition, voice leading, rhythm, timbre, style, and expectation turn the geometry into musical experience.</p></div>
