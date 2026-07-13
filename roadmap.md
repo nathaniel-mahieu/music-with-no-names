@@ -495,6 +495,7 @@ Objective: introduce a piano as a silent, interactive translation of the existin
 - [x] **K2.6.11** Add ranked scale-and-center compatibility, held-note fifths highlighting, modeled crunch, tonal pull, repose/arrival evidence, and a multi-state descriptor trace while keeping every output separate from musical quality.
 - [x] **K2.6.12** Consolidate Piano Lab into one always-visible HUD: preserve the last seven note-on attacks (including repetitions), align staff and log-frequency plots, number visits on a fixed fifths compass, stabilize changing scale frames, distinguish exact chords from outlines, rank nearby chord moves by retained tones, visualize sustain, and coordinate separate crunch, pull, arrival, leap, and voice-motion traces.
 - [x] **K2.6.13** Add an explicit temporal chord-gesture layer with adjustable attack-gap granularity and a hard maximum span; keep attacked membership separate from inherited held/pedal context, align selectable chord brackets across the seven-event HUD, and add chord-level crunch, pull, arrival, pitch-set novelty, voice motion, and exact-root fifths travel without combining them into a quality score.
+- [x] **K2.6.14** Audit and polish the chord HUD: prevent incomplete outlines from implying exact identity or a known fifths root, hide neighbor suggestions until a source field exists, realize suggested chords with economical register-aware voice leading, enlarge essential labels, simplify copy, and verify narrow/wide interaction without horizontal clipping.
 
 Exit gate:
 

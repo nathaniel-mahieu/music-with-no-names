@@ -20,6 +20,7 @@ import {
   pushRollingNoteEvent,
   resolutionDirection,
   tonalTendency,
+  voiceChordNear,
 } from "../lib/piano-model.ts";
 
 test("maps equal-tempered MIDI notes to physical frequency", () => {
@@ -138,6 +139,15 @@ test("separates chord pitch-set novelty, voice motion, and fifths travel", () =>
     rootTravel: 0,
     rootTravelSteps: null,
   });
+});
+
+test("voices nearby chords near the current hand position", () => {
+  assert.deepEqual(voiceChordNear([5, 9, 0], [60, 64, 67], 64), [60, 65, 69]);
+  assert.deepEqual(voiceChordNear([7, 11, 2], [60, 64, 67], 64), [59, 62, 67]);
+  assert.deepEqual(voiceChordNear([], [60, 64, 67], 64), []);
+  assert.deepEqual(voiceChordNear([0, 4, 7], [], Number.NaN), []);
+  assert.deepEqual(voiceChordNear([0, 1, 2, 3, 4, 5, 6], [60], 60), []);
+  assert.deepEqual(voiceChordNear([Number.NaN], [60], 60), []);
 });
 
 test("waits for enough distinct evidence before stabilizing a scale frame", () => {

@@ -36,6 +36,8 @@ The v1.26 HUD fixtures additionally require a strict seven-event note-on buffer 
 
 The v1.27 temporal-chord fixtures enforce both adjacent-gap and maximum-span boundaries, keep inherited sounding tones out of attacked chord membership, reject repeated attacks of one pitch class as a chord, and independently measure pitch-set novelty, symmetric voice-motion distance, shared tones, and exact-root travel around the fifths cycle.
 
+The v1.28 polish fixtures add bounded register-aware chord realization and reject empty, invalid, or overlarge pitch collections before combinatorial voicing work. Browser checks confirm that incomplete dyads remain labeled as outlines with an unknown root, exact triads restore root travel, suggested moves stay near the current hand position, essential HUD copy remains readable, and 390-pixel and desktop layouts avoid horizontal clipping.
+
 Source-level accessibility contracts require a named piano region, native on-screen key and event buttons, polite live status, named SVG summaries, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
 
 ## Playback-level invariants

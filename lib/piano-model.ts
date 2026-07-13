@@ -524,6 +524,41 @@ export function chordTransitionEvidence(
   };
 }
 
+export function voiceChordNear(pitchClasses: number[], sourceNotes: number[] = [], centerMidi = 60) {
+  if (!Number.isFinite(centerMidi)) return [];
+  const targets = [...new Set(pitchClasses.filter(Number.isFinite).map((pitchClass) => modulo(Math.round(pitchClass), 12)))];
+  if (!targets.length || targets.length > 6) return [];
+  const center = Math.round(centerMidi);
+  const choices = targets.map((pitchClass) => {
+    const notes: number[] = [];
+    for (let note = center - 24; note <= center + 24; note += 1) {
+      if (pitchClassFromMidi(note) === pitchClass) notes.push(note);
+    }
+    return notes;
+  });
+  let combinations: number[][] = [[]];
+  choices.forEach((notes) => {
+    combinations = combinations.flatMap((combination) => notes.map((note) => [...combination, note]));
+  });
+  const source = sourceNotes.filter(Number.isFinite).map(Math.round).sort((first, second) => first - second);
+  const sourceCenter = source.length ? source.reduce((sum, note) => sum + note, 0) / source.length : center;
+  const score = (combination: number[]) => {
+    const voiced = [...combination].sort((first, second) => first - second);
+    const voicedCenter = voiced.reduce((sum, note) => sum + note, 0) / voiced.length;
+    const span = voiced.at(-1)! - voiced[0];
+    const motion = source.length
+      ? (nearestVoiceDistance(source, voiced) + nearestVoiceDistance(voiced, source)) / 2
+      : 0;
+    const rootInBassPenalty = pitchClassFromMidi(voiced[0]) === targets[0] ? 0 : 0.7;
+    return motion * 4
+      + Math.abs(voicedCenter - sourceCenter) * 0.15
+      + Math.max(0, span - 12) * 0.08
+      + (source.length ? 0 : rootInBassPenalty);
+  };
+  const best = combinations.sort((first, second) => score(first) - score(second))[0];
+  return best ? [...best].sort((first, second) => first - second) : [];
+}
+
 function pitchClassSet(notes: number[]) {
   return [...new Set(notes.map((note) => pitchClassFromMidi(note)))].sort((first, second) => first - second);
 }
