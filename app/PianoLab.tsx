@@ -33,6 +33,7 @@ import {
   tonalTendency,
   voiceChordNear,
   type ChordCandidate,
+  type ChordBoundaryCorrection,
   type ChordGesture,
   type NearbyChord,
   type PianoScale,
@@ -58,6 +59,9 @@ type HudNoteEvent = {
   channel: number;
   source: "midi" | "screen";
   onsetMs: number;
+  keyReleaseMs: number | null;
+  releaseMs: number | null;
+  releaseReason: "key" | "pedal" | null;
   fieldNotes: number[];
 };
 type EventMeasure = {
@@ -83,6 +87,26 @@ type ChordMeasure = {
   commonPitchClassCount: number;
 };
 type FrameMode = "discover" | "locked";
+type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion";
+type IntervalEchoTarget = { semitones: number; anchorEventId: number };
+
+type MidiCallbacks = {
+  onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
+  onRelease: (note: number, channel: number, atMs: number, heldByPedal: boolean) => void;
+  onSustain: (down: boolean, channel: number, atMs: number, releasedNotes: number[]) => void;
+};
+
+type PersistedPianoSession = {
+  version: 1;
+  events: HudNoteEvent[];
+  chordWindowMs: number;
+  boundaryCorrections: Record<number, ChordBoundaryCorrection>;
+  focusLens: FocusLens;
+  showConventions: boolean;
+  frameMode: FrameMode;
+  lockedScaleId: PianoScale["id"];
+  lockedDoMidi: number;
+};
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const VISIBLE_NOTES = Array.from({ length: 25 }, (_, index) => 48 + index);
@@ -90,6 +114,14 @@ const WHITE_NOTES = VISIBLE_NOTES.filter((note) => WHITE_PITCH_CLASSES.has(pitch
 const DEFAULT_SCALE = PIANO_SCALES[0];
 const FIFTHS_ORDER = fifthsCircle();
 const EVENT_X = (slot: number) => 84 + slot * 88;
+const PIANO_SESSION_KEY = "music-with-no-names:piano-session:v1";
+const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }> = [
+  { id: "explore", label: "Explore", description: "See the whole phrase across every representation." },
+  { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },
+  { id: "scales", label: "Scales", description: "See how pitch evidence suggests Do and a scale route." },
+  { id: "chords", label: "Chords", description: "Inspect grouping, chord identity, and one-change consequences." },
+  { id: "motion", label: "Motion", description: "Follow pull, repose, novelty, and voice movement through time." },
+];
 
 function formatHz(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
@@ -97,6 +129,10 @@ function formatHz(value: number) {
 
 function uniqueSorted(notes: number[]) {
   return [...new Set(notes.map(Math.round))].sort((first, second) => first - second);
+}
+
+function currentHudTime() {
+  return performance.now();
 }
 
 function relativeSyllable(note: number, doMidi: number, scale: PianoScale) {
@@ -119,13 +155,13 @@ function gestureSlots(gesture: HudChordGesture, events: HudNoteEvent[]) {
   return { start: Math.max(0, start), end: Math.max(0, end) };
 }
 
-function useMidiKeyboard(onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[]) => void) {
+function useMidiKeyboard(callbacks: MidiCallbacks) {
   const accessRef = useRef<MidiAccessLike | null>(null);
   const pressedRef = useRef(new Set<number>());
   const sustainedRef = useRef(new Set<number>());
   const sustainDownRef = useRef(false);
   const notesRef = useRef(new Map<number, number>());
-  const onAttackRef = useRef(onAttack);
+  const callbacksRef = useRef(callbacks);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [inputs, setInputs] = useState<MidiInputLike[]>([]);
   const [selectedInputId, setSelectedInputId] = useState("");
@@ -134,7 +170,7 @@ function useMidiKeyboard(onAttack: (note: number, velocity: number, channel: num
   const [sustained, setSustained] = useState<Set<number>>(new Set());
   const [status, setStatus] = useState("Connect a MIDI keyboard, or use the silent on-screen keys.");
 
-  useEffect(() => { onAttackRef.current = onAttack; }, [onAttack]);
+  useEffect(() => { callbacksRef.current = callbacks; }, [callbacks]);
 
   const publish = useCallback(() => {
     setNotes(new Map(notesRef.current));
@@ -183,18 +219,21 @@ function useMidiKeyboard(onAttack: (note: number, velocity: number, channel: num
     setStatus(`Visualizing ${input.name || "MIDI input"}. No sound is generated or recorded.`);
     input.onmidimessage = (event) => {
       const message = parseMidiMessage(event.data);
+      const atMs = performance.now();
       if (message.type === "note-on") {
         pressedRef.current.add(message.note);
         sustainedRef.current.delete(message.note);
         notesRef.current.set(message.note, message.velocity);
         publish();
-        onAttackRef.current(message.note, message.velocity, message.channel, uniqueSorted(Array.from(notesRef.current.keys())));
+        callbacksRef.current.onAttack(message.note, message.velocity, message.channel, uniqueSorted(Array.from(notesRef.current.keys())), atMs);
       } else if (message.type === "note-off") {
         pressedRef.current.delete(message.note);
         if (sustainDownRef.current) sustainedRef.current.add(message.note);
         else notesRef.current.delete(message.note);
+        callbacksRef.current.onRelease(message.note, message.channel, atMs, sustainDownRef.current);
         publish();
       } else if (message.type === "sustain") {
+        const releasedNotes = message.down ? [] : Array.from(sustainedRef.current).filter((note) => !pressedRef.current.has(note));
         sustainDownRef.current = message.down;
         if (!message.down) {
           sustainedRef.current.forEach((note) => {
@@ -202,6 +241,7 @@ function useMidiKeyboard(onAttack: (note: number, velocity: number, channel: num
           });
           sustainedRef.current.clear();
         }
+        callbacksRef.current.onSustain(message.down, message.channel, atMs, releasedNotes);
         publish();
       }
     };
@@ -267,18 +307,24 @@ function StaffView({ events, gestures, selectedChordId, doMidi, scale, focusedId
   );
 }
 
-function ChordGestureLane({ events, measures, selectedChordId, doMidi, showConventions, onSelect }: {
+function ChordGestureLane({ events, measures, selectedChordId, focusedId, boundaryCorrections, doMidi, showConventions, onSelect, onBoundaryChange }: {
   events: HudNoteEvent[];
   measures: ChordMeasure[];
   selectedChordId: string | null;
+  focusedId: number | null;
+  boundaryCorrections: Record<number, ChordBoundaryCorrection>;
   doMidi: number;
   showConventions: boolean;
   onSelect: (id: string) => void;
+  onBoundaryChange: (eventId: number, correction: ChordBoundaryCorrection | null) => void;
 }) {
+  const focusedIndex = events.findIndex((event) => event.id === focusedId);
+  const focusedCorrection = focusedId == null ? undefined : boundaryCorrections[focusedId];
   return (
-    <div className="hud-chord-lane" aria-label="Chord gestures grouped by attack timing">
-      <span className="hud-chord-lane-label">chord grouping</span>
-      <div>
+    <div className="hud-chord-lane-wrap">
+      <div className="hud-chord-lane" aria-label="Chord gestures grouped by attack timing">
+        <span className="hud-chord-lane-label">chord grouping</span>
+        <div>
         {measures.map((measure) => {
           const slots = gestureSlots(measure.gesture, events);
           const label = measure.candidate ? `${measure.candidate.exact ? "" : "≈ "}${chordLabel(measure.candidate, doMidi, showConventions)}` : `${new Set(measure.gesture.attackedNotes.map(pitchClassFromMidi)).size}-position field`;
@@ -296,6 +342,13 @@ function ChordGestureLane({ events, measures, selectedChordId, doMidi, showConve
           </button>;
         })}
         {!measures.length ? <p>Notes inside the chosen time window will share a bracket.</p> : null}
+        </div>
+      </div>
+      <div className="hud-boundary-controls" aria-label="Correct chord grouping">
+        <span>{focusedIndex > 0 ? `Before attack ${focusedIndex + 1}` : "Select attack 2–7 to correct its boundary"}</span>
+        <button type="button" disabled={focusedIndex <= 0} aria-pressed={focusedCorrection === "break"} onClick={() => focusedId != null && onBoundaryChange(focusedId, focusedCorrection === "break" ? null : "break")}>Start new chord</button>
+        <button type="button" disabled={focusedIndex <= 0} aria-pressed={focusedCorrection === "join"} onClick={() => focusedId != null && onBoundaryChange(focusedId, focusedCorrection === "join" ? null : "join")}>Join previous</button>
+        {focusedCorrection ? <button type="button" onClick={() => focusedId != null && onBoundaryChange(focusedId, null)}>Use timing</button> : null}
       </div>
     </div>
   );
@@ -506,14 +559,133 @@ function nearbyLabel(chord: NearbyChord, doMidi: number, showConventions: boolea
   return showConventions ? CONVENTIONAL_PITCH_CLASSES[chord.rootPitchClass] : chord.syllable;
 }
 
+function durationLabel(event: HudNoteEvent, nowMs: number) {
+  const end = event.releaseMs ?? nowMs;
+  const duration = Math.max(0, end - event.onsetMs);
+  if (duration < 1000) return `${Math.round(duration)} ms`;
+  return `${(duration / 1000).toFixed(1)} s`;
+}
+
+function PhraseRibbon({ events, nowMs, doMidi, scale, focusedId, showConventions }: {
+  events: HudNoteEvent[];
+  nowMs: number;
+  doMidi: number;
+  scale: PianoScale;
+  focusedId: number | null;
+  showConventions: boolean;
+}) {
+  const firstOnset = events[0]?.onsetMs ?? 0;
+  const lastEnd = events.reduce((latest, event) => Math.max(latest, event.releaseMs ?? nowMs), firstOnset + 800);
+  const span = Math.max(800, lastEnd - firstOnset);
+  const notes = events.map((event) => event.note);
+  const low = notes.length ? Math.min(...notes) - 1 : doMidi - 6;
+  const high = notes.length ? Math.max(...notes) + 1 : doMidi + 6;
+  const xFor = (atMs: number) => 58 + ((atMs - firstOnset) / span) * 632;
+  const yFor = (note: number) => 118 - ((note - low) / Math.max(1, high - low)) * 82;
+  return (
+    <section className="hud-phrase-ribbon" aria-labelledby="hud-ribbon-title">
+      <div className="hud-panel-heading"><span>One phrase, every lens</span><strong id="hud-ribbon-title">Live phrase ribbon</strong><small>Length is sounding time · tail is pedal sustain · height is pitch · opacity is attack strength.</small></div>
+      <svg viewBox="0 0 720 142" role="img" aria-label={events.length ? `Phrase ribbon with ${events.length} attacks and their sounding durations` : "Empty live phrase ribbon waiting for note attacks"}>
+        <title>Live phrase timing, pitch, velocity, release, and pedal sustain</title>
+        {[36, 77, 118].map((y) => <line key={y} x1="58" x2="690" y1={y} y2={y} className="hud-grid-line" />)}
+        {events.map((event, index) => {
+          const keyEnd = event.keyReleaseMs ?? event.releaseMs ?? nowMs;
+          const soundingEnd = event.releaseMs ?? nowMs;
+          const x = xFor(event.onsetMs);
+          const keyWidth = Math.max(5, xFor(keyEnd) - x);
+          const tailWidth = Math.max(0, xFor(soundingEnd) - xFor(keyEnd));
+          const y = yFor(event.note);
+          const context = noteContext(event.note, doMidi, scale);
+          return <g key={event.id} className={event.id === focusedId ? "is-focused" : ""} aria-label={`Attack ${index + 1}, ${showConventions ? conventionalPitchName(event.note) : context.syllable}, ${durationLabel(event, nowMs)}`}>
+            <rect x={x} y={y - 5} width={keyWidth} height="10" rx="5" className="hud-ribbon-key" style={{ "--attack-strength": Math.max(.28, event.velocity / 127) } as CSSProperties} />
+            {tailWidth > 0 ? <line x1={xFor(keyEnd)} x2={xFor(soundingEnd)} y1={y} y2={y} className="hud-ribbon-pedal" /> : null}
+            <circle cx={x} cy={y} r="7" className="hud-ribbon-attack" />
+            <text x={x} y={Math.max(14, y - 12)} className="hud-point-label">{index + 1} · {showConventions ? conventionalPitchName(event.note) : context.syllable}</text>
+          </g>;
+        })}
+        {!events.length ? <text x="374" y="80" className="hud-empty-label">Your phrase will keep its timing, touch, release, and pedal shape here</text> : null}
+        {events.length ? <text x="690" y="136" className="hud-axis-label">{(span / 1000).toFixed(1)} s</text> : null}
+      </svg>
+    </section>
+  );
+}
+
+function IntervalEcho({ events, target, doMidi, scale, showConventions, onSetTarget, onClear }: {
+  events: HudNoteEvent[];
+  target: IntervalEchoTarget | null;
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+  onSetTarget: (target: IntervalEchoTarget) => void;
+  onClear: () => void;
+}) {
+  const latestPair = events.length >= 2 ? [events.at(-2)!, events.at(-1)!] as const : null;
+  const latestDistance = latestPair ? Math.abs(latestPair[1].note - latestPair[0].note) : null;
+  const afterTarget = target ? events.filter((event) => event.id > target.anchorEventId) : [];
+  const attempt = afterTarget.length >= 2 ? Math.abs(afterTarget.at(-1)!.note - afterTarget.at(-2)!.note) : null;
+  const matched = target != null && attempt === target.semitones;
+  const landmark = latestDistance == null ? null : intervalLandmark(latestDistance);
+  return (
+    <section className="hud-echo-panel" aria-labelledby="hud-echo-title">
+      <div className="hud-panel-heading"><span>Transfer, don’t memorize</span><strong id="hud-echo-title">Interval Echo</strong><small>Replay the same spacing from another key. The HUD stays silent and checks the relationship.</small></div>
+      {latestPair && landmark ? <div className="hud-echo-current">
+        <span>{showConventions ? `${conventionalPitchName(latestPair[0].note)} → ${conventionalPitchName(latestPair[1].note)}` : `${relativeSyllable(latestPair[0].note, doMidi, scale)} → ${relativeSyllable(latestPair[1].note, doMidi, scale)}`}</span>
+        <strong>{latestDistance} key step{latestDistance === 1 ? "" : "s"}</strong>
+        <small>{landmark.relationship} · near {landmark.landmarkLabel}</small>
+      </div> : <p className="hud-empty-copy">Play two notes to create an interval worth echoing.</p>}
+      <div className="hud-echo-actions">
+        <button type="button" disabled={!latestPair || latestDistance == null} onClick={() => latestPair && latestDistance != null && onSetTarget({ semitones: latestDistance, anchorEventId: latestPair[1].id })}>Echo this spacing</button>
+        {target ? <button type="button" onClick={onClear}>End echo</button> : null}
+      </div>
+      {target ? <div className={`hud-echo-feedback ${matched ? "is-match" : ""}`} aria-live="polite">
+        <span>Ghost target · {target.semitones} key step{target.semitones === 1 ? "" : "s"}</span>
+        <strong>{attempt == null ? "Play a new starting note, then a second note." : matched ? "Same relationship—new place." : `You moved ${attempt}. Keep the shape and try again.`}</strong>
+      </div> : null}
+    </section>
+  );
+}
+
+function ChordCausePanel({ measures, selectedId, doMidi, showConventions }: {
+  measures: ChordMeasure[];
+  selectedId: string | null;
+  doMidi: number;
+  showConventions: boolean;
+}) {
+  const selectedIndex = measures.findIndex((measure) => measure.gesture.id === selectedId);
+  const index = selectedIndex >= 0 ? selectedIndex : measures.length - 1;
+  const current = measures[index] ?? measures.at(-1) ?? null;
+  const previous = current ? measures[measures.indexOf(current) - 1] ?? null : null;
+  if (!current || !previous) return <section className="hud-cause-panel"><div className="hud-panel-heading"><span>Change one chord</span><strong>Causal chord view</strong><small>A second grouped chord creates the comparison baseline.</small></div><p className="hud-empty-copy">Play two chord gestures. The HUD will separate what changed from how the model changed.</p></section>;
+  const previousSet = new Set(previous.gesture.attackedNotes.map(pitchClassFromMidi));
+  const currentSet = new Set(current.gesture.attackedNotes.map(pitchClassFromMidi));
+  const namePc = (pc: number) => showConventions ? CONVENTIONAL_PITCH_CLASSES[pc] : CHROMATIC_SOLFEGE[pitchClassFromMidi(pc - pitchClassFromMidi(doMidi))];
+  const added = [...currentSet].filter((pc) => !previousSet.has(pc)).map(namePc);
+  const removed = [...previousSet].filter((pc) => !currentSet.has(pc)).map(namePc);
+  const kept = [...currentSet].filter((pc) => previousSet.has(pc)).map(namePc);
+  const delta = (currentValue: number | null, previousValue: number | null) => currentValue == null || previousValue == null ? null : Math.round((currentValue - previousValue) * 100);
+  const deltas = [
+    { label: "modeled roughness", value: delta(current.crunch, previous.crunch) },
+    { label: "pull toward Do", value: delta(current.pull, previous.pull) },
+    { label: "repose evidence", value: delta(current.arrival, previous.arrival) },
+  ];
+  return <section className="hud-cause-panel" aria-labelledby="hud-cause-title">
+    <div className="hud-panel-heading"><span>Change → consequence</span><strong id="hud-cause-title">Causal chord view</strong><small>These deltas describe this assumed sound model, not an emotional verdict.</small></div>
+    <div className="hud-cause-change"><span>{added.length ? `added ${added.join(" · ")}` : "added none"}</span><span>{removed.length ? `released ${removed.join(" · ")}` : "released none"}</span><span>{kept.length ? `kept ${kept.join(" · ")}` : "kept no positions"}</span></div>
+    <div className="hud-cause-deltas">{deltas.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value == null ? "—" : `${item.value > 0 ? "+" : ""}${item.value}`}</strong><em>{item.value == null ? "not available" : item.value > 3 ? "more" : item.value < -3 ? "less" : "similar"}</em></span>)}</div>
+  </section>;
+}
+
 export function PianoLab() {
   const [events, setEvents] = useState<HudNoteEvent[]>([]);
   const [focusedId, setFocusedId] = useState<number | null>(null);
   const [selectedChordId, setSelectedChordId] = useState<string | null>(null);
   const [chordWindowMs, setChordWindowMs] = useState(160);
+  const [boundaryCorrections, setBoundaryCorrections] = useState<Record<number, ChordBoundaryCorrection>>({});
   const [latchedNotes, setLatchedNotes] = useState<Map<number, number>>(new Map());
   const [showConventions, setShowConventions] = useState(false);
   const [frozen, setFrozen] = useState(false);
+  const [focusLens, setFocusLens] = useState<FocusLens>("explore");
+  const [intervalEchoTarget, setIntervalEchoTarget] = useState<IntervalEchoTarget | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
   const [lockedDoMidi, setLockedDoMidi] = useState(60);
@@ -521,12 +693,89 @@ export function PianoLab() {
   const frozenRef = useRef(false);
   const eventsRef = useRef<HudNoteEvent[]>([]);
   const [rememberedFrame, setRememberedFrame] = useState<ScaleCandidate | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [nowMs, setNowMs] = useState(0);
 
   useEffect(() => { frozenRef.current = frozen; }, [frozen]);
 
-  const addEvent = useCallback((note: number, velocity: number, channel: number, source: HudNoteEvent["source"], fieldNotes: number[]) => {
+  useEffect(() => {
+    const hydrationTask = window.setTimeout(() => {
+      const currentNow = currentHudTime();
+      setNowMs(currentNow);
+      try {
+        const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw) as PersistedPianoSession;
+          if (saved.version === 1 && Array.isArray(saved.events)) {
+            const lastOnset = saved.events.at(-1)?.onsetMs ?? currentNow;
+            const shift = currentNow - lastOnset - 350;
+            const restored = saved.events.map((event) => ({
+              ...event,
+              onsetMs: event.onsetMs + shift,
+              keyReleaseMs: event.keyReleaseMs == null ? null : event.keyReleaseMs + shift,
+              releaseMs: event.releaseMs == null ? currentNow - 350 : event.releaseMs + shift,
+              releaseReason: event.releaseReason ?? "key",
+            }));
+            eventsRef.current = restored;
+            setEvents(restored);
+            nextIdRef.current = Math.max(0, ...restored.map((event) => event.id)) + 1;
+            setFocusedId(restored.at(-1)?.id ?? null);
+            setChordWindowMs(saved.chordWindowMs ?? 160);
+            setBoundaryCorrections(saved.boundaryCorrections ?? {});
+            setFocusLens(saved.focusLens ?? "explore");
+            setShowConventions(Boolean(saved.showConventions));
+            setFrameMode(saved.frameMode ?? "discover");
+            setLockedScaleId(saved.lockedScaleId ?? DEFAULT_SCALE.id);
+            setLockedDoMidi(saved.lockedDoMidi ?? 60);
+          }
+        }
+      } catch {
+        window.sessionStorage.removeItem(PIANO_SESSION_KEY);
+      }
+      setHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(hydrationTask);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const session: PersistedPianoSession = { version: 1, events, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi };
+    try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
+  }, [boundaryCorrections, chordWindowMs, events, focusLens, frameMode, hydrated, lockedDoMidi, lockedScaleId, showConventions]);
+
+  useEffect(() => {
+    if (!events.some((event) => event.releaseMs == null)) return;
+    const timer = window.setInterval(() => setNowMs(currentHudTime()), 120);
+    return () => window.clearInterval(timer);
+  }, [events]);
+
+  const updateEvents = useCallback((updater: (current: HudNoteEvent[]) => HudNoteEvent[]) => {
+    const next = updater(eventsRef.current);
+    eventsRef.current = next;
+    setEvents(next);
+  }, []);
+
+  const releaseEvent = useCallback((note: number, channel: number, source: HudNoteEvent["source"], atMs: number, heldByPedal: boolean) => {
+    updateEvents((current) => {
+      const index = current.findLastIndex((event) => event.note === note && event.channel === channel && event.source === source && event.releaseMs == null);
+      if (index < 0) return current;
+      return current.map((event, eventIndex) => eventIndex === index ? {
+        ...event,
+        keyReleaseMs: atMs,
+        releaseMs: heldByPedal ? null : atMs,
+        releaseReason: heldByPedal ? null : "key",
+      } : event);
+    });
+  }, [updateEvents]);
+
+  const releasePedalEvents = useCallback((notes: number[], channel: number, atMs: number) => {
+    const released = new Set(notes);
+    updateEvents((current) => current.map((event) => event.channel === channel && released.has(event.note) && event.keyReleaseMs != null && event.releaseMs == null ? { ...event, releaseMs: atMs, releaseReason: "pedal" } : event));
+  }, [updateEvents]);
+
+  const addEvent = useCallback((note: number, velocity: number, channel: number, source: HudNoteEvent["source"], fieldNotes: number[], atMs = currentHudTime()) => {
     if (frozenRef.current) return;
-    const event: HudNoteEvent = { id: nextIdRef.current, note, velocity, channel, source, onsetMs: performance.now(), fieldNotes: uniqueSorted(fieldNotes) };
+    const event: HudNoteEvent = { id: nextIdRef.current, note, velocity, channel, source, onsetMs: atMs, keyReleaseMs: null, releaseMs: null, releaseReason: null, fieldNotes: uniqueSorted(fieldNotes) };
     nextIdRef.current += 1;
     const nextEvents = pushRollingNoteEvent(eventsRef.current, event, 7);
     eventsRef.current = nextEvents;
@@ -534,13 +783,16 @@ export function PianoLab() {
     const nextStable = scaleFrameTimeline(nextEvents.map((item) => item.note)).at(-1)?.stable;
     if (nextStable) setRememberedFrame(nextStable);
     setFocusedId(event.id);
+    setNowMs(atMs);
   }, []);
 
-  const midiAttack = useCallback((note: number, velocity: number, channel: number, midiField: number[]) => {
+  const midiAttack = useCallback((note: number, velocity: number, channel: number, midiField: number[], atMs: number) => {
     const combined = new Set([...latchedNotes.keys(), ...midiField]);
-    addEvent(note, velocity, channel, "midi", Array.from(combined));
+    addEvent(note, velocity, channel, "midi", Array.from(combined), atMs);
   }, [addEvent, latchedNotes]);
-  const midi = useMidiKeyboard(midiAttack);
+  const midiRelease = useCallback((note: number, channel: number, atMs: number, heldByPedal: boolean) => releaseEvent(note, channel, "midi", atMs, heldByPedal), [releaseEvent]);
+  const midiSustain = useCallback((down: boolean, channel: number, atMs: number, releasedNotes: number[]) => { if (!down) releasePedalEvents(releasedNotes, channel, atMs); }, [releasePedalEvents]);
+  const midi = useMidiKeyboard({ onAttack: midiAttack, onRelease: midiRelease, onSustain: midiSustain });
 
   const snapshots = useMemo(() => scaleFrameTimeline(events.map((event) => event.note)), [events]);
   const latestSnapshot = snapshots.at(-1);
@@ -551,7 +803,7 @@ export function PianoLab() {
     : discovered ?? { scale: DEFAULT_SCALE, rootPitchClass: 0, uniqueNoteCount: 0, inScaleCount: 0, routeCoveredCount: 0, matchFraction: 0, coverageFraction: 0, homePresent: false, fit: 0 };
   const doMidi = nearestMidiForPitchClass(frame.rootPitchClass, 60);
   const scale = frame.scale;
-  const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2), [chordWindowMs, events]);
+  const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events]);
   const chordMeasures = useMemo<ChordMeasure[]>(() => chordGestures.map((gesture, index) => {
     const pitchClassCount = new Set(gesture.attackedNotes.map(pitchClassFromMidi)).size;
     const candidates = pitchClassCount <= 5 ? identifyChordCandidates(gesture.attackedNotes, 3) : [];
@@ -622,7 +874,10 @@ export function PianoLab() {
 
   const toggleScreenKey = (note: number) => {
     const next = new Map(latchedNotes);
-    if (next.has(note)) next.delete(note);
+    if (next.has(note)) {
+      next.delete(note);
+      releaseEvent(note, 0, "screen", currentHudTime(), false);
+    }
     else {
       next.set(note, 104);
       const combined = new Set([...next.keys(), ...midi.notes.keys()]);
@@ -637,8 +892,20 @@ export function PianoLab() {
     setFocusedId(null);
     setSelectedChordId(null);
     setRememberedFrame(null);
+    setBoundaryCorrections({});
+    setIntervalEchoTarget(null);
     setLatchedNotes(new Map());
     midi.clear();
+  };
+
+  const setBoundaryCorrection = (eventId: number, correction: ChordBoundaryCorrection | null) => {
+    setBoundaryCorrections((current) => {
+      const next = { ...current };
+      if (correction) next[eventId] = correction;
+      else delete next[eventId];
+      return next;
+    });
+    setSelectedChordId(null);
   };
 
   const lockCandidate = (candidate: ScaleCandidate) => {
@@ -716,25 +983,44 @@ export function PianoLab() {
         <em>{frozen ? "Trace frozen; held keys still show below." : `${events.length}/7 attacks in view`}</em>
       </div>
 
-      <div className="piano-hud-main">
+      <div className="piano-model-disclosure"><strong>Assumed sound model</strong><span>12-key equal temperament · harmonic piano-like spectrum · 9 partials per note · MIDI events only</span><small>Roughness and repose are predictions from that standardized spectrum. They do not analyze the actual sound of your piano, keyboard patch, room, or DAW.</small></div>
+
+      <nav className="piano-focus-lenses" aria-label="Learning focus">
+        {FOCUS_LENSES.map((lens) => <button key={lens.id} type="button" aria-pressed={focusLens === lens.id} onClick={() => setFocusLens(lens.id)}><strong>{lens.label}</strong><span>{lens.description}</span></button>)}
+      </nav>
+
+      <PhraseRibbon events={events} nowMs={nowMs || events.at(-1)?.onsetMs || 0} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
+
+      <div className="hud-event-selector" aria-label="Select an event across every view">{events.map((event, index) => <button key={event.id} type="button" aria-pressed={focusedEvent?.id === event.id} onClick={() => { setFocusedId(event.id); const containing = chordGestures.find((gesture) => gesture.attacks.some((attack) => attack.id === event.id)); if (containing) setSelectedChordId(containing.id); }}><strong>{index + 1}</strong><span>{showConventions ? conventionalPitchName(event.note) : relativeSyllable(event.note, doMidi, scale)}</span><small>{durationLabel(event, nowMs || event.onsetMs)}{event.releaseReason === "pedal" ? " · pedal" : ""}</small></button>)}</div>
+
+      {(focusLens === "explore" || focusLens === "chords") ? <ChordGestureLane events={events} measures={chordMeasures} selectedChordId={effectiveSelectedChordId} focusedId={focusedEvent?.id ?? null} boundaryCorrections={boundaryCorrections} doMidi={doMidi} showConventions={showConventions} onBoundaryChange={setBoundaryCorrection} onSelect={(id) => { setSelectedChordId(id); const gesture = chordGestures.find((item) => item.id === id); if (gesture) setFocusedId(gesture.attacks.at(-1)!.id); }} /> : null}
+
+      {focusLens === "explore" ? <div className="piano-hud-main">
         <div className="hud-phrase-stack">
           <StaffView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
-          <div className="hud-event-selector" aria-label="Select an event across every view">{events.map((event, index) => <button key={event.id} type="button" aria-pressed={focusedEvent?.id === event.id} onClick={() => { setFocusedId(event.id); const containing = chordGestures.find((gesture) => gesture.attacks.some((attack) => attack.id === event.id)); if (containing) setSelectedChordId(containing.id); }}><strong>{index + 1}</strong><span>{showConventions ? conventionalPitchName(event.note) : relativeSyllable(event.note, doMidi, scale)}</span><small>{index ? `${Math.round(event.onsetMs - events[index - 1].onsetMs)} ms` : "start"}</small></button>)}</div>
-          <ChordGestureLane events={events} measures={chordMeasures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} onSelect={(id) => { setSelectedChordId(id); const gesture = chordGestures.find((item) => item.id === id); if (gesture) setFocusedId(gesture.attacks.at(-1)!.id); }} />
           <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         </div>
         <div className="hud-context-stack">
           <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
           <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         </div>
-      </div>
+      </div> : focusLens === "intervals" ? <div className="piano-focus-grid is-intervals">
+        <StaffView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
+        <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
+      </div> : focusLens === "scales" ? <div className="piano-focus-grid is-scales">
+        <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
+        <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
+      </div> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
+        <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
+        <ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} />
+      </div> : null}
 
       <div className="piano-hud-keyboard-wrap">
         <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>solid held · ring sustained · gold chord attack · dotted inherited · double mark Do</small></div>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
       </div>
 
-      <div className="piano-hud-analysis">
+      {(focusLens === "explore" || focusLens === "chords") ? <div className="piano-hud-analysis">
         <section className="hud-chord-panel" aria-labelledby="hud-chord-title">
           <div className="hud-panel-heading"><span>{selectedGesture ? `${selectedGesture.kind} gesture · ${Math.round(selectedGesture.spreadMs)} ms` : fieldIsLive ? "Held now" : events.length ? "Last outlined field" : "Waiting for a field"}</span><strong id="hud-chord-title">Chord identity</strong><small>Chord attacks determine identity; already-held and pedal tones remain visible as inherited context.</small></div>
           {leadingChord ? <div className="hud-chord-result"><span>{leadingChord.exact ? "exact pitch-class match" : "possible outline"}</span><strong>{chordLabel(leadingChord, doMidi, showConventions)}</strong><small>{leadingChord.inversion > 0 ? `inversion ${leadingChord.inversion} · ` : ""}{leadingChord.missingPitchClasses.length ? `${leadingChord.missingPitchClasses.length} missing · ` : ""}{leadingChord.extraPitchClasses.length ? `${leadingChord.extraPitchClasses.length} added` : "no added tones"}</small></div> : fieldPitchClassCount > 5 ? <div className="hud-chord-result"><span>scale-like pitch field</span><strong>{fieldPitchClassCount} distinct positions</strong><small>Too many simultaneous positions for a useful chord-template label; inspect the interval texture and scale lens instead.</small></div> : <p className="hud-empty-copy">Hold two or more notes. The HUD will name exact matches separately from incomplete outlines.</p>}
@@ -756,11 +1042,15 @@ export function PianoLab() {
         </section>
 
         <RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} />
-      </div>
+      </div> : null}
 
-      <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} />
+      {(focusLens === "explore" || focusLens === "chords") ? <ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /> : null}
 
-      <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>Chord crunch, pull, and arrival use the sounding field at the final attack; pitch-set novelty and voice motion use attacked members. Crunch remains a standardized nine-partial proxy. Musical goodness still depends on timing, style, memory, intention, and your response.</small></footer>
+      {focusLens === "intervals" ? <div className="piano-focus-grid is-interval-practice"><IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} /><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
+
+      {(focusLens === "explore" || focusLens === "motion") ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
+
+      <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>Your phrase persists when you visit another lab in this tab. Chord crunch, pull, and repose use a standardized nine-partial proxy; pitch novelty and voice motion use attacked members. Musical goodness still depends on timing, style, memory, intention, and your response.</small></footer>
     </section>
   );
 }

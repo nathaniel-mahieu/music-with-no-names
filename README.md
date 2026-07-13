@@ -4,15 +4,21 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Chord Gesture HUD Polish v1.28**. It provides:
+The current milestone is **Guided Live Phrase v1.29**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
-- A single persistent Piano HUD that aligns the last seven note attacks across grand staff notation, log-frequency height, a fixed circle of fifths, changing scale frames, chord identity, nearby scale chords, interval texture, and separate perceptual traces.
-- Local Web MIDI input with permission-aware device selection, note-on/off, velocity, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and no MIDI data is uploaded.
+- A persistent live phrase ribbon that keeps the last seven attacks, velocity, key release, sounding duration, and pedal-extended tails aligned while the learner moves among Explore, Intervals, Scales, Chords, and Motion lenses.
+- A single Piano HUD that aligns that phrase across grand staff notation, log-frequency height, a fixed circle of fifths, changing scale frames, chord identity, nearby scale chords, interval texture, and separate perceptual traces.
+- Local Web MIDI input with permission-aware device selection, note-on/off, velocity, duration, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and the seven-event phrase remains only in the current browser tab.
+- Interval Echo practice that asks the learner to reproduce a spacing from a different starting key without playing an answer.
+- A causal chord comparison that states which pitch positions were added, released, or retained before showing separate roughness, pull, and repose deltas.
+- Correctable chord grouping: any selected attack can explicitly start a new chord, join the previous chord, or return to timing-based inference.
+- A prominent disclosure of the assumed equal-tempered, nine-partial harmonic teaching spectrum; the HUD does not claim to analyze the connected keyboard’s actual sound.
+- Lab URLs encode the active surface, while the Piano phrase, chosen lens, frame, and grouping corrections survive visits to other labs in the same tab.
 - Movable-Do overlays for every piano key, with conventional note, scale, and interval names available only as an optional translation layer.
-- A live scale walk for bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes.
-- A held-note interval network plus separate common-period fit, modeled spectral crunch, pull toward the selected Do, repose/arrival evidence, and a recent-state trajectory—never a combined listenability or quality score.
+- Four compatible frame families—bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes—shown as hypotheses rather than automatic truth.
+- A selected-field interval texture plus separate modeled spectral crunch, pull toward the selected Do, repose/arrival evidence, pitch novelty, and voice motion—never a combined listenability or quality score.
 - A scale-and-center finder that ranks multiple compatible frames from recent pitch classes while making ambiguity and limited evidence visible.
 - Live circle-of-fifths mapping that marks held pitch classes and numbers recent attacks, plus a deliberately cautious scale-frame detector that waits for four distinct pitch classes before changing its stable frame.
 - Exact chord matching kept separate from incomplete outlines, with nearby scale-derived moves ranked by common tones instead of a claim about what should sound good.
@@ -20,7 +26,7 @@ The current milestone is **Chord Gesture HUD Polish v1.28**. It provides:
 - Chord brackets aligned across staff, frequency, and evidence time; selected chord members also propagate into the fifths compass, scale lens, keyboard, interval texture, and chord-level crunch, pull, arrival, pitch-set novelty, voice-motion, and root-travel evidence.
 - Clear outline-versus-exact chord language, an explicit unknown-root state, plain-language low/moderate/high evidence cues, and nearby chord realizations that minimize keyboard motion around the current hand position.
 - Controlled chord fields that connect physical differences to conditional possibilities such as fusion, weight, openness, or pressure without assigning fixed emotions.
-- A circle of fifths derived from repeated 3:2 moves, octave folding, equal-key approximation, and the visible pure-tuning closure mismatch.
+- A fifths compass derived from repeated near-3:2 moves, with the pure-versus-equal closure mismatch taught explicitly in the Start self-check.
 - Physical step geometry for seven-, five-, and six-degree scales, including the 3 · 2 · 2 · 3 · 2 fingerprint.
 - Degree-level frequency ratios, nearby small-integer landmarks, spectral-interaction evidence, and contextual-role explanations kept visibly separate.
 - A listen–imagine–reveal exercise for practicing inner hearing without a keyboard-shaped map.

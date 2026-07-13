@@ -6720,7 +6720,7 @@ footer a {
   }
 }
 
-/* Piano HUD v1.28: one coordinated, silent seven-event learning surface. */
+/* Piano HUD v1.29: one persistent phrase through focused learning lenses. */
 .piano-hud {
   --hud-crunch: var(--piano-coral);
   --hud-pull: var(--piano-gold);
@@ -6819,6 +6819,120 @@ footer a {
 .piano-hud-statebar strong { color: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: .74rem; }
 .piano-hud-statebar small { color: var(--muted); font-size: .69rem; }
 
+.piano-model-disclosure {
+  display: grid;
+  grid-template-columns: auto minmax(240px, .7fr) minmax(320px, 1fr);
+  gap: 8px 18px;
+  align-items: center;
+  padding: 10px clamp(20px, 4vw, 52px);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--piano-gold) 8%, var(--surface-soft));
+}
+
+.piano-model-disclosure strong {
+  color: var(--piano-gold);
+  font-size: .72rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.piano-model-disclosure span { font-family: var(--font-mono), monospace; font-size: .72rem; }
+.piano-model-disclosure small { color: var(--muted); font-size: .72rem; line-height: 1.4; }
+
+.piano-focus-lenses {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+
+.piano-focus-lenses button {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  color: var(--foreground);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.piano-focus-lenses button:last-child { border-right: 0; }
+.piano-focus-lenses button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
+.piano-focus-lenses strong { font-size: .8rem; }
+.piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
+.piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
+
+.hud-phrase-ribbon {
+  min-width: 0;
+  padding: 17px clamp(20px, 4vw, 52px) 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hud-phrase-ribbon svg { display: block; width: 100%; height: auto; overflow: visible; }
+.hud-ribbon-key { fill: var(--piano-blue); opacity: var(--attack-strength); }
+.hud-ribbon-pedal { stroke: var(--piano-blue); stroke-width: 3; stroke-dasharray: 4 4; }
+.hud-ribbon-attack { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 2; }
+.hud-phrase-ribbon g.is-focused .hud-ribbon-attack { fill: var(--piano-gold); stroke-width: 3; }
+
+.piano-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+
+.piano-focus-grid > * + * { border-left: 1px solid var(--line); }
+.piano-focus-grid.is-motion { grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); }
+.piano-focus-grid.is-interval-practice { grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr); }
+
+.hud-echo-panel,
+.hud-cause-panel { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
+
+.hud-echo-current {
+  display: grid;
+  gap: 3px;
+  padding: 10px 0 10px 11px;
+  border-left: 2px solid var(--piano-blue);
+}
+
+.hud-echo-current span,
+.hud-echo-current small { color: var(--muted); font-size: .72rem; }
+.hud-echo-current strong { font-family: var(--font-display), Georgia, serif; font-size: 1.25rem; font-weight: 400; }
+.hud-echo-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.hud-echo-actions button,
+.hud-boundary-controls button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--foreground);
+  background: transparent;
+  font: inherit;
+  font-size: .72rem;
+  cursor: pointer;
+}
+
+.hud-echo-actions button:disabled,
+.hud-boundary-controls button:disabled { opacity: .45; cursor: not-allowed; }
+.hud-boundary-controls button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
+.hud-echo-feedback { display: grid; gap: 3px; margin-top: 12px; padding: 10px; border: 1px dashed var(--line-strong); }
+.hud-echo-feedback.is-match { border-style: solid; border-color: var(--piano-gold); }
+.hud-echo-feedback span { color: var(--muted); font-size: .72rem; }
+.hud-echo-feedback strong { font-size: .78rem; font-weight: 500; }
+
+.hud-cause-change { display: flex; flex-wrap: wrap; gap: 6px; }
+.hud-cause-change span { padding: 6px 8px; border: 1px solid var(--line); font-size: .72rem; }
+.hud-cause-deltas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-cause-deltas > span { min-width: 0; padding: 8px; border-right: 1px solid var(--line); }
+.hud-cause-deltas > span:last-child { border-right: 0; }
+.hud-cause-deltas small,
+.hud-cause-deltas strong,
+.hud-cause-deltas em { display: block; }
+.hud-cause-deltas small,
+.hud-cause-deltas em { color: var(--muted); font-size: .72rem; font-style: normal; }
+.hud-cause-deltas strong { margin: 3px 0; font-family: var(--font-mono), monospace; font-size: .88rem; }
+
 .piano-hud-main {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(500px, .95fr);
@@ -6897,12 +7011,13 @@ footer a {
 .hud-event-selector strong { font-size: .67rem; }
 .hud-event-selector small { margin-top: 2px; opacity: .72; }
 
+.hud-chord-lane-wrap { border-bottom: 1px solid var(--line); }
+
 .hud-chord-lane {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 12px;
   padding: 5px 18px 12px;
-  border-bottom: 1px solid var(--line);
 }
 
 .hud-chord-lane-label {
@@ -6923,6 +7038,17 @@ footer a {
 .hud-chord-lane button[aria-pressed="true"] small { color: color-mix(in srgb, var(--background) 72%, transparent); }
 .hud-chord-lane button strong { overflow: hidden; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
 .hud-chord-lane p { grid-column: 1 / -1; align-self: center; margin: 0; color: var(--faint); font-size: .66rem; }
+
+.hud-boundary-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 18px 10px;
+}
+
+.hud-boundary-controls span { margin-right: auto; color: var(--muted); font-size: .72rem; }
 
 .hud-circle-panel { overflow: hidden; }
 .hud-fifths-circle { position: relative; width: min(100%, 248px); aspect-ratio: 1; margin: 23px auto 10px; border: 1px solid var(--line-strong); border-radius: 50%; }
@@ -7062,6 +7188,14 @@ footer a {
   .hud-context-stack > * + * { border-top: 0; border-left: 1px solid var(--line); }
   .piano-hud-analysis { grid-template-columns: 1fr 1fr; }
   .piano-hud-analysis .hud-texture-panel { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0; }
+  .piano-model-disclosure { grid-template-columns: auto 1fr; }
+  .piano-model-disclosure small { grid-column: 1 / -1; }
+  .piano-focus-lenses { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .piano-focus-lenses button { border-bottom: 1px solid var(--line); }
+  .piano-focus-grid.is-motion,
+  .piano-focus-grid.is-interval-practice { grid-template-columns: 1fr; }
+  .piano-focus-grid.is-motion > * + *,
+  .piano-focus-grid.is-interval-practice > * + * { border-top: 1px solid var(--line); border-left: 0; }
 }
 
 @media (max-width: 620px) {
@@ -7089,6 +7223,18 @@ footer a {
   .hud-keyboard .piano-key.is-black { width: 5%; }
   .piano-hud-insight { grid-template-columns: 1fr; }
   .piano-hud-insight > span { grid-row: auto; }
+  .piano-model-disclosure { grid-template-columns: 1fr; }
+  .piano-model-disclosure small { grid-column: auto; }
+  .piano-focus-lenses { grid-template-columns: 1fr 1fr; }
+  .piano-focus-lenses button { padding: 10px 12px; }
+  .piano-focus-lenses span { display: none; }
+  .piano-focus-grid { grid-template-columns: 1fr; }
+  .piano-focus-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-cause-deltas { grid-template-columns: 1fr; }
+  .hud-cause-deltas > span { border-right: 0; border-bottom: 1px solid var(--line); }
+  .hud-cause-deltas > span:last-child { border-bottom: 0; }
+  .hud-boundary-controls { justify-content: flex-start; }
+  .hud-boundary-controls span { flex-basis: 100%; }
 }
 
 @media (forced-colors: active) {

@@ -58,6 +58,8 @@ export type ChordGesture<T extends TimedNoteAttack = TimedNoteAttack> = {
   kind: "together" | "rolled";
 };
 
+export type ChordBoundaryCorrection = "break" | "join";
+
 export type ChordTransitionEvidence = {
   commonPitchClassCount: number;
   pitchSetNovelty: number;
@@ -456,6 +458,7 @@ export function groupChordGestures<T extends TimedNoteAttack>(
   events: T[],
   gapMs: number,
   maximumSpanMs = gapMs * 2,
+  boundaryCorrections: Readonly<Record<number, ChordBoundaryCorrection>> = {},
 ): ChordGesture<T>[] {
   if (!Number.isFinite(gapMs) || gapMs <= 0 || !Number.isFinite(maximumSpanMs) || maximumSpanMs < gapMs) return [];
   const gestures: ChordGesture<T>[] = [];
@@ -474,8 +477,9 @@ export function groupChordGestures<T extends TimedNoteAttack>(
     }
     const first = cluster[0];
     const previous = cluster.at(-1)!;
-    const joinsPrevious = event.onsetMs - previous.onsetMs <= gapMs;
-    const staysWithinMaximum = event.onsetMs - first.onsetMs <= maximumSpanMs;
+    const correction = boundaryCorrections[event.id];
+    const joinsPrevious = correction === "join" || (correction !== "break" && event.onsetMs - previous.onsetMs <= gapMs);
+    const staysWithinMaximum = correction === "join" || event.onsetMs - first.onsetMs <= maximumSpanMs;
     if (joinsPrevious && staysWithinMaximum) cluster.push(event);
     else {
       closeCluster();

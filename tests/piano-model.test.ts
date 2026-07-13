@@ -125,6 +125,22 @@ test("requires two distinct pitch classes before naming a temporal chord", () =>
   assert.deepEqual(groupChordGestures([], 0, 0), []);
 });
 
+test("lets a player correct automatic chord boundaries", () => {
+  const attacks = [
+    { id: 1, note: 60, onsetMs: 0, fieldNotes: [60] },
+    { id: 2, note: 64, onsetMs: 40, fieldNotes: [60, 64] },
+    { id: 3, note: 67, onsetMs: 80, fieldNotes: [60, 64, 67] },
+    { id: 4, note: 62, onsetMs: 500, fieldNotes: [62] },
+    { id: 5, note: 65, onsetMs: 540, fieldNotes: [62, 65] },
+  ];
+  const split = groupChordGestures(attacks, 100, 200, { 3: "break" });
+  assert.deepEqual(split.map((gesture) => gesture.attackedNotes), [[60, 64], [62, 65]]);
+
+  const joined = groupChordGestures(attacks.slice(0, 4), 100, 200, { 4: "join" });
+  assert.deepEqual(joined.map((gesture) => gesture.attackedNotes), [[60, 64, 67, 62]]);
+  assert.equal(joined[0].spreadMs, 500);
+});
+
 test("separates chord pitch-set novelty, voice motion, and fifths travel", () => {
   const sameShapeMoved = chordTransitionEvidence([60, 64, 67], [62, 65, 69], 0, 2);
   assert.equal(sameShapeMoved.commonPitchClassCount, 0);

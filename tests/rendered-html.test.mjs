@@ -110,6 +110,14 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /No sound is generated or recorded/);
   assert.match(pianoLab, /Scale lens/);
   assert.match(pianoLab, /standardized nine-partial proxy/);
+  assert.match(pianoLab, /Live phrase ribbon/);
+  assert.match(pianoLab, /Interval Echo/);
+  assert.match(pianoLab, /Causal chord view/);
+  assert.match(pianoLab, /Assumed sound model/);
+  assert.match(pianoLab, /Start new chord/);
+  assert.match(pianoLab, /sessionStorage/);
+  assert.match(ratioLab, /labFromSearch/);
+  assert.match(ratioLab, /searchParams\.set\("lab", lab\)/);
   assert.match(pianoLab, /tonal pull, arrival evidence/);
   assert.doesNotMatch(pianoLab, /AudioContext|createOscillator|synth\.enable/);
   assert.match(earLab, /Hear how timbre, register, and level change an interval/);

@@ -486,16 +486,17 @@ Objective: introduce a piano as a silent, interactive translation of the existin
 - [x] **K2.6.2** Add local, analysis-only Web MIDI input with permission-aware connection, device selection, note-on/off, velocity, and sustain-pedal handling; never synthesize, record, or route audio from Piano Lab input.
 - [x] **K2.6.3** Keep conventional note, scale, and interval names behind an optional translation layer.
 - [x] **K2.6.4** Add bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes with octave-closing physical gap fingerprints.
-- [x] **K2.6.5** Add a live ascending scale walk that accepts Do in any MIDI octave and follows note-on events with corrective feedback.
+- [ ] **K2.6.5** Restore a live ascending scale walk that accepts Do in any MIDI octave and follows note-on events with corrective feedback. (An earlier implementation did not survive the consolidated HUD; Guided Live Phrase v1.29 provides the shared specimen and Scale lens needed to rebuild it coherently.)
 - [x] **K2.6.6** Represent each held field as a pairwise interval network plus separate harmonic-fit, spectral-friction, pitch-span, and selected-route-membership evidence.
-- [x] **K2.6.7** Add controlled sonority starting fields with conditional affordance language and no combined listenability, emotion, consonance, or quality score.
-- [x] **K2.6.8** Derive the circle of fifths from repeated 3:2 moves, octave folding, equal-key approximation, and the visible 23.5-cent pure closure mismatch.
-- [x] **K2.6.9** Allow any fifths position to become the new movable Do while preserving the relationship-first representation.
+- [ ] **K2.6.7** Restore controlled sonority starting fields with conditional affordance language and no combined listenability, emotion, consonance, or quality score. (The v1.29 HUD retains nearby chord moves and causal deltas but not the earlier recipe field.)
+- [ ] **K2.6.8** Extend the current fifths compass into the full derivation from repeated 3:2 moves, octave folding, equal-key approximation, and the visible 23.5-cent pure closure mismatch. (The derivation remains tested and taught in the Start lab, but is not visible inside Piano.)
+- [ ] **K2.6.9** Allow any fifths position to become the new movable Do while preserving the relationship-first representation. (The current Piano compass is explanatory, not clickable.)
 - [x] **K2.6.10** Test MIDI parsing, transposition invariance, scale closure, interval landmarks, fifths geometry, semantic interaction, forced colors, and responsive layout contracts.
 - [x] **K2.6.11** Add ranked scale-and-center compatibility, held-note fifths highlighting, modeled crunch, tonal pull, repose/arrival evidence, and a multi-state descriptor trace while keeping every output separate from musical quality.
 - [x] **K2.6.12** Consolidate Piano Lab into one always-visible HUD: preserve the last seven note-on attacks (including repetitions), align staff and log-frequency plots, number visits on a fixed fifths compass, stabilize changing scale frames, distinguish exact chords from outlines, rank nearby chord moves by retained tones, visualize sustain, and coordinate separate crunch, pull, arrival, leap, and voice-motion traces.
 - [x] **K2.6.13** Add an explicit temporal chord-gesture layer with adjustable attack-gap granularity and a hard maximum span; keep attacked membership separate from inherited held/pedal context, align selectable chord brackets across the seven-event HUD, and add chord-level crunch, pull, arrival, pitch-set novelty, voice motion, and exact-root fifths travel without combining them into a quality score.
 - [x] **K2.6.14** Audit and polish the chord HUD: prevent incomplete outlines from implying exact identity or a known fifths root, hide neighbor suggestions until a source field exists, realize suggested chords with economical register-aware voice leading, enlarge essential labels, simplify copy, and verify narrow/wide interaction without horizontal clipping.
+- [x] **K2.6.15** Establish Guided Live Phrase v1.29: preserve the seven-event specimen across lab changes in one tab; capture key release, sounding duration, velocity, and pedal extension; add Explore, Intervals, Scales, Chords, and Motion practice lenses; implement Interval Echo, causal chord deltas, correctable chord boundaries, active-lab URLs, and a prominent assumed-sound disclosure.
 
 Exit gate:
 
@@ -658,7 +659,8 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Ear Lab sensory models and independent human reports implemented.
 - [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
 - [x] Movable-Do scale orbit, physical step fingerprint, degree evidence, and inner-hearing practice implemented.
-- [x] Silent Piano companion with local MIDI input, movable-Do key mapping, scale/center inference, scale walk, live interval network, musicality-descriptor trace, held-note fifths mapping, and a physically derived circle of fifths implemented.
+- [x] Silent Piano companion with local MIDI input, movable-Do key mapping, scale/center inference, selected-field interval texture, perceptual-evidence trace, held-note fifths mapping, chord gestures, and nearby voice-led chord moves implemented.
+- [x] Persistent live phrase ribbon, note duration and pedal tails, guided focus lenses, Interval Echo, causal chord comparison, and correctable chord boundaries implemented.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 - [x] Event self-similarity and incremental uncertainty/surprise trace implemented.

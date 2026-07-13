@@ -53,6 +53,11 @@ const LABS: { id: LabId; label: string }[] = [
   { id: "personal", label: "Personal Lens" },
 ];
 
+function labFromSearch(search: string): LabId | null {
+  const requested = new URLSearchParams(search).get("lab");
+  return LABS.some((lab) => lab.id === requested) ? requested as LabId : null;
+}
+
 const LAB_COPY: Record<
   LabId,
   {
@@ -431,7 +436,9 @@ export function RatioLab() {
       setRatio(shared.ratio);
       setReferenceHz(shared.referenceHz);
       setTimbre(shared.timbre);
-      if (window.location.search.includes("ratio=")) setActiveLab("ratio");
+      const linkedLab = labFromSearch(window.location.search);
+      if (linkedLab) setActiveLab(linkedLab);
+      else if (window.location.search.includes("ratio=")) setActiveLab("ratio");
     }, 0);
     return () => window.clearTimeout(hydrationTask);
   }, []);
@@ -439,6 +446,7 @@ export function RatioLab() {
   const shareExperiment = async () => {
     const url = new URL(window.location.href);
     url.search = ratioShareSearch({ ratio, referenceHz, timbre });
+    url.searchParams.set("lab", "ratio");
     url.hash = "lab-stage";
     window.history.replaceState(null, "", url);
     try {
@@ -453,6 +461,10 @@ export function RatioLab() {
   const selectLab = (lab: LabId) => {
     if (activeLab === "ratio" && isPlaying) stop();
     setActiveLab(lab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("lab", lab);
+    url.hash = "lab-stage";
+    window.history.replaceState(null, "", url);
     window.requestAnimationFrame(() => {
       const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       document.getElementById("lab-stage")?.scrollIntoView({
@@ -691,7 +703,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.28
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.29
         </div>
       </header>
 
