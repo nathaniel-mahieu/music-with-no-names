@@ -157,6 +157,35 @@ export type MotifTransformation = {
   confidence: number;
 };
 
+export type LandmarkPathId = "pop-loop" | "blues-turn" | "classical-cadence" | "pedal-field";
+
+export type LandmarkPathStep = {
+  id: string;
+  role: string;
+  conventionalName: string;
+  rootOffset: number;
+  pitchOffsets: number[];
+  prompt: string;
+};
+
+export type LandmarkPath = {
+  id: LandmarkPathId;
+  family: string;
+  title: string;
+  question: string;
+  invariant: string;
+  characteristic: string;
+  provenance: string;
+  steps: LandmarkPathStep[];
+};
+
+export type LandmarkTransitionProfile = {
+  commonPitchClassCount: number;
+  totalVoiceMotion: number;
+  largestLeap: number;
+  rootTravelSteps: number | null;
+};
+
 export type ChordTemplate = {
   id: string;
   name: string;
@@ -265,6 +294,74 @@ export const CHORD_TEMPLATES: ChordTemplate[] = [
   { id: "major7", name: "major seventh", symbol: "maj7", offsets: [0, 4, 7, 11] },
   { id: "minor7", name: "minor seventh", symbol: "m7", offsets: [0, 3, 7, 10] },
   { id: "half-diminished7", name: "half-diminished seventh", symbol: "ø7", offsets: [0, 3, 6, 10] },
+];
+
+/**
+ * Generated harmonic archetypes, not transcriptions of particular recordings.
+ * Offsets are relative to the learner's movable Do so every path transposes as
+ * one relationship-preserving object.
+ */
+export const LANDMARK_PATHS: LandmarkPath[] = [
+  {
+    id: "pop-loop",
+    family: "Pop loop",
+    title: "Four-field return",
+    question: "Can you feel direction even though every fourth move begins the cycle again?",
+    invariant: "The four-position order repeats while the entire path can move to any Do.",
+    characteristic: "Short voice moves bind contrasting fields into a circular, forward-moving loop.",
+    provenance: "Generated from the widely used I–V–vi–IV harmonic archetype; no song or recording is reproduced.",
+    steps: [
+      { id: "home", role: "home field", conventionalName: "I", rootOffset: 0, pitchOffsets: [0, 4, 7], prompt: "Establish the center." },
+      { id: "fifth", role: "fifth field", conventionalName: "V", rootOffset: 7, pitchOffsets: [2, 7, 11], prompt: "Keep one position while the root moves near a 3:2 relation." },
+      { id: "shadow", role: "shadow field", conventionalName: "vi", rootOffset: 9, pitchOffsets: [0, 4, 9], prompt: "Notice how a darker third arrives through small voice motion." },
+      { id: "side", role: "side field", conventionalName: "IV", rootOffset: 5, pitchOffsets: [0, 5, 9], prompt: "Hold two positions and change one before the loop restarts." },
+    ],
+  },
+  {
+    id: "blues-turn",
+    family: "Blues cycle",
+    title: "Seventh-colored turn",
+    question: "What stays blues-like while the root visits the side and fifth fields?",
+    invariant: "The lowered-seventh color remains present as the root path leaves and returns to Do.",
+    characteristic: "Persistent seventh tension makes arrival porous rather than completely smoothed away.",
+    provenance: "Generated from a traditional I7–IV7–I7–V7–I7 blues archetype; no melody or recording is reproduced.",
+    steps: [
+      { id: "home-seven", role: "home with edge", conventionalName: "I7", rootOffset: 0, pitchOffsets: [0, 4, 7, 10], prompt: "Establish home without removing the lowered-seventh edge." },
+      { id: "side-seven", role: "side with edge", conventionalName: "IV7", rootOffset: 5, pitchOffsets: [0, 3, 5, 9], prompt: "Move the root to the side field while keeping the seventh color." },
+      { id: "home-return", role: "home return", conventionalName: "I7", rootOffset: 0, pitchOffsets: [0, 4, 7, 10], prompt: "Return without becoming fully smooth." },
+      { id: "fifth-seven", role: "fifth with pull", conventionalName: "V7", rootOffset: 7, pitchOffsets: [2, 5, 7, 11], prompt: "Let the fifth field create the strongest directed pull." },
+      { id: "home-close", role: "home again", conventionalName: "I7", rootOffset: 0, pitchOffsets: [0, 4, 7, 10], prompt: "Resolve the root path while preserving the style-defining edge." },
+    ],
+  },
+  {
+    id: "classical-cadence",
+    family: "Classical cadence",
+    title: "Gathering into home",
+    question: "Can several small voice moves make the final field feel more focused than a large leap?",
+    invariant: "The cadence is a directed relationship pattern and survives transposition to another Do.",
+    characteristic: "Shared tones and half-step motion concentrate expectation before the final arrival.",
+    provenance: "Generated from the common ii–V7–I cadence archetype; no composition or performance is reproduced.",
+    steps: [
+      { id: "prepare", role: "preparation field", conventionalName: "ii", rootOffset: 2, pitchOffsets: [2, 5, 9], prompt: "Begin away from home with a soft preparation." },
+      { id: "focus", role: "fifth with pull", conventionalName: "V7", rootOffset: 7, pitchOffsets: [2, 5, 7, 11], prompt: "Keep two positions and sharpen the pull toward Do." },
+      { id: "arrive", role: "home arrival", conventionalName: "I", rootOffset: 0, pitchOffsets: [0, 4, 7], prompt: "Move the nearest voices into the home field." },
+    ],
+  },
+  {
+    id: "pedal-field",
+    family: "Pedal point",
+    title: "One tone, changing sky",
+    question: "How much can the field change while one physical frequency stays fixed?",
+    invariant: "Do remains present in every field while the upper intervals supply the motion.",
+    characteristic: "A fixed bass can make changing upper structures feel connected, suspended, or returning.",
+    provenance: "Generated from a common pedal-point technique; no composition or performance is reproduced.",
+    steps: [
+      { id: "pedal-home", role: "clear home", conventionalName: "I", rootOffset: 0, pitchOffsets: [0, 4, 7], prompt: "Establish Do as the fixed floor." },
+      { id: "pedal-side", role: "side over Do", conventionalName: "IV/Do", rootOffset: 5, pitchOffsets: [0, 5, 9], prompt: "Keep Do and replace the upper interval field." },
+      { id: "pedal-open", role: "open pull over Do", conventionalName: "Vsus/Do", rootOffset: 7, pitchOffsets: [0, 2, 7], prompt: "Keep Do while the upper pair opens a suspended pull." },
+      { id: "pedal-return", role: "clear home", conventionalName: "I", rootOffset: 0, pitchOffsets: [0, 4, 7], prompt: "Resolve only the upper voices; the floor never moved." },
+    ],
+  },
 ];
 
 const INTERVAL_LANDMARKS = [
@@ -970,6 +1067,50 @@ export function voiceChordNear(pitchClasses: number[], sourceNotes: number[] = [
   };
   const best = combinations.sort((first, second) => score(first) - score(second))[0];
   return best ? [...best].sort((first, second) => first - second) : [];
+}
+
+export function landmarkStepPitchClasses(path: LandmarkPath, stepIndex: number, doPitchClass: number) {
+  const step = path.steps[stepIndex];
+  if (!step || !Number.isFinite(doPitchClass)) return [];
+  return [...new Set(step.pitchOffsets.map((offset) => modulo(Math.round(doPitchClass + offset), 12)))].sort((first, second) => first - second);
+}
+
+export function matchesLandmarkStep(path: LandmarkPath, stepIndex: number, playedNotes: number[], doPitchClass: number) {
+  const target = landmarkStepPitchClasses(path, stepIndex, doPitchClass);
+  const played = [...new Set(playedNotes.filter(Number.isFinite).map(pitchClassFromMidi))].sort((first, second) => first - second);
+  return target.length > 0 && target.length === played.length && target.every((pitchClass, index) => pitchClass === played[index]);
+}
+
+/** Produces one stable, compact voicing sequence so ghost keys never shift while a chord is being entered. */
+export function voiceLandmarkPath(path: LandmarkPath, doMidi: number) {
+  if (!Number.isFinite(doMidi)) return [];
+  const rootPitchClass = pitchClassFromMidi(doMidi);
+  let previous: number[] = [];
+  return path.steps.map((_, stepIndex) => {
+    const pitchClasses = landmarkStepPitchClasses(path, stepIndex, rootPitchClass);
+    const voiced = voiceChordNear(pitchClasses, previous, doMidi);
+    previous = voiced;
+    return voiced;
+  });
+}
+
+export function landmarkTransitionProfile(path: LandmarkPath, stepIndex: number, doMidi: number): LandmarkTransitionProfile | null {
+  if (stepIndex <= 0 || stepIndex >= path.steps.length || !Number.isFinite(doMidi)) return null;
+  const voicings = voiceLandmarkPath(path, doMidi);
+  const previous = voicings[stepIndex - 1];
+  const current = voicings[stepIndex];
+  if (!previous?.length || !current?.length) return null;
+  const rootPitchClass = pitchClassFromMidi(doMidi);
+  const previousRoot = modulo(rootPitchClass + path.steps[stepIndex - 1].rootOffset, 12);
+  const currentRoot = modulo(rootPitchClass + path.steps[stepIndex].rootOffset, 12);
+  const transition = chordTransitionEvidence(previous, current, previousRoot, currentRoot);
+  const voices = voiceLeadingProfile(previous, current);
+  return {
+    commonPitchClassCount: transition.commonPitchClassCount,
+    totalVoiceMotion: voices.totalMotion,
+    largestLeap: voices.largestLeap,
+    rootTravelSteps: transition.rootTravelSteps,
+  };
 }
 
 function pitchClassSet(notes: number[]) {

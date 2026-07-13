@@ -11,6 +11,7 @@ import {
 import {
   CHROMATIC_SOLFEGE,
   CONVENTIONAL_PITCH_CLASSES,
+  LANDMARK_PATHS,
   PIANO_SCALES,
   articulationTimeline,
   chordTransitionEvidence,
@@ -22,6 +23,8 @@ import {
   groupChordGestures,
   identifyChordCandidates,
   intervalLandmark,
+  landmarkTransitionProfile,
+  matchesLandmarkStep,
   nearbyScaleChords,
   nearestMidiForPitchClass,
   noteContext,
@@ -38,11 +41,14 @@ import {
   tonalGravityCandidates,
   tonalTendency,
   voiceChordNear,
+  voiceLandmarkPath,
   voiceLeadingProfile,
   type ChordCandidate,
   type ChordBoundaryCorrection,
   type ChordGesture,
   type ArticulationEvidence,
+  type LandmarkPath,
+  type LandmarkPathId,
   type MotifTransformation,
   type NearbyChord,
   type PianoScale,
@@ -98,7 +104,7 @@ type ChordMeasure = {
   commonPitchClassCount: number;
 };
 type FrameMode = "discover" | "locked";
-type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion";
+type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths";
 type IntervalEchoTarget = { semitones: number; anchorEventId: number };
 type ResolutionTarget = ResolutionFork & {
   anchorEventId: number;
@@ -113,7 +119,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3;
+  version: 2 | 3 | 4;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -126,6 +132,8 @@ type PersistedPianoSession = {
   ghostNotes: number[];
   resolutionTarget?: ResolutionTarget | null;
   resolutionForkSet?: ResolutionFork[] | null;
+  landmarkPathId?: LandmarkPathId;
+  landmarkStepIndex?: number;
 };
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -141,6 +149,7 @@ const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }>
   { id: "scales", label: "Scales", description: "See how pitch evidence suggests Do and a scale route." },
   { id: "chords", label: "Chords", description: "Inspect grouping, chord identity, and one-change consequences." },
   { id: "motion", label: "Motion", description: "Follow touch, articulation, motifs, pull, and voice movement through time." },
+  { id: "paths", label: "Paths", description: "Play pop, blues, cadence, and pedal-point archetypes as transferable relationships." },
 ];
 
 function formatHz(value: number) {
@@ -983,6 +992,58 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   </section>;
 }
 
+function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, showConventions, onSelect, onReplay }: {
+  path: LandmarkPath;
+  stepIndex: number;
+  targetNotes: number[];
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+  onSelect: (id: LandmarkPathId) => void;
+  onReplay: () => void;
+}) {
+  const complete = stepIndex >= path.steps.length;
+  const currentStep = complete ? null : path.steps[stepIndex];
+  const transition = currentStep ? landmarkTransitionProfile(path, stepIndex, doMidi) : null;
+  const perception = targetNotes.length >= 2 ? sonorityPerceptionModel(targetNotes.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: 0.72, partialCount: 9 }))) : null;
+  const tendency = targetNotes.length ? tonalTendency(targetNotes, doMidi, scale) : null;
+  const targetLabels = targetNotes.map((note) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale));
+  const targetDescription = currentStep
+    ? `Step ${stepIndex + 1} of ${path.steps.length}, ${currentStep.role}. Play ${targetLabels.join(", ")}.`
+    : `${path.title} complete after ${path.steps.length} matched fields.`;
+  return <section className="hud-landmark-coach" aria-labelledby="hud-landmark-title">
+    <div className="hud-panel-heading"><span>Generated · silent · transposable</span><strong id="hud-landmark-title">Playable landmark paths</strong><small>Choose an archetype, then supply every outlined field yourself. Do stays fixed; the HUD advances only after an exact pitch-class match in any octave.</small></div>
+    <div className="hud-landmark-selector" aria-label="Choose a landmark path">
+      {LANDMARK_PATHS.map((candidate) => <button key={candidate.id} type="button" aria-pressed={candidate.id === path.id} onClick={() => onSelect(candidate.id)}><span>{candidate.family}</span><strong>{candidate.title}</strong><small>{candidate.steps.length} fields</small></button>)}
+    </div>
+    <div className="hud-landmark-question"><span>one listening question</span><strong>{path.question}</strong><small>{path.provenance}</small></div>
+    <ol className="hud-landmark-progress" aria-label={`${path.title} progress`}>
+      {path.steps.map((step, index) => <li key={step.id} className={index < stepIndex ? "is-complete" : index === stepIndex ? "is-current" : ""} aria-current={index === stepIndex ? "step" : undefined}>
+        <span>{index < stepIndex ? "✓" : index + 1}</span>
+        <strong>{showConventions ? `${step.conventionalName} · ${step.role}` : step.role}</strong>
+        <small>{index < stepIndex ? "matched" : index === stepIndex ? "play now" : "ahead"}</small>
+      </li>)}
+    </ol>
+    <div className={`hud-landmark-target ${complete ? "is-complete" : ""}`} role="status" aria-label={targetDescription}>
+      <span>{complete ? "path complete" : `field ${stepIndex + 1} of ${path.steps.length}`}</span>
+      <strong>{complete ? "Replay it: same relationships, more embodied" : `${currentStep!.role} · ${targetLabels.join(" · ")}`}</strong>
+      <small>{complete ? "The archetype is a reusable relationship path, not a fixed key or a claim about every piece in this style." : `${currentStep!.prompt} Release the prior field, then play the dashed keys together or as one compact roll.`}</small>
+      {complete ? <button type="button" onClick={onReplay}>Replay path</button> : null}
+    </div>
+    {!complete ? <div className="hud-landmark-evidence" aria-label="Current landmark transition evidence">
+      <span><small>carried tones</small><strong>{transition ? transition.commonPitchClassCount : "—"}</strong><em>{transition ? "same pitch classes" : "first-field baseline"}</em></span>
+      <span><small>nearest voices</small><strong>{transition ? transition.totalVoiceMotion : "—"}</strong><em>{transition ? `key steps total · largest ${transition.largestLeap}` : "motion begins next"}</em></span>
+      <span><small>root around fifths</small><strong>{transition?.rootTravelSteps ?? "—"}</strong><em>{transition?.rootTravelSteps == null ? "baseline" : transition.rootTravelSteps === 1 ? "one neighbor" : "circle steps"}</em></span>
+      <span><small>modeled field</small><strong>{perception ? `${Math.round(perception.roughness * 100)} / ${Math.round(perception.repose * 100)}` : "—"}</strong><em>crunch / repose proxy</em></span>
+      <span><small>toward Do</small><strong>{tendency ? Math.round(tendency.homePull * 100) : "—"}</strong><em>{tendency?.hasHome ? "Do is present" : "Do is absent"}</em></span>
+    </div> : null}
+    <div className="hud-landmark-reading">
+      <p><span>what stays invariant</span><strong>{path.invariant}</strong></p>
+      <p><span>characteristic affordance</span><strong>{path.characteristic}</strong></p>
+    </div>
+  </section>;
+}
+
 export function PianoLab() {
   const [events, setEvents] = useState<HudNoteEvent[]>([]);
   const [phraseEvents, setPhraseEvents] = useState<HudNoteEvent[]>([]);
@@ -999,6 +1060,8 @@ export function PianoLab() {
   const [ghostNotes, setGhostNotes] = useState<number[]>([]);
   const [resolutionTarget, setResolutionTarget] = useState<ResolutionTarget | null>(null);
   const [resolutionForkSet, setResolutionForkSet] = useState<ResolutionFork[] | null>(null);
+  const [landmarkPathId, setLandmarkPathId] = useState<LandmarkPathId>("pop-loop");
+  const [landmarkStepIndex, setLandmarkStepIndex] = useState(0);
   const [fingerprintRotation, setFingerprintRotation] = useState(0);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
@@ -1007,6 +1070,7 @@ export function PianoLab() {
   const frozenRef = useRef(false);
   const eventsRef = useRef<HudNoteEvent[]>([]);
   const phraseEventsRef = useRef<HudNoteEvent[]>([]);
+  const landmarkLastMatchIdRef = useRef(0);
   const [rememberedFrame, setRememberedFrame] = useState<ScaleCandidate | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [nowMs, setNowMs] = useState(0);
@@ -1024,7 +1088,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -1052,6 +1116,8 @@ export function PianoLab() {
             setGhostNotes(saved.ghostNotes ?? []);
             setResolutionTarget(saved.resolutionTarget ?? null);
             setResolutionForkSet(saved.resolutionForkSet ?? null);
+            if (LANDMARK_PATHS.some((path) => path.id === saved.landmarkPathId)) setLandmarkPathId(saved.landmarkPathId!);
+            setLandmarkStepIndex(Math.max(0, Math.round(saved.landmarkStepIndex ?? 0)));
           }
         }
       } catch {
@@ -1064,9 +1130,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 3, phraseEvents, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet };
+    const session: PersistedPianoSession = { version: 4, phraseEvents, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, lockedDoMidi, lockedScaleId, phraseEvents, resolutionForkSet, resolutionTarget, showConventions]);
+  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, phraseEvents, resolutionForkSet, resolutionTarget, showConventions]);
 
   useEffect(() => {
     if (!phraseEvents.length) return;
@@ -1135,6 +1201,16 @@ export function PianoLab() {
     : discovered ?? { scale: DEFAULT_SCALE, rootPitchClass: 0, uniqueNoteCount: 0, inScaleCount: 0, routeCoveredCount: 0, matchFraction: 0, coverageFraction: 0, homePresent: false, fit: 0 };
   const doMidi = nearestMidiForPitchClass(frame.rootPitchClass, 60);
   const scale = frame.scale;
+  useEffect(() => {
+    if (!hydrated || focusLens !== "paths" || frameMode === "locked") return;
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(doMidi);
+    setFrameMode("locked");
+  }, [doMidi, focusLens, frameMode, hydrated, scale.id]);
+  const landmarkPath = LANDMARK_PATHS.find((path) => path.id === landmarkPathId) ?? LANDMARK_PATHS[0];
+  const effectiveLandmarkStepIndex = Math.min(landmarkStepIndex, landmarkPath.steps.length);
+  const landmarkVoicings = useMemo(() => voiceLandmarkPath(landmarkPath, doMidi), [doMidi, landmarkPath]);
+  const landmarkTargetNotes = landmarkVoicings[effectiveLandmarkStepIndex] ?? [];
   const gravityCandidates = useMemo(() => tonalGravityCandidates(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0, 12), [nowMs, phraseEvents]);
   const nextNoteForks = useMemo(() => resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4), [frame.rootPitchClass, phraseEvents, scale]);
   const articulationEvidence = useMemo(() => articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0), [nowMs, phraseEvents]);
@@ -1176,6 +1252,14 @@ export function PianoLab() {
     return combined;
   }, [latchedNotes, midi.notes]);
   const activeNoteNumbers = useMemo(() => uniqueSorted(Array.from(activeNotesMap.keys())), [activeNotesMap]);
+  useEffect(() => {
+    if (focusLens !== "paths" || !landmarkTargetNotes.length || !activeNoteNumbers.length) return;
+    const latestEventId = phraseEvents.at(-1)?.id ?? 0;
+    if (latestEventId <= landmarkLastMatchIdRef.current) return;
+    if (!matchesLandmarkStep(landmarkPath, effectiveLandmarkStepIndex, activeNoteNumbers, pitchClassFromMidi(doMidi))) return;
+    landmarkLastMatchIdRef.current = latestEventId;
+    setLandmarkStepIndex((current) => Math.min(landmarkPath.steps.length, current + 1));
+  }, [activeNoteNumbers, doMidi, effectiveLandmarkStepIndex, focusLens, landmarkPath, landmarkTargetNotes.length, phraseEvents]);
   const lastField = events.at(-1)?.fieldNotes ?? [];
   const fieldNotes = activeNoteNumbers.length ? activeNoteNumbers : lastField;
   const fieldIsLive = activeNoteNumbers.length > 0;
@@ -1239,6 +1323,8 @@ export function PianoLab() {
     setGhostNotes([]);
     setResolutionTarget(null);
     setResolutionForkSet(null);
+    setLandmarkStepIndex(0);
+    landmarkLastMatchIdRef.current = 0;
     setFingerprintRotation(0);
     setLatchedNotes(new Map());
     midi.clear();
@@ -1273,10 +1359,38 @@ export function PianoLab() {
   };
 
   const selectFocusLens = (lens: FocusLens) => {
+    if (lens === "paths") {
+      setLockedScaleId(scale.id);
+      setLockedDoMidi(doMidi);
+      setFrameMode("locked");
+      setGhostChord(null);
+      setGhostNotes([]);
+      setResolutionTarget(null);
+      setResolutionForkSet(null);
+      landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
+    }
     setFocusLens(lens);
     const url = new URL(window.location.href);
     url.searchParams.set("pianoLens", lens);
     window.history.replaceState(null, "", url);
+  };
+
+  const selectLandmarkPath = (id: LandmarkPathId) => {
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(doMidi);
+    setFrameMode("locked");
+    setLandmarkPathId(id);
+    setLandmarkStepIndex(0);
+    landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
+    setGhostChord(null);
+    setGhostNotes([]);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+  };
+
+  const replayLandmarkPath = () => {
+    setLandmarkStepIndex(0);
+    landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
   };
 
   const chooseGhostChord = (chord: NearbyChord) => {
@@ -1294,7 +1408,10 @@ export function PianoLab() {
     setResolutionTarget({ ...fork, anchorEventId: phraseEvents.at(-1)?.id ?? 0, frameRootPitchClass: frame.rootPitchClass, frameScaleId: scale.id });
   };
 
-  const newestInsight = focusedEvent ? (() => {
+  const newestInsight = focusLens === "paths" ? effectiveLandmarkStepIndex >= landmarkPath.steps.length
+    ? `${landmarkPath.family} complete: ${landmarkPath.invariant}`
+    : `${landmarkPath.family}: ${effectiveLandmarkStepIndex} of ${landmarkPath.steps.length} fields matched. Next, play the outlined ${landmarkPath.steps[effectiveLandmarkStepIndex].role}; ${landmarkPath.steps[effectiveLandmarkStepIndex].prompt.toLowerCase()}`
+    : focusedEvent ? (() => {
     const context = noteContext(focusedEvent.note, doMidi, scale);
     const fieldCandidate = fieldPitchClassCount <= 5 ? selectedChordMeasure?.candidate ?? chordCandidates[0] : undefined;
     const intervalCopy = latestInterval ? `${latestInterval.relationship} from the prior attack` : "the first attack in this trace";
@@ -1320,14 +1437,15 @@ export function PianoLab() {
     const inherited = selectedGesture?.inheritedNotes.includes(note) ?? false;
     const chordGhost = ghostNotes.includes(note);
     const resolutionGhost = resolutionTarget != null && pitchClassFromMidi(note) === resolutionTarget.pitchClass;
-    const ghost = chordGhost || resolutionGhost;
+    const landmarkGhost = focusLens === "paths" && landmarkTargetNotes.includes(note);
+    const ghost = chordGhost || resolutionGhost || landmarkGhost;
     const home = context.stepsWithinOctave === 0;
     const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", chordMember ? "is-chord-member" : "", inherited ? "is-inherited" : "", ghost ? "is-ghost" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
       "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
       "--key-width": `${100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
-    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${chordMember ? ", attacked in selected chord" : inherited ? ", inherited into selected chord field" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
+    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${chordMember ? ", attacked in selected chord" : inherited ? ", inherited into selected chord field" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
   };
 
   const exactChord = chordCandidates.find((candidate) => candidate.exact);
@@ -1342,7 +1460,7 @@ export function PianoLab() {
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
           <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label>
           <button type="button" aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{frozen ? "Resume trace" : "Freeze trace"}</button>
-          <button type="button" aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{frameMode === "locked" ? "Unlock Do" : "Lock Do"}</button>
+          <button type="button" disabled={focusLens === "paths"} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{focusLens === "paths" ? "Do fixed for path" : frameMode === "locked" ? "Unlock Do" : "Lock Do"}</button>
           <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>Theory names</span></label>
           <button type="button" onClick={clearAll}>Clear</button>
         </div>
@@ -1383,7 +1501,7 @@ export function PianoLab() {
         <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
         <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} />
-      </div> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
+      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} />
         <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} />

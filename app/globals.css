@@ -6787,6 +6787,7 @@ footer a {
 }
 
 .piano-hud-controls > button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
+.piano-hud-controls > button:disabled { opacity: .55; cursor: not-allowed; }
 .piano-hud-controls .piano-primary-action { color: var(--background); background: var(--foreground); }
 .piano-hud-controls > label:not(.piano-convention-toggle) { display: grid; gap: 3px; color: var(--muted); font-size: .68rem; }
 .piano-hud-controls > label:not(.piano-convention-toggle) select { min-width: 146px; }
@@ -6841,7 +6842,7 @@ footer a {
 
 .piano-focus-lenses {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   border-bottom: 1px solid var(--line);
 }
 
@@ -7255,6 +7256,52 @@ footer a {
 .hud-motif-readout small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-motif-readout strong { font-size: .78rem; font-weight: 500; }
 
+.hud-landmark-coach { min-width: 0; border-bottom: 1px solid var(--line); }
+.hud-landmark-coach > .hud-panel-heading { padding: 17px 18px; }
+.hud-landmark-selector { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-landmark-selector button { display: grid; min-width: 0; gap: 4px; padding: 11px 12px; border: 0; border-right: 1px solid var(--line); color: var(--foreground); background: transparent; text-align: left; cursor: pointer; }
+.hud-landmark-selector button:last-child { border-right: 0; }
+.hud-landmark-selector button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
+.hud-landmark-selector span { color: var(--piano-gold); font-size: .7rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-landmark-selector strong { font-size: .78rem; font-weight: 500; }
+.hud-landmark-selector small { color: var(--muted); font-size: .7rem; }
+.hud-landmark-selector button[aria-pressed="true"] span,
+.hud-landmark-selector button[aria-pressed="true"] small { color: color-mix(in srgb, var(--background) 72%, transparent); }
+.hud-landmark-question { display: grid; gap: 5px; margin: 15px 18px; padding: 10px 0 10px 12px; border-left: 2px solid var(--piano-blue); }
+.hud-landmark-question span { color: var(--muted); font-size: .7rem; text-transform: uppercase; }
+.hud-landmark-question strong { font-family: var(--font-display), Georgia, serif; font-size: 1.05rem; font-weight: 400; }
+.hud-landmark-question small { max-width: 92ch; color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.hud-landmark-progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); margin: 0; padding: 0 18px 15px; list-style: none; }
+.hud-landmark-progress li { display: grid; grid-template-columns: auto 1fr; min-width: 0; gap: 2px 8px; align-items: center; padding: 9px 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); }
+.hud-landmark-progress li + li { border-left: 1px solid var(--line); }
+.hud-landmark-progress li > span { grid-row: 1 / 3; display: grid; width: 24px; height: 24px; place-content: center; border: 1px solid var(--line-strong); border-radius: 50%; font-family: var(--font-mono), monospace; font-size: .7rem; }
+.hud-landmark-progress strong { overflow: hidden; font-size: .72rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.hud-landmark-progress small { font-size: .7rem; }
+.hud-landmark-progress li.is-complete { color: var(--foreground); }
+.hud-landmark-progress li.is-complete > span { border-color: var(--piano-blue); background: color-mix(in srgb, var(--piano-blue) 15%, transparent); }
+.hud-landmark-progress li.is-current { color: var(--foreground); background: color-mix(in srgb, var(--piano-gold) 9%, transparent); }
+.hud-landmark-progress li.is-current > span { border-color: var(--piano-gold); border-style: dashed; }
+.hud-landmark-target { display: grid; gap: 4px; margin: 0 18px 15px; padding: 12px 12px 12px 14px; border-left: 3px dashed var(--piano-gold); background: color-mix(in srgb, var(--piano-gold) 5%, transparent); }
+.hud-landmark-target.is-complete { border-left-style: solid; }
+.hud-landmark-target span { color: var(--muted); font-size: .7rem; text-transform: uppercase; }
+.hud-landmark-target strong { font-family: var(--font-display), Georgia, serif; font-size: 1.18rem; font-weight: 400; }
+.hud-landmark-target small { max-width: 90ch; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.hud-landmark-target button { justify-self: start; min-height: 34px; margin-top: 5px; padding: 0 11px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .72rem; cursor: pointer; }
+.hud-landmark-evidence { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 18px 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-landmark-evidence > span { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--line); }
+.hud-landmark-evidence > span:last-child { border-right: 0; }
+.hud-landmark-evidence small,
+.hud-landmark-evidence strong,
+.hud-landmark-evidence em { display: block; }
+.hud-landmark-evidence small,
+.hud-landmark-evidence em { color: var(--muted); font-size: .7rem; font-style: normal; line-height: 1.35; }
+.hud-landmark-evidence strong { margin: 3px 0; font-family: var(--font-mono), monospace; font-size: .84rem; }
+.hud-landmark-reading { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+.hud-landmark-reading p { display: grid; gap: 5px; margin: 0; padding: 13px 18px; }
+.hud-landmark-reading p + p { border-left: 1px solid var(--line); }
+.hud-landmark-reading span { color: var(--piano-gold); font-size: .7rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-landmark-reading strong { font-size: .74rem; font-weight: 500; line-height: 1.5; }
+
 .piano-hud-keyboard-wrap { border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--piano-blue) 3%, var(--surface-soft)); }
 .hud-keyboard { height: 146px; }
 .hud-keyboard .piano-key.is-white { padding-bottom: 10px; }
@@ -7356,6 +7403,9 @@ footer a {
   .hud-resolution-field { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0 !important; }
   .hud-motion-learning-grid { grid-template-columns: 1fr; }
   .hud-motion-learning-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-landmark-evidence { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hud-landmark-evidence > span:nth-child(3) { border-right: 0; }
+  .hud-landmark-evidence > span:nth-child(n + 4) { border-top: 1px solid var(--line); }
 }
 
 @media (max-width: 620px) {
@@ -7409,6 +7459,16 @@ footer a {
   .hud-motif-empty-label { font-size: 28px; }
   .hud-motif-range-label { font-size: 30px; }
   .hud-motif-tick-label { font-size: 26px; }
+  .hud-landmark-selector { grid-template-columns: 1fr 1fr; }
+  .hud-landmark-selector button:nth-child(2) { border-right: 0; }
+  .hud-landmark-selector button:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  .hud-landmark-progress { grid-template-columns: 1fr 1fr; }
+  .hud-landmark-progress li:nth-child(odd) { border-left: 0; }
+  .hud-landmark-evidence { grid-template-columns: 1fr; }
+  .hud-landmark-evidence > span { border-right: 0; border-bottom: 1px solid var(--line); }
+  .hud-landmark-evidence > span:last-child { border-bottom: 0; }
+  .hud-landmark-reading { grid-template-columns: 1fr; }
+  .hud-landmark-reading p + p { border-top: 1px solid var(--line); border-left: 0; }
 }
 
 @media (forced-colors: active) {
@@ -7426,6 +7486,8 @@ footer a {
   .hud-chord-band.is-selected { fill: Highlight; stroke: HighlightText; }
   .hud-motif-source,
   .hud-motif-target { fill: Canvas; stroke: CanvasText; }
+  .hud-landmark-selector button[aria-pressed="true"],
+  .hud-landmark-progress li.is-current { border-color: Highlight; background: Highlight; color: HighlightText; }
   .hud-fifth-node.is-chord-member,
   .hud-keyboard .piano-key.is-chord-member,
   .hud-keyboard .piano-key.is-ghost { outline-color: Highlight; }

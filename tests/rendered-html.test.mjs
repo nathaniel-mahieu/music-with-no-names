@@ -53,7 +53,7 @@ test("server-renders the guided learning product surface", async () => {
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, pianoLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
+  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, pianoLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab, pianoModel] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -68,6 +68,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
     readFile(new URL("../app/RecordingLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/AtlasLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PersonalLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-model.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /<RatioLab \/>/);
@@ -128,6 +129,16 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Motif transformation trail/);
   assert.match(pianoLab, /repeat → change one property → return/);
   assert.match(pianoLab, /blue source · gold later statement · exact · transposed · rhythm changed · ending changed · return/);
+  assert.match(pianoLab, /Playable landmark paths/);
+  assert.match(pianoLab, /HUD advances only after an exact pitch-class match in any octave/);
+  assert.match(pianoLab, /Generated · silent · transposable/);
+  assert.match(pianoLab, /same relationships, more embodied/);
+  assert.match(pianoLab, /silent landmark path target/);
+  assert.match(pianoModel, /Pop loop/);
+  assert.match(pianoModel, /Blues cycle/);
+  assert.match(pianoModel, /Classical cadence/);
+  assert.match(pianoModel, /Pedal point/);
+  assert.match(pianoModel, /no song or recording is reproduced/i);
   assert.match(pianoLab, /Route fit \+ held time \+ recurrence \+ attack \+ low register \+ ending · named candidates were sounded/);
   assert.match(pianoLab, /No note was entered or sounded/);
   assert.match(pianoLab, /setResolutionForkSet\(resolutionForkSet \?\? nextNoteForks\)/);

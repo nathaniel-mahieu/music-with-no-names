@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  LANDMARK_PATHS,
   PIANO_SCALES,
   articulationTimeline,
   chordTransitionEvidence,
@@ -12,6 +13,9 @@ import {
   identifyChordCandidates,
   inferScaleCandidates,
   intervalLandmark,
+  landmarkStepPitchClasses,
+  landmarkTransitionProfile,
+  matchesLandmarkStep,
   nearbyScaleChords,
   noteContext,
   pairwiseIntervals,
@@ -27,6 +31,7 @@ import {
   tonalTendency,
   tonalGravityCandidates,
   voiceChordNear,
+  voiceLandmarkPath,
   voiceLeadingProfile,
 } from "../lib/piano-model.ts";
 
@@ -196,6 +201,49 @@ test("voices nearby chords near the current hand position", () => {
   assert.deepEqual(voiceChordNear([0, 4, 7], [], Number.NaN), []);
   assert.deepEqual(voiceChordNear([0, 1, 2, 3, 4, 5, 6], [60], 60), []);
   assert.deepEqual(voiceChordNear([Number.NaN], [60], 60), []);
+});
+
+test("defines transposable, generated landmark paths without song transcriptions", () => {
+  assert.deepEqual(LANDMARK_PATHS.map((path) => path.id), ["pop-loop", "blues-turn", "classical-cadence", "pedal-field"]);
+  for (const path of LANDMARK_PATHS) {
+    assert.ok(path.steps.length >= 3);
+    assert.match(path.provenance, /Generated/);
+    for (const step of path.steps) {
+      assert.ok(step.pitchOffsets.length >= 3);
+      assert.ok(step.pitchOffsets.every((offset) => Number.isInteger(offset) && offset >= 0 && offset < 12));
+    }
+  }
+});
+
+test("transposes a landmark as one relationship-preserving path", () => {
+  const path = LANDMARK_PATHS[0];
+  const inC = landmarkStepPitchClasses(path, 1, 0);
+  const inD = landmarkStepPitchClasses(path, 1, 2);
+  assert.deepEqual(inC, [2, 7, 11]);
+  assert.deepEqual(inD, [1, 4, 9]);
+  assert.deepEqual(landmarkStepPitchClasses(path, 99, 0), []);
+});
+
+test("matches landmark targets by pitch class while keeping voicing stable", () => {
+  const path = LANDMARK_PATHS.find((item) => item.id === "classical-cadence")!;
+  assert.equal(matchesLandmarkStep(path, 0, [50, 53, 57], 0), true);
+  assert.equal(matchesLandmarkStep(path, 0, [62, 65], 0), false);
+  assert.equal(matchesLandmarkStep(path, 0, [50, 53, 58], 0), false);
+  const first = voiceLandmarkPath(path, 60);
+  const second = voiceLandmarkPath(path, 60);
+  assert.deepEqual(first, second);
+  assert.equal(first.length, path.steps.length);
+  assert.ok(first.every((voicing) => voicing.every((note) => note >= 48 && note <= 72)));
+});
+
+test("explains each landmark transition through shared tones, hand motion, and fifths travel", () => {
+  const path = LANDMARK_PATHS.find((item) => item.id === "pedal-field")!;
+  const transition = landmarkTransitionProfile(path, 1, 60)!;
+  assert.equal(transition.commonPitchClassCount, 1);
+  assert.ok(transition.totalVoiceMotion > 0);
+  assert.ok(transition.largestLeap > 0);
+  assert.equal(transition.rootTravelSteps, 1);
+  assert.equal(landmarkTransitionProfile(path, 0, 60), null);
 });
 
 test("waits for enough distinct evidence before stabilizing a scale frame", () => {
