@@ -19,6 +19,7 @@ import {
   detectMotifTransformations,
   fifthStepForPitchClass,
   fifthsCircle,
+  fifthsSpiral,
   frequencyFromMidi,
   groupChordGestures,
   identifyChordCandidates,
@@ -500,8 +501,8 @@ function FrequencyView({ events, gestures, selectedChordId, doMidi, scale, focus
   );
 }
 
-function FifthsCompass({ events, activeNotes, chordNotes, chordRootPitchClass, doMidi, scale, focusedNote, showConventions }: {
-  events: HudNoteEvent[]; activeNotes: number[]; chordNotes: number[]; chordRootPitchClass: number | null; doMidi: number; scale: PianoScale; focusedNote: number | null; showConventions: boolean;
+function FifthsCompass({ events, activeNotes, chordNotes, chordRootPitchClass, doMidi, scale, focusedNote, showConventions, onChooseDo }: {
+  events: HudNoteEvent[]; activeNotes: number[]; chordNotes: number[]; chordRootPitchClass: number | null; doMidi: number; scale: PianoScale; focusedNote: number | null; showConventions: boolean; onChooseDo: (pitchClass: number) => void;
 }) {
   const visits = new Map<number, number[]>();
   events.forEach((event, index) => {
@@ -515,22 +516,85 @@ function FifthsCompass({ events, activeNotes, chordNotes, chordRootPitchClass, d
   const doStep = fifthStepForPitchClass(pitchClassFromMidi(doMidi));
   return (
     <div className="hud-circle-panel">
-      <div className="hud-panel-heading"><span>Pitch geography</span><strong>Fifths compass</strong><small>Clockwise neighbors differ by the near-3:2 relation.</small></div>
-      <div className="hud-fifths-circle" role="img" aria-label="Circle of fifths with the last seven event numbers, active notes, and selected chord members">
+      <div className="hud-panel-heading"><span>Pitch geography</span><strong>Fifths compass</strong><small>Clockwise neighbors differ by the near-3:2 relation. Choose any position to make it movable Do.</small></div>
+      <div className="hud-fifths-circle" role="group" aria-label="Choose movable Do around the circle of fifths; event numbers, active notes, and selected chord members remain marked">
         <div className="hud-fifths-center"><span>{chordNotes.length ? "selected chord" : "current frame"}</span><strong>{chordNotes.length ? chordRootPitchClass == null ? "root ?" : showConventions ? CONVENTIONAL_PITCH_CLASSES[chordRootPitchClass] : CHROMATIC_SOLFEGE[pitchClassFromMidi(chordRootPitchClass - pitchClassFromMidi(doMidi))] : "Do"}</strong><small>{chordNotes.length ? chordRootPitchClass == null ? `${new Set(chordNotes.map(pitchClassFromMidi)).size} positions · outline` : `${new Set(chordNotes.map(pitchClassFromMidi)).size} positions · exact root` : showConventions ? CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi)] : scale.name.replace(" route", "")}</small></div>
         {FIFTHS_ORDER.nodes.map((node) => {
           const absolutePc = node.pitchClass;
           const relative = CHROMATIC_SOLFEGE[pitchClassFromMidi(absolutePc - pitchClassFromMidi(doMidi))];
           const eventVisits = visits.get(node.step) ?? [];
           const className = ["hud-fifth-node", node.step === doStep ? "is-home" : "", activeSteps.has(node.step) ? "is-active" : "", chordSteps.has(node.step) ? "is-chord-member" : "", node.step === chordRootStep ? "is-chord-root" : "", node.step === focusedStep ? "is-focused" : ""].filter(Boolean).join(" ");
-          return <div key={node.step} className={className} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties}>
+          return <button type="button" key={node.step} className={className} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties} aria-pressed={node.step === doStep} aria-label={`${node.step === doStep ? "Current movable Do" : `Make ${relative} movable Do`}; fifths step ${node.step}${eventVisits.length ? `; attacks ${eventVisits.join(", ")}` : ""}`} onClick={() => onChooseDo(absolutePc)}>
             <strong>{showConventions ? CONVENTIONAL_PITCH_CLASSES[absolutePc] : relative}</strong>
             <span>{eventVisits.length ? eventVisits.join("·") : "·"}</span>
-          </div>;
+          </button>;
         })}
       </div>
     </div>
   );
+}
+
+function FifthsDerivation({ doMidi, showConventions, onChooseDo }: { doMidi: number; showConventions: boolean; onChooseDo: (pitchClass: number) => void }) {
+  const [stackedMoves, setStackedMoves] = useState(12);
+  const [temperamentPercent, setTemperamentPercent] = useState(0);
+  const blend = temperamentPercent / 100;
+  const spiral = fifthsSpiral(blend);
+  const visibleNodes = spiral.nodes.slice(0, stackedMoves + 1);
+  const pointFor = (node: typeof spiral.nodes[number]) => {
+    const angle = (node.step / 12 + node.cumulativeDriftCents / 1200) * Math.PI * 2 - Math.PI / 2;
+    const radius = 98 + (1 - blend) * (node.step - 6) * 3.4;
+    return { x: 180 + Math.cos(angle) * radius, y: 180 + Math.sin(angle) * radius };
+  };
+  const points = visibleNodes.map(pointFor);
+  const current = visibleNodes.at(-1)!;
+  const currentPoint = points.at(-1)!;
+  const closure = Math.abs(spiral.closureDriftCents);
+  const perFifthCorrection = spiral.pureFifthCents - spiral.displayedFifthCents;
+  const doPitchClass = pitchClassFromMidi(doMidi);
+  const currentAbsolutePitchClass = pitchClassFromMidi(doPitchClass + current.pitchClass);
+  const currentRole = CHROMATIC_SOLFEGE[current.pitchClass];
+  const currentLabel = showConventions ? CONVENTIONAL_PITCH_CLASSES[currentAbsolutePitchClass] : currentRole;
+  const currentIsDo = current.pitchClass === 0;
+  const description = `${stackedMoves} stacked fifth moves shown. Each displayed fifth is ${spiral.displayedFifthCents.toFixed(3)} cents. The twelve-step closure mismatch is ${closure.toFixed(2)} cents. ${temperamentPercent === 100 ? "The path closes on the equal-key circle." : "The path remains an open spiral."}`;
+  return <section className="hud-fifths-derivation" aria-labelledby="hud-fifths-derivation-title">
+    <div className="hud-panel-heading"><span>3:2 → octave fold → keyboard circle</span><strong id="hud-fifths-derivation-title">Why the fifths circle is first a spiral</strong><small>One question: what is gained—and changed—when a pure relationship is adjusted until the keyboard cycle closes?</small></div>
+    <div className="hud-fifths-derivation-body">
+      <div className="hud-fifths-spiral-field">
+        <svg viewBox="0 0 360 360" role="img" aria-label={description}>
+          <title>Repeated fifths morphing from a nonclosing pure-ratio spiral to an equal-tempered circle</title>
+          <circle cx="180" cy="180" r="98" className="hud-fifths-reference-circle" />
+          <polyline points={points.map((point) => `${point.x},${point.y}`).join(" ")} className="hud-fifths-spiral-path" />
+          {visibleNodes.map((node, index) => {
+            const point = points[index];
+            const relative = CHROMATIC_SOLFEGE[node.pitchClass];
+            const absolutePitchClass = pitchClassFromMidi(doPitchClass + node.pitchClass);
+            const label = showConventions ? CONVENTIONAL_PITCH_CLASSES[absolutePitchClass] : relative;
+            return <g key={node.step} className={`${node.step === stackedMoves ? "is-current" : ""} ${node.step === 12 ? "is-return" : ""}`} style={{ transform: `translate(${point.x}px, ${point.y}px)` } as CSSProperties}>
+              <circle cx="0" cy="0" r={node.step === stackedMoves ? 8 : 5} className="hud-fifths-spiral-node"><title>{`Move ${node.step}: ${label}; ${node.displayedFoldedCents.toFixed(2)} cents after octave folding`}</title></circle>
+              {(node.step === 0 || node.step === stackedMoves || node.step === 12) ? <text x="0" y="-12" className="hud-fifths-spiral-label">{node.step === 12 ? `return ${label}` : `${node.step} · ${label}`}</text> : null}
+            </g>;
+          })}
+          {stackedMoves === 12 ? <line x1={points[0].x} y1={points[0].y} x2={currentPoint.x} y2={currentPoint.y} className="hud-fifths-closure-gap" /> : null}
+          <text x="180" y="174" className="hud-fifths-center-label">{temperamentPercent === 0 ? "pure 3:2" : temperamentPercent === 100 ? "equal keys" : `${temperamentPercent}% corrected`}</text>
+          <text x="180" y="193" className="hud-fifths-center-value">{spiral.displayedFifthCents.toFixed(3)}¢ / fifth</text>
+        </svg>
+        <small>Angle carries accumulated cents beyond the equal-key position; radius separates successive moves so the open return stays visible.</small>
+        <button type="button" onClick={() => onChooseDo(currentAbsolutePitchClass)} disabled={current.step === 12 || currentIsDo} aria-label={currentIsDo ? `Spiral move ${current.step} is the current movable Do` : `Make ${currentLabel} from spiral move ${current.step} movable Do`}>{current.step === 12 ? "Return points to the same key position" : currentIsDo ? `Move ${current.step} · ${currentLabel} is current Do` : `Make move ${current.step} · ${currentLabel} the new Do`}</button>
+      </div>
+      <div className="hud-fifths-controls">
+        <label htmlFor="hud-fifths-stack"><span>Stack pure 3:2 moves</span><strong>{stackedMoves} of 12</strong></label>
+        <input id="hud-fifths-stack" type="range" min="0" max="12" step="1" value={stackedMoves} onInput={(event) => setStackedMoves(Number(event.currentTarget.value))} onChange={(event) => setStackedMoves(Number(event.target.value))} />
+        <label htmlFor="hud-fifths-temper"><span>Apply equal-key correction</span><strong>{temperamentPercent}%</strong></label>
+        <input id="hud-fifths-temper" type="range" min="0" max="100" step="1" value={temperamentPercent} onInput={(event) => setTemperamentPercent(Number(event.currentTarget.value))} onChange={(event) => setTemperamentPercent(Number(event.target.value))} />
+        <div className="hud-fifths-equation" aria-live="polite">
+          <span>relationship repeated</span><strong>(3/2)<sup>{current.step}</sup></strong><small>Start from 1:1 and multiply by the same physical relationship.</small>
+          <span>octaves folded away</span><strong>÷ 2<sup>{current.octavesRemoved}</sup> = {current.foldedRatio.toFixed(5)}</strong><small>Doubling or halving changes register while preserving octave-equivalent position.</small>
+          <span>remaining closure gap</span><strong>{closure.toFixed(2)} cents</strong><small>{temperamentPercent === 0 ? "Twelve pure fifths overshoot seven octaves." : temperamentPercent === 100 ? `Each fifth is narrowed by ${perFifthCorrection.toFixed(3)} cents, so the cycle closes.` : `${perFifthCorrection.toFixed(3)} cents removed from each fifth; the spiral is partly closed.`}</small>
+        </div>
+      </div>
+    </div>
+    <p className="hud-fifths-takeaway"><strong>What stays invariant:</strong> the sequence of fifth-neighbor positions and every played MIDI key. <strong>What changes:</strong> the exact frequency size assigned to each fifth so twelve moves can return to the keyboard’s starting position.</p>
+  </section>;
 }
 
 function ScaleLens({ events, chordNotes, snapshots, frame, doMidi, showConventions, onAdopt }: {
@@ -1266,8 +1330,12 @@ export function PianoLab() {
     const hydrationTask = window.setTimeout(() => {
       const currentNow = currentHudTime();
       setNowMs(currentNow);
-      const linkedLens = new URLSearchParams(window.location.search).get("pianoLens") as FocusLens | null;
+      const linkedParams = new URLSearchParams(window.location.search);
+      const linkedLens = linkedParams.get("pianoLens") as FocusLens | null;
       const validLinkedLens = FOCUS_LENSES.some((lens) => lens.id === linkedLens) ? linkedLens : null;
+      const linkedDoValue = Number(linkedParams.get("pianoDo"));
+      const linkedScale = PIANO_SCALES.find((candidate) => candidate.id === linkedParams.get("pianoScale"));
+      const validLinkedDo = linkedParams.has("pianoDo") && Number.isInteger(linkedDoValue) && linkedDoValue >= 0 && linkedDoValue < 12;
       if (validLinkedLens) setFocusLens(validLinkedLens);
       try {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
@@ -1308,6 +1376,11 @@ export function PianoLab() {
         }
       } catch {
         window.sessionStorage.removeItem(PIANO_SESSION_KEY);
+      }
+      if (validLinkedDo && linkedScale) {
+        setLockedDoMidi(nearestMidiForPitchClass(linkedDoValue, 60));
+        setLockedScaleId(linkedScale.id);
+        setFrameMode("locked");
       }
       setHydrated(true);
     }, 0);
@@ -1568,6 +1641,25 @@ export function PianoLab() {
     setLockedScaleId(candidate.scale.id);
     setLockedDoMidi(nearestMidiForPitchClass(candidate.rootPitchClass, 60));
     setFrameMode("locked");
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoDo", String(candidate.rootPitchClass));
+    url.searchParams.set("pianoScale", candidate.scale.id);
+    window.history.replaceState(null, "", url);
+  };
+
+  const chooseDoFromFifths = (rootPitchClass: number) => {
+    const pitchClass = pitchClassFromMidi(rootPitchClass);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    setGhostChord(null);
+    setGhostNotes([]);
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(nearestMidiForPitchClass(pitchClass, 60));
+    setFrameMode("locked");
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoDo", String(pitchClass));
+    url.searchParams.set("pianoScale", scale.id);
+    window.history.replaceState(null, "", url);
   };
 
   const toggleFrameMode = () => {
@@ -1577,7 +1669,17 @@ export function PianoLab() {
       setLockedScaleId(scale.id);
       setLockedDoMidi(doMidi);
       setFrameMode("locked");
-    } else setFrameMode("discover");
+      const url = new URL(window.location.href);
+      url.searchParams.set("pianoDo", String(pitchClassFromMidi(doMidi)));
+      url.searchParams.set("pianoScale", scale.id);
+      window.history.replaceState(null, "", url);
+    } else {
+      setFrameMode("discover");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("pianoDo");
+      url.searchParams.delete("pianoScale");
+      window.history.replaceState(null, "", url);
+    }
   };
 
   const captureExperiencePhrase = () => {
@@ -1774,15 +1876,16 @@ export function PianoLab() {
           <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         </div>
         <div className="hud-context-stack">
-          <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
+          <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
           <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         </div>
       </div> : focusLens === "intervals" ? <div className="piano-focus-grid is-intervals">
         <StaffView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
       </div> : focusLens === "scales" ? <div className="piano-focus-grid is-scales">
-        <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
+        <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
+        <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} />
       </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />

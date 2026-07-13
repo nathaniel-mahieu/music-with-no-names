@@ -8,6 +8,7 @@ import {
   detectMotifTransformations,
   fifthStepForPitchClass,
   fifthsCircle,
+  fifthsSpiral,
   frequencyFromMidi,
   groupChordGestures,
   identifyChordCandidates,
@@ -384,6 +385,21 @@ test("derives the circle from stacked fifths and exposes its closure mismatch", 
   assert.ok(Math.abs(circle.nodes[1].driftCents - 1.955) < 0.01);
   assert.ok(Math.abs(circle.closureDriftCents - 23.46) < 0.02);
   for (const node of circle.nodes) assert.equal(fifthStepForPitchClass(node.pitchClass), node.step);
+});
+
+test("morphs a nonclosing pure-fifths spiral into a closing equal-key circle", () => {
+  const pure = fifthsSpiral(0);
+  const halfway = fifthsSpiral(0.5);
+  const equal = fifthsSpiral(1);
+  assert.equal(pure.nodes.length, 13);
+  assert.equal(pure.nodes[1].foldedRatio, 1.5);
+  assert.ok(Math.abs(pure.nodes[12].displayedFoldedCents - 23.46) < 0.02);
+  assert.ok(Math.abs(pure.closureDriftCents - 23.46) < 0.02);
+  assert.ok(halfway.closureDriftCents > 0 && halfway.closureDriftCents < pure.closureDriftCents);
+  assert.ok(Math.abs(equal.displayedFifthCents - 700) < 1e-12);
+  assert.ok(Math.abs(equal.nodes[12].displayedFoldedCents) < 1e-10);
+  assert.ok(Math.abs(equal.closureDriftCents) < 1e-10);
+  assert.deepEqual(equal.nodes.slice(0, 4).map((node) => node.pitchClass), [0, 7, 2, 9]);
 });
 
 test("parses note, zero-velocity note-off, and sustain MIDI messages", () => {

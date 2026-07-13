@@ -1285,6 +1285,43 @@ export function fifthsCircle() {
   };
 }
 
+/**
+ * Thirteen cumulative fifth positions, including the attempted return.
+ * `temperamentBlend` moves each fifth from pure 3:2 (0) to 700 cents (1).
+ */
+export function fifthsSpiral(temperamentBlend = 0) {
+  const blend = Math.max(0, Math.min(1, Number.isFinite(temperamentBlend) ? temperamentBlend : 0));
+  const pureFifthCents = centsFromRatio(3 / 2);
+  const equalFifthCents = 700;
+  const displayedFifthCents = pureFifthCents + (equalFifthCents - pureFifthCents) * blend;
+  const nodes = Array.from({ length: 13 }, (_, step) => {
+    const pureUnfoldedRatio = (3 / 2) ** step;
+    const octavesRemoved = Math.floor(Math.log2(pureUnfoldedRatio));
+    const foldedRatio = pureUnfoldedRatio / 2 ** octavesRemoved;
+    const pureFoldedCents = modulo(step * pureFifthCents, 1200);
+    const keyboardFoldedCents = modulo(step * equalFifthCents, 1200);
+    const displayedFoldedCents = modulo(step * displayedFifthCents, 1200);
+    return {
+      step,
+      pitchClass: modulo(step * 7, 12),
+      octavesRemoved,
+      foldedRatio,
+      pureFoldedCents,
+      keyboardFoldedCents,
+      displayedFoldedCents,
+      cumulativeDriftCents: step * (displayedFifthCents - equalFifthCents),
+    };
+  });
+  return {
+    blend,
+    pureFifthCents,
+    equalFifthCents,
+    displayedFifthCents,
+    closureDriftCents: 12 * (displayedFifthCents - equalFifthCents),
+    nodes,
+  };
+}
+
 export function parseMidiMessage(data: ArrayLike<number>): MidiMessage {
   if (data.length < 1) return { type: "other" };
   const status = Number(data[0]);

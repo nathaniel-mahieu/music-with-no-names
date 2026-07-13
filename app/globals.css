@@ -7173,7 +7173,7 @@ footer a {
 .hud-fifths-center span { color: var(--muted); font-size: .56rem; text-transform: uppercase; }
 .hud-fifths-center strong { margin: 2px 0; color: var(--piano-gold); font-size: .9rem; }
 .hud-fifths-center small { overflow: hidden; font-size: .53rem; text-overflow: ellipsis; white-space: nowrap; }
-.hud-fifth-node { position: absolute; top: 50%; left: 50%; display: grid; place-content: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); background: var(--surface-raised); text-align: center; transform: translate(-50%, -50%) rotate(var(--fifth-angle)) translateY(clamp(-104px, -7.2vw, -88px)) rotate(calc(-1 * var(--fifth-angle))); }
+.hud-fifth-node { position: absolute; top: 50%; left: 50%; display: grid; place-content: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); background: var(--surface-raised); font: inherit; text-align: center; cursor: pointer; transform: translate(-50%, -50%) rotate(var(--fifth-angle)) translateY(clamp(-104px, -7.2vw, -88px)) rotate(calc(-1 * var(--fifth-angle))); }
 .hud-fifth-node strong,
 .hud-fifth-node span { display: block; font-size: .56rem; }
 .hud-fifth-node strong { color: var(--foreground); font-size: .64rem; }
@@ -7183,6 +7183,64 @@ footer a {
 .hud-fifth-node.is-chord-root { border-style: double; border-width: 4px; }
 .hud-fifth-node.is-focused { color: var(--background); border-color: var(--foreground); background: var(--piano-gold); }
 .hud-fifth-node.is-focused strong { color: var(--background); }
+
+.hud-fifths-derivation {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 20px 18px;
+  border-top: 1px solid var(--line);
+  border-left: 0 !important;
+}
+
+.hud-fifths-derivation-body {
+  display: grid;
+  grid-template-columns: minmax(300px, .82fr) minmax(330px, 1.18fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.hud-fifths-spiral-field {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 12px 16px 18px;
+  border-right: 1px solid var(--line);
+}
+
+.hud-fifths-spiral-field svg { display: block; width: min(100%, 390px); height: auto; overflow: visible; }
+.hud-fifths-reference-circle { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 5; }
+.hud-fifths-spiral-path { fill: none; stroke: var(--piano-blue); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hud-fifths-spiral-node { fill: var(--surface-raised); stroke: var(--piano-blue); stroke-width: 2; }
+.hud-fifths-spiral-field g { transition: transform 180ms ease; }
+.hud-fifths-spiral-field g.is-current .hud-fifths-spiral-node { fill: var(--piano-gold); stroke: var(--foreground); stroke-width: 3; }
+.hud-fifths-spiral-field g.is-return .hud-fifths-spiral-node { fill: var(--surface-raised); stroke: var(--piano-coral); }
+.hud-fifths-spiral-label { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; }
+.hud-fifths-closure-gap { stroke: var(--piano-coral); stroke-width: 3; stroke-dasharray: 4 4; }
+.hud-fifths-center-label,
+.hud-fifths-center-value { fill: var(--muted); text-anchor: middle; }
+.hud-fifths-center-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.hud-fifths-center-value { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 13px; }
+.hud-fifths-spiral-field > small { max-width: 48ch; margin: -8px 0 12px; color: var(--muted); font-size: .68rem; line-height: 1.42; text-align: center; }
+.hud-fifths-spiral-field > button { min-height: 36px; padding: 7px 11px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; cursor: pointer; }
+.hud-fifths-spiral-field > button:disabled { color: var(--muted); cursor: default; }
+
+.hud-fifths-controls { min-width: 0; padding: 18px; }
+.hud-fifths-controls > label { display: flex; justify-content: space-between; gap: 16px; margin: 0 0 6px; font-size: .7rem; }
+.hud-fifths-controls > label strong { color: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: .72rem; }
+.hud-fifths-controls > input[type="range"] { width: 100%; margin: 0 0 20px; accent-color: var(--piano-gold); }
+.hud-fifths-equation { display: grid; grid-template-columns: minmax(120px, .65fr) minmax(155px, .8fr) minmax(190px, 1.2fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-fifths-equation > * { min-width: 0; margin: 0; padding: 10px; border-right: 1px solid var(--line); }
+.hud-fifths-equation > *:nth-child(3n) { border-right: 0; }
+.hud-fifths-equation > span { color: var(--muted); font-size: .65rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-fifths-equation > strong { font-family: var(--font-mono), monospace; font-size: .76rem; font-weight: 500; overflow-wrap: anywhere; }
+.hud-fifths-equation > small { color: var(--muted); font-size: .68rem; line-height: 1.42; }
+.hud-fifths-equation sup { font-size: .68em; }
+.hud-fifths-takeaway { margin: 12px 0 0; color: var(--muted); font-size: .7rem; line-height: 1.5; }
+.hud-fifths-takeaway strong { color: var(--foreground); font-weight: 650; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-fifths-spiral-field g { transition: none; }
+}
 
 .hud-scale-current { display: grid; gap: 3px; margin-bottom: 12px; padding-left: 10px; border-left: 2px solid var(--piano-blue); }
 .hud-scale-current span,
@@ -7555,6 +7613,8 @@ footer a {
   .piano-chord-learning-grid { grid-template-columns: 1fr; }
   .piano-chord-learning-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
   .hud-scale-learning-grid { grid-template-columns: 1fr 1fr; }
+  .hud-fifths-derivation-body { grid-template-columns: 1fr; }
+  .hud-fifths-spiral-field { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-resolution-field { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0 !important; }
   .hud-motion-learning-grid { grid-template-columns: 1fr; }
   .hud-motion-learning-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }
@@ -7611,6 +7671,9 @@ footer a {
   .hud-voice-summary > span:last-child { border-bottom: 0; }
   .hud-scale-learning-grid { grid-template-columns: 1fr; }
   .hud-scale-learning-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-fifths-equation { grid-template-columns: 1fr; }
+  .hud-fifths-equation > * { border-right: 0; }
+  .hud-fifths-equation > span:not(:first-child) { border-top: 1px solid var(--line); }
   .hud-resolution-field { grid-column: auto; }
   .hud-resolution-options { grid-template-columns: 1fr; }
   .hud-articulation-lane strong { font-size: .64rem; }
@@ -7650,6 +7713,11 @@ footer a {
   .hud-scale-rail,
   .hud-scale-rail > div { border-color: CanvasText; background: Canvas; color: CanvasText; }
   .hud-fifth-node.is-focused { border-color: Highlight; background: Highlight; color: HighlightText; }
+  .hud-fifths-reference-circle,
+  .hud-fifths-spiral-path,
+  .hud-fifths-spiral-node,
+  .hud-fifths-closure-gap { fill: Canvas; stroke: CanvasText; }
+  .hud-fifths-spiral-field g.is-current .hud-fifths-spiral-node { fill: Highlight; stroke: HighlightText; }
   .hud-keyboard .piano-key.is-sustained { outline-color: LinkText; }
   .hud-chord-band { fill: Canvas; stroke: CanvasText; }
   .hud-chord-band.is-selected { fill: Highlight; stroke: HighlightText; }

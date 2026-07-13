@@ -129,6 +129,12 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /silent chord target/);
   assert.match(pianoLab, /silent resolution target/);
   assert.match(pianoLab, /Scale fingerprint \+ tonal gravity/);
+  assert.match(pianoLab, /Why the fifths circle is first a spiral/);
+  assert.match(pianoLab, /what is gained—and changed—when a pure relationship is adjusted/);
+  assert.match(pianoLab, /Stack pure 3:2 moves/);
+  assert.match(pianoLab, /Apply equal-key correction/);
+  assert.match(pianoLab, /Make .* movable Do/);
+  assert.match(pianoLab, /pianoDo/);
   assert.match(pianoLab, /Resolution forks/);
   assert.match(pianoLab, /Duration \+ articulation lane/);
   assert.match(pianoLab, /Motif transformation trail/);

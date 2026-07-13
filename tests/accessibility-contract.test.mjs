@@ -28,7 +28,10 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-live="polite"/);
   assert.match(piano, /Grand staff showing/);
   assert.match(piano, /Evidence traces across/);
-  assert.match(piano, /Circle of fifths with the last seven event numbers/);
+  assert.match(piano, /Choose movable Do around the circle of fifths/);
+  assert.match(piano, /Repeated fifths morphing from a nonclosing pure-ratio spiral/);
+  assert.match(piano, /id="hud-fifths-stack"/);
+  assert.match(piano, /id="hud-fifths-temper"/);
   assert.match(piano, /Select an event across every view/);
   assert.match(piano, /Chord gestures grouped by attack timing/);
   assert.match(piano, /aria-label="Selected chord evidence"/);

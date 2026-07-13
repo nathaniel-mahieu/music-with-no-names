@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Assumed Sound Models v1.35**. It provides:
+The current milestone is **First-Principles Fifths v1.36**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
@@ -28,6 +28,8 @@ The current milestone is **Assumed Sound Models v1.35**. It provides:
 - An explicit voice-leading coach that traces nearest held, rising, falling, added, and released voices; identifies parallel, contrary, oblique, bass, and largest-leap motion; and keeps these observations separate from harmonic quality.
 - Silent nearby-chord targets that mark ghost keys for the learner to perform. Suggestion buttons no longer enter notes or play an answer.
 - A prominent Assumed Spectrum control with sine, exact-harmonic, mellow-piano, and bright-piano teaching proxies. A live partial comb makes the spectral assumption visible while the copy states exactly which modeled outputs can change and which note, interval, scale, timing, tonal, and listener evidence remains fixed. The HUD does not claim to analyze the connected keyboard’s actual sound.
+- A first-principles fifths spiral inside the Scales focus: step from zero through twelve repeated 3:2 moves, see how octave folding preserves pitch-class position, expose the 23.46-cent pure closure mismatch, and continuously apply the small per-fifth equal-key correction until the open spiral becomes a closed circle.
+- A clickable fifths compass and spiral target that can make any fifth-neighbor position the new movable Do without entering or sounding a note. The selected Do and scale frame lock together, update every coordinated representation, persist in the tab, and are encoded in the URL.
 - Lab URLs encode the active surface and Piano focus lens, while the phrase, chosen frame, grouping corrections, and ghost target survive visits to other labs in the same tab.
 - Movable-Do overlays for every piano key, with conventional note, scale, and interval names available only as an optional translation layer.
 - Four compatible frame families—bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes—shown as hypotheses rather than automatic truth.
@@ -39,7 +41,7 @@ The current milestone is **Assumed Sound Models v1.35**. It provides:
 - Chord brackets aligned across staff, frequency, and evidence time; selected chord members also propagate into the fifths compass, scale lens, keyboard, interval texture, and chord-level crunch, pull, arrival, pitch-set novelty, voice-motion, and root-travel evidence.
 - Clear outline-versus-exact chord language, an explicit unknown-root state, plain-language low/moderate/high evidence cues, and nearby chord realizations that minimize keyboard motion around the current hand position.
 - Controlled chord fields that connect physical differences to conditional possibilities such as fusion, weight, openness, or pressure without assigning fixed emotions.
-- A fifths compass derived from repeated near-3:2 moves, with the pure-versus-equal closure mismatch taught explicitly in the Start self-check.
+- A fifths compass derived from repeated near-3:2 moves, with the pure-versus-equal closure mismatch visible and manipulable beside the learner’s live phrase.
 - Physical step geometry for seven-, five-, and six-degree scales, including the 3 · 2 · 2 · 3 · 2 fingerprint.
 - Degree-level frequency ratios, nearby small-integer landmarks, spectral-interaction evidence, and contextual-role explanations kept visibly separate.
 - A listen–imagine–reveal exercise for practicing inner hearing without a keyboard-shaped map.
