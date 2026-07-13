@@ -34,6 +34,8 @@ Scale-candidate fixtures require a complete bright seven-position route to rank 
 
 The v1.26 HUD fixtures additionally require a strict seven-event note-on buffer that preserves repeated attacks, prevent the automatic scale frame from stabilizing before four distinct pitch classes, recognize chord inversions despite doubled notes, keep incomplete chord outlines explicit, and rank nearby scale chords by retained pitch classes with a concrete one-voice move when available.
 
+The v1.27 temporal-chord fixtures enforce both adjacent-gap and maximum-span boundaries, keep inherited sounding tones out of attacked chord membership, reject repeated attacks of one pitch class as a chord, and independently measure pitch-set novelty, symmetric voice-motion distance, shared tones, and exact-root travel around the fifths cycle.
+
 Source-level accessibility contracts require a named piano region, native on-screen key and event buttons, polite live status, named SVG summaries, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
 
 ## Playback-level invariants

@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Single-Surface MIDI Piano HUD v1.26**. It provides:
+The current milestone is **Temporal Chord Gesture HUD v1.27**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
@@ -16,6 +16,8 @@ The current milestone is **Single-Surface MIDI Piano HUD v1.26**. It provides:
 - A scale-and-center finder that ranks multiple compatible frames from recent pitch classes while making ambiguity and limited evidence visible.
 - Live circle-of-fifths mapping that marks held pitch classes and numbers recent attacks, plus a deliberately cautious scale-frame detector that waits for four distinct pitch classes before changing its stable frame.
 - Exact chord matching kept separate from incomplete outlines, with nearby scale-derived moves ranked by common tones instead of a claim about what should sound good.
+- Adjustable 80, 160, and 320 ms chord-gesture grouping with a hard two-window maximum span. Chord attacks remain distinct from notes inherited through holding or sustain.
+- Chord brackets aligned across staff, frequency, and evidence time; selected chord members also propagate into the fifths compass, scale lens, keyboard, interval texture, and chord-level crunch, pull, arrival, pitch-set novelty, voice-motion, and root-travel evidence.
 - Controlled chord fields that connect physical differences to conditional possibilities such as fusion, weight, openness, or pressure without assigning fixed emotions.
 - A circle of fifths derived from repeated 3:2 moves, octave folding, equal-key approximation, and the visible pure-tuning closure mismatch.
 - Physical step geometry for seven-, five-, and six-degree scales, including the 3 · 2 · 2 · 3 · 2 fingerprint.

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PIANO_SCALES,
+  chordTransitionEvidence,
   fifthStepForPitchClass,
   fifthsCircle,
   frequencyFromMidi,
+  groupChordGestures,
   identifyChordCandidates,
   inferScaleCandidates,
   intervalLandmark,
@@ -83,6 +85,59 @@ test("keeps repeated attacks in a strict seven-event rolling trace", () => {
   assert.equal(trace.length, 7);
   assert.deepEqual(trace.map((event) => event.id), [1, 2, 3, 4, 5, 6, 7]);
   assert.equal(pushRollingNoteEvent([{ note: 60 }], { note: 60 }, 7).length, 2);
+});
+
+test("groups temporally compact attacks without chaining past the maximum span", () => {
+  const attacks = [
+    { id: 1, note: 60, onsetMs: 0, fieldNotes: [60] },
+    { id: 2, note: 64, onsetMs: 70, fieldNotes: [60, 64] },
+    { id: 3, note: 67, onsetMs: 140, fieldNotes: [60, 64, 67] },
+    { id: 4, note: 62, onsetMs: 210, fieldNotes: [60, 62, 64, 67] },
+    { id: 5, note: 65, onsetMs: 280, fieldNotes: [62, 65] },
+  ];
+  const gestures = groupChordGestures(attacks, 80, 200);
+  assert.equal(gestures.length, 2);
+  assert.deepEqual(gestures[0].attackedNotes, [60, 64, 67]);
+  assert.deepEqual(gestures[1].attackedNotes, [62, 65]);
+  assert.equal(gestures[0].spreadMs, 140);
+  assert.equal(gestures[0].kind, "rolled");
+});
+
+test("keeps inherited sounding tones separate from chord attacks", () => {
+  const gestures = groupChordGestures([
+    { id: 1, note: 64, onsetMs: 100, fieldNotes: [48, 60, 64] },
+    { id: 2, note: 67, onsetMs: 150, fieldNotes: [48, 60, 64, 67] },
+  ], 80, 160);
+  assert.equal(gestures.length, 1);
+  assert.deepEqual(gestures[0].attackedNotes, [64, 67]);
+  assert.deepEqual(gestures[0].inheritedNotes, [48, 60]);
+  assert.deepEqual(gestures[0].soundingNotesAtClose, [48, 60, 64, 67]);
+  assert.equal(gestures[0].kind, "together");
+});
+
+test("requires two distinct pitch classes before naming a temporal chord", () => {
+  const repeated = groupChordGestures([
+    { id: 1, note: 60, onsetMs: 0, fieldNotes: [60] },
+    { id: 2, note: 60, onsetMs: 40, fieldNotes: [60] },
+  ], 80, 160);
+  assert.deepEqual(repeated, []);
+  assert.deepEqual(groupChordGestures([], 0, 0), []);
+});
+
+test("separates chord pitch-set novelty, voice motion, and fifths travel", () => {
+  const sameShapeMoved = chordTransitionEvidence([60, 64, 67], [62, 65, 69], 0, 2);
+  assert.equal(sameShapeMoved.commonPitchClassCount, 0);
+  assert.equal(sameShapeMoved.pitchSetNovelty, 1);
+  assert.ok(sameShapeMoved.voiceMotion > 0);
+  assert.equal(sameShapeMoved.rootTravelSteps, 2);
+  assert.equal(sameShapeMoved.rootTravel, 2 / 6);
+  assert.deepEqual(chordTransitionEvidence(null, [60, 64, 67]), {
+    commonPitchClassCount: 0,
+    pitchSetNovelty: 0,
+    voiceMotion: 0,
+    rootTravel: 0,
+    rootTravelSteps: null,
+  });
 });
 
 test("waits for enough distinct evidence before stabilizing a scale frame", () => {

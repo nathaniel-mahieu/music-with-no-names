@@ -100,6 +100,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Interval texture/);
   assert.match(pianoLab, /No overall goodness score/);
   assert.match(pianoLab, /near-3:2 relation/);
+  assert.match(pianoLab, /Chord grouping/);
+  assert.match(pianoLab, /maximum span/);
+  assert.match(pianoLab, /diamonds summarize grouped chords/);
+  assert.match(pianoLab, /already-held and pedal tones remain visible as inherited context/);
   assert.match(pianoLab, /sustain/);
   assert.match(pianoLab, /nothing is uploaded/i);
   assert.match(pianoLab, /No sound is generated or recorded/);

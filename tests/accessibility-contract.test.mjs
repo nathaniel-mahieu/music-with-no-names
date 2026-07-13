@@ -30,6 +30,9 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Evidence traces across/);
   assert.match(piano, /Circle of fifths with the last seven event numbers/);
   assert.match(piano, /Select an event across every view/);
+  assert.match(piano, /Chord gestures grouped by attack timing/);
+  assert.match(piano, /aria-label="Selected chord evidence"/);
+  assert.match(piano, /id="hud-chord-window"/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);

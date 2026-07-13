@@ -39,6 +39,33 @@ export type RollingNoteEvent = {
   note: number;
 };
 
+export type TimedNoteAttack = RollingNoteEvent & {
+  id: number;
+  onsetMs: number;
+  fieldNotes: number[];
+};
+
+export type ChordGesture<T extends TimedNoteAttack = TimedNoteAttack> = {
+  id: string;
+  attacks: T[];
+  attackedNotes: number[];
+  inheritedNotes: number[];
+  soundingNotesAtClose: number[];
+  startMs: number;
+  endMs: number;
+  spreadMs: number;
+  temporalCompactness: number;
+  kind: "together" | "rolled";
+};
+
+export type ChordTransitionEvidence = {
+  commonPitchClassCount: number;
+  pitchSetNovelty: number;
+  voiceMotion: number;
+  rootTravel: number;
+  rootTravelSteps: number | null;
+};
+
 export type ScaleFrameSnapshot = {
   eventIndex: number;
   leading: ScaleCandidate | null;
@@ -400,6 +427,101 @@ export function scaleFrameTimeline(notes: number[]): ScaleFrameSnapshot[] {
 export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], event: T, limit = 7) {
   if (!Number.isInteger(limit) || limit <= 0) return [];
   return [...events, event].slice(-limit);
+}
+
+function finalizeChordGesture<T extends TimedNoteAttack>(attacks: T[], maximumSpanMs: number): ChordGesture<T> | null {
+  const distinctPitchClasses = new Set(attacks.map((attack) => pitchClassFromMidi(attack.note)));
+  if (attacks.length < 2 || distinctPitchClasses.size < 2) return null;
+  const first = attacks[0];
+  const last = attacks.at(-1)!;
+  const attackedNotes = attacks.map((attack) => Math.round(attack.note));
+  const attackedSet = new Set(attackedNotes);
+  const soundingNotesAtClose = [...new Set(last.fieldNotes.map(Math.round))].sort((a, b) => a - b);
+  const spreadMs = Math.max(0, last.onsetMs - first.onsetMs);
+  return {
+    id: `chord-${first.id}-${last.id}`,
+    attacks: [...attacks],
+    attackedNotes,
+    inheritedNotes: soundingNotesAtClose.filter((note) => !attackedSet.has(note)),
+    soundingNotesAtClose,
+    startMs: first.onsetMs,
+    endMs: last.onsetMs,
+    spreadMs,
+    temporalCompactness: Math.max(0, 1 - spreadMs / maximumSpanMs),
+    kind: spreadMs <= 90 ? "together" : "rolled",
+  };
+}
+
+export function groupChordGestures<T extends TimedNoteAttack>(
+  events: T[],
+  gapMs: number,
+  maximumSpanMs = gapMs * 2,
+): ChordGesture<T>[] {
+  if (!Number.isFinite(gapMs) || gapMs <= 0 || !Number.isFinite(maximumSpanMs) || maximumSpanMs < gapMs) return [];
+  const gestures: ChordGesture<T>[] = [];
+  let cluster: T[] = [];
+
+  const closeCluster = () => {
+    const gesture = finalizeChordGesture(cluster, maximumSpanMs);
+    if (gesture) gestures.push(gesture);
+    cluster = [];
+  };
+
+  events.forEach((event) => {
+    if (!cluster.length) {
+      cluster = [event];
+      return;
+    }
+    const first = cluster[0];
+    const previous = cluster.at(-1)!;
+    const joinsPrevious = event.onsetMs - previous.onsetMs <= gapMs;
+    const staysWithinMaximum = event.onsetMs - first.onsetMs <= maximumSpanMs;
+    if (joinsPrevious && staysWithinMaximum) cluster.push(event);
+    else {
+      closeCluster();
+      cluster = [event];
+    }
+  });
+  closeCluster();
+  return gestures;
+}
+
+function nearestVoiceDistance(source: number[], target: number[]) {
+  if (!source.length || !target.length) return 0;
+  return source.reduce((sum, note) => sum + Math.min(...target.map((targetNote) => Math.abs(note - targetNote))), 0) / source.length;
+}
+
+export function chordTransitionEvidence(
+  previousNotes: number[] | null,
+  currentNotes: number[],
+  previousRootPitchClass: number | null = null,
+  currentRootPitchClass: number | null = null,
+): ChordTransitionEvidence {
+  if (!previousNotes?.length || !currentNotes.length) {
+    return { commonPitchClassCount: 0, pitchSetNovelty: 0, voiceMotion: 0, rootTravel: 0, rootTravelSteps: null };
+  }
+  const previousPitchClasses = pitchClassSet(previousNotes);
+  const currentPitchClasses = pitchClassSet(currentNotes);
+  const commonPitchClasses = currentPitchClasses.filter((pitchClass) => previousPitchClasses.includes(pitchClass));
+  const union = new Set([...previousPitchClasses, ...currentPitchClasses]);
+  const bidirectionalMotion = (
+    nearestVoiceDistance(previousNotes, currentNotes)
+    + nearestVoiceDistance(currentNotes, previousNotes)
+  ) / 2;
+  let rootTravelSteps: number | null = null;
+  if (previousRootPitchClass != null && currentRootPitchClass != null) {
+    const previousStep = fifthStepForPitchClass(previousRootPitchClass);
+    const currentStep = fifthStepForPitchClass(currentRootPitchClass);
+    const forward = modulo(currentStep - previousStep, 12);
+    rootTravelSteps = Math.min(forward, 12 - forward);
+  }
+  return {
+    commonPitchClassCount: commonPitchClasses.length,
+    pitchSetNovelty: union.size ? 1 - commonPitchClasses.length / union.size : 0,
+    voiceMotion: Math.min(1, bidirectionalMotion / 12),
+    rootTravel: rootTravelSteps == null ? 0 : rootTravelSteps / 6,
+    rootTravelSteps,
+  };
 }
 
 function pitchClassSet(notes: number[]) {
