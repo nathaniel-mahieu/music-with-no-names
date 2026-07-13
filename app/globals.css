@@ -7136,6 +7136,73 @@ footer a {
 .hud-frame-history i { display: block; font-size: .42rem; font-style: normal; }
 .hud-empty-copy { margin: 10px 0; color: var(--muted); font-size: .69rem; line-height: 1.45; }
 
+.hud-scale-practice {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 20px 18px;
+  border-top: 1px solid var(--line);
+  border-left: 0 !important;
+}
+
+.hud-scale-learning-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.08fr) minmax(300px, .97fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.hud-scale-learning-grid > div { min-width: 0; padding: 14px; }
+.hud-scale-learning-grid > div + div { border-left: 1px solid var(--line); }
+.hud-subheading { display: grid; gap: 3px; margin-bottom: 12px; }
+.hud-subheading span { color: var(--piano-gold); font-size: .69rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.hud-subheading strong { font-family: var(--font-display), Georgia, serif; font-size: 1rem; font-weight: 400; }
+.hud-subheading small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+
+.hud-fingerprint { display: flex; align-items: stretch; min-height: 68px; border: 1px solid var(--line-strong); }
+.hud-fingerprint > span { display: grid; flex: var(--fingerprint-gap) 1 0; place-content: center; min-width: 0; border-right: 1px solid var(--line); color: var(--muted); text-align: center; }
+.hud-fingerprint > span:last-child { border-right: 0; }
+.hud-fingerprint > span.is-encountered { color: var(--foreground); background: color-mix(in srgb, var(--piano-blue) 12%, transparent); box-shadow: inset 0 -4px var(--piano-gold); }
+.hud-fingerprint strong,
+.hud-fingerprint small { display: block; }
+.hud-fingerprint strong { font-family: var(--font-mono), monospace; font-size: .9rem; }
+.hud-fingerprint small { color: inherit; font-size: .69rem; }
+.hud-fingerprint-caption { display: grid; gap: 4px; margin-top: 8px; }
+.hud-fingerprint-caption span { font-family: var(--font-mono), monospace; font-size: .76rem; }
+.hud-fingerprint-caption small,
+.hud-fingerprint-field p { color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.hud-fingerprint-field p { margin: 8px 0 0; }
+.hud-rotate-fingerprint { margin-top: 11px; }
+
+.hud-gravity-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; align-items: end; min-height: 104px; padding-top: 8px; border-bottom: 1px solid var(--line-strong); }
+.hud-gravity-bars > span { display: grid; grid-template-rows: 76px auto; gap: 5px; align-items: end; min-width: 0; text-align: center; }
+.hud-gravity-bars i { display: block; width: 72%; height: calc(8px + var(--gravity) * 65px); margin: 0 auto; background: var(--line-strong); }
+.hud-gravity-bars span.is-leading i { background: var(--piano-blue); }
+.hud-gravity-bars span.is-strongest i { box-shadow: inset 0 4px var(--piano-gold); }
+.hud-gravity-bars strong { overflow: hidden; font-family: var(--font-mono), monospace; font-size: .69rem; text-overflow: clip; }
+.hud-gravity-candidates { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.hud-gravity-candidates li { display: grid; gap: 2px; padding-left: 9px; border-left: 2px solid var(--line-strong); }
+.hud-gravity-candidates li:first-child { border-left-color: var(--piano-gold); }
+.hud-gravity-candidates span,
+.hud-gravity-candidates small { color: var(--muted); font-size: .69rem; }
+.hud-gravity-candidates strong { font-size: .74rem; font-weight: 500; }
+
+.hud-resolution-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.hud-resolution-options button { display: grid; min-width: 0; gap: 3px; padding: 9px; border: 1px solid var(--line); color: var(--foreground); background: transparent; text-align: left; cursor: pointer; }
+.hud-resolution-options button:hover { background: var(--surface-soft); }
+.hud-resolution-options button[aria-pressed="true"] { color: var(--background); border-color: var(--foreground); background: var(--foreground); }
+.hud-resolution-options span,
+.hud-resolution-options small { color: var(--muted); font-size: .69rem; line-height: 1.35; }
+.hud-resolution-options button[aria-pressed="true"] span,
+.hud-resolution-options button[aria-pressed="true"] small { color: color-mix(in srgb, var(--background) 72%, transparent); }
+.hud-resolution-options strong { font-size: .74rem; font-weight: 500; }
+.hud-resolution-feedback { display: grid; gap: 3px; margin-top: 10px; padding: 10px; border: 1px dashed var(--line-strong); }
+.hud-resolution-feedback.is-match { border-style: solid; border-color: var(--piano-gold); }
+.hud-resolution-feedback span,
+.hud-resolution-feedback small,
+.hud-resolution-field > p { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-resolution-feedback strong { font-family: var(--font-mono), monospace; font-size: .78rem; }
+.hud-resolution-feedback button { width: fit-content; margin-top: 5px; }
+
 .piano-hud-keyboard-wrap { border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--piano-blue) 3%, var(--surface-soft)); }
 .hud-keyboard { height: 146px; }
 .hud-keyboard .piano-key.is-white { padding-bottom: 10px; }
@@ -7233,6 +7300,8 @@ footer a {
   .piano-focus-grid.is-interval-practice > * + * { border-top: 1px solid var(--line); border-left: 0; }
   .piano-chord-learning-grid { grid-template-columns: 1fr; }
   .piano-chord-learning-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-scale-learning-grid { grid-template-columns: 1fr 1fr; }
+  .hud-resolution-field { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0 !important; }
 }
 
 @media (max-width: 620px) {
@@ -7275,6 +7344,10 @@ footer a {
   .hud-voice-summary { grid-template-columns: 1fr; }
   .hud-voice-summary > span { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-voice-summary > span:last-child { border-bottom: 0; }
+  .hud-scale-learning-grid { grid-template-columns: 1fr; }
+  .hud-scale-learning-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-resolution-field { grid-column: auto; }
+  .hud-resolution-options { grid-template-columns: 1fr; }
 }
 
 @media (forced-colors: active) {

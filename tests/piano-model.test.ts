@@ -19,8 +19,11 @@ import {
   scaleSemitones,
   pushPhraseEvent,
   pushRollingNoteEvent,
+  resolutionForks,
   resolutionDirection,
+  scaleFingerprint,
   tonalTendency,
+  tonalGravityCandidates,
   voiceChordNear,
   voiceLeadingProfile,
 } from "../lib/piano-model.ts";
@@ -200,6 +203,48 @@ test("waits for enough distinct evidence before stabilizing a scale frame", () =
   assert.equal(timeline[3].changed, true);
   assert.equal(timeline.at(-1)?.stable?.scale.id, "bright-seven");
   assert.equal(timeline.at(-1)?.stable?.rootPitchClass, 0);
+  const octaveReturn = scaleFrameTimeline([60, 62, 64, 65, 67, 69, 71, 72]);
+  assert.equal(octaveReturn.at(-1)?.stable?.scale.id, "bright-seven");
+  assert.equal(octaveReturn.at(-1)?.stable?.rootPitchClass, 0);
+});
+
+test("keeps a scale fingerprint invariant while rotating its starting gap", () => {
+  const scale = PIANO_SCALES[0];
+  const original = scaleFingerprint(scale);
+  const rotated = scaleFingerprint(scale, 2);
+  assert.deepEqual(original.steps, [2, 2, 1, 2, 2, 2, 1]);
+  assert.deepEqual(rotated.steps, [1, 2, 2, 2, 1, 2, 2]);
+  assert.equal(original.total, 12);
+  assert.equal(rotated.total, 12);
+  assert.deepEqual(scaleFingerprint(scale, 9).steps, rotated.steps);
+});
+
+test("decomposes performed tonal gravity instead of treating pitch membership as a detected key", () => {
+  const phrase = [
+    { note: 60, onsetMs: 0, keyReleaseMs: 900, releaseMs: 900, velocity: 118 },
+    { note: 64, onsetMs: 1_000, keyReleaseMs: 1_220, releaseMs: 1_220, velocity: 76 },
+    { note: 67, onsetMs: 1_400, keyReleaseMs: 1_650, releaseMs: 1_650, velocity: 82 },
+    { note: 60, onsetMs: 1_900, keyReleaseMs: 2_700, releaseMs: 2_700, velocity: 112 },
+  ];
+  const candidates = tonalGravityCandidates(phrase, 2_700, 12);
+  assert.equal(candidates.length, 12);
+  assert.equal(candidates[0].rootPitchClass, 0);
+  assert.equal(candidates[0].scale.id, "bright-seven");
+  assert.equal(candidates[0].components.recurrence, 1);
+  assert.equal(candidates[0].components.ending, 1);
+  assert.ok(candidates[0].components.duration > 0.9);
+  assert.ok(candidates[0].score > candidates[1].score);
+  assert.deepEqual(tonalGravityCandidates([], 0), []);
+});
+
+test("offers contrasting unranked resolution forks without entering a note", () => {
+  const forks = resolutionForks([{ note: 60 }, { note: 64 }, { note: 71 }], 0, PIANO_SCALES[0], 4);
+  assert.equal(forks.length, 4);
+  assert.equal(forks[0].id, "center-return");
+  assert.equal(forks[0].pitchClass, 0);
+  assert.equal(new Set(forks.map((fork) => fork.pitchClass)).size, forks.length);
+  assert.ok(forks.some((fork) => fork.id === "fifths-neighbor" && fork.pitchClass === 7));
+  assert.deepEqual(resolutionForks([], 0, PIANO_SCALES[0]), []);
 });
 
 test("separates exact chord identity, inversion, and incomplete outlines", () => {

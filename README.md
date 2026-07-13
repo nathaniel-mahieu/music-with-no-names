@@ -4,12 +4,16 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Phrase Memory + Voice Leading v1.30**. It provides:
+The current milestone is **Scale Fingerprint + Tonal Gravity v1.31**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
 - A persistent live phrase ribbon that keeps sixty seconds of attacks, velocity, key release, sounding duration, pedal-extended tails, and silence while the coordinated staff, frequency, chord, and evidence views magnify the latest seven attacks.
 - A single Piano HUD that aligns that phrase across grand staff notation, log-frequency height, a fixed circle of fifths, changing scale frames, chord identity, nearby scale chords, interval texture, and separate perceptual traces.
+- A focused scale-learning sequence that reads the selected route as a cyclic equal-key gap fingerprint before showing its conventional name, preserves the fingerprint under transposition, and rotates the starting gap to preview mode-like hearing.
+- A twelve-center tonal-gravity field that keeps route compatibility separate from performed evidence: held time, recurrence, attack strength, low-register placement, and phrase endings remain visible contributors rather than collapsing into key certainty.
+- Silent resolution forks for center return, minimum hand motion, the near-3:2 fifths neighbor, and a less-recent route tone. The learner chooses an intention, plays the outlined pitch class, and reflects on the result; the control never enters or sounds an answer.
+- Phrase-level scale inference that uses the full sixty-second memory so the seven-attack microscope cannot forget an earlier Do and spuriously reframe the same phrase.
 - Local Web MIDI input with permission-aware device selection, note-on/off, velocity, duration, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and the seven-event phrase remains only in the current browser tab.
 - Interval Echo practice that asks the learner to reproduce a spacing from a different starting key without playing an answer.
 - A causal chord comparison that states which pitch positions were added, released, or retained before showing separate roughness, pull, and repose deltas.

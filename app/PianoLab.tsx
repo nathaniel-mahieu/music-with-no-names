@@ -28,9 +28,12 @@ import {
   pitchClassFromMidi,
   pushPhraseEvent,
   pushRollingNoteEvent,
+  resolutionForks,
   resolutionDirection,
+  scaleFingerprint,
   scaleFrameTimeline,
   scaleSemitones,
+  tonalGravityCandidates,
   tonalTendency,
   voiceChordNear,
   voiceLeadingProfile,
@@ -39,7 +42,9 @@ import {
   type ChordGesture,
   type NearbyChord,
   type PianoScale,
+  type ResolutionFork,
   type ScaleCandidate,
+  type TonalGravityCandidate,
 } from "@/lib/piano-model";
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
 
@@ -91,6 +96,11 @@ type ChordMeasure = {
 type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion";
 type IntervalEchoTarget = { semitones: number; anchorEventId: number };
+type ResolutionTarget = ResolutionFork & {
+  anchorEventId: number;
+  frameRootPitchClass?: number;
+  frameScaleId?: PianoScale["id"];
+};
 
 type MidiCallbacks = {
   onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
@@ -99,7 +109,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2;
+  version: 2 | 3;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -110,6 +120,8 @@ type PersistedPianoSession = {
   lockedDoMidi: number;
   ghostChord: NearbyChord | null;
   ghostNotes: number[];
+  resolutionTarget?: ResolutionTarget | null;
+  resolutionForkSet?: ResolutionFork[] | null;
 };
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -486,6 +498,120 @@ function ScaleLens({ events, chordNotes, snapshots, frame, doMidi, showConventio
   );
 }
 
+function pitchClassRoleLabel(pitchClass: number, doMidi: number, scale: PianoScale, showConventions: boolean) {
+  return showConventions
+    ? CONVENTIONAL_PITCH_CLASSES[pitchClass]
+    : noteContext(nearestMidiForPitchClass(pitchClass, doMidi), doMidi, scale).syllable;
+}
+
+function gravityCenterLabel(candidate: TonalGravityCandidate, doMidi: number, scale: PianoScale, showConventions: boolean) {
+  return pitchClassRoleLabel(candidate.rootPitchClass, doMidi, scale, showConventions);
+}
+
+function strongestGravityDrivers(candidate: TonalGravityCandidate) {
+  const labels: Array<[keyof TonalGravityCandidate["components"], string]> = [
+    ["routeFit", "route fit"],
+    ["duration", "held time"],
+    ["recurrence", "recurrence"],
+    ["accent", "attack"],
+    ["bass", "low register"],
+    ["ending", "phrase ending"],
+  ];
+  return labels
+    .map(([key, label]) => ({ label, value: candidate.components[key] }))
+    .sort((first, second) => second.value - first.value)
+    .slice(0, 2);
+}
+
+function ScalePracticeField({
+  phraseEvents,
+  frame,
+  doMidi,
+  showConventions,
+  gravity,
+  fingerprintRotation,
+  forks,
+  target,
+  targetMatched,
+  onRotate,
+  onChooseTarget,
+  onClearTarget,
+}: {
+  phraseEvents: HudNoteEvent[];
+  frame: ScaleCandidate;
+  doMidi: number;
+  showConventions: boolean;
+  gravity: TonalGravityCandidate[];
+  fingerprintRotation: number;
+  forks: ResolutionFork[];
+  target: ResolutionTarget | null;
+  targetMatched: boolean;
+  onRotate: () => void;
+  onChooseTarget: (fork: ResolutionFork) => void;
+  onClearTarget: () => void;
+}) {
+  const fingerprint = scaleFingerprint(frame.scale, fingerprintRotation);
+  const routePositions = scaleSemitones(frame.scale);
+  const rotationOffset = routePositions[fingerprint.rotation] ?? 0;
+  const observed = new Set(phraseEvents.map((event) => pitchClassFromMidi(event.note)));
+  const gravityByPitchClass = new Map(gravity.map((candidate) => [candidate.rootPitchClass, candidate]));
+  const maximumGravity = Math.max(...gravity.map((candidate) => candidate.score), 0.001);
+  const leadingGravity = gravity
+    .filter((candidate) => candidate.components.duration + candidate.components.recurrence + candidate.components.accent + candidate.components.bass + candidate.components.ending > 0)
+    .slice(0, 3);
+  const forkScale = PIANO_SCALES.find((scale) => scale.id === target?.frameScaleId) ?? frame.scale;
+  const forkDoMidi = target?.frameRootPitchClass == null ? doMidi : nearestMidiForPitchClass(target.frameRootPitchClass, doMidi);
+  const movementLabel = (movement: number) => movement === 0 ? "repeat" : `${movement > 0 ? "+" : ""}${movement} key step${Math.abs(movement) === 1 ? "" : "s"}`;
+  return <section className="hud-scale-practice" aria-labelledby="hud-scale-practice-title">
+    <div className="hud-panel-heading"><span>Shape · center · choice</span><strong id="hud-scale-practice-title">Scale fingerprint + tonal gravity</strong><small>One performed phrase, three separate questions. These are hypotheses and invitations—not a key detector or a goodness score.</small></div>
+    <div className="hud-scale-learning-grid">
+      <div className="hud-fingerprint-field">
+        <div className="hud-subheading"><span>Selected frame · derived shape</span><strong>Read the gaps before the name</strong><small>{new Set(phraseEvents.map((event) => pitchClassFromMidi(event.note))).size} measured pitch classes encountered in phrase memory</small></div>
+        <div className="hud-fingerprint" role="img" aria-label={`Cyclic scale gap fingerprint ${fingerprint.steps.join(", ")} equal-key steps`}>
+          {fingerprint.steps.map((step, index) => {
+            const start = fingerprint.positions[index];
+            const startPitchClass = pitchClassFromMidi(frame.rootPitchClass + rotationOffset + start);
+            const endPitchClass = pitchClassFromMidi(startPitchClass + step);
+            const encountered = observed.has(startPitchClass) && observed.has(endPitchClass);
+            return <span key={`${fingerprint.rotation}-${index}`} className={encountered ? "is-encountered" : ""} style={{ "--fingerprint-gap": step } as CSSProperties}><strong>{step}</strong><small>{step === 1 ? "close" : step === 2 ? "whole" : "wide"}</small></span>;
+          })}
+        </div>
+        <div className="hud-fingerprint-caption"><span>{fingerprint.steps.join("–")}</span><small>Totals {fingerprint.total} equal key steps: the octave loop closes. Moving Do transposes the loop without changing this string.</small></div>
+        <button type="button" className="hud-rotate-fingerprint" onClick={onRotate}>Rotate the starting point</button>
+        <p>Rotation keeps the same cyclic pitch set but changes which gap follows Do—a direct preview of mode-like hearing.</p>
+      </div>
+
+      <div className="hud-gravity-field">
+        <div className="hud-subheading"><span>Modeled from performance</span><strong>Competing centers</strong><small>Route fit + held time + recurrence + attack + low register + ending · named candidates were sounded</small></div>
+        <div className="hud-gravity-bars" role="img" aria-label="Twelve possible tonal centers weighted by performed evidence">
+          {Array.from({ length: 12 }, (_, pitchClass) => {
+            const candidate = gravityByPitchClass.get(pitchClass);
+            const label = pitchClassRoleLabel(pitchClass, doMidi, frame.scale, showConventions);
+            const rank = gravity.findIndex((item) => item.rootPitchClass === pitchClass);
+            return <span key={pitchClass} className={rank === 0 ? "is-leading is-strongest" : rank > 0 && rank < 3 ? "is-leading" : ""}><i style={{ "--gravity": candidate ? candidate.score / maximumGravity : 0 } as CSSProperties} /><strong>{label}</strong></span>;
+          })}
+        </div>
+        <ol className="hud-gravity-candidates">
+          {leadingGravity.map((candidate, index) => {
+            const drivers = strongestGravityDrivers(candidate);
+            return <li key={candidate.rootPitchClass}><span>{index === 0 ? "strongest hypothesis" : "competing"}</span><strong>{gravityCenterLabel(candidate, doMidi, frame.scale, showConventions)} · {showConventions ? candidate.scale.conventionalName : candidate.scale.name}</strong><small>{drivers.map((driver) => `${driver.label} ${Math.round(driver.value * 100)}`).join(" · ")}</small></li>;
+          })}
+          {!leadingGravity.length ? <li><span>waiting</span><strong>Play a phrase to form center hypotheses</strong><small>The current Do frame will not move from this panel.</small></li> : null}
+        </ol>
+      </div>
+
+      <div className="hud-resolution-field">
+        <div className="hud-subheading"><span>Playable experiment · selected Do</span><strong>Resolution forks</strong><small>Choose an intention; the HUD silently outlines a pitch class. Supply the note yourself.</small></div>
+        <div className="hud-resolution-options">
+          {forks.map((fork) => <button key={`${fork.id}-${fork.pitchClass}`} type="button" aria-pressed={target?.id === fork.id && target.pitchClass === fork.pitchClass} onClick={() => onChooseTarget(fork)}><span>{fork.label}</span><strong>{pitchClassRoleLabel(fork.pitchClass, forkDoMidi, forkScale, showConventions)} · {movementLabel(fork.movement)}</strong><small>{fork.explanation}</small></button>)}
+        </div>
+        {target ? <div className={`hud-resolution-feedback ${targetMatched ? "is-match" : ""}`} role="status"><span>{targetMatched ? "You played the fork" : "Silent target armed"}</span><strong>{pitchClassRoleLabel(target.pitchClass, forkDoMidi, forkScale, showConventions)} · any octave</strong><small>{targetMatched ? "Notice whether it felt like return, continuation, opening, or surprise; the model does not decide that response." : "One pitch class is dashed on the keyboard. No note was entered or sounded."}</small><button type="button" onClick={onClearTarget}>Clear fork</button></div> : null}
+        {!forks.length ? <p>Play at least one note to reveal contrasting continuation intentions.</p> : null}
+      </div>
+    </div>
+  </section>;
+}
+
 function chordLabel(candidate: ChordCandidate, doMidi: number, showConventions: boolean) {
   const root = showConventions ? CONVENTIONAL_PITCH_CLASSES[candidate.rootPitchClass] : CHROMATIC_SOLFEGE[pitchClassFromMidi(candidate.rootPitchClass - pitchClassFromMidi(doMidi))];
   if (showConventions) return `${root}${candidate.template.symbol || ""}`;
@@ -749,6 +875,9 @@ export function PianoLab() {
   const [intervalEchoTarget, setIntervalEchoTarget] = useState<IntervalEchoTarget | null>(null);
   const [ghostChord, setGhostChord] = useState<NearbyChord | null>(null);
   const [ghostNotes, setGhostNotes] = useState<number[]>([]);
+  const [resolutionTarget, setResolutionTarget] = useState<ResolutionTarget | null>(null);
+  const [resolutionForkSet, setResolutionForkSet] = useState<ResolutionFork[] | null>(null);
+  const [fingerprintRotation, setFingerprintRotation] = useState(0);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
   const [lockedDoMidi, setLockedDoMidi] = useState(60);
@@ -773,7 +902,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if (saved.version === 2 && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -799,6 +928,8 @@ export function PianoLab() {
             setLockedDoMidi(saved.lockedDoMidi ?? 60);
             setGhostChord(saved.ghostChord ?? null);
             setGhostNotes(saved.ghostNotes ?? []);
+            setResolutionTarget(saved.resolutionTarget ?? null);
+            setResolutionForkSet(saved.resolutionForkSet ?? null);
           }
         }
       } catch {
@@ -811,9 +942,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 2, phraseEvents, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes };
+    const session: PersistedPianoSession = { version: 3, phraseEvents, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, lockedDoMidi, lockedScaleId, phraseEvents, showConventions]);
+  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, lockedDoMidi, lockedScaleId, phraseEvents, resolutionForkSet, resolutionTarget, showConventions]);
 
   useEffect(() => {
     if (!phraseEvents.length) return;
@@ -858,7 +989,7 @@ export function PianoLab() {
     setPhraseEvents(nextPhraseEvents);
     eventsRef.current = nextEvents;
     setEvents(nextEvents);
-    const nextStable = scaleFrameTimeline(nextEvents.map((item) => item.note)).at(-1)?.stable;
+    const nextStable = scaleFrameTimeline(nextPhraseEvents.map((item) => item.note)).at(-1)?.stable;
     if (nextStable) setRememberedFrame(nextStable);
     setFocusedId(event.id);
     setNowMs(atMs);
@@ -872,8 +1003,9 @@ export function PianoLab() {
   const midiSustain = useCallback((down: boolean, channel: number, atMs: number, releasedNotes: number[]) => { if (!down) releasePedalEvents(releasedNotes, channel, atMs); }, [releasePedalEvents]);
   const midi = useMidiKeyboard({ onAttack: midiAttack, onRelease: midiRelease, onSustain: midiSustain });
 
-  const snapshots = useMemo(() => scaleFrameTimeline(events.map((event) => event.note)), [events]);
-  const latestSnapshot = snapshots.at(-1);
+  const phraseSnapshots = useMemo(() => scaleFrameTimeline(phraseEvents.map((event) => event.note)), [phraseEvents]);
+  const snapshots = phraseSnapshots.slice(-events.length);
+  const latestSnapshot = phraseSnapshots.at(-1);
   const discovered = latestSnapshot?.stable ?? rememberedFrame;
   const lockedScale = PIANO_SCALES.find((scale) => scale.id === lockedScaleId) ?? DEFAULT_SCALE;
   const frame: ScaleCandidate = frameMode === "locked"
@@ -881,6 +1013,8 @@ export function PianoLab() {
     : discovered ?? { scale: DEFAULT_SCALE, rootPitchClass: 0, uniqueNoteCount: 0, inScaleCount: 0, routeCoveredCount: 0, matchFraction: 0, coverageFraction: 0, homePresent: false, fit: 0 };
   const doMidi = nearestMidiForPitchClass(frame.rootPitchClass, 60);
   const scale = frame.scale;
+  const gravityCandidates = useMemo(() => tonalGravityCandidates(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0, 12), [nowMs, phraseEvents]);
+  const nextNoteForks = useMemo(() => resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4), [frame.rootPitchClass, phraseEvents, scale]);
   const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events]);
   const chordMeasures = useMemo<ChordMeasure[]>(() => chordGestures.map((gesture, index) => {
     const pitchClassCount = new Set(gesture.attackedNotes.map(pitchClassFromMidi)).size;
@@ -929,6 +1063,7 @@ export function PianoLab() {
   const nearby = analysisNotes.length ? nearbyScaleChords(analysisNotes, doMidi, scale, 3) : [];
   const ghostAttemptNotes = activeNoteNumbers.length ? activeNoteNumbers : chordGestures.at(-1)?.attackedNotes ?? [];
   const ghostMatched = ghostChord ? samePitchClasses(ghostAttemptNotes, ghostChord.pitchClasses) : false;
+  const resolutionMatched = resolutionTarget ? phraseEvents.some((event) => event.id > resolutionTarget.anchorEventId && pitchClassFromMidi(event.note) === resolutionTarget.pitchClass) : false;
   const focusedEvent = events.find((event) => event.id === focusedId) ?? events.at(-1) ?? null;
 
   const measures = useMemo<EventMeasure[]>(() => events.map((event, index) => {
@@ -978,6 +1113,9 @@ export function PianoLab() {
     setIntervalEchoTarget(null);
     setGhostChord(null);
     setGhostNotes([]);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    setFingerprintRotation(0);
     setLatchedNotes(new Map());
     midi.clear();
   };
@@ -993,12 +1131,16 @@ export function PianoLab() {
   };
 
   const lockCandidate = (candidate: ScaleCandidate) => {
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
     setLockedScaleId(candidate.scale.id);
     setLockedDoMidi(nearestMidiForPitchClass(candidate.rootPitchClass, 60));
     setFrameMode("locked");
   };
 
   const toggleFrameMode = () => {
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
     if (frameMode === "discover") {
       setLockedScaleId(scale.id);
       setLockedDoMidi(doMidi);
@@ -1015,8 +1157,17 @@ export function PianoLab() {
 
   const chooseGhostChord = (chord: NearbyChord) => {
     const center = analysisNotes.length ? analysisNotes.reduce((sum, note) => sum + note, 0) / analysisNotes.length : 60;
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
     setGhostChord(chord);
     setGhostNotes(voiceChordNear(chord.pitchClasses, analysisNotes, center));
+  };
+
+  const chooseResolutionTarget = (fork: ResolutionFork) => {
+    setGhostChord(null);
+    setGhostNotes([]);
+    setResolutionForkSet(resolutionForkSet ?? nextNoteForks);
+    setResolutionTarget({ ...fork, anchorEventId: phraseEvents.at(-1)?.id ?? 0, frameRootPitchClass: frame.rootPitchClass, frameScaleId: scale.id });
   };
 
   const newestInsight = focusedEvent ? (() => {
@@ -1038,14 +1189,16 @@ export function PianoLab() {
     const focused = focusedEvent?.note === note;
     const chordMember = selectedGesture?.attackedNotes.includes(note) ?? false;
     const inherited = selectedGesture?.inheritedNotes.includes(note) ?? false;
-    const ghost = ghostNotes.includes(note);
+    const chordGhost = ghostNotes.includes(note);
+    const resolutionGhost = resolutionTarget != null && pitchClassFromMidi(note) === resolutionTarget.pitchClass;
+    const ghost = chordGhost || resolutionGhost;
     const home = context.stepsWithinOctave === 0;
     const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", chordMember ? "is-chord-member" : "", inherited ? "is-inherited" : "", ghost ? "is-ghost" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
       "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
       "--key-width": `${100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
-    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${chordMember ? ", attacked in selected chord" : inherited ? ", inherited into selected chord field" : ""}${ghost ? ", silent ghost target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
+    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${chordMember ? ", attacked in selected chord" : inherited ? ", inherited into selected chord field" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
   };
 
   const exactChord = chordCandidates.find((candidate) => candidate.exact);
@@ -1100,13 +1253,14 @@ export function PianoLab() {
       </div> : focusLens === "scales" ? <div className="piano-focus-grid is-scales">
         <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
         <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
+        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} />
       </div> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} />
       </div> : null}
 
       <div className="piano-hud-keyboard-wrap">
-        <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>solid held · ring sustained · gold chord attack · dotted inherited · dashed ghost target · double mark Do</small></div>
+        <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>solid held · ring sustained · gold chord attack · dotted inherited · dashed silent target · double mark Do</small></div>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
       </div>
 

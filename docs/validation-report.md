@@ -42,6 +42,8 @@ The v1.29 phrase fixtures permit explicit break/join corrections at inferred cho
 
 The v1.30 phrase-memory fixtures retain attacks inside a rolling sixty-second boundary independently of the seven-event microscope. Voice-leading fixtures pin minimum-motion held, rising, falling, added, contrary, parallel, oblique, bass, and largest-leap results. Source contracts require a Voice-leading coach, silent ghost targets, URL-encoded Piano lenses, and the absence of the former answer-entering chord action.
 
+The v1.31 scale fixtures preserve cyclic gap inventory and twelve-step octave closure under a rotated starting point. Performed-gravity fixtures require the sounded Do candidate to outrank compatible alternatives when it is repeated, longer, stronger, low, and phrase-final while exposing every component separately. Resolution-fork fixtures require unique pitch-class alternatives and a center-return and fifths-neighbor path without entering a note. Browser review confirms that the eighth attack no longer discards the first attack’s frame evidence, a chosen fork keeps its original intention label after the learner plays it, the target is silent and matchable in any octave, the Scales view has no warnings or horizontal clipping at desktop and 390 pixels, and the active Piano lens remains URL-addressable.
+
 Source-level accessibility contracts require a named piano region, native on-screen key and event buttons, polite live status, named SVG summaries, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
 
 ## Playback-level invariants

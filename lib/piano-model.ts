@@ -93,6 +93,37 @@ export type ScaleFrameSnapshot = {
   evidenceLabel: "no evidence" | "little evidence" | "several compatible frames" | "distinct within this catalog";
 };
 
+export type PerformanceEvidenceEvent = RollingNoteEvent & {
+  velocity?: number;
+  onsetMs: number;
+  keyReleaseMs?: number | null;
+  releaseMs?: number | null;
+  fieldNotes?: number[];
+};
+
+export type TonalGravityCandidate = {
+  rootPitchClass: number;
+  scale: PianoScale;
+  score: number;
+  components: {
+    routeFit: number;
+    duration: number;
+    recurrence: number;
+    accent: number;
+    bass: number;
+    ending: number;
+  };
+};
+
+export type ResolutionFork = {
+  id: "center-return" | "least-motion" | "fifths-neighbor" | "fresh-route" | "alternate-route";
+  label: string;
+  note: number;
+  pitchClass: number;
+  movement: number;
+  explanation: string;
+};
+
 export type ChordTemplate = {
   id: string;
   name: string;
@@ -439,6 +470,142 @@ export function scaleFrameTimeline(notes: number[]): ScaleFrameSnapshot[] {
       evidenceLabel,
     };
   });
+}
+
+function clampUnit(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function performedDuration(event: PerformanceEvidenceEvent, nowMs: number) {
+  const keyEnd = event.keyReleaseMs ?? event.releaseMs ?? Math.min(nowMs, event.onsetMs + 420);
+  const soundEnd = event.releaseMs ?? Math.min(nowMs, event.onsetMs + 2_500);
+  const fingerMs = Math.max(0, Math.min(2_500, keyEnd - event.onsetMs));
+  const pedalMs = Math.max(0, Math.min(2_500, soundEnd - keyEnd));
+  return clampUnit(Math.log1p((fingerMs + pedalMs * 0.35) / 100) / Math.log1p(25));
+}
+
+/**
+ * Ranks competing center + route hypotheses from performed evidence. The score is
+ * deliberately decomposed: pitch-set compatibility is not allowed to masquerade
+ * as a measured key, and held, repeated, accented, low, and ending notes remain
+ * separately inspectable teaching cues.
+ */
+export function tonalGravityCandidates(
+  events: PerformanceEvidenceEvent[],
+  nowMs = events.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.onsetMs), 0),
+  limit = 3,
+): TonalGravityCandidate[] {
+  const usable = events.filter((event) => Number.isFinite(event.note) && Number.isFinite(event.onsetMs));
+  if (!usable.length || !Number.isInteger(limit) || limit <= 0) return [];
+  const referenceNow = Number.isFinite(nowMs) ? nowMs : usable.at(-1)!.onsetMs;
+  const phraseLow = Math.min(...usable.map((event) => event.note));
+  const counts = Array.from({ length: 12 }, () => 0);
+  const durations = Array.from({ length: 12 }, () => 0);
+  const accents = Array.from({ length: 12 }, () => 0);
+  const basses = Array.from({ length: 12 }, () => 0);
+  const endings = Array.from({ length: 12 }, () => 0);
+  const eventWeights: number[] = [];
+
+  usable.forEach((event, index) => {
+    const pitchClass = pitchClassFromMidi(event.note);
+    const duration = performedDuration(event, referenceNow);
+    const accent = clampUnit((event.velocity ?? 88) / 127);
+    const ageMs = Math.max(0, referenceNow - event.onsetMs);
+    const recency = 0.35 + 0.65 * Math.exp(-ageMs / 20_000);
+    const weight = (0.35 + 0.65 * duration) * (0.65 + 0.35 * accent) * recency;
+    counts[pitchClass] += 1;
+    durations[pitchClass] += duration * recency;
+    accents[pitchClass] += accent;
+    if (event.note <= phraseLow + 2) basses[pitchClass] += recency;
+    const fromEnd = usable.length - 1 - index;
+    if (fromEnd < 3) endings[pitchClass] += [1, 0.45, 0.2][fromEnd];
+    eventWeights.push(weight);
+  });
+
+  const normalize = (values: number[]) => {
+    const maximum = Math.max(...values, 0);
+    return values.map((value) => maximum > 0 ? value / maximum : 0);
+  };
+  const durationEvidence = normalize(durations);
+  const recurrenceEvidence = normalize(counts);
+  const accentEvidence = normalize(accents.map((value, pitchClass) => counts[pitchClass] ? value / counts[pitchClass] : 0));
+  const bassEvidence = normalize(basses);
+  const endingEvidence = normalize(endings);
+  const totalEventWeight = eventWeights.reduce((sum, weight) => sum + weight, 0);
+
+  const candidates: TonalGravityCandidate[] = [];
+  for (let rootPitchClass = 0; rootPitchClass < 12; rootPitchClass += 1) {
+    let bestScale = PIANO_SCALES[0];
+    let bestRouteFit = -1;
+    PIANO_SCALES.forEach((scale) => {
+      const route = new Set(scaleSemitones(scale).map((position) => modulo(rootPitchClass + position, 12)));
+      const routeFit = usable.reduce((sum, event, index) => sum + (route.has(pitchClassFromMidi(event.note)) ? eventWeights[index] : 0), 0) / totalEventWeight;
+      if (routeFit > bestRouteFit) {
+        bestScale = scale;
+        bestRouteFit = routeFit;
+      }
+    });
+    const components = {
+      routeFit: clampUnit(bestRouteFit),
+      duration: durationEvidence[rootPitchClass],
+      recurrence: recurrenceEvidence[rootPitchClass],
+      accent: accentEvidence[rootPitchClass],
+      bass: bassEvidence[rootPitchClass],
+      ending: endingEvidence[rootPitchClass],
+    };
+    const score = (
+      components.routeFit * 0.42
+      + components.duration * 0.17
+      + components.recurrence * 0.14
+      + components.accent * 0.09
+      + components.bass * 0.08
+      + components.ending * 0.1
+    );
+    candidates.push({ rootPitchClass, scale: bestScale, score: clampUnit(score), components });
+  }
+
+  return candidates.sort((first, second) => second.score - first.score || first.rootPitchClass - second.rootPitchClass).slice(0, limit);
+}
+
+export function scaleFingerprint(scale: PianoScale, rotation = 0) {
+  const length = scale.steps.length;
+  if (!length) return { steps: [] as number[], positions: [] as number[], rotation: 0, total: 0 };
+  const normalizedRotation = modulo(Math.round(rotation), length);
+  const steps = [...scale.steps.slice(normalizedRotation), ...scale.steps.slice(0, normalizedRotation)];
+  const positions: number[] = [0];
+  steps.slice(0, -1).forEach((step) => positions.push(positions.at(-1)! + step));
+  return { steps, positions, rotation: normalizedRotation, total: steps.reduce((sum, step) => sum + step, 0) };
+}
+
+/** Returns contrasting, unranked next-note intentions. It does not predict a correct continuation. */
+export function resolutionForks(events: RollingNoteEvent[], rootPitchClass: number, scale: PianoScale, limit = 4): ResolutionFork[] {
+  const usable = events.filter((event) => Number.isFinite(event.note));
+  if (!usable.length || !Number.isInteger(limit) || limit <= 0) return [];
+  const last = Math.round(usable.at(-1)!.note);
+  const routePitchClasses = scaleSemitones(scale).map((position) => modulo(rootPitchClass + position, 12));
+  const recentPitchClasses = usable.map((event) => pitchClassFromMidi(event.note));
+  const forks: ResolutionFork[] = [];
+  const add = (id: ResolutionFork["id"], label: string, pitchClass: number, explanation: string) => {
+    if (forks.some((fork) => fork.pitchClass === pitchClass)) return;
+    const note = nearestMidiForPitchClass(pitchClass, last);
+    forks.push({ id, label, note, pitchClass, movement: note - last, explanation });
+  };
+
+  add("center-return", "Return to the center", modulo(rootPitchClass, 12), "Tests the selected Do as a home arrival.");
+  const leastMotion = routePitchClasses
+    .filter((pitchClass) => pitchClass !== pitchClassFromMidi(last))
+    .map((pitchClass) => ({ pitchClass, distance: Math.abs(nearestMidiForPitchClass(pitchClass, last) - last) }))
+    .sort((first, second) => first.distance - second.distance || first.pitchClass - second.pitchClass)[0];
+  if (leastMotion) add("least-motion", "Move the least", leastMotion.pitchClass, "Keeps the next hand move as small as this route permits.");
+  add("fifths-neighbor", "Visit the fifths neighbor", modulo(rootPitchClass + 7, 12), "Tests the near-3:2 neighbor of the proposed center.");
+  const fresh = routePitchClasses
+    .map((pitchClass) => ({ pitchClass, lastSeen: recentPitchClasses.lastIndexOf(pitchClass), distance: Math.abs(nearestMidiForPitchClass(pitchClass, last) - last) }))
+    .sort((first, second) => first.lastSeen - second.lastSeen || first.distance - second.distance)[0];
+  if (fresh) add("fresh-route", "Refresh the route", fresh.pitchClass, "Chooses the least-recent pitch class inside the current route.");
+  routePitchClasses.forEach((pitchClass) => {
+    if (forks.length < limit) add("alternate-route", "Try another route tone", pitchClass, "Offers another in-route continuation when two intentions point to the same key.");
+  });
+  return forks.slice(0, limit);
 }
 
 export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], event: T, limit = 7) {
