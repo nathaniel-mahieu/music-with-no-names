@@ -41,6 +41,7 @@ test("server-renders the guided learning product surface", async () => {
   assert.match(html, />Start<\/button>/i);
   assert.match(html, />Ratio<\/button>/i);
   assert.match(html, />Scale<\/button>/i);
+  assert.match(html, />Piano<\/button>/i);
   assert.match(html, />Ear<\/button>/i);
   assert.match(html, />Harmony<\/button>/i);
   assert.match(html, />Rhythm<\/button>/i);
@@ -52,13 +53,14 @@ test("server-renders the guided learning product surface", async () => {
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
+  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, pianoLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/GuideLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/EarLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
@@ -93,6 +95,15 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(scaleLab, /minor pentatonic/);
   assert.match(scaleLab, /A nearby gap does not decide what comes next/);
   assert.doesNotMatch(scaleLab, /Move Do to the next landmark/);
+  assert.match(pianoLab, /Connect MIDI keyboard/);
+  assert.match(pianoLab, /Map the keys/);
+  assert.match(pianoLab, /A chord is an interval network/);
+  assert.match(pianoLab, /No total “listenability” or quality score is computed/);
+  assert.match(pianoLab, /Multiply by 3:2, then fold back into one octave/);
+  assert.match(pianoLab, /sustain/);
+  assert.match(pianoLab, /nothing is uploaded/i);
+  assert.match(pianoLab, /void synth\.enable\(\);\s*registerPlayedNote/);
+  assert.match(pianoLab, /The browser kept audio suspended/);
   assert.match(earLab, /Hear how timbre, register, and level change an interval/);
   assert.match(earLab, /modelPredictions/);
   assert.match(earLab, /humanRatings/);

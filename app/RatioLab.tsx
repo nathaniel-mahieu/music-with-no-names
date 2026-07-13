@@ -34,14 +34,16 @@ import { RecordingLab } from "./RecordingLab";
 import { EarLab } from "./EarLab";
 import { GuideLab } from "./GuideLab";
 import { ScaleLab } from "./ScaleLab";
+import { PianoLab } from "./PianoLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "guide" | "ratio" | "scale" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type LabId = "guide" | "ratio" | "scale" | "piano" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "guide", label: "Start" },
   { id: "ratio", label: "Ratio" },
   { id: "scale", label: "Scale" },
+  { id: "piano", label: "Piano" },
   { id: "ear", label: "Ear" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
@@ -66,7 +68,7 @@ const LAB_COPY: Record<
     eyebrow: "Learn music from sound and relationships",
     title: "Start with what you can hear and change.",
     description:
-      "Change one part of a sound at a time. Explore pitch, scales, harmony, rhythm, expectation, and your own response—without relying on note letters or a piano.",
+      "Change one part of a sound at a time. Explore pitch, scales, piano, harmony, rhythm, expectation, and your own response—without treating note letters or key geometry as the foundation.",
     principleTop: "Sound",
     principleMain: "→ hearing → music",
     principleBottom: "through a listener in context",
@@ -88,6 +90,15 @@ const LAB_COPY: Record<
     principleTop: "Movable home",
     principleMain: "Do → gaps → Do",
     principleBottom: "same relationships at any pitch",
+  },
+  piano: {
+    eyebrow: "Translate relationships onto a playable keyboard",
+    title: "See what every key means relative to home.",
+    description:
+      "Use the on-screen piano or connect a MIDI keyboard. Follow movable Do, build scales and interval networks, and derive the circle of fifths from repeated 3:2 relationships.",
+    principleTop: "Key press",
+    principleMain: "→ interval → context",
+    principleBottom: "physical evidence is not a quality score",
   },
   ear: {
     eyebrow: "How sound changes in an ear",
@@ -680,7 +691,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.23
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.24
         </div>
       </header>
 
@@ -916,7 +927,9 @@ export function RatioLab() {
             </section>
           </>
         ) : activeLab === "scale" ? (
-          <ScaleLab />
+          <ScaleLab onNavigate={selectLab} />
+        ) : activeLab === "piano" ? (
+          <PianoLab />
         ) : activeLab === "ear" ? (
           <EarLab />
         ) : activeLab === "harmony" ? (
@@ -936,7 +949,7 @@ export function RatioLab() {
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Explore intervals · scales · hearing · harmony · rhythm · form · recordings · musical landmarks · your response</span>
+        <span>Explore intervals · scales · piano + MIDI · hearing · harmony · rhythm · form · recordings · musical landmarks · your response</span>
       </footer>
     </main>
   );

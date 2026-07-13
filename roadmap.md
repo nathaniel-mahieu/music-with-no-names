@@ -1,7 +1,7 @@
 # Music With No Names — Development Roadmap
 
 Status: implementation underway
-Last updated: 2026-07-11
+Last updated: 2026-07-13
 
 ## North star
 
@@ -478,6 +478,28 @@ Exit gate:
 - A learner can read small, medium, and large scale gaps without translating them into note letters.
 - No physical metric is presented as a universal measure of stability, emotion, or goodness.
 
+### K2.6 — Piano and MIDI relationship bridge
+
+Objective: introduce a piano as a playable translation of the existing ratio, interval, scale, and auditory models without making keyboard geometry or note letters foundational.
+
+- [x] **K2.6.1** Add a two-octave on-screen piano whose keys are labeled by movable-Do role relative to a changeable home.
+- [x] **K2.6.2** Add local Web MIDI input with permission-aware connection, device selection, note-on/off, velocity, and sustain-pedal handling.
+- [x] **K2.6.3** Keep conventional note, scale, and interval names behind an optional translation layer.
+- [x] **K2.6.4** Add bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes with octave-closing physical gap fingerprints.
+- [x] **K2.6.5** Add a live ascending scale walk that accepts Do in any MIDI octave and follows note-on events with corrective feedback.
+- [x] **K2.6.6** Represent each held field as a pairwise interval network plus separate harmonic-fit, spectral-friction, pitch-span, and selected-route-membership evidence.
+- [x] **K2.6.7** Add controlled sonority starting fields with conditional affordance language and no combined listenability, emotion, consonance, or quality score.
+- [x] **K2.6.8** Derive the circle of fifths from repeated 3:2 moves, octave folding, equal-key approximation, and the visible 23.5-cent pure closure mismatch.
+- [x] **K2.6.9** Allow any fifths position to become the new movable Do while preserving the relationship-first representation.
+- [x] **K2.6.10** Test MIDI parsing, transposition invariance, scale closure, interval landmarks, fifths geometry, semantic interaction, forced colors, and responsive layout contracts.
+
+Exit gate:
+
+- A learner can press a physical or on-screen key and explain its frequency, distance, syllable, and scale role relative to Do.
+- A learner can add notes and distinguish physical interaction evidence from scale context and personal musical judgment.
+- A learner can explain why the equal-tempered fifths cycle closes even though twelve pure 3:2 moves do not equal exactly seven octaves.
+- MIDI data and all learning state remain local to the browser.
+
 ### Q10 — Validation, accessibility, and release hardening
 
 Objective: ensure that the experience is scientifically honest, musically useful, robust, and pleasant to use.
@@ -513,6 +535,7 @@ F0 Foundation
   └─ R1 Ratio Lab
        └─ A2 Auditory reality
             ├─ S2.5 Transposable scales + inner hearing
+            │    └─ K2.6 Piano + MIDI relationship bridge
             ├─ H3 Multi-tone harmony
             └─ T4 Rhythm and embodiment
                  └─ P5 Pattern and prediction
@@ -629,6 +652,7 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Ear Lab sensory models and independent human reports implemented.
 - [x] Guided learning path, hearing safety, glossary, ADRs, and research ledger implemented.
 - [x] Movable-Do scale orbit, physical step fingerprint, degree evidence, and inner-hearing practice implemented.
+- [x] Piano companion with local MIDI input, movable-Do key mapping, scale walk, live interval network, separated sonority evidence, and a physically derived circle of fifths implemented.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 - [x] Event self-similarity and incremental uncertainty/surprise trace implemented.

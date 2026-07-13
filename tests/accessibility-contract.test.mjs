@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-const LABS = ["GuideLab", "ScaleLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab"];
+const LABS = ["GuideLab", "ScaleLab", "PianoLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab"];
 
 test("every learning lab exposes a named semantic region", async () => {
   for (const lab of LABS) {
@@ -12,9 +12,10 @@ test("every learning lab exposes a named semantic region", async () => {
 });
 
 test("dynamic visuals and status changes expose nonvisual descriptions", async () => {
-  const [ratio, scale, recording, journey, atlas] = await Promise.all([
+  const [ratio, scale, piano, recording, journey, atlas] = await Promise.all([
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RecordingLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/JourneyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/AtlasLab.tsx", import.meta.url), "utf8"),
@@ -23,16 +24,21 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(scale, /name="scale-degree"/);
   assert.match(scale, /aria-live="polite"/);
   assert.match(scale, /<ol className="step-fingerprint"/);
+  assert.match(piano, /aria-label="Two-octave on-screen piano/);
+  assert.match(piano, /aria-live="polite"/);
+  assert.match(piano, /role="progressbar"/);
+  assert.match(piano, /Circle of fifths in movable-Do syllables/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);
 });
 
 test("focus, reduced-motion, and non-color contracts are present", async () => {
-  const [css, ratio, scale] = await Promise.all([
+  const [css, ratio, scale, piano] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(css, /select:focus-visible/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
@@ -51,4 +57,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.learning-scale \.step-fingerprint > li span/);
   assert.doesNotMatch(ratio, /tabIndex=\{?[1-9]/);
   assert.doesNotMatch(scale, /className="degree-inspector"[^>]*aria-live/);
+  assert.doesNotMatch(piano, /tabIndex=\{?[1-9]/);
+  assert.match(css, /\.piano-key\.is-circle-target/);
+  assert.match(css, /\.piano-key\.is-active,[\s\S]*Highlight/);
 });

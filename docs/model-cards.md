@@ -29,6 +29,16 @@ These cards describe educational models used by Music With No Names. A model out
 - **Confidence:** values are bounded educational indices with visible drivers. They are not probabilities, preference estimates, emotion classifiers, or a consonance score.
 - **Limits:** no familiarity corpus, individualized hearing model, temporal expectation beyond one previous field, tempo, dynamics, articulation, spatialization, semantic content, culture, or personal association. Formula weights are explanatory choices, not fitted coefficients.
 
+## Piano and MIDI relationship bridge
+
+- **Version:** `mwno-piano-1` for the pure relationship layer; live sonority evidence reuses `mwno-sonority-1`.
+- **Inputs:** local MIDI note number, velocity, sustain state, selected movable Do, selected octave-closing scale route, and optional conventional-label visibility.
+- **Relational outputs:** frequency in hertz, equal-key ratio and cents from Do, movable syllable, selected-scale membership, pairwise interval landmarks, and repeated-fifths coordinates.
+- **Fifths derivation:** each pure move multiplies frequency by 3:2 and removes octaves until the result lies within one octave. The equal-key placement is shown separately, including accumulated error and the approximately 23.46-cent mismatch between twelve pure fifths and seven octaves.
+- **Live sonority outputs:** harmonic-template fit, spectral friction, outer-voice span, and selected-route membership remain separate. The interface does not average them into listenability, consonance, emotion, or quality.
+- **MIDI privacy:** permission and messages stay in the browser. Note-on, note-off, velocity, and sustain are used only for the live local view; no MIDI event log is persisted or uploaded.
+- **Limits:** equal temperament is the keyboard coordinate system, not a claim of natural superiority. Velocity is not calibrated loudness. Scale membership is not correctness. Conditional language such as “may support” is not an emotion classifier or listener prediction.
+
 ## Rhythm and pulse models
 
 - **Version:** `mwno-rhythm-1`.

@@ -24,6 +24,14 @@ The Scale Lab fixtures require every preset to close at an exact 2:1 octave, pre
 
 The browser review additionally checks that the model’s ten-partial harmonic spectrum is the spectrum synthesized for simultaneous examples, while melodic examples explicitly exclude simultaneous roughness as their explanation. Context and inner-hearing tasks collect a learner response before interpretation. These checks validate internal consistency and interaction behavior; they do not demonstrate learning gains in recruited participants.
 
+## Piano and MIDI invariants
+
+The piano-model fixtures pin MIDI note 69 to 440 Hz, require octave frequency doubling, verify that each learning scale closes after twelve equal keyboard steps, and preserve movable-Do role under transposition. Pairwise interval tests compare equal-key distances with declared simple-ratio landmarks without treating the landmark as the tuning identity.
+
+The fifths fixtures generate the order Do → Sol → Re → La by repeated 3:2 multiplication and octave folding. They recover the approximately 1.955-cent difference between one pure fifth and seven equal-key steps, and the approximately 23.46-cent mismatch after twelve pure fifths versus seven octaves. MIDI parser fixtures cover note-on, explicit and zero-velocity note-off, channel preservation, and sustain-pedal thresholds.
+
+Source-level accessibility contracts require a named piano region, native on-screen key buttons, polite live status, accessible meter values, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
+
 ## Playback-level invariants
 
 Synthesized labs share a nominal 0.065 master gain, equal-power simultaneous mixing, RMS-matched harmonic waveforms, a 0.24 coherent-peak ceiling, and one safety-compressor configuration. Recording playback is attenuated against both a 0.045 RMS target and a 0.20 peak ceiling. Tests cover silent and invalid inputs, voice-count invariance, timbre power matching, and recording gain bounds. Rhythm remains a separately calibrated transient, and authored musical dynamics remain intentionally audible.

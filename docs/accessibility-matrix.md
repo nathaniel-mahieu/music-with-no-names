@@ -6,6 +6,7 @@
 - Native buttons, range inputs, selects, details, and links provide keyboard operation without custom key handlers.
 - Focus-visible outlines cover links, buttons, inputs, and selects.
 - Dynamic audio and analysis status uses polite live regions.
+- The Piano Lab uses native buttons for every on-screen key, a native MIDI-device select, text-redundant scale and active-key states, and labeled progress values for every live evidence meter.
 - Canvas and dense visualizations provide accessible names or adjacent textual interpretations.
 - Reduced-motion preferences disable smooth scrolling and collapse animation/transition duration.
 - Color is redundant with text labels, position, marker shape, border style, or fill pattern. Atlas corpus clouds use dashed, dotted, and double borders plus distinct patterns.
@@ -23,4 +24,5 @@ The following must be checked with real assistive technology and are not claimed
 - High-contrast and forced-color modes.
 - Confirm system-color appearance in Windows High Contrast on physical displays; the automated forced-color contract does not substitute for this check.
 - Touch target comfort and switch-control operation on real mobile devices.
+- Physical MIDI-keyboard connection, sustain behavior, disconnect/reconnect announcements, and device switching with assistive technology.
 - Reduced-motion behavior in a browser with the operating-system preference enabled.

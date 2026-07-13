@@ -4,10 +4,17 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Clear Listening + Matched Levels v1.23**. It provides:
+The current milestone is **Piano + MIDI Relationship Bridge v1.24**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
+- A Piano Lab that translates those relationships onto a two-octave keyboard without treating key geometry as the underlying theory.
+- Local Web MIDI input with permission-aware device selection, note-on/off, velocity, and sustain-pedal visualization; no MIDI data is uploaded.
+- Movable-Do overlays for every piano key, with conventional note, scale, and interval names available only as an optional translation layer.
+- A live scale walk for bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes.
+- A held-note interval network plus separate common-period fit, spectral friction, pitch-span, and selected-scale membership views—never a combined listenability or quality score.
+- Controlled chord fields that connect physical differences to conditional possibilities such as fusion, weight, openness, or pressure without assigning fixed emotions.
+- A circle of fifths derived from repeated 3:2 moves, octave folding, equal-key approximation, and the visible pure-tuning closure mismatch.
 - Physical step geometry for seven-, five-, and six-degree scales, including the 3 · 2 · 2 · 3 · 2 fingerprint.
 - Degree-level frequency ratios, nearby small-integer landmarks, spectral-interaction evidence, and contextual-role explanations kept visibly separate.
 - A listen–imagine–reveal exercise for practicing inner hearing without a keyboard-shaped map.
@@ -28,7 +35,7 @@ The current milestone is **Clear Listening + Matched Levels v1.23**. It provides
 - A live field map comparing current and landmark ratio combinations by activation and source fusion, plus an explicit previous-field delta.
 - Phone navigation with readable three-column lab choices and full-size touch targets.
 - Reduced-motion-aware lab navigation and enlarged Atlas landmark hit areas without inflating their data-encoded marks.
-- A five-part private reasoning check that tests relationships, auditory realization, perceptual-value distinctions, prediction timing, and whole-form context.
+- An eight-part private reasoning check that tests relationships, scale and fifths geometry, auditory realization, perceptual-value distinctions, prediction timing, and whole-form context.
 - Explanations and direct evidence-lab links after every answer, with no score upload or claim of participant validation.
 - A first-focus skip route to the active Lab and native-order keyboard navigation without positive tab indices.
 - Forced-color fallbacks for selection, spectra, voice identity, causal maps, and Atlas uncertainty encodings.

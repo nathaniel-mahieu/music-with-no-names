@@ -159,7 +159,7 @@ function useScaleAudio(referenceHz: number, ratios: number[]) {
   return { activeDegrees, isPlaying, message, playSequence, stop };
 }
 
-export function ScaleLab() {
+export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") => void }) {
   const [lesson, setLesson] = useState<LessonId>("home");
   const [presetId, setPresetId] = useState<PresetId>("seven");
   const [referenceHz, setReferenceHz] = useState(220);
@@ -424,7 +424,7 @@ export function ScaleLab() {
             </div>
           </div>
 
-          <div className="scale-takeaway"><span>What carries into other music</span><strong>Move every pitch together and the scale is transposed. Change the gap pattern or phrase, and its musical role can change.</strong><p>The gaps describe pitch relationships. The phrase builds expectation. Overlapping overtones shape simultaneous sound. Your listening history and purpose shape your response.</p></div>
+          <div className="scale-takeaway"><span>What carries into other music</span><strong>Move every pitch together and the scale is transposed. Change the gap pattern or phrase, and its musical role can change.</strong><p>The gaps describe pitch relationships. The phrase builds expectation. Overlapping overtones shape simultaneous sound. Your listening history and purpose shape your response.</p>{onNavigate ? <button type="button" onClick={() => onNavigate("piano")}>Bring these relationships to a piano</button> : null}</div>
         </section>
       )}
     </section>

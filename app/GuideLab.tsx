@@ -2,15 +2,17 @@
 
 import { useRef, useState } from "react";
 
-type Destination = "ratio" | "scale" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type Destination = "ratio" | "scale" | "piano" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const PATH: { number: string; title: string; question: string; destination: Destination; action: string }[] = [
   { number: "01", title: "Relationship", question: "If both pitches move, what stays the same between them?", destination: "ratio", action: "Compare two pitches" },
   { number: "02", title: "Scale shape", question: "How can Do mean home at any pitch?", destination: "scale", action: "Learn movable scales" },
-  { number: "03", title: "Hearing", question: "Why can the same interval sound different in a new register or timbre?", destination: "ear", action: "Change the sound" },
-  { number: "04", title: "Rhythm", question: "How do spacing and tempo create pulse and movement?", destination: "rhythm", action: "Build a rhythm" },
-  { number: "05", title: "Musical journey", question: "How do repetition, surprise, and return shape a phrase?", destination: "journey", action: "Follow a musical journey" },
-  { number: "06", title: "Your response", question: "How do your goal and listening history change your response?", destination: "personal", action: "Map your listening" },
+  { number: "03", title: "Piano map", question: "How do the same relationships appear under your fingers?", destination: "piano", action: "Connect keys to relationships" },
+  { number: "04", title: "Hearing", question: "Why can the same interval sound different in a new register or timbre?", destination: "ear", action: "Change the sound" },
+  { number: "05", title: "Harmony", question: "What changes when several interval pairs overlap at once?", destination: "harmony", action: "Build a harmonic field" },
+  { number: "06", title: "Rhythm", question: "How do spacing and tempo create pulse and movement?", destination: "rhythm", action: "Build a rhythm" },
+  { number: "07", title: "Musical journey", question: "How do repetition, surprise, and return shape a phrase?", destination: "journey", action: "Follow a musical journey" },
+  { number: "08", title: "Your response", question: "How do your goal and listening history change your response?", destination: "personal", action: "Map your listening" },
 ];
 
 const GLOSSARY = [
@@ -21,6 +23,8 @@ const GLOSSARY = [
   ["scale", "an ordered gap pattern that repeats when frequency doubles"],
   ["scale degree", "one position relative to Do"],
   ["transposition", "moving every pitch together while keeping their relationships"],
+  ["piano key", "one physical control in a twelve-equal-step tuning; its role changes when Do changes"],
+  ["circle of fifths", "repeated near-3:2 moves, folded into one octave and closed by equal temperament"],
   ["roughness", "modeled interaction between nearby frequencies that overlap in time"],
   ["harmonicity", "how well spectral components fit a harmonic pattern"],
   ["fusion", "whether several sounds seem to form one sound object"],
@@ -60,6 +64,14 @@ const LEARNING_CHECKS: {
     explanation: "Transposition changes the absolute embodiment while preserving the ordered gaps, ratios, syllables, and degree relationships. Choosing a new home would change those home-relative relationships.",
     destination: "scale",
     action: "Run the transposition test",
+  },
+  {
+    prompt: "Why does the equal-tempered circle of fifths close after twelve moves?",
+    options: ["Twelve pure 3:2 ratios equal exactly seven octaves", "The keyboard slightly adjusts each fifth so the accumulated mismatch is spread", "The note letters force the frequencies to repeat"],
+    answer: 1,
+    explanation: "Twelve pure 3:2 moves exceed seven octaves by about 23.5 cents. Equal temperament narrows each fifth slightly, making the keyboard cycle close while preserving a close approximation.",
+    destination: "piano",
+    action: "Trace the fifths cycle",
   },
   {
     prompt: "When can upper-partial roughness help explain an interval in this lesson?",
