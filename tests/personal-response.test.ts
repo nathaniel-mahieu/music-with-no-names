@@ -66,8 +66,9 @@ test("summarizes explicit phrase reports with sample-dependent uncertainty", () 
 });
 
 test("parses only complete bounded phrase-character observations", () => {
-  const valid = characterObservation("1", 30, 70);
+  const valid = { ...characterObservation("1", 30, 70), soundModelId: "bright-piano" as const };
   const invalid = { ...valid, ratings: { ...valid.ratings, liking: 140 } };
-  assert.deepEqual(parsePhraseCharacterObservations(JSON.stringify([valid, invalid])), [valid]);
+  const unknownModel = { ...valid, soundModelId: "actual-piano" };
+  assert.deepEqual(parsePhraseCharacterObservations(JSON.stringify([valid, invalid, unknownModel])), [valid]);
   assert.deepEqual(parsePhraseCharacterObservations("not json"), []);
 });

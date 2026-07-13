@@ -58,6 +58,15 @@ import {
 } from "@/lib/piano-model";
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
 import {
+  DEFAULT_PIANO_SOUND_MODEL_ID,
+  PIANO_SOUND_MODELS,
+  isPianoSoundModelId,
+  pianoSoundModel,
+  pianoSoundPartialProfile,
+  pianoSoundVoice,
+  type PianoSoundModelId,
+} from "@/lib/piano-sound-model";
+import {
   PHRASE_CHARACTER_STORAGE_KEY,
   parsePhraseCharacterObservations,
   phraseRelationshipSignature,
@@ -128,7 +137,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4;
+  version: 2 | 3 | 4 | 5;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -143,6 +152,7 @@ type PersistedPianoSession = {
   resolutionForkSet?: ResolutionFork[] | null;
   landmarkPathId?: LandmarkPathId;
   landmarkStepIndex?: number;
+  soundModelId?: PianoSoundModelId;
 };
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -208,7 +218,7 @@ function evidenceWord(value: number) {
   return "low";
 }
 
-function phraseCharacterEvidence(events: HudNoteEvent[], doMidi: number, scale: PianoScale): PhraseCharacterEvidence {
+function phraseCharacterEvidence(events: HudNoteEvent[], doMidi: number, scale: PianoScale, soundModelId: PianoSoundModelId): PhraseCharacterEvidence {
   if (!events.length) return {
     measured: { attackCount: 0, phraseMs: 0, pitchSpan: 0, meanVelocity: 0, overlapShare: 0 },
     modeled: { meanCrunch: 0, endingRepose: 0, meanNovelty: 0, centerClarity: 0 },
@@ -220,11 +230,11 @@ function phraseCharacterEvidence(events: HudNoteEvent[], doMidi: number, scale: 
   const crunchValues = events.flatMap((event) => {
     const field = uniqueSorted(event.fieldNotes);
     if (field.length < 2) return [];
-    return [sonorityPerceptionModel(field.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: 0.72, partialCount: 9 }))).roughness];
+    return [sonorityPerceptionModel(field.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))).roughness];
   });
   const finalEvent = events.at(-1)!;
   const endingField = uniqueSorted(finalEvent.fieldNotes.length ? finalEvent.fieldNotes : [finalEvent.note]);
-  const endingPerception = endingField.length >= 2 ? sonorityPerceptionModel(endingField.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: 0.72, partialCount: 9 }))) : null;
+  const endingPerception = endingField.length >= 2 ? sonorityPerceptionModel(endingField.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
   const endingTendency = tonalTendency(endingField, doMidi, scale);
   const noveltyValues = events.slice(1).map((event, index) => events.slice(0, index + 1).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? 0 : 1);
   const gravity = tonalGravityCandidates(events, phraseEnd, 2);
@@ -1053,12 +1063,13 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   </section>;
 }
 
-function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, showConventions, onSelect, onReplay }: {
+function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundModelId, showConventions, onSelect, onReplay }: {
   path: LandmarkPath;
   stepIndex: number;
   targetNotes: number[];
   doMidi: number;
   scale: PianoScale;
+  soundModelId: PianoSoundModelId;
   showConventions: boolean;
   onSelect: (id: LandmarkPathId) => void;
   onReplay: () => void;
@@ -1066,7 +1077,7 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, showCo
   const complete = stepIndex >= path.steps.length;
   const currentStep = complete ? null : path.steps[stepIndex];
   const transition = currentStep ? landmarkTransitionProfile(path, stepIndex, doMidi) : null;
-  const perception = targetNotes.length >= 2 ? sonorityPerceptionModel(targetNotes.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: 0.72, partialCount: 9 }))) : null;
+  const perception = targetNotes.length >= 2 ? sonorityPerceptionModel(targetNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
   const tendency = targetNotes.length ? tonalTendency(targetNotes, doMidi, scale) : null;
   const targetLabels = targetNotes.map((note) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale));
   const targetDescription = currentStep
@@ -1112,7 +1123,7 @@ function characterChoiceLabel(key: keyof PhraseCharacterRatings, value: number |
   return question.choices[index];
 }
 
-function ExperienceLens({ captured, latestCount, observations, draft, questionIndex, saved, evidence, deleteArmed, onCapture, onAnswer, onBack, onSave, onReflectAgain, onArmDelete, onDelete }: {
+function ExperienceLens({ captured, latestCount, observations, draft, questionIndex, saved, evidence, soundModelLabel, deleteArmed, onCapture, onAnswer, onBack, onSave, onReflectAgain, onArmDelete, onDelete }: {
   captured: HudNoteEvent[];
   latestCount: number;
   observations: PhraseCharacterObservation[];
@@ -1120,6 +1131,7 @@ function ExperienceLens({ captured, latestCount, observations, draft, questionIn
   questionIndex: number;
   saved: boolean;
   evidence: PhraseCharacterEvidence;
+  soundModelLabel: string;
   deleteArmed: boolean;
   onCapture: () => void;
   onAnswer: (key: keyof PhraseCharacterRatings, value: number) => void;
@@ -1159,7 +1171,7 @@ function ExperienceLens({ captured, latestCount, observations, draft, questionIn
           <text x="54" y="278" className="hud-character-axis-label is-start">suspended</text><text x="466" y="278" className="hud-character-axis-label is-end">settled</text>
           <text x="45" y="255" className="hud-character-axis-label is-end">calm</text><text x="45" y="46" className="hud-character-axis-label is-end">energized</text>
           {summary ? <ellipse cx={xFor(summary.center.settledness)} cy={yFor(summary.center.energy)} rx={Math.min(206, (summary.spread.settledness + summary.uncertainty) * 4.12)} ry={Math.min(105, (summary.spread.energy + summary.uncertainty) * 2.1)} className="hud-character-uncertainty" /> : null}
-          {observations.map((observation, index) => <circle key={observation.id} cx={xFor(observation.ratings.settledness)} cy={yFor(observation.ratings.energy)} r={4 + observation.ratings.liking / 28} strokeWidth={1 + observation.ratings.familiarity / 55} className={`hud-character-point ${observation.phraseSignature === signature ? "is-same-phrase" : ""}`}><title>{`Report ${index + 1}: settledness ${observation.ratings.settledness}, energy ${observation.ratings.energy}, familiarity ${observation.ratings.familiarity}, liking ${observation.ratings.liking}`}</title></circle>)}
+          {observations.map((observation, index) => <circle key={observation.id} cx={xFor(observation.ratings.settledness)} cy={yFor(observation.ratings.energy)} r={4 + observation.ratings.liking / 28} strokeWidth={1 + observation.ratings.familiarity / 55} className={`hud-character-point ${observation.phraseSignature === signature ? "is-same-phrase" : ""}`}><title>{`Report ${index + 1}: settledness ${observation.ratings.settledness}, energy ${observation.ratings.energy}, familiarity ${observation.ratings.familiarity}, liking ${observation.ratings.liking}${observation.soundModelId ? `, assumed spectrum ${pianoSoundModel(observation.soundModelId).shortLabel}` : ""}`}</title></circle>)}
           {summary ? <circle cx={xFor(summary.center.settledness)} cy={yFor(summary.center.energy)} r="4" className="hud-character-center"><title>Center of saved reports</title></circle> : null}
           {draftPlaced ? <g className="hud-character-current"><circle cx={xFor(draft.settledness!)} cy={yFor(draft.energy!)} r="9" /><line x1={xFor(draft.settledness!) - 13} x2={xFor(draft.settledness!) + 13} y1={yFor(draft.energy!)} y2={yFor(draft.energy!)} /><line x1={xFor(draft.settledness!)} x2={xFor(draft.settledness!)} y1={yFor(draft.energy!) - 13} y2={yFor(draft.energy!) + 13} /></g> : null}
           {!observations.length && !draftPlaced ? <text x="270" y="148" className="hud-character-empty">Answer settledness and energy to place this experience</text> : null}
@@ -1183,11 +1195,30 @@ function ExperienceLens({ captured, latestCount, observations, draft, questionIn
     </div>
     {ready ? <div className="hud-character-evidence" aria-label="Measured, modeled, and listener-reported phrase evidence">
       <div><span>measured from MIDI</span><strong>{evidence.measured.attackCount} attacks · {evidence.measured.pitchSpan} key span · {(evidence.measured.phraseMs / 1000).toFixed(1)} s · {Math.round(evidence.measured.overlapShare * 100)}% overlapping links</strong><small>Timing, pitch range, velocity, and overlap are captured events.</small></div>
-      <div><span>modeled from assumptions</span><strong>{Math.round(evidence.modeled.meanCrunch * 100)} crunch · {Math.round(evidence.modeled.endingRepose * 100)} ending repose · {Math.round(evidence.modeled.meanNovelty * 100)} pitch novelty · {Math.round(evidence.modeled.centerClarity * 100)} center margin</strong><small>Equal-tempered positions and the disclosed nine-partial proxy; not your piano’s audio.</small></div>
+      <div><span>modeled from assumptions</span><strong>{Math.round(evidence.modeled.meanCrunch * 100)} crunch · {Math.round(evidence.modeled.endingRepose * 100)} ending repose · {Math.round(evidence.modeled.meanNovelty * 100)} pitch novelty · {Math.round(evidence.modeled.centerClarity * 100)} center margin</strong><small>{soundModelLabel} supplies the spectral evidence; it is not your piano’s audio. Pitch novelty and center margin do not change with this choice.</small></div>
       <div><span>reported by you</span><strong>{reportedValues}</strong><small>These values are not inferred from the rows above, and correlation would not prove cause.</small></div>
     </div> : null}
     <div className="hud-character-local-data"><span>{observations.length} phrase report{observations.length === 1 ? "" : "s"} stored only in this browser</span>{observations.length ? <button type="button" onClick={deleteArmed ? onDelete : onArmDelete}>{deleteArmed ? "Confirm delete phrase reports" : "Delete phrase reports"}</button> : null}</div>
   </section>;
+}
+
+function SoundModelDisclosure({ value, onChange }: { value: PianoSoundModelId; onChange: (value: PianoSoundModelId) => void }) {
+  const model = pianoSoundModel(value);
+  const profile = pianoSoundPartialProfile(value);
+  return <div className="piano-model-disclosure">
+    <label htmlFor="hud-sound-model"><span>Assumed spectrum</span><select id="hud-sound-model" value={value} onChange={(event) => { if (isPianoSoundModelId(event.target.value)) onChange(event.target.value); }}>{PIANO_SOUND_MODELS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+    <svg viewBox="0 0 180 58" role="img" aria-label={`${model.label}: ${model.partialCount} partial${model.partialCount === 1 ? "" : "s"}, ${model.rolloffDbPerOctave} decibels per octave rolloff${model.inharmonicity ? ", slight upper-partial stretch" : ", exact harmonic spacing"}.`}>
+      <title>Relative partial frequencies and amplitudes for the selected teaching spectrum</title>
+      <line x1="8" x2="172" y1="50" y2="50" />
+      {profile.map((partial) => {
+        const x = 8 + Math.min(1, Math.log2(partial.frequencyMultiple) / 4) * 164;
+        const y = 50 - partial.amplitude * 38;
+        return <line key={partial.partialIndex} x1={x} x2={x} y1="50" y2={y} className="piano-model-partial"><title>{`Partial ${partial.partialIndex}: ${partial.frequencyMultiple.toFixed(3)}×, relative amplitude ${partial.amplitude.toFixed(2)}`}</title></line>;
+      })}
+    </svg>
+    <div className="piano-model-copy"><strong>{model.shortLabel}</strong><span>{model.description}</span><small><b>Changes:</b> modeled crunch, harmonic fit, brightness, and spectral share of repose. <b>Stays fixed:</b> keys, intervals, scales, fifths, rhythm, pull toward Do, novelty, and your reports.</small></div>
+    <p>MIDI events only · silent · no audio analysis</p>
+  </div>;
 }
 
 export function PianoLab() {
@@ -1208,6 +1239,7 @@ export function PianoLab() {
   const [resolutionForkSet, setResolutionForkSet] = useState<ResolutionFork[] | null>(null);
   const [landmarkPathId, setLandmarkPathId] = useState<LandmarkPathId>("pop-loop");
   const [landmarkStepIndex, setLandmarkStepIndex] = useState(0);
+  const [soundModelId, setSoundModelId] = useState<PianoSoundModelId>(DEFAULT_PIANO_SOUND_MODEL_ID);
   const [experiencePhrase, setExperiencePhrase] = useState<HudNoteEvent[]>([]);
   const [experienceDraft, setExperienceDraft] = useState<Partial<PhraseCharacterRatings>>({});
   const [experienceQuestionIndex, setExperienceQuestionIndex] = useState(0);
@@ -1241,7 +1273,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -1271,6 +1303,7 @@ export function PianoLab() {
             setResolutionForkSet(saved.resolutionForkSet ?? null);
             if (LANDMARK_PATHS.some((path) => path.id === saved.landmarkPathId)) setLandmarkPathId(saved.landmarkPathId!);
             setLandmarkStepIndex(Math.max(0, Math.round(saved.landmarkStepIndex ?? 0)));
+            if (isPianoSoundModelId(saved.soundModelId)) setSoundModelId(saved.soundModelId);
           }
         }
       } catch {
@@ -1283,9 +1316,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 4, phraseEvents, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex };
+    const session: PersistedPianoSession = { version: 5, phraseEvents, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, phraseEvents, resolutionForkSet, resolutionTarget, showConventions]);
+  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, phraseEvents, resolutionForkSet, resolutionTarget, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -1380,7 +1413,8 @@ export function PianoLab() {
   const effectiveLandmarkStepIndex = Math.min(landmarkStepIndex, landmarkPath.steps.length);
   const landmarkVoicings = useMemo(() => voiceLandmarkPath(landmarkPath, doMidi), [doMidi, landmarkPath]);
   const landmarkTargetNotes = landmarkVoicings[effectiveLandmarkStepIndex] ?? [];
-  const experienceEvidence = useMemo(() => phraseCharacterEvidence(experiencePhrase, doMidi, scale), [doMidi, experiencePhrase, scale]);
+  const soundModel = pianoSoundModel(soundModelId);
+  const experienceEvidence = useMemo(() => phraseCharacterEvidence(experiencePhrase, doMidi, scale, soundModelId), [doMidi, experiencePhrase, scale, soundModelId]);
   useEffect(() => {
     if (!hydrated || focusLens !== "experience" || experiencePhrase.length >= 3 || phraseEvents.length < 3) return;
     const timer = window.setTimeout(() => {
@@ -1401,7 +1435,7 @@ export function PianoLab() {
     const candidates = pitchClassCount <= 5 ? identifyChordCandidates(gesture.attackedNotes, 3) : [];
     const candidate = candidates.find((item) => item.exact) ?? candidates[0] ?? null;
     const soundingNotes = gesture.soundingNotesAtClose.length ? gesture.soundingNotesAtClose : uniqueSorted(gesture.attackedNotes);
-    const perception = soundingNotes.length >= 2 ? sonorityPerceptionModel(soundingNotes.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: 0.72, partialCount: 9 }))) : null;
+    const perception = soundingNotes.length >= 2 ? sonorityPerceptionModel(soundingNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
     const tendency = tonalTendency(soundingNotes, doMidi, scale);
     const previous = chordGestures[index - 1];
     const previousPitchClassCount = previous ? new Set(previous.attackedNotes.map(pitchClassFromMidi)).size : 0;
@@ -1421,7 +1455,7 @@ export function PianoLab() {
       rootTravelSteps: transition.rootTravelSteps,
       commonPitchClassCount: transition.commonPitchClassCount,
     };
-  }), [chordGestures, doMidi, scale]);
+  }), [chordGestures, doMidi, scale, soundModelId]);
   const selectedChordMeasure = chordMeasures.find((measure) => measure.gesture.id === selectedChordId) ?? chordMeasures.at(-1) ?? null;
   const effectiveSelectedChordId = selectedChordMeasure?.gesture.id ?? null;
   const selectedGesture = selectedChordMeasure?.gesture ?? null;
@@ -1459,7 +1493,7 @@ export function PianoLab() {
 
   const measures = useMemo<EventMeasure[]>(() => events.map((event, index) => {
     const notes = uniqueSorted(event.fieldNotes);
-    const perception = notes.length >= 2 ? sonorityPerceptionModel(notes.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: Math.max(0.12, (note === event.note ? event.velocity : 88) / 127), partialCount: 9 }))) : null;
+    const perception = notes.length >= 2 ? sonorityPerceptionModel(notes.map((note) => pianoSoundVoice(frequencyFromMidi(note), Math.max(0.12, (note === event.note ? event.velocity : 88) / 127), soundModelId))) : null;
     const tendency = tonalTendency(notes, doMidi, scale);
     const previous = events[index - 1];
     const interval = previous ? Math.abs(event.note - previous.note) : 0;
@@ -1471,7 +1505,7 @@ export function PianoLab() {
       novelty: previous ? (events.slice(0, index).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? Math.min(0.35, interval / 36) : Math.min(1, 0.72 + interval / 48)) : 0,
       motion: previous ? Math.min(1, interval / 7) : 0,
     };
-  }), [doMidi, events, scale]);
+  }), [doMidi, events, scale, soundModelId]);
 
   const currentMeasure = measures.at(-1);
   const previousMeasure = measures.at(-2);
@@ -1580,6 +1614,7 @@ export function PianoLab() {
       phraseSignature: phraseRelationshipSignature(experiencePhrase),
       ratings: experienceDraft as PhraseCharacterRatings,
       evidence: experienceEvidence,
+      soundModelId,
     };
     setPhraseCharacterObservations((current) => [...current, observation]);
     setExperienceSaved(true);
@@ -1721,7 +1756,7 @@ export function PianoLab() {
         <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
       </div>
 
-      <div className="piano-model-disclosure"><strong>Assumed sound model</strong><span>12-key equal temperament · harmonic piano-like spectrum · 9 partials per note · MIDI events only</span><small>Roughness and repose are predictions from that standardized spectrum. They do not analyze the actual sound of your piano, keyboard patch, room, or DAW.</small></div>
+      <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} />
 
       <nav className="piano-focus-lenses" aria-label="Learning focus">
         {FOCUS_LENSES.map((lens) => <button key={lens.id} type="button" aria-pressed={focusLens === lens.id} onClick={() => selectFocusLens(lens.id)}><strong>{lens.label}</strong><span>{lens.description}</span></button>)}
@@ -1749,7 +1784,7 @@ export function PianoLab() {
         <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
         <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} />
-      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
+      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} />
         <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} />
@@ -1791,7 +1826,7 @@ export function PianoLab() {
 
       {(focusLens === "explore" || focusLens === "motion") ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
 
-      <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Chord crunch, pull, and repose use a standardized nine-partial proxy; voice strands use nearest keyboard motion, not intended fingering. Musical goodness still depends on timing, style, memory, intention, and your response.</small></footer>
+      <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Voice strands use nearest keyboard motion, not intended fingering. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>
     </section>
   );
 }

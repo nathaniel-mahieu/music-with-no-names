@@ -53,7 +53,7 @@ test("server-renders the guided learning product surface", async () => {
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, pianoLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab, pianoModel] = await Promise.all([
+  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, pianoLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab, pianoModel, pianoSoundModel] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -69,6 +69,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
     readFile(new URL("../app/AtlasLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PersonalLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-sound-model.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /<RatioLab \/>/);
@@ -110,11 +111,15 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /no sound, recording, or upload/i);
   assert.match(pianoLab, /No sound is generated or recorded/);
   assert.match(pianoLab, /Scale lens/);
-  assert.match(pianoLab, /standardized nine-partial proxy/);
+  assert.match(pianoLab, /Assumed spectrum/);
+  assert.match(pianoSoundModel, /Sine · one partial/);
+  assert.match(pianoLab, /Changes:/);
+  assert.match(pianoLab, /Stays fixed:/);
+  assert.match(pianoLab, /no audio analysis/i);
   assert.match(pianoLab, /Live phrase ribbon/);
   assert.match(pianoLab, /Interval Echo/);
   assert.match(pianoLab, /Causal chord view/);
-  assert.match(pianoLab, /Assumed sound model/);
+  assert.match(pianoLab, /pianoSoundVoice/);
   assert.match(pianoLab, /Start new chord/);
   assert.match(pianoLab, /sessionStorage/);
   assert.match(pianoLab, /60-second phrase memory/);

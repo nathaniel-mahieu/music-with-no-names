@@ -35,7 +35,10 @@ export function harmonicSpectrum(
   for (let index = 1; index <= partialCount; index += 1) {
     const octave = Math.log2(index);
     const amplitude = 10 ** (-(options.rolloffDbPerOctave * octave) / 20);
-    const stretchedIndex = index * Math.sqrt(1 + Math.max(0, options.inharmonicity) * index ** 2);
+    const inharmonicity = Math.max(0, options.inharmonicity);
+    // Normalize to the first partial so string stiffness stretches upper partials
+    // without silently retuning the performed fundamental.
+    const stretchedIndex = index * Math.sqrt((1 + inharmonicity * index ** 2) / (1 + inharmonicity));
     components.push({
       frequencyHz: fundamentalHz * stretchedIndex,
       amplitude,

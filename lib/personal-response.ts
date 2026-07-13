@@ -1,4 +1,5 @@
 import type { ExperiencePosition } from "./experience-model";
+import { isPianoSoundModelId, type PianoSoundModelId } from "./piano-sound-model.ts";
 
 export type ResponseSample = {
   position: ExperiencePosition;
@@ -45,6 +46,7 @@ export type PhraseCharacterObservation = {
   phraseSignature: string;
   ratings: PhraseCharacterRatings;
   evidence: PhraseCharacterEvidence;
+  soundModelId?: PianoSoundModelId;
 };
 
 export type PhraseCharacterSummary = {
@@ -89,7 +91,8 @@ export function parsePhraseCharacterObservations(value: string | null): PhraseCh
         && typeof candidate.phraseSignature === "string"
         && candidate.phraseSignature.length > 0
         && validRatings(candidate.ratings)
-        && validEvidence(candidate.evidence);
+        && validEvidence(candidate.evidence)
+        && (candidate.soundModelId == null || isPianoSoundModelId(candidate.soundModelId));
     });
   } catch {
     return [];

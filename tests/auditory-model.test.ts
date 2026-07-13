@@ -15,6 +15,7 @@ const options = { partialCount: 10, rolloffDbPerOctave: 6, inharmonicity: 0, noi
 test("constructs predictable harmonic and stretched spectra", () => {
   const harmonic = harmonicSpectrum(100, 0, options);
   const stretched = harmonicSpectrum(100, 0, { ...options, inharmonicity: 0.002 });
+  assert.equal(stretched[0].frequencyHz, 100);
   assert.equal(harmonic[4].frequencyHz, 500);
   assert.ok(stretched[4].frequencyHz > 500);
 });

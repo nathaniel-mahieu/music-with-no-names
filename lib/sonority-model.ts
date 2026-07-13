@@ -4,12 +4,14 @@ import {
   harmonicSpectrum,
   spectralOverlap,
   type SpectralComponent,
+  type SpectrumOptions,
 } from "./auditory-model.ts";
 
 export type SonorityVoice = {
   frequencyHz: number;
   amplitude: number;
   partialCount: number;
+  spectrum?: Partial<SpectrumOptions>;
 };
 
 export type SonorityPerception = {
@@ -68,10 +70,10 @@ export function sonorityPerceptionModel(
 
   const spectra = voices.map((voice, source) =>
     harmonicSpectrum(voice.frequencyHz, source, {
-      partialCount: voice.partialCount,
-      rolloffDbPerOctave: 7,
-      inharmonicity: 0,
-      noiseAmount: 0,
+      partialCount: voice.spectrum?.partialCount ?? voice.partialCount,
+      rolloffDbPerOctave: voice.spectrum?.rolloffDbPerOctave ?? 7,
+      inharmonicity: voice.spectrum?.inharmonicity ?? 0,
+      noiseAmount: voice.spectrum?.noiseAmount ?? 0,
     }).map((component) => ({ ...component, amplitude: component.amplitude * voice.amplitude })),
   );
   const components = spectra.flat();

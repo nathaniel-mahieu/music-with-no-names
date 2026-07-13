@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Personal Character Map v1.34**. It provides:
+The current milestone is **Assumed Sound Models v1.35**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
@@ -27,7 +27,7 @@ The current milestone is **Personal Character Map v1.34**. It provides:
 - Correctable chord grouping: any selected attack can explicitly start a new chord, join the previous chord, or return to timing-based inference.
 - An explicit voice-leading coach that traces nearest held, rising, falling, added, and released voices; identifies parallel, contrary, oblique, bass, and largest-leap motion; and keeps these observations separate from harmonic quality.
 - Silent nearby-chord targets that mark ghost keys for the learner to perform. Suggestion buttons no longer enter notes or play an answer.
-- A prominent disclosure of the assumed equal-tempered, nine-partial harmonic teaching spectrum; the HUD does not claim to analyze the connected keyboard’s actual sound.
+- A prominent Assumed Spectrum control with sine, exact-harmonic, mellow-piano, and bright-piano teaching proxies. A live partial comb makes the spectral assumption visible while the copy states exactly which modeled outputs can change and which note, interval, scale, timing, tonal, and listener evidence remains fixed. The HUD does not claim to analyze the connected keyboard’s actual sound.
 - Lab URLs encode the active surface and Piano focus lens, while the phrase, chosen frame, grouping corrections, and ghost target survive visits to other labs in the same tab.
 - Movable-Do overlays for every piano key, with conventional note, scale, and interval names available only as an optional translation layer.
 - Four compatible frame families—bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes—shown as hypotheses rather than automatic truth.

@@ -6877,23 +6877,46 @@ footer a {
 
 .piano-model-disclosure {
   display: grid;
-  grid-template-columns: auto minmax(240px, .7fr) minmax(320px, 1fr);
-  gap: 8px 18px;
+  grid-template-columns: minmax(210px, .72fr) 180px minmax(320px, 1.5fr) auto;
+  gap: 10px 20px;
   align-items: center;
   padding: 10px clamp(20px, 4vw, 52px);
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--piano-gold) 8%, var(--surface-soft));
 }
 
-.piano-model-disclosure strong {
+.piano-model-disclosure label {
+  display: grid;
+  gap: 5px;
+}
+
+.piano-model-disclosure label > span,
+.piano-model-disclosure .piano-model-copy > strong {
   color: var(--piano-gold);
   font-size: .72rem;
   letter-spacing: .06em;
   text-transform: uppercase;
 }
 
-.piano-model-disclosure span { font-family: var(--font-mono), monospace; font-size: .72rem; }
-.piano-model-disclosure small { color: var(--muted); font-size: .72rem; line-height: 1.4; }
+.piano-model-disclosure select {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 30px 7px 10px;
+  color: var(--foreground);
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: var(--background);
+  font: inherit;
+}
+
+.piano-model-disclosure svg { display: block; width: 100%; height: 58px; color: var(--line-strong); overflow: visible; }
+.piano-model-disclosure svg line { stroke: currentColor; stroke-width: 1; }
+.piano-model-disclosure svg .piano-model-partial { color: var(--piano-gold); stroke-width: 3; }
+.piano-model-copy { display: grid; gap: 3px; }
+.piano-model-copy > span { font-size: .76rem; line-height: 1.35; }
+.piano-model-copy small { color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.piano-model-copy b { color: var(--foreground); font-weight: 650; }
+.piano-model-disclosure > p { margin: 0; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .64rem; line-height: 1.45; text-transform: uppercase; }
 
 .piano-focus-lenses {
   display: grid;
@@ -7521,8 +7544,8 @@ footer a {
   .hud-context-stack > * + * { border-top: 0; border-left: 1px solid var(--line); }
   .piano-hud-analysis { grid-template-columns: 1fr 1fr; }
   .piano-hud-analysis .hud-texture-panel { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0; }
-  .piano-model-disclosure { grid-template-columns: auto 1fr; }
-  .piano-model-disclosure small { grid-column: 1 / -1; }
+  .piano-model-disclosure { grid-template-columns: minmax(200px, .8fr) 180px minmax(260px, 1.3fr); }
+  .piano-model-disclosure > p { grid-column: 1 / -1; }
   .piano-focus-lenses { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .piano-focus-lenses button { border-bottom: 1px solid var(--line); }
   .piano-focus-grid.is-motion,
@@ -7569,8 +7592,9 @@ footer a {
   .hud-keyboard .piano-key.is-black { width: 5%; }
   .piano-hud-insight { grid-template-columns: 1fr; }
   .piano-hud-insight > span { grid-row: auto; }
-  .piano-model-disclosure { grid-template-columns: 1fr; }
-  .piano-model-disclosure small { grid-column: auto; }
+  .piano-model-disclosure { grid-template-columns: minmax(0, 1fr) 132px; gap: 8px 14px; }
+  .piano-model-copy { grid-column: 1 / -1; }
+  .piano-model-disclosure > p { grid-column: 1 / -1; }
   .piano-focus-lenses { grid-template-columns: 1fr 1fr; }
   .piano-focus-lenses button { padding: 10px 12px; }
   .piano-focus-lenses span { display: none; }
