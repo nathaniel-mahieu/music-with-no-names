@@ -4,9 +4,12 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Playable Landmark Paths v1.33**. It provides:
+The current milestone is **Personal Character Map v1.34**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
+- A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
+- A three-lane explanation of every reflected phrase: measured MIDI facts, modeled teaching proxies, and listener-reported experience remain visibly separate. Relationship signatures follow intervals and normalized timing rather than absolute pitch or tempo, so transposed and uniformly time-scaled versions can be compared without treating them as identical experiences.
+- Local-only phrase reports that persist across visits, appear in the Personal Lens, join portable JSON export and the two-step deletion flow, and never upload MIDI or infer emotion, familiarity, or liking.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
 - A persistent live phrase ribbon that keeps sixty seconds of attacks, velocity, key release, sounding duration, pedal-extended tails, and silence while the coordinated staff, frequency, chord, and evidence views magnify the latest seven attacks.
 - A Motion-lens articulation lane that keeps finger contact, pedal extension, sounding overlap, and silence separate, then describes each connection as held, detached, joined, finger-overlapped, pedal-linked, or phrase-ending without inferring notation or judging technique.

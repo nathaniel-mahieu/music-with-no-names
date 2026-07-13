@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { LANDMARKS } from "./AtlasLab";
-import { familiarityResponseTrend, learnPreferenceTerrain, terrainFit, type ResponseSample } from "@/lib/personal-response";
+import {
+  PHRASE_CHARACTER_STORAGE_KEY,
+  familiarityResponseTrend,
+  learnPreferenceTerrain,
+  parsePhraseCharacterObservations,
+  summarizePhraseCharacter,
+  terrainFit,
+  type PhraseCharacterObservation,
+  type ResponseSample,
+} from "@/lib/personal-response";
 
 type RatingKey =
   | "liking"
@@ -108,12 +117,14 @@ export function PersonalLab() {
   const [goal, setGoal] = useState<GoalId>("curiosity");
   const [ratings, setRatings] = useState<Ratings>(INITIAL_RATINGS);
   const [observations, setObservations] = useState<Observation[]>([]);
+  const [phraseObservations, setPhraseObservations] = useState<PhraseCharacterObservation[]>([]);
   const [storageReady, setStorageReady] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
       setObservations(safeParseObservations(window.localStorage.getItem(STORAGE_KEY)));
+      setPhraseObservations(parsePhraseCharacterObservations(window.localStorage.getItem(PHRASE_CHARACTER_STORAGE_KEY)));
       setStorageReady(true);
     }, 0);
     return () => window.clearTimeout(hydrationTask);
@@ -134,6 +145,7 @@ export function PersonalLab() {
     return landmark ? [{ position: { tension: landmark.tension, surprise: landmark.surprise, drive: landmark.drive }, liking: observation.ratings.liking, interest: observation.ratings.interest, familiarity: observation.ratings.familiarity, recordedAt: observation.recordedAt }] : [];
   }), [observations]);
   const learnedTerrain = useMemo(() => learnPreferenceTerrain(responseSamples), [responseSamples]);
+  const phraseCharacterSummary = useMemo(() => summarizePhraseCharacter(phraseObservations), [phraseObservations]);
   const selectedHistory = useMemo(() => observations.filter((observation) => observation.landmarkId === landmarkId).map<ResponseSample>((observation) => ({ position: { tension: selected.tension, surprise: selected.surprise, drive: selected.drive }, liking: observation.ratings.liking, interest: observation.ratings.interest, familiarity: observation.ratings.familiarity, recordedAt: observation.recordedAt })), [landmarkId, observations, selected]);
   const historyTrend = useMemo(() => familiarityResponseTrend(selectedHistory), [selectedHistory]);
   const terrainRanking = useMemo(() => learnedTerrain ? LANDMARKS.map((landmark) => ({ landmark, fit: terrainFit(landmark, learnedTerrain) })).sort((a, b) => b.fit - a.fit).slice(0, 5) : [], [learnedTerrain]);
@@ -173,6 +185,7 @@ export function PersonalLab() {
       schema: "music-with-no-names.personal-lens.v1",
       exportedAt: new Date().toISOString(),
       observations,
+      phraseCharacterObservations: phraseObservations,
       learnedPreferenceModel: learnedTerrain,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -188,7 +201,9 @@ export function PersonalLab() {
 
   const deleteObservations = () => {
     setObservations([]);
+    setPhraseObservations([]);
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(PHRASE_CHARACTER_STORAGE_KEY);
     setDeleteArmed(false);
   };
 
@@ -202,6 +217,11 @@ export function PersonalLab() {
         <p>
           Rate tension, movement, interest, familiarity, resolution, and liking separately. Your entries stay in this browser and can change from one listen to the next.
         </p>
+      </div>
+
+      <div className="personal-live-phrase-summary">
+        <div><span>Live Piano phrase reports</span><strong>{phraseCharacterSummary ? `${phraseCharacterSummary.sampleCount} reflection${phraseCharacterSummary.sampleCount === 1 ? "" : "s"} · center ${Math.round(phraseCharacterSummary.center.settledness)} settled / ${Math.round(phraseCharacterSummary.center.energy)} energy` : "No live phrase reflections yet"}</strong><small>{phraseCharacterSummary ? `Uncertainty ±${Math.round(phraseCharacterSummary.uncertainty)} · surprise/familiarity and liking remain separate report dimensions.` : "Use the Piano Experience focus to map your own phrase without asking the model to infer how it felt."}</small></div>
+        <a href="?lab=piano&pianoLens=experience">Open live phrase map</a>
       </div>
 
       <div className="personal-context">
@@ -293,15 +313,15 @@ export function PersonalLab() {
       <div className="personal-data">
         <div>
           <span>Local evidence</span>
-          <strong>{observations.length} saved listening{observations.length === 1 ? "" : "s"}</strong>
+          <strong>{observations.length} landmark listening{observations.length === 1 ? "" : "s"} · {phraseObservations.length} live phrase reflection{phraseObservations.length === 1 ? "" : "s"}</strong>
           <p>Stored only in this browser. No account, upload, or cohort comparison.</p>
         </div>
         <div className="data-actions">
-          <button type="button" onClick={exportObservations} disabled={observations.length === 0}>Export JSON</button>
+          <button type="button" onClick={exportObservations} disabled={observations.length + phraseObservations.length === 0}>Export JSON</button>
           {deleteArmed ? (
             <button type="button" className="danger" onClick={deleteObservations}>Confirm delete all</button>
           ) : (
-            <button type="button" onClick={() => setDeleteArmed(true)} disabled={observations.length === 0}>Delete local data</button>
+            <button type="button" onClick={() => setDeleteArmed(true)} disabled={observations.length + phraseObservations.length === 0}>Delete local data</button>
           )}
         </div>
       </div>

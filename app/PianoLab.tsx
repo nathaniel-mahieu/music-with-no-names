@@ -57,6 +57,15 @@ import {
   type TonalGravityCandidate,
 } from "@/lib/piano-model";
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
+import {
+  PHRASE_CHARACTER_STORAGE_KEY,
+  parsePhraseCharacterObservations,
+  phraseRelationshipSignature,
+  summarizePhraseCharacter,
+  type PhraseCharacterEvidence,
+  type PhraseCharacterObservation,
+  type PhraseCharacterRatings,
+} from "@/lib/personal-response";
 
 type MidiInputLike = {
   id: string;
@@ -104,7 +113,7 @@ type ChordMeasure = {
   commonPitchClassCount: number;
 };
 type FrameMode = "discover" | "locked";
-type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths";
+type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type IntervalEchoTarget = { semitones: number; anchorEventId: number };
 type ResolutionTarget = ResolutionFork & {
   anchorEventId: number;
@@ -150,7 +159,22 @@ const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }>
   { id: "chords", label: "Chords", description: "Inspect grouping, chord identity, and one-change consequences." },
   { id: "motion", label: "Motion", description: "Follow touch, articulation, motifs, pull, and voice movement through time." },
   { id: "paths", label: "Paths", description: "Play pop, blues, cadence, and pedal-point archetypes as transferable relationships." },
+  { id: "experience", label: "Experience", description: "Report how this phrase felt; keep your response separate from modeled evidence." },
 ];
+
+const CHARACTER_QUESTIONS: Array<{
+  key: keyof PhraseCharacterRatings;
+  prompt: string;
+  low: string;
+  high: string;
+  choices: string[];
+}> = [
+  { key: "settledness", prompt: "How settled did this phrase feel to you?", low: "suspended", high: "settled", choices: ["suspended", "mostly open", "between", "mostly settled", "settled"] },
+  { key: "energy", prompt: "How energized did this phrase feel?", low: "calm", high: "energized", choices: ["calm", "gentle", "between", "active", "energized"] },
+  { key: "familiarity", prompt: "How surprising or familiar did this relationship path feel?", low: "surprising", high: "familiar", choices: ["surprising", "unfamiliar", "between", "recognizable", "familiar"] },
+  { key: "liking", prompt: "How much did you like this particular experience?", low: "less", high: "more", choices: ["much less", "less", "between", "more", "much more"] },
+];
+const CHARACTER_VALUES = [0, 25, 50, 75, 100];
 
 function formatHz(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
@@ -182,6 +206,43 @@ function evidenceWord(value: number) {
   if (value >= 0.67) return "high";
   if (value >= 0.34) return "moderate";
   return "low";
+}
+
+function phraseCharacterEvidence(events: HudNoteEvent[], doMidi: number, scale: PianoScale): PhraseCharacterEvidence {
+  if (!events.length) return {
+    measured: { attackCount: 0, phraseMs: 0, pitchSpan: 0, meanVelocity: 0, overlapShare: 0 },
+    modeled: { meanCrunch: 0, endingRepose: 0, meanNovelty: 0, centerClarity: 0 },
+  };
+  const notes = events.map((event) => event.note);
+  const phraseEnd = events.at(-1)?.releaseMs ?? events.at(-1)!.onsetMs;
+  const articulation = articulationTimeline(events, phraseEnd);
+  const overlapShare = articulation.length > 1 ? articulation.slice(0, -1).filter((item) => item.overlapMs > 0).length / (articulation.length - 1) : 0;
+  const crunchValues = events.flatMap((event) => {
+    const field = uniqueSorted(event.fieldNotes);
+    if (field.length < 2) return [];
+    return [sonorityPerceptionModel(field.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: 0.72, partialCount: 9 }))).roughness];
+  });
+  const finalEvent = events.at(-1)!;
+  const endingField = uniqueSorted(finalEvent.fieldNotes.length ? finalEvent.fieldNotes : [finalEvent.note]);
+  const endingPerception = endingField.length >= 2 ? sonorityPerceptionModel(endingField.map((note) => ({ frequencyHz: frequencyFromMidi(note), amplitude: 0.72, partialCount: 9 }))) : null;
+  const endingTendency = tonalTendency(endingField, doMidi, scale);
+  const noveltyValues = events.slice(1).map((event, index) => events.slice(0, index + 1).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? 0 : 1);
+  const gravity = tonalGravityCandidates(events, phraseEnd, 2);
+  return {
+    measured: {
+      attackCount: events.length,
+      phraseMs: Math.max(0, events.at(-1)!.onsetMs - events[0].onsetMs),
+      pitchSpan: Math.max(...notes) - Math.min(...notes),
+      meanVelocity: events.reduce((sum, event) => sum + event.velocity, 0) / events.length,
+      overlapShare,
+    },
+    modeled: {
+      meanCrunch: crunchValues.length ? crunchValues.reduce((sum, value) => sum + value, 0) / crunchValues.length : 0,
+      endingRepose: (endingPerception?.repose ?? 0.5) * 0.55 + endingTendency.homeEvidence * 0.45,
+      meanNovelty: noveltyValues.length ? noveltyValues.reduce((sum, value) => sum + value, 0) / noveltyValues.length : 0,
+      centerClarity: gravity.length > 1 ? Math.max(0, gravity[0].score - gravity[1].score) : 0,
+    },
+  };
 }
 
 function gestureSlots(gesture: HudChordGesture, events: HudNoteEvent[]) {
@@ -1044,6 +1105,91 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, showCo
   </section>;
 }
 
+function characterChoiceLabel(key: keyof PhraseCharacterRatings, value: number | undefined) {
+  if (value == null) return "—";
+  const question = CHARACTER_QUESTIONS.find((item) => item.key === key)!;
+  const index = CHARACTER_VALUES.reduce((best, candidate, candidateIndex) => Math.abs(candidate - value) < Math.abs(CHARACTER_VALUES[best] - value) ? candidateIndex : best, 0);
+  return question.choices[index];
+}
+
+function ExperienceLens({ captured, latestCount, observations, draft, questionIndex, saved, evidence, deleteArmed, onCapture, onAnswer, onBack, onSave, onReflectAgain, onArmDelete, onDelete }: {
+  captured: HudNoteEvent[];
+  latestCount: number;
+  observations: PhraseCharacterObservation[];
+  draft: Partial<PhraseCharacterRatings>;
+  questionIndex: number;
+  saved: boolean;
+  evidence: PhraseCharacterEvidence;
+  deleteArmed: boolean;
+  onCapture: () => void;
+  onAnswer: (key: keyof PhraseCharacterRatings, value: number) => void;
+  onBack: () => void;
+  onSave: () => void;
+  onReflectAgain: () => void;
+  onArmDelete: () => void;
+  onDelete: () => void;
+}) {
+  const signature = phraseRelationshipSignature(captured);
+  const repeats = observations.filter((observation) => observation.phraseSignature === signature);
+  const summary = summarizePhraseCharacter(observations);
+  const question = CHARACTER_QUESTIONS[questionIndex];
+  const ready = captured.length >= 3;
+  const draftPlaced = draft.settledness != null && draft.energy != null;
+  const xFor = (value: number) => 54 + value / 100 * 412;
+  const yFor = (value: number) => 252 - value / 100 * 210;
+  const mapDescription = observations.length
+    ? `${observations.length} saved personal phrase reports; center settledness ${Math.round(summary!.center.settledness)}, energy ${Math.round(summary!.center.energy)}, uncertainty plus or minus ${Math.round(summary!.uncertainty)}.`
+    : "No saved personal phrase reports yet. The first two answers will place the current experience.";
+  const reportedValues = CHARACTER_QUESTIONS.map((item) => `${item.low} ${draft[item.key] == null ? "—" : draft[item.key]} ${item.high}`).join("; ");
+  return <section className="hud-experience-lens" aria-labelledby="hud-experience-title">
+    <div className="hud-panel-heading"><span>Listener-reported · local · uncertain</span><strong id="hud-experience-title">Personal character map</strong><small>Describe this experience yourself. The map never derives emotion, liking, or familiarity from MIDI or the assumed sound model.</small></div>
+    <div className="hud-experience-toolbar">
+      <div><span>reflection specimen</span><strong>{ready ? `${captured.length} captured attacks` : "No phrase held yet"}</strong><small>{ready ? `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature` : "Play at least three attacks, then hold the latest phrase."}</small></div>
+      <button type="button" disabled={latestCount < 3} onClick={onCapture}>{ready ? "Use latest phrase" : "Hold latest phrase"}</button>
+    </div>
+    <div className="hud-experience-main">
+      <div className="hud-character-map">
+        <div className="hud-subheading"><span>Your saved reports</span><strong>Suspended ↔ settled · calm ↔ energized</strong><small>{observations.length} local sample{observations.length === 1 ? "" : "s"} · uncertainty {summary ? `±${Math.round(summary.uncertainty)}` : "not estimated"}</small></div>
+        <svg viewBox="0 0 520 292" role="img" aria-label={mapDescription}>
+          <title>Personal phrase reports mapped by settledness and energy</title>
+          <line x1="54" x2="466" y1="252" y2="252" className="hud-character-axis" />
+          <line x1="54" x2="54" y1="42" y2="252" className="hud-character-axis" />
+          <line x1="260" x2="260" y1="42" y2="252" className="hud-character-grid" />
+          <line x1="54" x2="466" y1="147" y2="147" className="hud-character-grid" />
+          <text x="54" y="278" className="hud-character-axis-label is-start">suspended</text><text x="466" y="278" className="hud-character-axis-label is-end">settled</text>
+          <text x="45" y="255" className="hud-character-axis-label is-end">calm</text><text x="45" y="46" className="hud-character-axis-label is-end">energized</text>
+          {summary ? <ellipse cx={xFor(summary.center.settledness)} cy={yFor(summary.center.energy)} rx={Math.min(206, (summary.spread.settledness + summary.uncertainty) * 4.12)} ry={Math.min(105, (summary.spread.energy + summary.uncertainty) * 2.1)} className="hud-character-uncertainty" /> : null}
+          {observations.map((observation, index) => <circle key={observation.id} cx={xFor(observation.ratings.settledness)} cy={yFor(observation.ratings.energy)} r={4 + observation.ratings.liking / 28} strokeWidth={1 + observation.ratings.familiarity / 55} className={`hud-character-point ${observation.phraseSignature === signature ? "is-same-phrase" : ""}`}><title>{`Report ${index + 1}: settledness ${observation.ratings.settledness}, energy ${observation.ratings.energy}, familiarity ${observation.ratings.familiarity}, liking ${observation.ratings.liking}`}</title></circle>)}
+          {summary ? <circle cx={xFor(summary.center.settledness)} cy={yFor(summary.center.energy)} r="4" className="hud-character-center"><title>Center of saved reports</title></circle> : null}
+          {draftPlaced ? <g className="hud-character-current"><circle cx={xFor(draft.settledness!)} cy={yFor(draft.energy!)} r="9" /><line x1={xFor(draft.settledness!) - 13} x2={xFor(draft.settledness!) + 13} y1={yFor(draft.energy!)} y2={yFor(draft.energy!)} /><line x1={xFor(draft.settledness!)} x2={xFor(draft.settledness!)} y1={yFor(draft.energy!) - 13} y2={yFor(draft.energy!) + 13} /></g> : null}
+          {!observations.length && !draftPlaced ? <text x="270" y="148" className="hud-character-empty">Answer settledness and energy to place this experience</text> : null}
+        </svg>
+        <p>dot size = reported liking · ring weight = reported familiarity · gold = same relationship signature · ellipse = sample spread + uncertainty</p>
+      </div>
+      <div className="hud-character-question">
+        {!ready ? <div className="hud-character-empty-state"><span>begin with your phrase</span><strong>Play, then hold at least three attacks.</strong><small>The reflection freezes a specimen so later playing cannot rewrite the experience you are rating.</small></div> : saved ? <div className="hud-character-saved" role="status"><span>saved locally</span><strong>This report is one sample, not your identity.</strong><small>Repeat the same relationship later to see whether surprise/familiarity, liking, settledness, or energy changes.</small><button type="button" onClick={onReflectAgain}>Reflect on it again</button></div> : question ? <>
+          <ol className="hud-character-question-progress" aria-label="Reflection progress">{CHARACTER_QUESTIONS.map((item, index) => <li key={item.key} className={index < questionIndex ? "is-complete" : index === questionIndex ? "is-current" : ""}><span>{index < questionIndex ? "✓" : index + 1}</span><strong>{item.key === "settledness" ? "settled" : item.key}</strong></li>)}</ol>
+          <div className="hud-character-prompt"><span>question {questionIndex + 1} of 4</span><strong>{question.prompt}</strong><small>{question.low} → {question.high}</small></div>
+          <div className="hud-character-choices" role="group" aria-label={question.prompt}>{CHARACTER_VALUES.map((value, index) => <button key={value} type="button" aria-pressed={draft[question.key] === value} onClick={() => onAnswer(question.key, value)}><span>{index + 1}</span><strong>{question.choices[index]}</strong></button>)}</div>
+          {questionIndex > 0 ? <button type="button" className="hud-character-back" onClick={onBack}>Change previous answer</button> : null}
+        </> : <div className="hud-character-review">
+          <span>your report · not a model output</span>
+          <strong>Save this four-part experience?</strong>
+          <div>{CHARACTER_QUESTIONS.map((item) => <p key={item.key}><span>{item.key === "settledness" ? "settled" : item.key}</span><strong>{characterChoiceLabel(item.key, draft[item.key])}</strong><small>{draft[item.key]}</small></p>)}</div>
+          <button type="button" onClick={onSave}>Save this phrase report</button>
+          <button type="button" className="hud-character-back" onClick={onBack}>Change last answer</button>
+        </div>}
+      </div>
+    </div>
+    {ready ? <div className="hud-character-evidence" aria-label="Measured, modeled, and listener-reported phrase evidence">
+      <div><span>measured from MIDI</span><strong>{evidence.measured.attackCount} attacks · {evidence.measured.pitchSpan} key span · {(evidence.measured.phraseMs / 1000).toFixed(1)} s · {Math.round(evidence.measured.overlapShare * 100)}% overlapping links</strong><small>Timing, pitch range, velocity, and overlap are captured events.</small></div>
+      <div><span>modeled from assumptions</span><strong>{Math.round(evidence.modeled.meanCrunch * 100)} crunch · {Math.round(evidence.modeled.endingRepose * 100)} ending repose · {Math.round(evidence.modeled.meanNovelty * 100)} pitch novelty · {Math.round(evidence.modeled.centerClarity * 100)} center margin</strong><small>Equal-tempered positions and the disclosed nine-partial proxy; not your piano’s audio.</small></div>
+      <div><span>reported by you</span><strong>{reportedValues}</strong><small>These values are not inferred from the rows above, and correlation would not prove cause.</small></div>
+    </div> : null}
+    <div className="hud-character-local-data"><span>{observations.length} phrase report{observations.length === 1 ? "" : "s"} stored only in this browser</span>{observations.length ? <button type="button" onClick={deleteArmed ? onDelete : onArmDelete}>{deleteArmed ? "Confirm delete phrase reports" : "Delete phrase reports"}</button> : null}</div>
+  </section>;
+}
+
 export function PianoLab() {
   const [events, setEvents] = useState<HudNoteEvent[]>([]);
   const [phraseEvents, setPhraseEvents] = useState<HudNoteEvent[]>([]);
@@ -1062,6 +1208,13 @@ export function PianoLab() {
   const [resolutionForkSet, setResolutionForkSet] = useState<ResolutionFork[] | null>(null);
   const [landmarkPathId, setLandmarkPathId] = useState<LandmarkPathId>("pop-loop");
   const [landmarkStepIndex, setLandmarkStepIndex] = useState(0);
+  const [experiencePhrase, setExperiencePhrase] = useState<HudNoteEvent[]>([]);
+  const [experienceDraft, setExperienceDraft] = useState<Partial<PhraseCharacterRatings>>({});
+  const [experienceQuestionIndex, setExperienceQuestionIndex] = useState(0);
+  const [experienceSaved, setExperienceSaved] = useState(false);
+  const [phraseCharacterObservations, setPhraseCharacterObservations] = useState<PhraseCharacterObservation[]>([]);
+  const [characterStorageReady, setCharacterStorageReady] = useState(false);
+  const [characterDeleteArmed, setCharacterDeleteArmed] = useState(false);
   const [fingerprintRotation, setFingerprintRotation] = useState(0);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
@@ -1135,6 +1288,19 @@ export function PianoLab() {
   }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, phraseEvents, resolutionForkSet, resolutionTarget, showConventions]);
 
   useEffect(() => {
+    const hydrationTask = window.setTimeout(() => {
+      setPhraseCharacterObservations(parsePhraseCharacterObservations(window.localStorage.getItem(PHRASE_CHARACTER_STORAGE_KEY)));
+      setCharacterStorageReady(true);
+    }, 0);
+    return () => window.clearTimeout(hydrationTask);
+  }, []);
+
+  useEffect(() => {
+    if (!characterStorageReady) return;
+    try { window.localStorage.setItem(PHRASE_CHARACTER_STORAGE_KEY, JSON.stringify(phraseCharacterObservations)); } catch { /* Continue without persistent reports when storage is unavailable. */ }
+  }, [characterStorageReady, phraseCharacterObservations]);
+
+  useEffect(() => {
     if (!phraseEvents.length) return;
     const timer = window.setInterval(() => setNowMs(currentHudTime()), 120);
     return () => window.clearInterval(timer);
@@ -1203,14 +1369,28 @@ export function PianoLab() {
   const scale = frame.scale;
   useEffect(() => {
     if (!hydrated || focusLens !== "paths" || frameMode === "locked") return;
-    setLockedScaleId(scale.id);
-    setLockedDoMidi(doMidi);
-    setFrameMode("locked");
+    const timer = window.setTimeout(() => {
+      setLockedScaleId(scale.id);
+      setLockedDoMidi(doMidi);
+      setFrameMode("locked");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [doMidi, focusLens, frameMode, hydrated, scale.id]);
   const landmarkPath = LANDMARK_PATHS.find((path) => path.id === landmarkPathId) ?? LANDMARK_PATHS[0];
   const effectiveLandmarkStepIndex = Math.min(landmarkStepIndex, landmarkPath.steps.length);
   const landmarkVoicings = useMemo(() => voiceLandmarkPath(landmarkPath, doMidi), [doMidi, landmarkPath]);
   const landmarkTargetNotes = landmarkVoicings[effectiveLandmarkStepIndex] ?? [];
+  const experienceEvidence = useMemo(() => phraseCharacterEvidence(experiencePhrase, doMidi, scale), [doMidi, experiencePhrase, scale]);
+  useEffect(() => {
+    if (!hydrated || focusLens !== "experience" || experiencePhrase.length >= 3 || phraseEvents.length < 3) return;
+    const timer = window.setTimeout(() => {
+      setExperiencePhrase([...phraseEvents]);
+      setExperienceDraft({});
+      setExperienceQuestionIndex(0);
+      setExperienceSaved(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [experiencePhrase.length, focusLens, hydrated, phraseEvents]);
   const gravityCandidates = useMemo(() => tonalGravityCandidates(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0, 12), [nowMs, phraseEvents]);
   const nextNoteForks = useMemo(() => resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4), [frame.rootPitchClass, phraseEvents, scale]);
   const articulationEvidence = useMemo(() => articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0), [nowMs, phraseEvents]);
@@ -1258,7 +1438,10 @@ export function PianoLab() {
     if (latestEventId <= landmarkLastMatchIdRef.current) return;
     if (!matchesLandmarkStep(landmarkPath, effectiveLandmarkStepIndex, activeNoteNumbers, pitchClassFromMidi(doMidi))) return;
     landmarkLastMatchIdRef.current = latestEventId;
-    setLandmarkStepIndex((current) => Math.min(landmarkPath.steps.length, current + 1));
+    const timer = window.setTimeout(() => {
+      setLandmarkStepIndex((current) => Math.min(landmarkPath.steps.length, current + 1));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [activeNoteNumbers, doMidi, effectiveLandmarkStepIndex, focusLens, landmarkPath, landmarkTargetNotes.length, phraseEvents]);
   const lastField = events.at(-1)?.fieldNotes ?? [];
   const fieldNotes = activeNoteNumbers.length ? activeNoteNumbers : lastField;
@@ -1325,6 +1508,11 @@ export function PianoLab() {
     setResolutionForkSet(null);
     setLandmarkStepIndex(0);
     landmarkLastMatchIdRef.current = 0;
+    setExperiencePhrase([]);
+    setExperienceDraft({});
+    setExperienceQuestionIndex(0);
+    setExperienceSaved(false);
+    setCharacterDeleteArmed(false);
     setFingerprintRotation(0);
     setLatchedNotes(new Map());
     midi.clear();
@@ -1358,6 +1546,58 @@ export function PianoLab() {
     } else setFrameMode("discover");
   };
 
+  const captureExperiencePhrase = () => {
+    if (phraseEvents.length < 3) {
+      setExperiencePhrase([]);
+      setExperienceDraft({});
+      setExperienceQuestionIndex(0);
+      setExperienceSaved(false);
+      return;
+    }
+    setExperiencePhrase([...phraseEvents]);
+    setExperienceDraft({});
+    setExperienceQuestionIndex(0);
+    setExperienceSaved(false);
+    setCharacterDeleteArmed(false);
+  };
+
+  const answerExperienceQuestion = (key: keyof PhraseCharacterRatings, value: number) => {
+    setExperienceDraft((current) => ({ ...current, [key]: value }));
+    setExperienceQuestionIndex((current) => Math.min(CHARACTER_QUESTIONS.length, current + 1));
+    setExperienceSaved(false);
+  };
+
+  const backExperienceQuestion = () => {
+    setExperienceQuestionIndex((current) => Math.max(0, current - 1));
+    setExperienceSaved(false);
+  };
+
+  const saveExperienceReport = () => {
+    if (experiencePhrase.length < 3 || CHARACTER_QUESTIONS.some((question) => experienceDraft[question.key] == null)) return;
+    const observation: PhraseCharacterObservation = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      recordedAt: new Date().toISOString(),
+      phraseSignature: phraseRelationshipSignature(experiencePhrase),
+      ratings: experienceDraft as PhraseCharacterRatings,
+      evidence: experienceEvidence,
+    };
+    setPhraseCharacterObservations((current) => [...current, observation]);
+    setExperienceSaved(true);
+    setCharacterDeleteArmed(false);
+  };
+
+  const reflectOnExperienceAgain = () => {
+    setExperienceDraft({});
+    setExperienceQuestionIndex(0);
+    setExperienceSaved(false);
+  };
+
+  const deletePhraseReports = () => {
+    setPhraseCharacterObservations([]);
+    try { window.localStorage.removeItem(PHRASE_CHARACTER_STORAGE_KEY); } catch { /* Local deletion remains best-effort when storage is unavailable. */ }
+    setCharacterDeleteArmed(false);
+  };
+
   const selectFocusLens = (lens: FocusLens) => {
     if (lens === "paths") {
       setLockedScaleId(scale.id);
@@ -1369,6 +1609,7 @@ export function PianoLab() {
       setResolutionForkSet(null);
       landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
     }
+    if (lens === "experience") captureExperiencePhrase();
     setFocusLens(lens);
     const url = new URL(window.location.href);
     url.searchParams.set("pianoLens", lens);
@@ -1408,7 +1649,14 @@ export function PianoLab() {
     setResolutionTarget({ ...fork, anchorEventId: phraseEvents.at(-1)?.id ?? 0, frameRootPitchClass: frame.rootPitchClass, frameScaleId: scale.id });
   };
 
-  const newestInsight = focusLens === "paths" ? effectiveLandmarkStepIndex >= landmarkPath.steps.length
+  const newestInsight = focusLens === "experience" ? experiencePhrase.length < 3
+    ? "Play at least three attacks, then hold the latest phrase for a personal reflection."
+    : experienceSaved
+      ? "Your phrase report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence."
+      : experienceQuestionIndex < CHARACTER_QUESTIONS.length
+        ? `Reflection ${experienceQuestionIndex + 1} of 4: ${CHARACTER_QUESTIONS[experienceQuestionIndex].prompt}`
+        : "All four personal dimensions are answered. Review them together before saving this observation."
+    : focusLens === "paths" ? effectiveLandmarkStepIndex >= landmarkPath.steps.length
     ? `${landmarkPath.family} complete: ${landmarkPath.invariant}`
     : `${landmarkPath.family}: ${effectiveLandmarkStepIndex} of ${landmarkPath.steps.length} fields matched. Next, play the outlined ${landmarkPath.steps[effectiveLandmarkStepIndex].role}; ${landmarkPath.steps[effectiveLandmarkStepIndex].prompt.toLowerCase()}`
     : focusedEvent ? (() => {
@@ -1501,7 +1749,7 @@ export function PianoLab() {
         <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} />
         <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} />
-      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
+      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} />
         <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} />

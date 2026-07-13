@@ -134,6 +134,14 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Generated · silent · transposable/);
   assert.match(pianoLab, /same relationships, more embodied/);
   assert.match(pianoLab, /silent landmark path target/);
+  assert.match(pianoLab, /Personal character map/);
+  assert.match(pianoLab, /Listener-reported · local · uncertain/);
+  assert.match(pianoLab, /The map never derives emotion, liking, or familiarity from MIDI/);
+  assert.match(pianoLab, /dot size = reported liking/);
+  assert.match(pianoLab, /measured from MIDI/);
+  assert.match(pianoLab, /modeled from assumptions/);
+  assert.match(pianoLab, /reported by you/);
+  assert.match(pianoLab, /same relationship signature/);
   assert.match(pianoModel, /Pop loop/);
   assert.match(pianoModel, /Blues cycle/);
   assert.match(pianoModel, /Classical cadence/);
@@ -200,6 +208,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(personalLab, /Transparent personal response surface/);
   assert.match(personalLab, /learnedPreferenceModel/);
   assert.match(personalLab, /Repeated listening/);
+  assert.match(personalLab, /Live Piano phrase reports/);
+  assert.match(personalLab, /Open live phrase map/);
 
   await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
   await assert.rejects(access(new URL("../package-lock.json", projectRoot)));

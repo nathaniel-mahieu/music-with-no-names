@@ -852,6 +852,8 @@ export function detectMotifTransformations(events: MotifNoteEvent[], limit = 3):
   return candidates
     .sort((first, second) => second.score - first.score || second.targetStartIndex - first.targetStartIndex)
     .slice(0, limit)
+    // The ranking score is an internal ordering aid, not part of the public motif evidence.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     .map(({ score: _score, ...candidate }) => candidate);
 }
 

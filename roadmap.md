@@ -501,6 +501,7 @@ Objective: introduce a piano as a silent, interactive translation of the existin
 - [x] **K2.6.17** Add Scale Fingerprint + Tonal Gravity v1.31: expose cyclic scale-gap strings and view-only rotations before theory names; rank competing sounded centers from separately visible route, duration, recurrence, attack, low-register, and ending evidence; offer frozen silent resolution forks the learner performs; and derive the stable frame from phrase memory rather than the truncated microscope.
 - [x] **K2.6.18** Add Gesture + Motif v1.32: separate finger contact, pedal extension, sounding overlap, and silence in a seven-attack articulation lane; classify local touch connections with tempo-relative timing evidence; detect exact, transposed, rhythmically varied, altered-ending, and returning three- or four-attack motifs across phrase memory; and turn each match into a one-property practice prompt inside the Motion focus.
 - [x] **K2.6.19** Add Playable Landmark Paths v1.33: define generated, transposable pop-loop, blues-cycle, classical-cadence, and pedal-point archetypes; lock the current Do while practicing; create stable close-position ghost voicings; advance only after exact learner-performed pitch-class matches in any octave; and explain every transition through carried tones, nearest-voice motion, fifths travel, and separate modeled texture/tendency evidence without reproducing a recording or treating the archetype as a song-level universal.
+- [x] **K2.6.20** Add Personal Character Map v1.34: freeze a live phrase for reflection; collect settledness, energy, surprise/familiarity, and liking one question at a time; map only explicit learner reports with sample count, spread, and uncertainty; compare transposition- and tempo-scale-invariant relationship signatures; keep measured MIDI facts, modeled proxies, and listener reports in separate evidence lanes; and connect local persistence, export, and deletion to the Personal Lens.
 
 Exit gate:
 
@@ -669,6 +670,7 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Cyclic scale fingerprints, performed-evidence tonal gravity, phrase-stable center framing, and learner-performed resolution forks implemented.
 - [x] Duration/articulation evidence and phrase-local motif transformation coaching implemented in the live Motion lens.
 - [x] Silent playable landmark paths connect pop, blues, classical-cadence, and pedal-point archetypes to live MIDI, close voicing, fifths motion, and modeled texture inside the same Piano HUD.
+- [x] The live Experience focus maps explicit phrase reports separately from measured MIDI evidence and modeled teaching proxies, with local uncertainty, relationship-signature comparison, Personal Lens integration, export, and deletion.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 - [x] Event self-similarity and incremental uncertainty/surprise trace implemented.
