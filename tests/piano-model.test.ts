@@ -17,10 +17,12 @@ import {
   scaleCoverage,
   scaleFrameTimeline,
   scaleSemitones,
+  pushPhraseEvent,
   pushRollingNoteEvent,
   resolutionDirection,
   tonalTendency,
   voiceChordNear,
+  voiceLeadingProfile,
 } from "../lib/piano-model.ts";
 
 test("maps equal-tempered MIDI notes to physical frequency", () => {
@@ -86,6 +88,13 @@ test("keeps repeated attacks in a strict seven-event rolling trace", () => {
   assert.equal(trace.length, 7);
   assert.deepEqual(trace.map((event) => event.id), [1, 2, 3, 4, 5, 6, 7]);
   assert.equal(pushRollingNoteEvent([{ note: 60 }], { note: 60 }, 7).length, 2);
+});
+
+test("keeps a bounded sixty-second phrase behind the seven-event microscope", () => {
+  const attacks = Array.from({ length: 8 }, (_, index) => ({ id: index + 1, note: 60 + index, onsetMs: index * 10_000, fieldNotes: [60 + index] }));
+  const phrase = attacks.reduce((current, attack) => pushPhraseEvent(current, attack, 60_000, 256), [] as typeof attacks);
+  assert.deepEqual(phrase.map((attack) => attack.id), [2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(pushPhraseEvent(phrase, { id: 9, note: 68, onsetMs: 80_000, fieldNotes: [68] }, 0), []);
 });
 
 test("groups temporally compact attacks without chaining past the maximum span", () => {
@@ -155,6 +164,24 @@ test("separates chord pitch-set novelty, voice motion, and fifths travel", () =>
     rootTravel: 0,
     rootTravelSteps: null,
   });
+});
+
+test("draws explicit held, contrary, parallel, and changing voice strands", () => {
+  const contrary = voiceLeadingProfile([60, 64, 67], [60, 62, 69]);
+  assert.deepEqual(contrary.strands.map((strand) => [strand.from, strand.to, strand.motion]), [
+    [60, 60, "held"],
+    [64, 62, "down"],
+    [67, 69, "up"],
+  ]);
+  assert.deepEqual(contrary.motionClasses, ["contrary", "oblique"]);
+  assert.equal(contrary.largestLeap, 2);
+  assert.equal(contrary.totalMotion, 4);
+  assert.equal(contrary.bassMotion, 0);
+
+  const parallel = voiceLeadingProfile([60, 64], [62, 66, 69]);
+  assert.ok(parallel.motionClasses.includes("parallel"));
+  assert.ok(parallel.motionClasses.includes("changing voice count"));
+  assert.equal(parallel.strands.filter((strand) => strand.motion === "added").length, 1);
 });
 
 test("voices nearby chords near the current hand position", () => {

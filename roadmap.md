@@ -497,6 +497,7 @@ Objective: introduce a piano as a silent, interactive translation of the existin
 - [x] **K2.6.13** Add an explicit temporal chord-gesture layer with adjustable attack-gap granularity and a hard maximum span; keep attacked membership separate from inherited held/pedal context, align selectable chord brackets across the seven-event HUD, and add chord-level crunch, pull, arrival, pitch-set novelty, voice motion, and exact-root fifths travel without combining them into a quality score.
 - [x] **K2.6.14** Audit and polish the chord HUD: prevent incomplete outlines from implying exact identity or a known fifths root, hide neighbor suggestions until a source field exists, realize suggested chords with economical register-aware voice leading, enlarge essential labels, simplify copy, and verify narrow/wide interaction without horizontal clipping.
 - [x] **K2.6.15** Establish Guided Live Phrase v1.29: preserve the seven-event specimen across lab changes in one tab; capture key release, sounding duration, velocity, and pedal extension; add Explore, Intervals, Scales, Chords, and Motion practice lenses; implement Interval Echo, causal chord deltas, correctable chord boundaries, active-lab URLs, and a prominent assumed-sound disclosure.
+- [x] **K2.6.16** Expand Phrase Memory + Voice Leading v1.30: retain a bounded sixty-second phrase behind the seven-attack microscope; trace explicit nearest voice strands and parallel/contrary/oblique motion; replace answer-entering nearby chords with silent ghost targets the learner performs; persist the target and encode the selected Piano lens in the URL.
 
 Exit gate:
 
@@ -661,6 +662,7 @@ These decisions should be resolved only when their dependent phase begins:
 - [x] Movable-Do scale orbit, physical step fingerprint, degree evidence, and inner-hearing practice implemented.
 - [x] Silent Piano companion with local MIDI input, movable-Do key mapping, scale/center inference, selected-field interval texture, perceptual-evidence trace, held-note fifths mapping, chord gestures, and nearby voice-led chord moves implemented.
 - [x] Persistent live phrase ribbon, note duration and pedal tails, guided focus lenses, Interval Echo, causal chord comparison, and correctable chord boundaries implemented.
+- [x] Sixty-second phrase memory, explicit voice-leading strands, motion classes, and learner-performed ghost chord targets implemented.
 - [x] Prime-coordinate harmony lattice, temperament morph, and sequence motion implemented.
 - [x] Competing pulse hypotheses, nested phase, syncopation, and tapping input implemented.
 - [x] Event self-similarity and incremental uncertainty/surprise trace implemented.

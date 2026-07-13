@@ -40,6 +40,8 @@ The v1.28 polish fixtures add bounded register-aware chord realization and rejec
 
 The v1.29 phrase fixtures permit explicit break/join corrections at inferred chord boundaries while preserving automatic adjacent-gap and maximum-span behavior elsewhere. Source contracts require the live phrase ribbon, Interval Echo, causal chord view, prominent assumed-sound disclosure, tab-scoped session persistence, and active-lab URL state. Browser checks confirm five captured on-screen attacks persist across Scale/Piano navigation with the chosen learning lens, an interval can be matched from a new starting key, a forced join creates a corrected chord group, controls remain unclipped at 390 pixels, and no console errors are emitted.
 
+The v1.30 phrase-memory fixtures retain attacks inside a rolling sixty-second boundary independently of the seven-event microscope. Voice-leading fixtures pin minimum-motion held, rising, falling, added, contrary, parallel, oblique, bass, and largest-leap results. Source contracts require a Voice-leading coach, silent ghost targets, URL-encoded Piano lenses, and the absence of the former answer-entering chord action.
+
 Source-level accessibility contracts require a named piano region, native on-screen key and event buttons, polite live status, named SVG summaries, a text-labeled fifths cycle, forced-color states, and no positive tab indices. Browser review and physical MIDI-device testing remain separate release checks.
 
 ## Playback-level invariants

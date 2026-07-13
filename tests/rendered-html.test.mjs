@@ -116,6 +116,12 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Assumed sound model/);
   assert.match(pianoLab, /Start new chord/);
   assert.match(pianoLab, /sessionStorage/);
+  assert.match(pianoLab, /60-second phrase memory/);
+  assert.match(pianoLab, /Voice-leading coach/);
+  assert.match(pianoLab, /Silent ghost targets/);
+  assert.match(pianoLab, /silent ghost target/);
+  assert.match(pianoLab, /pianoLens/);
+  assert.doesNotMatch(pianoLab, /placeNearbyChord/);
   assert.match(ratioLab, /labFromSearch/);
   assert.match(ratioLab, /searchParams\.set\("lab", lab\)/);
   assert.match(pianoLab, /tonal pull, arrival evidence/);

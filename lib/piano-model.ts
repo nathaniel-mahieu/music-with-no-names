@@ -68,6 +68,21 @@ export type ChordTransitionEvidence = {
   rootTravelSteps: number | null;
 };
 
+export type VoiceLeadingStrand = {
+  from: number | null;
+  to: number | null;
+  semitones: number;
+  motion: "held" | "up" | "down" | "added" | "released";
+};
+
+export type VoiceLeadingProfile = {
+  strands: VoiceLeadingStrand[];
+  largestLeap: number;
+  totalMotion: number;
+  bassMotion: number;
+  motionClasses: Array<"parallel" | "contrary" | "oblique" | "changing voice count">;
+};
+
 export type ScaleFrameSnapshot = {
   eventIndex: number;
   leading: ScaleCandidate | null;
@@ -431,6 +446,12 @@ export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], ev
   return [...events, event].slice(-limit);
 }
 
+export function pushPhraseEvent<T extends TimedNoteAttack>(events: T[], event: T, windowMs = 60_000, limit = 256) {
+  if (!Number.isFinite(windowMs) || windowMs <= 0 || !Number.isInteger(limit) || limit <= 0) return [];
+  const threshold = event.onsetMs - windowMs;
+  return [...events, event].filter((item) => item.onsetMs >= threshold).slice(-limit);
+}
+
 function finalizeChordGesture<T extends TimedNoteAttack>(attacks: T[], maximumSpanMs: number): ChordGesture<T> | null {
   const distinctPitchClasses = new Set(attacks.map((attack) => pitchClassFromMidi(attack.note)));
   if (attacks.length < 2 || distinctPitchClasses.size < 2) return null;
@@ -493,6 +514,77 @@ export function groupChordGestures<T extends TimedNoteAttack>(
 function nearestVoiceDistance(source: number[], target: number[]) {
   if (!source.length || !target.length) return 0;
   return source.reduce((sum, note) => sum + Math.min(...target.map((targetNote) => Math.abs(note - targetNote))), 0) / source.length;
+}
+
+function minimumVoicePairs(source: number[], target: number[]): Array<[number, number]> {
+  if (!source.length || !target.length) return [] as Array<[number, number]>;
+  if (source.length > target.length) {
+    return minimumVoicePairs(target, source).map(([to, from]) => [from, to] as [number, number]);
+  }
+  let best: Array<[number, number]> = [];
+  let bestCost = Number.POSITIVE_INFINITY;
+  const visit = (sourceIndex: number, availableTargetIndices: number[], pairs: Array<[number, number]>, cost: number) => {
+    if (sourceIndex >= source.length) {
+      if (cost < bestCost) { best = pairs; bestCost = cost; }
+      return;
+    }
+    availableTargetIndices.forEach((targetIndex, optionIndex) => {
+      const nextCost = cost + Math.abs(source[sourceIndex] - target[targetIndex]);
+      if (nextCost > bestCost) return;
+      visit(
+        sourceIndex + 1,
+        availableTargetIndices.filter((_, index) => index !== optionIndex),
+        [...pairs, [source[sourceIndex], target[targetIndex]]],
+        nextCost,
+      );
+    });
+  };
+  visit(0, target.map((_, index) => index), [], 0);
+  return best;
+}
+
+function indicesConsumedByValues(notes: number[], values: number[]) {
+  const used = new Set<number>();
+  values.forEach((value) => {
+    const index = notes.findIndex((note, noteIndex) => note === value && !used.has(noteIndex));
+    if (index >= 0) used.add(index);
+  });
+  return used;
+}
+
+export function voiceLeadingProfile(previousNotes: number[], currentNotes: number[]): VoiceLeadingProfile {
+  const previous = previousNotes.filter(Number.isFinite).map(Math.round).sort((a, b) => a - b);
+  const current = currentNotes.filter(Number.isFinite).map(Math.round).sort((a, b) => a - b);
+  const pairs = minimumVoicePairs(previous, current);
+  const strands: VoiceLeadingStrand[] = pairs.map(([from, to]) => {
+    const semitones = to - from;
+    return { from, to, semitones, motion: semitones === 0 ? "held" : semitones > 0 ? "up" : "down" };
+  });
+  const usedPrevious = indicesConsumedByValues(previous, pairs.map(([from]) => from));
+  const usedCurrent = indicesConsumedByValues(current, pairs.map(([, to]) => to));
+  previous.forEach((note, index) => {
+    if (!usedPrevious.has(index)) strands.push({ from: note, to: null, semitones: 0, motion: "released" });
+  });
+  current.forEach((note, index) => {
+    if (!usedCurrent.has(index)) strands.push({ from: null, to: note, semitones: 0, motion: "added" });
+  });
+  strands.sort((first, second) => (first.from ?? first.to ?? 0) - (second.from ?? second.to ?? 0));
+  const moved = strands.filter((strand) => strand.from != null && strand.to != null && strand.semitones !== 0);
+  const hasUp = moved.some((strand) => strand.semitones > 0);
+  const hasDown = moved.some((strand) => strand.semitones < 0);
+  const hasHeld = strands.some((strand) => strand.motion === "held");
+  const motionClasses: VoiceLeadingProfile["motionClasses"] = [];
+  if (moved.length >= 2 && hasUp !== hasDown) motionClasses.push("parallel");
+  if (hasUp && hasDown) motionClasses.push("contrary");
+  if (hasHeld && moved.length) motionClasses.push("oblique");
+  if (strands.some((strand) => strand.motion === "added" || strand.motion === "released")) motionClasses.push("changing voice count");
+  return {
+    strands,
+    largestLeap: moved.reduce((largest, strand) => Math.max(largest, Math.abs(strand.semitones)), 0),
+    totalMotion: moved.reduce((total, strand) => total + Math.abs(strand.semitones), 0),
+    bassMotion: previous.length && current.length ? current[0] - previous[0] : 0,
+    motionClasses,
+  };
 }
 
 export function chordTransitionEvidence(

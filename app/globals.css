@@ -6887,7 +6887,8 @@ footer a {
 .piano-focus-grid.is-interval-practice { grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr); }
 
 .hud-echo-panel,
-.hud-cause-panel { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
+.hud-cause-panel,
+.hud-voice-coach { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
 
 .hud-echo-current {
   display: grid;
@@ -6932,6 +6933,39 @@ footer a {
 .hud-cause-deltas small,
 .hud-cause-deltas em { color: var(--muted); font-size: .72rem; font-style: normal; }
 .hud-cause-deltas strong { margin: 3px 0; font-family: var(--font-mono), monospace; font-size: .88rem; }
+
+.piano-chord-learning-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, .72fr) minmax(0, 1.28fr);
+  border-bottom: 1px solid var(--line);
+}
+
+.piano-chord-learning-grid > * { border-bottom: 0; }
+.piano-chord-learning-grid > * + * { border-left: 1px solid var(--line); }
+.hud-voice-coach svg { display: block; width: 100%; height: auto; overflow: visible; }
+.hud-voice-strand line { stroke: var(--piano-blue); stroke-width: 2; }
+.hud-voice-strand circle { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 2; }
+.hud-voice-strand.is-held line { stroke: var(--piano-gold); stroke-width: 3; }
+.hud-voice-strand.is-added line,
+.hud-voice-strand.is-released line { stroke-dasharray: 5 4; }
+.hud-voice-strand.is-added circle,
+.hud-voice-strand.is-released circle { fill: transparent; stroke-dasharray: 2 2; }
+.hud-voice-label { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: .72rem; text-anchor: start; }
+.hud-voice-label.is-left { text-anchor: end; }
+.hud-voice-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-voice-summary > span { min-width: 0; padding: 8px; border-right: 1px solid var(--line); }
+.hud-voice-summary > span:last-child { border-right: 0; }
+.hud-voice-summary small,
+.hud-voice-summary strong { display: block; }
+.hud-voice-summary small { color: var(--muted); font-size: .72rem; }
+.hud-voice-summary strong { margin-top: 3px; font-size: .78rem; font-weight: 500; }
+
+.hud-ghost-feedback { display: grid; gap: 3px; margin-top: 10px; padding: 10px; border: 1px dashed var(--line-strong); }
+.hud-ghost-feedback.is-match { border-style: solid; border-color: var(--piano-gold); }
+.hud-ghost-feedback span,
+.hud-ghost-feedback small { color: var(--muted); font-size: .72rem; }
+.hud-ghost-feedback strong { font-family: var(--font-mono), monospace; font-size: .8rem; }
+.hud-ghost-feedback button { width: fit-content; margin-top: 5px; }
 
 .piano-hud-main {
   display: grid;
@@ -7111,6 +7145,7 @@ footer a {
 .hud-keyboard .piano-key.is-pressed { box-shadow: inset 0 -8px var(--piano-coral), inset 0 0 0 3px var(--foreground) !important; }
 .hud-keyboard .piano-key.is-chord-member { outline: 3px solid var(--piano-gold); outline-offset: -7px; }
 .hud-keyboard .piano-key.is-inherited { outline: 3px dotted var(--piano-blue); outline-offset: -7px; }
+.hud-keyboard .piano-key.is-ghost:not(.is-active) { outline: 3px dashed var(--piano-coral); outline-offset: -7px; }
 
 .piano-hud-analysis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(280px, .9fr); border-bottom: 1px solid var(--line); }
 .piano-hud-analysis > * + * { border-left: 1px solid var(--line); }
@@ -7196,6 +7231,8 @@ footer a {
   .piano-focus-grid.is-interval-practice { grid-template-columns: 1fr; }
   .piano-focus-grid.is-motion > * + *,
   .piano-focus-grid.is-interval-practice > * + * { border-top: 1px solid var(--line); border-left: 0; }
+  .piano-chord-learning-grid { grid-template-columns: 1fr; }
+  .piano-chord-learning-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
 }
 
 @media (max-width: 620px) {
@@ -7235,6 +7272,9 @@ footer a {
   .hud-cause-deltas > span:last-child { border-bottom: 0; }
   .hud-boundary-controls { justify-content: flex-start; }
   .hud-boundary-controls span { flex-basis: 100%; }
+  .hud-voice-summary { grid-template-columns: 1fr; }
+  .hud-voice-summary > span { border-right: 0; border-bottom: 1px solid var(--line); }
+  .hud-voice-summary > span:last-child { border-bottom: 0; }
 }
 
 @media (forced-colors: active) {
@@ -7251,5 +7291,6 @@ footer a {
   .hud-chord-band { fill: Canvas; stroke: CanvasText; }
   .hud-chord-band.is-selected { fill: Highlight; stroke: HighlightText; }
   .hud-fifth-node.is-chord-member,
-  .hud-keyboard .piano-key.is-chord-member { outline-color: Highlight; }
+  .hud-keyboard .piano-key.is-chord-member,
+  .hud-keyboard .piano-key.is-ghost { outline-color: Highlight; }
 }
