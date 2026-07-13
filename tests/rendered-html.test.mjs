@@ -124,6 +124,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /silent resolution target/);
   assert.match(pianoLab, /Scale fingerprint \+ tonal gravity/);
   assert.match(pianoLab, /Resolution forks/);
+  assert.match(pianoLab, /Duration \+ articulation lane/);
+  assert.match(pianoLab, /Motif transformation trail/);
+  assert.match(pianoLab, /repeat → change one property → return/);
+  assert.match(pianoLab, /blue source · gold later statement · exact · transposed · rhythm changed · ending changed · return/);
   assert.match(pianoLab, /Route fit \+ held time \+ recurrence \+ attack \+ low register \+ ending · named candidates were sounded/);
   assert.match(pianoLab, /No note was entered or sounded/);
   assert.match(pianoLab, /setResolutionForkSet\(resolutionForkSet \?\? nextNoteForks\)/);

@@ -12,8 +12,10 @@ import {
   CHROMATIC_SOLFEGE,
   CONVENTIONAL_PITCH_CLASSES,
   PIANO_SCALES,
+  articulationTimeline,
   chordTransitionEvidence,
   conventionalPitchName,
+  detectMotifTransformations,
   fifthStepForPitchClass,
   fifthsCircle,
   frequencyFromMidi,
@@ -40,6 +42,8 @@ import {
   type ChordCandidate,
   type ChordBoundaryCorrection,
   type ChordGesture,
+  type ArticulationEvidence,
+  type MotifTransformation,
   type NearbyChord,
   type PianoScale,
   type ResolutionFork,
@@ -136,7 +140,7 @@ const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }>
   { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },
   { id: "scales", label: "Scales", description: "See how pitch evidence suggests Do and a scale route." },
   { id: "chords", label: "Chords", description: "Inspect grouping, chord identity, and one-change consequences." },
-  { id: "motion", label: "Motion", description: "Follow pull, repose, novelty, and voice movement through time." },
+  { id: "motion", label: "Motion", description: "Follow touch, articulation, motifs, pull, and voice movement through time." },
 ];
 
 function formatHz(value: number) {
@@ -750,6 +754,124 @@ function PhraseRibbon({ events, nowMs, doMidi, scale, focusedId, showConventions
   );
 }
 
+const ARTICULATION_LABELS: Record<ArticulationEvidence["kind"], string> = {
+  held: "held",
+  "phrase-end": "ending",
+  detached: "detached",
+  connected: "joined",
+  "finger-overlap": "overlap",
+  "pedal-joined": "pedal link",
+};
+
+function compactTiming(ms: number) {
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
+function articulationConnectionCopy(item: ArticulationEvidence) {
+  if (item.kind === "held") return `finger ${compactTiming(item.fingerMs)} and growing`;
+  if (item.kind === "phrase-end") return item.pedalMs > 25 ? `pedal tail ${compactTiming(item.pedalMs)}` : `sounded ${compactTiming(item.soundingMs)}`;
+  if (item.kind === "detached") return `silence ${compactTiming(item.silenceMs)}`;
+  if (item.kind === "pedal-joined") return `pedal overlap ${compactTiming(item.overlapMs)}`;
+  if (item.kind === "finger-overlap") return `finger overlap ${compactTiming(item.overlapMs)}`;
+  return "release meets next attack";
+}
+
+function motifTitle(motif: MotifTransformation) {
+  const base = motif.kind === "exact-repeat"
+    ? "exact repeat"
+    : motif.kind === "transposed-repeat"
+      ? `same shape · shifted ${motif.transpositionSemitones > 0 ? "+" : ""}${motif.transpositionSemitones}`
+      : motif.kind === "rhythmic-variation"
+        ? "same pitch shape · new rhythm"
+        : `same opening · ending ${motif.endingDeltaSemitones > 0 ? "+" : ""}${motif.endingDeltaSemitones}`;
+  return motif.returnAfterInterveningMaterial ? `return after intervening material · ${base}` : base;
+}
+
+function motifPracticePrompt(motif: MotifTransformation | undefined) {
+  if (!motif) return "Play three or four attacks, leave a gap, then repeat the shape exactly or from a different starting key.";
+  if (motif.kind === "exact-repeat") return "Try next: keep the onset pattern and move the whole shape to a new starting key.";
+  if (motif.kind === "transposed-repeat") return "Try next: return to the original starting key while preserving this timing.";
+  if (motif.kind === "rhythmic-variation") return "Try next: restore the first rhythm while keeping the later pitch placement.";
+  return "Try next: keep the changed ending once, then return to the first ending.";
+}
+
+function PhraseMotionField({ events, articulation, motifs }: {
+  events: HudNoteEvent[];
+  articulation: ArticulationEvidence[];
+  motifs: MotifTransformation[];
+}) {
+  const microscopeArticulation = articulation.slice(-7);
+  const microscopeOffset = Math.max(0, events.length - microscopeArticulation.length);
+  const firstOnset = events[0]?.onsetMs ?? 0;
+  const lastOnset = events.at(-1)?.onsetMs ?? firstOnset;
+  const phraseSpan = Math.max(500, lastOnset - firstOnset);
+  const xFor = (eventIndex: number) => 54 + ((events[eventIndex]?.onsetMs ?? firstOnset) - firstOnset) / phraseSpan * 620;
+  const leadingMotifs = motifs.slice(0, 2);
+  const strongest = leadingMotifs[0];
+  const rangeLabel = (start: number, length: number) => `P${start + 1}–P${start + length}`;
+  const motifDescription = leadingMotifs.length
+    ? leadingMotifs.map((motif) => `${rangeLabel(motif.sourceStartIndex, motif.length)} to ${rangeLabel(motif.targetStartIndex, motif.length)}: ${motifTitle(motif)}`).join(". ")
+    : "No three- or four-attack motif transformation detected yet.";
+  return <section className="hud-phrase-motion" aria-labelledby="hud-phrase-motion-title">
+    <div className="hud-panel-heading"><span>Measured gesture + modeled recurrence</span><strong id="hud-phrase-motion-title">Touch, connection, and motif</strong><small>Timing can change the gesture while pitches stay fixed. Motif labels compare exact key-step shapes and normalized onset gaps.</small></div>
+    <div className="hud-motion-learning-grid">
+      <div className="hud-articulation-field">
+        <div className="hud-subheading"><span>Captured MIDI timing</span><strong>Duration + articulation lane</strong><small>blue finger contact · gold pedal extension · link to the next attack</small></div>
+        <div className="hud-articulation-lane" style={{ "--articulation-count": Math.max(1, microscopeArticulation.length) } as CSSProperties} aria-label="Finger, pedal, silence, and overlap for the seven-attack microscope">
+          {microscopeArticulation.map((item, slot) => {
+            const referenceMs = item.interOnsetMs ?? Math.max(250, item.soundingMs);
+            const fingerShare = Math.min(1, item.fingerMs / Math.max(1, referenceMs));
+            const pedalShare = Math.min(1 - fingerShare, item.pedalMs / Math.max(1, referenceMs));
+            return <div key={item.eventId} className={`is-${item.kind}`} aria-label={`Microscope ${slot + 1}, ${ARTICULATION_LABELS[item.kind]}, finger ${compactTiming(item.fingerMs)}, pedal ${compactTiming(item.pedalMs)}, ${articulationConnectionCopy(item)}`}>
+              <span>M{slot + 1}</span>
+              <strong>{ARTICULATION_LABELS[item.kind]}</strong>
+              <div className="hud-articulation-bar" style={{ "--finger-share": fingerShare, "--pedal-share": pedalShare } as CSSProperties}><i /><b /><em /></div>
+              <small>{articulationConnectionCopy(item)}</small>
+            </div>;
+          })}
+          {!microscopeArticulation.length ? <p>Play two attacks to see whether touch leaves silence, meets the next attack, or overlaps it.</p> : null}
+        </div>
+        <p className="hud-motion-teaching-copy">“Detached,” “joined,” and “overlap” describe captured timing relative to the next attack. They do not infer intended notation or judge technique.</p>
+      </div>
+
+      <div className="hud-motif-field">
+        <div className="hud-subheading"><span>Local phrase comparison</span><strong>Motif transformation trail</strong><small>blue source · gold later statement · exact · transposed · rhythm changed · ending changed · return</small></div>
+        <svg viewBox="0 0 720 192" role="img" aria-label={motifDescription}>
+          <title>Repeated and transformed three- or four-attack shapes across the live phrase</title>
+          {leadingMotifs.map((motif, row) => {
+            const y = 18 + row * 34;
+            const sourceX = xFor(motif.sourceStartIndex);
+            const sourceEnd = xFor(motif.sourceStartIndex + motif.length - 1);
+            const targetX = xFor(motif.targetStartIndex);
+            const targetEnd = xFor(motif.targetStartIndex + motif.length - 1);
+            return <g key={`${motif.sourceStartIndex}-${motif.targetStartIndex}-${motif.length}`}>
+              <rect x={sourceX - 6} y={y} width={Math.max(12, sourceEnd - sourceX + 12)} height="18" rx="3" className="hud-motif-source" />
+              <rect x={targetX - 6} y={y} width={Math.max(12, targetEnd - targetX + 12)} height="18" rx="3" className="hud-motif-target" />
+              <line x1={sourceEnd + 8} x2={targetX - 8} y1={y + 9} y2={y + 9} className="hud-motif-connector" />
+              <text x={(sourceEnd + targetX) / 2} y={y - 4} className="hud-motif-label">{motifTitle(motif)}</text>
+              <text x={(sourceX + sourceEnd) / 2} y={y + 13} className="hud-motif-range-label">{rangeLabel(motif.sourceStartIndex, motif.length)}</text>
+              <text x={(targetX + targetEnd) / 2} y={y + 13} className="hud-motif-range-label">{rangeLabel(motif.targetStartIndex, motif.length)}</text>
+            </g>;
+          })}
+          <line x1="54" x2="674" y1="112" y2="112" className="hud-grid-line" />
+          {events.map((event, index) => {
+            const microscopeSlot = index >= microscopeOffset ? index - microscopeOffset + 1 : null;
+            return <g key={event.id}><circle cx={xFor(index)} cy={112 + (index % 3 - 1) * 5} r="4" className="hud-motif-event" />{microscopeSlot ? <text x={xFor(index)} y={132 + index % 3 * 24} className="hud-motif-tick-label">M{microscopeSlot}</text> : null}</g>;
+          })}
+          {!events.length ? <text x="360" y="78" className="hud-motif-empty-label">Phrase attacks will form a recurrence trail here</text> : null}
+          {events.length && !leadingMotifs.length ? <text x="360" y="64" className="hud-motif-empty-label">No three- or four-attack transformation yet</text> : null}
+        </svg>
+        <div className="hud-motif-readout">
+          <span>{strongest ? "strongest local match" : "practice prompt"}</span>
+          <strong>{strongest ? motifTitle(strongest) : "repeat → change one property → return"}</strong>
+          <small>{strongest ? `${rangeLabel(strongest.sourceStartIndex, strongest.length)} → ${rangeLabel(strongest.targetStartIndex, strongest.length)}. ${motifPracticePrompt(strongest)}` : motifPracticePrompt(undefined)}</small>
+        </div>
+      </div>
+    </div>
+  </section>;
+}
+
 function IntervalEcho({ events, target, doMidi, scale, showConventions, onSetTarget, onClear }: {
   events: HudNoteEvent[];
   target: IntervalEchoTarget | null;
@@ -1015,6 +1137,8 @@ export function PianoLab() {
   const scale = frame.scale;
   const gravityCandidates = useMemo(() => tonalGravityCandidates(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0, 12), [nowMs, phraseEvents]);
   const nextNoteForks = useMemo(() => resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4), [frame.rootPitchClass, phraseEvents, scale]);
+  const articulationEvidence = useMemo(() => articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0), [nowMs, phraseEvents]);
+  const motifTransformations = useMemo(() => detectMotifTransformations(phraseEvents, 3), [phraseEvents]);
   const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events]);
   const chordMeasures = useMemo<ChordMeasure[]>(() => chordGestures.map((gesture, index) => {
     const pitchClassCount = new Set(gesture.attackedNotes.map(pitchClassFromMidi)).size;
@@ -1176,9 +1300,14 @@ export function PianoLab() {
     const intervalCopy = latestInterval ? `${latestInterval.relationship} from the prior attack` : "the first attack in this trace";
     const routeCopy = context.inScale ? `inside the current ${scale.name}` : `outside the current route`;
     const motionCopy = resolution?.label ?? "building a baseline";
+    const focusedArticulationIndex = articulationEvidence.findIndex((item) => item.eventId === focusedEvent.id);
+    const connectionAroundFocus = focusedArticulationIndex > 0 ? articulationEvidence[focusedArticulationIndex - 1] : articulationEvidence[focusedArticulationIndex];
+    const articulationCopy = connectionAroundFocus ? `The touch around this attack is ${ARTICULATION_LABELS[connectionAroundFocus.kind]} (${articulationConnectionCopy(connectionAroundFocus)}).` : "";
+    const latestMotif = motifTransformations.find((motif) => motif.targetEventIds.includes(focusedEvent.id)) ?? motifTransformations[0];
+    const motifCopy = latestMotif ? `Phrase memory also finds ${motifTitle(latestMotif)}.` : "";
     const transitionCopy = selectedChordMeasure ? selectedChordMeasure.hasPreviousChord ? `Grouped across ${Math.round(selectedChordMeasure.gesture.spreadMs)} ms: ${evidenceWord(selectedChordMeasure.novelty)} pitch-set novelty, ${evidenceWord(selectedChordMeasure.motion)} voice motion${selectedChordMeasure.rootTravelSteps == null ? "" : `, and ${selectedChordMeasure.rootTravelSteps} fifths step${selectedChordMeasure.rootTravelSteps === 1 ? "" : "s"} of root travel`}.` : `Grouped across ${Math.round(selectedChordMeasure.gesture.spreadMs)} ms; this first chord gesture sets the transition baseline.` : "";
     const chordCopy = fieldCandidate ? fieldCandidate.exact ? `The ${selectedGesture ? "grouped attacks" : fieldIsLive ? "held" : "last"} form ${chordLabel(fieldCandidate, doMidi, showConventions)}.` : `The grouped field may outline ${chordLabel(fieldCandidate, doMidi, showConventions)}; tones are missing or added.` : fieldPitchClassCount > 5 ? `The ${fieldPitchClassCount}-position field is scale-like, so no chord label is forced.` : "Hold another note to expose chord relationships.";
-    return `${showConventions ? conventionalPitchName(focusedEvent.note) : context.syllable} arrived as ${intervalCopy}, ${routeCopy}; modeled evidence is ${motionCopy}. ${chordCopy} ${transitionCopy}`.trim();
+    return `${showConventions ? conventionalPitchName(focusedEvent.note) : context.syllable} arrived as ${intervalCopy}, ${routeCopy}; modeled evidence is ${motionCopy}. ${articulationCopy} ${motifCopy} ${chordCopy} ${transitionCopy}`.trim();
   })() : "Play a MIDI or on-screen key. One note attack will appear in every view at once.";
 
   const renderKey = (note: number, black: boolean) => {
@@ -1257,6 +1386,7 @@ export function PianoLab() {
       </div> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} />
+        <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} />
       </div> : null}
 
       <div className="piano-hud-keyboard-wrap">

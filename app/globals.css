@@ -7203,6 +7203,58 @@ footer a {
 .hud-resolution-feedback strong { font-family: var(--font-mono), monospace; font-size: .78rem; }
 .hud-resolution-feedback button { width: fit-content; margin-top: 5px; }
 
+.hud-phrase-motion {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 20px 18px;
+  border-top: 1px solid var(--line);
+  border-left: 0 !important;
+}
+
+.hud-motion-learning-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.hud-motion-learning-grid > div { min-width: 0; padding: 14px; }
+.hud-motion-learning-grid > div + div { border-left: 1px solid var(--line); }
+.hud-articulation-lane { display: grid; grid-template-columns: repeat(var(--articulation-count), minmax(0, 1fr)); min-height: 112px; border: 1px solid var(--line); }
+.hud-articulation-lane > div { display: grid; min-width: 0; gap: 4px; align-content: start; padding: 8px 5px; border-right: 1px solid var(--line); }
+.hud-articulation-lane > div:last-child { border-right: 0; }
+.hud-articulation-lane span { color: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: .69rem; }
+.hud-articulation-lane strong { min-height: 2.5em; font-size: .69rem; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
+.hud-articulation-lane small { color: var(--muted); font-size: .69rem; line-height: 1.3; overflow-wrap: anywhere; }
+.hud-articulation-lane > p { grid-column: 1 / -1; align-self: center; margin: 0; padding: 18px; color: var(--muted); font-size: .69rem; line-height: 1.45; text-align: center; }
+.hud-articulation-bar { display: flex; width: 100%; height: 7px; overflow: hidden; background: var(--surface-soft); }
+.hud-articulation-bar i { width: calc(var(--finger-share) * 100%); background: var(--piano-blue); }
+.hud-articulation-bar b { width: calc(var(--pedal-share) * 100%); background: var(--piano-gold); }
+.hud-articulation-bar em { flex: 1; border-bottom: 1px dotted var(--line-strong); }
+.hud-articulation-lane .is-detached { box-shadow: inset 0 -3px var(--line-strong); }
+.hud-articulation-lane .is-connected { box-shadow: inset 0 -3px var(--piano-blue); }
+.hud-articulation-lane .is-finger-overlap,
+.hud-articulation-lane .is-pedal-joined { box-shadow: inset 0 -3px var(--piano-gold); }
+.hud-motion-teaching-copy { margin: 10px 0 0; color: var(--muted); font-size: .69rem; line-height: 1.45; }
+
+.hud-motif-field svg { display: block; width: 100%; height: auto; overflow: visible; }
+.hud-motif-source { fill: color-mix(in srgb, var(--piano-blue) 24%, transparent); stroke: var(--piano-blue); stroke-width: 1.5; }
+.hud-motif-target { fill: color-mix(in srgb, var(--piano-gold) 24%, transparent); stroke: var(--piano-gold); stroke-width: 1.5; }
+.hud-motif-connector { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 4 4; }
+.hud-motif-event { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 1.5; }
+.hud-motif-label,
+.hud-motif-range-label,
+.hud-motif-tick-label,
+.hud-motif-empty-label { font-family: var(--font-mono), monospace; text-anchor: middle; }
+.hud-motif-label { fill: var(--muted); font-size: 16px; }
+.hud-motif-range-label { fill: var(--foreground); font-size: 14px; }
+.hud-motif-tick-label { fill: var(--muted); font-size: 14px; }
+.hud-motif-empty-label { fill: var(--faint); font-size: 16px; }
+.hud-motif-readout { display: grid; gap: 3px; padding: 10px 0 10px 11px; border-left: 2px solid var(--piano-gold); }
+.hud-motif-readout span,
+.hud-motif-readout small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-motif-readout strong { font-size: .78rem; font-weight: 500; }
+
 .piano-hud-keyboard-wrap { border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--piano-blue) 3%, var(--surface-soft)); }
 .hud-keyboard { height: 146px; }
 .hud-keyboard .piano-key.is-white { padding-bottom: 10px; }
@@ -7302,6 +7354,8 @@ footer a {
   .piano-chord-learning-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
   .hud-scale-learning-grid { grid-template-columns: 1fr 1fr; }
   .hud-resolution-field { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0 !important; }
+  .hud-motion-learning-grid { grid-template-columns: 1fr; }
+  .hud-motion-learning-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }
 }
 
 @media (max-width: 620px) {
@@ -7348,6 +7402,13 @@ footer a {
   .hud-scale-learning-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }
   .hud-resolution-field { grid-column: auto; }
   .hud-resolution-options { grid-template-columns: 1fr; }
+  .hud-articulation-lane strong { font-size: .64rem; }
+  .hud-articulation-lane small { display: none; }
+  .hud-articulation-lane { min-height: 72px; }
+  .hud-motif-label,
+  .hud-motif-empty-label { font-size: 28px; }
+  .hud-motif-range-label { font-size: 30px; }
+  .hud-motif-tick-label { font-size: 26px; }
 }
 
 @media (forced-colors: active) {
@@ -7363,6 +7424,8 @@ footer a {
   .hud-keyboard .piano-key.is-sustained { outline-color: LinkText; }
   .hud-chord-band { fill: Canvas; stroke: CanvasText; }
   .hud-chord-band.is-selected { fill: Highlight; stroke: HighlightText; }
+  .hud-motif-source,
+  .hud-motif-target { fill: Canvas; stroke: CanvasText; }
   .hud-fifth-node.is-chord-member,
   .hud-keyboard .piano-key.is-chord-member,
   .hud-keyboard .piano-key.is-ghost { outline-color: Highlight; }

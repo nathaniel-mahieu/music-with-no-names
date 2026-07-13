@@ -4,11 +4,14 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Scale Fingerprint + Tonal Gravity v1.31**. It provides:
+The current milestone is **Gesture + Motif v1.32**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
 - A persistent live phrase ribbon that keeps sixty seconds of attacks, velocity, key release, sounding duration, pedal-extended tails, and silence while the coordinated staff, frequency, chord, and evidence views magnify the latest seven attacks.
+- A Motion-lens articulation lane that keeps finger contact, pedal extension, sounding overlap, and silence separate, then describes each connection as held, detached, joined, finger-overlapped, pedal-linked, or phrase-ending without inferring notation or judging technique.
+- A phrase-local motif trail that compares non-overlapping three- and four-attack shapes and distinguishes exact repetition, transposition, rhythmic variation, altered endings, and a return after intervening material.
+- One-property-at-a-time motif prompts—repeat, transpose, change the rhythm, alter the ending, and return—derived from the learner’s own live phrase rather than a separate exercise screen.
 - A single Piano HUD that aligns that phrase across grand staff notation, log-frequency height, a fixed circle of fifths, changing scale frames, chord identity, nearby scale chords, interval texture, and separate perceptual traces.
 - A focused scale-learning sequence that reads the selected route as a cyclic equal-key gap fingerprint before showing its conventional name, preserves the fingerprint under transposition, and rotates the starting gap to preview mode-like hearing.
 - A twelve-center tonal-gravity field that keeps route compatibility separate from performed evidence: held time, recurrence, attack strength, low-register placement, and phrase endings remain visible contributors rather than collapsing into key certainty.

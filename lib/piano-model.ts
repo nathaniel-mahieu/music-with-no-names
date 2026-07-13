@@ -124,6 +124,39 @@ export type ResolutionFork = {
   explanation: string;
 };
 
+export type ArticulationKind = "held" | "phrase-end" | "detached" | "connected" | "finger-overlap" | "pedal-joined";
+
+export type ArticulationEvidence = {
+  eventIndex: number;
+  eventId: number;
+  kind: ArticulationKind;
+  fingerMs: number;
+  pedalMs: number;
+  soundingMs: number;
+  interOnsetMs: number | null;
+  silenceMs: number;
+  overlapMs: number;
+};
+
+export type MotifNoteEvent = RollingNoteEvent & {
+  id: number;
+  onsetMs: number;
+};
+
+export type MotifTransformation = {
+  kind: "exact-repeat" | "transposed-repeat" | "rhythmic-variation" | "altered-ending";
+  sourceStartIndex: number;
+  targetStartIndex: number;
+  length: number;
+  sourceEventIds: number[];
+  targetEventIds: number[];
+  transpositionSemitones: number;
+  rhythmDistance: number;
+  endingDeltaSemitones: number;
+  returnAfterInterveningMaterial: boolean;
+  confidence: number;
+};
+
 export type ChordTemplate = {
   id: string;
   name: string;
@@ -606,6 +639,123 @@ export function resolutionForks(events: RollingNoteEvent[], rootPitchClass: numb
     if (forks.length < limit) add("alternate-route", "Try another route tone", pitchClass, "Offers another in-route continuation when two intentions point to the same key.");
   });
   return forks.slice(0, limit);
+}
+
+/**
+ * Separates finger contact, pedal extension, and the connection to the next
+ * attack. The labels are tempo-relative descriptions of captured MIDI timing,
+ * not claims about intended notation or performance technique.
+ */
+export function articulationTimeline(events: Array<PerformanceEvidenceEvent & { id: number }>, nowMs: number): ArticulationEvidence[] {
+  const referenceNow = Number.isFinite(nowMs) ? nowMs : events.at(-1)?.onsetMs ?? 0;
+  return events.map((event, eventIndex) => {
+    const next = events[eventIndex + 1];
+    const keyEnd = event.keyReleaseMs ?? event.releaseMs ?? referenceNow;
+    const soundEnd = event.releaseMs ?? referenceNow;
+    const fingerMs = Math.max(0, keyEnd - event.onsetMs);
+    const soundingMs = Math.max(fingerMs, soundEnd - event.onsetMs);
+    const pedalMs = Math.max(0, soundingMs - fingerMs);
+    const interOnsetMs = next ? Math.max(0, next.onsetMs - event.onsetMs) : null;
+    const silenceMs = next ? Math.max(0, next.onsetMs - soundEnd) : 0;
+    const overlapMs = next ? Math.max(0, soundEnd - next.onsetMs) : 0;
+    let kind: ArticulationKind;
+    if (event.keyReleaseMs == null && event.releaseMs == null) kind = "held";
+    else if (!next) kind = "phrase-end";
+    else {
+      const edgeTolerance = Math.max(25, Math.min(80, interOnsetMs! * 0.1));
+      if (keyEnd > next.onsetMs + edgeTolerance) kind = "finger-overlap";
+      else if (keyEnd < next.onsetMs - edgeTolerance) kind = soundEnd >= next.onsetMs - edgeTolerance ? "pedal-joined" : "detached";
+      else kind = "connected";
+    }
+    return { eventIndex, eventId: event.id, kind, fingerMs, pedalMs, soundingMs, interOnsetMs, silenceMs, overlapMs };
+  });
+}
+
+function normalizedOnsetGaps(events: MotifNoteEvent[]) {
+  const gaps = events.slice(1).map((event, index) => Math.max(0, event.onsetMs - events[index].onsetMs));
+  const total = gaps.reduce((sum, gap) => sum + gap, 0);
+  return total > 0 ? gaps.map((gap) => gap / total) : gaps.map(() => 0);
+}
+
+function averageDistance(first: number[], second: number[]) {
+  if (!first.length || first.length !== second.length) return 0;
+  return first.reduce((sum, value, index) => sum + Math.abs(value - second[index]), 0) / first.length;
+}
+
+function sameNumberSequence(first: number[], second: number[]) {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
+}
+
+/**
+ * Finds literal, transposed, rhythmically varied, and altered-ending returns in
+ * non-overlapping three- or four-attack windows. Exact semitone shapes and
+ * normalized onset gaps make every classification inspectable.
+ */
+export function detectMotifTransformations(events: MotifNoteEvent[], limit = 3): MotifTransformation[] {
+  const usable = events.filter((event) => Number.isFinite(event.note) && Number.isFinite(event.onsetMs));
+  if (usable.length < 6 || !Number.isInteger(limit) || limit <= 0) return [];
+  const candidates: Array<MotifTransformation & { score: number }> = [];
+  const seenWindowPairs = new Set<string>();
+
+  for (let length = Math.min(4, Math.floor(usable.length / 2)); length >= 3; length -= 1) {
+    for (let sourceStartIndex = 0; sourceStartIndex + length * 2 <= usable.length; sourceStartIndex += 1) {
+      for (let targetStartIndex = sourceStartIndex + length; targetStartIndex + length <= usable.length; targetStartIndex += 1) {
+        const pairKey = `${sourceStartIndex}:${targetStartIndex}`;
+        if (seenWindowPairs.has(pairKey)) continue;
+        const source = usable.slice(sourceStartIndex, sourceStartIndex + length);
+        const target = usable.slice(targetStartIndex, targetStartIndex + length);
+        const sourceNotes = source.map((event) => Math.round(event.note));
+        const targetNotes = target.map((event) => Math.round(event.note));
+        const sourceOffsets = sourceNotes.map((note) => note - sourceNotes[0]);
+        const targetOffsets = targetNotes.map((note) => note - targetNotes[0]);
+        const rhythmDistance = averageDistance(normalizedOnsetGaps(source), normalizedOnsetGaps(target));
+        const rhythmClose = rhythmDistance <= 0.12;
+        const exactPitch = sameNumberSequence(sourceNotes, targetNotes);
+        const sameShape = sameNumberSequence(sourceOffsets, targetOffsets);
+        const transpositionSemitones = targetNotes[0] - sourceNotes[0];
+        const prefixShapeMatches = length >= 4 && sameNumberSequence(sourceOffsets.slice(0, -1), targetOffsets.slice(0, -1));
+        const endingDeltaSemitones = targetOffsets.at(-1)! - sourceOffsets.at(-1)!;
+        let kind: MotifTransformation["kind"] | null = null;
+        let baseConfidence = 0;
+        if (exactPitch && rhythmClose) {
+          kind = "exact-repeat";
+          baseConfidence = 1;
+        } else if (sameShape && rhythmClose) {
+          kind = "transposed-repeat";
+          baseConfidence = 0.96;
+        } else if (sameShape && rhythmDistance > 0.12 && rhythmDistance <= 0.5) {
+          kind = "rhythmic-variation";
+          baseConfidence = Math.max(0.68, 0.92 - rhythmDistance * 0.5);
+        } else if (prefixShapeMatches && endingDeltaSemitones !== 0 && rhythmClose) {
+          kind = "altered-ending";
+          baseConfidence = Math.max(0.68, 0.88 - Math.min(12, Math.abs(endingDeltaSemitones)) / 60);
+        }
+        if (!kind) continue;
+        const returnAfterInterveningMaterial = targetStartIndex > sourceStartIndex + length;
+        const confidence = clampUnit(baseConfidence + (length === 4 ? 0.025 : 0) + (returnAfterInterveningMaterial ? 0.015 : 0));
+        candidates.push({
+          kind,
+          sourceStartIndex,
+          targetStartIndex,
+          length,
+          sourceEventIds: source.map((event) => event.id),
+          targetEventIds: target.map((event) => event.id),
+          transpositionSemitones,
+          rhythmDistance,
+          endingDeltaSemitones,
+          returnAfterInterveningMaterial,
+          confidence,
+          score: confidence + length * 0.01 + targetStartIndex * 0.0001,
+        });
+        seenWindowPairs.add(pairKey);
+      }
+    }
+  }
+
+  return candidates
+    .sort((first, second) => second.score - first.score || second.targetStartIndex - first.targetStartIndex)
+    .slice(0, limit)
+    .map(({ score: _score, ...candidate }) => candidate);
 }
 
 export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], event: T, limit = 7) {

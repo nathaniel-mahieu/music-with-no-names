@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PIANO_SCALES,
+  articulationTimeline,
   chordTransitionEvidence,
+  detectMotifTransformations,
   fifthStepForPitchClass,
   fifthsCircle,
   frequencyFromMidi,
@@ -245,6 +247,53 @@ test("offers contrasting unranked resolution forks without entering a note", () 
   assert.equal(new Set(forks.map((fork) => fork.pitchClass)).size, forks.length);
   assert.ok(forks.some((fork) => fork.id === "fifths-neighbor" && fork.pitchClass === 7));
   assert.deepEqual(resolutionForks([], 0, PIANO_SCALES[0]), []);
+});
+
+test("separates finger duration, pedal extension, overlap, and silence", () => {
+  const timeline = articulationTimeline([
+    { id: 1, note: 60, onsetMs: 0, keyReleaseMs: 200, releaseMs: 200 },
+    { id: 2, note: 62, onsetMs: 500, keyReleaseMs: 1_000, releaseMs: 1_000 },
+    { id: 3, note: 64, onsetMs: 1_000, keyReleaseMs: 1_300, releaseMs: 1_800 },
+    { id: 4, note: 65, onsetMs: 1_500, keyReleaseMs: 2_000, releaseMs: 2_000 },
+    { id: 5, note: 67, onsetMs: 1_800, keyReleaseMs: 2_200, releaseMs: 2_200 },
+  ], 2_200);
+  assert.deepEqual(timeline.map((item) => item.kind), ["detached", "connected", "pedal-joined", "finger-overlap", "phrase-end"]);
+  assert.equal(timeline[0].silenceMs, 300);
+  assert.equal(timeline[2].fingerMs, 300);
+  assert.equal(timeline[2].pedalMs, 500);
+  assert.equal(timeline[2].overlapMs, 300);
+  assert.equal(articulationTimeline([{ id: 1, note: 60, onsetMs: 0, keyReleaseMs: null, releaseMs: null }], 450)[0].kind, "held");
+});
+
+function motifEvents(notes: number[], onsets: number[]) {
+  return notes.map((note, index) => ({ id: index + 1, note, onsetMs: onsets[index] }));
+}
+
+test("distinguishes exact and transposed motif recurrences", () => {
+  const exact = detectMotifTransformations(motifEvents([60, 62, 64, 60, 62, 64], [0, 100, 200, 500, 600, 700]));
+  assert.equal(exact[0].kind, "exact-repeat");
+  assert.deepEqual(exact[0].sourceEventIds, [1, 2, 3]);
+  assert.deepEqual(exact[0].targetEventIds, [4, 5, 6]);
+  assert.equal(exact[0].transpositionSemitones, 0);
+
+  const transposed = detectMotifTransformations(motifEvents([60, 62, 64, 67, 69, 71], [0, 100, 200, 500, 600, 700]));
+  assert.equal(transposed[0].kind, "transposed-repeat");
+  assert.equal(transposed[0].transpositionSemitones, 7);
+});
+
+test("distinguishes rhythmic variation, altered endings, and return after intervening material", () => {
+  const rhythm = detectMotifTransformations(motifEvents([60, 62, 64, 60, 62, 64], [0, 100, 200, 500, 550, 700]));
+  assert.equal(rhythm[0].kind, "rhythmic-variation");
+  assert.ok(rhythm[0].rhythmDistance > 0.12);
+
+  const altered = detectMotifTransformations(motifEvents([60, 62, 64, 65, 67, 69, 71, 65], [0, 100, 200, 300, 600, 700, 800, 900]));
+  assert.equal(altered[0].kind, "altered-ending");
+  assert.notEqual(altered[0].endingDeltaSemitones, 0);
+
+  const returned = detectMotifTransformations(motifEvents([60, 62, 64, 66, 67, 60, 62, 64], [0, 100, 200, 300, 400, 700, 800, 900]));
+  assert.equal(returned[0].kind, "exact-repeat");
+  assert.equal(returned[0].returnAfterInterveningMaterial, true);
+  assert.deepEqual(detectMotifTransformations([]), []);
 });
 
 test("separates exact chord identity, inversion, and incomplete outlines", () => {
