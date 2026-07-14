@@ -17,6 +17,7 @@ import {
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
+  comparePhraseLenses,
   controlledSonorityChange,
   conventionalPitchName,
   detectMotifTransformations,
@@ -67,6 +68,7 @@ import {
   type ScaleCandidate,
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
+  type PhraseLensComparison,
   type TonalGravityCandidate,
   type TonalGravityCounterfactual,
   type TonalGravityCue,
@@ -180,6 +182,16 @@ type PulseMirrorSession = {
   anchorEventId: number;
   capturedTapEventIds: number[];
 };
+type PhraseCompareDimension = "settledness" | "energy" | "liking";
+type PhraseCompareReport = "a" | "same" | "b";
+type PhraseCompareSession = {
+  baseline: HudNoteEvent[];
+  anchorEventId: number;
+  comparison: HudNoteEvent[] | null;
+  rootPitchClass: number;
+  scaleId: PianoScale["id"];
+  reports: Partial<Record<PhraseCompareDimension, PhraseCompareReport>>;
+};
 
 type MidiCallbacks = {
   onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
@@ -188,7 +200,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -211,6 +223,7 @@ type PersistedPianoSession = {
   controlledSonoritySession?: ControlledSonoritySession | null;
   motionFocusMode?: MotionFocusMode;
   pulseMirrorSession?: PulseMirrorSession | null;
+  phraseCompareSession?: PhraseCompareSession | null;
 };
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -349,6 +362,38 @@ function isGravityCounterfactualSession(value: unknown): value is GravityCounter
     && session.specimen.some((event) => pitchClassFromMidi(event.note) === session.targetPitchClass);
 }
 
+function isFrozenPhraseSpecimen(value: unknown, maximumLength = 12): value is HudNoteEvent[] {
+  return Array.isArray(value)
+    && value.length >= 3
+    && value.length <= maximumLength
+    && value.every((event) => event
+      && Number.isInteger(event.id)
+      && Number.isInteger(event.note) && event.note >= 0 && event.note <= 127
+      && Number.isFinite(event.velocity) && event.velocity >= 0 && event.velocity <= 127
+      && Number.isFinite(event.onsetMs) && event.onsetMs >= 0
+      && (event.keyReleaseMs == null || Number.isFinite(event.keyReleaseMs))
+      && (event.releaseMs == null || Number.isFinite(event.releaseMs))
+      && (event.source === "midi" || event.source === "screen")
+      && isMidiNoteList(event.fieldNotes));
+}
+
+function isPhraseCompareSession(value: unknown): value is PhraseCompareSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<PhraseCompareSession>;
+  const reports = session.reports ?? {};
+  const validReports = Object.entries(reports).every(([key, report]) => (key === "settledness" || key === "energy" || key === "liking")
+    && (report === "a" || report === "same" || report === "b"));
+  return isFrozenPhraseSpecimen(session.baseline)
+    && (session.comparison == null || isFrozenPhraseSpecimen(session.comparison))
+    && Number.isInteger(session.anchorEventId)
+    && session.anchorEventId! >= 0
+    && Number.isInteger(session.rootPitchClass)
+    && session.rootPitchClass! >= 0
+    && session.rootPitchClass! < 12
+    && PIANO_SCALES.some((scale) => scale.id === session.scaleId)
+    && validReports;
+}
+
 function freezeGravitySpecimen(events: HudNoteEvent[], captureAtMs: number) {
   const selected = events.slice(-24);
   const origin = selected[0]?.onsetMs ?? 0;
@@ -358,6 +403,25 @@ function freezeGravitySpecimen(events: HudNoteEvent[], captureAtMs: number) {
     keyReleaseMs: Math.max(0, (event.keyReleaseMs ?? Math.max(captureAtMs, event.onsetMs)) - origin),
     releaseMs: Math.max(0, (event.releaseMs ?? Math.max(captureAtMs, event.onsetMs)) - origin),
   }));
+}
+
+function freezePhraseSpecimen(events: HudNoteEvent[], captureAtMs: number) {
+  const selected = events.slice(-12);
+  const origin = selected[0]?.onsetMs ?? 0;
+  return selected.map((event) => ({
+    ...event,
+    onsetMs: Math.max(0, event.onsetMs - origin),
+    keyReleaseMs: Math.max(0, (event.keyReleaseMs ?? Math.max(captureAtMs, event.onsetMs)) - origin),
+    releaseMs: Math.max(0, (event.releaseMs ?? Math.max(captureAtMs, event.onsetMs)) - origin),
+  }));
+}
+
+function latestReplayablePhrase(events: HudNoteEvent[]) {
+  const selected = events.slice(-12);
+  for (let index = selected.length - 1; index > 0; index -= 1) {
+    if (selected[index].onsetMs - selected[index - 1].onsetMs > 1_600 && selected.length - index >= 3) return selected.slice(index);
+  }
+  return selected;
 }
 
 function frozenSpecimenNow(events: HudNoteEvent[]) {
@@ -1870,6 +1934,92 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
   </section>;
 }
 
+function signedPhraseValue(value: number, digits = 0) {
+  const rounded = Number(value.toFixed(digits));
+  return `${rounded > 0 ? "+" : ""}${rounded}`;
+}
+
+function phraseMovePath(moves: number[]) {
+  return moves.length ? moves.map((move) => signedPhraseValue(move)).join(" · ") : "one attack only";
+}
+
+function PhraseCompareField({ session, liveReplayCount, comparison, availableAttackCount, doMidi, scale, showConventions, onStart, onCapture, onReplay, onPromote, onReport, onEnd }: {
+  session: PhraseCompareSession | null;
+  liveReplayCount: number;
+  comparison: PhraseLensComparison | null;
+  availableAttackCount: number;
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+  onStart: () => void;
+  onCapture: () => void;
+  onReplay: () => void;
+  onPromote: () => void;
+  onReport: (dimension: PhraseCompareDimension, report: PhraseCompareReport) => void;
+  onEnd: () => void;
+}) {
+  if (!session) return <section className="hud-phrase-compare is-entry" aria-labelledby="hud-phrase-compare-entry-title">
+    <div className="hud-panel-heading"><span>One phrase · one replay · five lenses</span><strong id="hud-phrase-compare-entry-title">What changed across the whole phrase?</strong><small>Freeze a short phrase, replay it with one intentional change, and compare sound, relationships, motion, context, and your own response without creating a goodness score.</small></div>
+    <button type="button" onClick={onStart} disabled={availableAttackCount < 3}>Freeze phrase A</button>
+    <p>{availableAttackCount >= 3 ? `The latest ${Math.min(12, availableAttackCount)} attacks are available; a pause longer than 1.6 seconds starts a newer specimen when it contains at least three attacks.` : `Play at least ${3 - availableAttackCount} more attack${3 - availableAttackCount === 1 ? "" : "s"} first.`} No sound is generated or recorded.</p>
+  </section>;
+
+  const labelPitchClass = (pitchClass: number) => pitchClassRoleLabel(pitchClass, doMidi, scale, showConventions);
+  if (!session.comparison || !comparison) return <section className="hud-phrase-compare is-capturing" aria-labelledby="hud-phrase-compare-title">
+    <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>Phrase A frozen · frame fixed</span><strong id="hud-phrase-compare-title">Replay it as phrase B</strong><small>A contains {session.baseline.length} attacks. Release any held keys, then preserve the phrase or intentionally change register, intervals, timing, touch, or ending.</small></div><button type="button" onClick={onEnd}>End</button></div>
+    <div className="hud-phrase-capture-status" role="status" aria-live="polite"><span>B replay</span><strong>{liveReplayCount} attack{liveReplayCount === 1 ? "" : "s"} captured after A</strong><small>Aim for roughly {session.baseline.length}; capture is available after three and keeps at most twelve.</small></div>
+    <div className="hud-phrase-change-prompts" aria-label="Possible one-property replay changes"><span>same path · new register</span><span>same pitches · new timing</span><span>same notes · new touch</span><span>change the ending</span></div>
+    <div className="hud-builder-actions"><button type="button" onClick={onCapture} disabled={liveReplayCount < 3}>Freeze phrase B</button><button type="button" onClick={onStart}>Replace phrase A with latest</button></div>
+    <p className="hud-phrase-limit">The replay is learner-bounded rather than automatically segmented. MIDI captures events, not your instrument audio or intention.</p>
+  </section>;
+
+  const registerDelta = comparison.sound.meanMidiB - comparison.sound.meanMidiA;
+  const velocityDelta = comparison.sound.meanVelocityB - comparison.sound.meanVelocityA;
+  const spanDelta = comparison.sound.pitchSpanB - comparison.sound.pitchSpanA;
+  const soundChanged = Math.abs(registerDelta) >= 0.5 || Math.abs(velocityDelta) >= 1 || spanDelta !== 0;
+  const overlapDelta = comparison.motion.overlapShareB - comparison.motion.overlapShareA;
+  const durationChanged = comparison.motion.tempoRatio != null && Math.abs(comparison.motion.tempoRatio - 1) > 0.05;
+  const motionChanged = !comparison.motion.sameTimingShape || durationChanged || Math.abs(overlapDelta) > 0.05;
+  const contextChanged = comparison.context.leadingCenterA !== comparison.context.leadingCenterB
+    || comparison.context.endingPitchClassA !== comparison.context.endingPitchClassB
+    || Math.abs(comparison.context.clarityB - comparison.context.clarityA) > 0.03;
+  const relationshipCopy = comparison.relationships.sameIntervalPath
+    ? comparison.relationships.uniformTransposition === 0
+      ? "Every signed interval and every absolute key stayed the same."
+      : `Every pitch moved ${signedPhraseValue(comparison.relationships.uniformTransposition ?? 0)} keys; the signed interval path stayed invariant.`
+    : `${comparison.relationships.changedMoveCount} of ${Math.max(comparison.relationships.intervalPathA.length, comparison.relationships.intervalPathB.length)} signed moves changed.`;
+  const timingCopy = comparison.motion.sameTimingShape
+    ? comparison.motion.tempoRatio == null
+      ? "The proportional onset shape stayed the same."
+      : `The proportional onset shape stayed the same at ${comparison.motion.tempoRatio.toFixed(2)}× A's elapsed time.`
+    : comparison.motion.timingShapeDistance == null
+      ? "The attack counts differ, so no one-to-one timing shape is claimed."
+      : `The normalized onset spacing changed by ${Math.round(comparison.motion.timingShapeDistance * 100)} points on average.`;
+  const reportRows: Array<{ id: PhraseCompareDimension; label: string; a: string; b: string }> = [
+    { id: "settledness", label: "Which felt more settled?", a: "A", b: "B" },
+    { id: "energy", label: "Which felt more energized?", a: "A", b: "B" },
+    { id: "liking", label: "Which did you like more here?", a: "A", b: "B" },
+  ];
+  const reportCopy = (dimension: PhraseCompareDimension) => {
+    const report = session.reports[dimension];
+    if (!report) return "not reported";
+    if (report === "same") return "felt about the same";
+    const adjective = dimension === "settledness" ? "more settled" : dimension === "energy" ? "more energized" : "liked more";
+    return `${report.toUpperCase()} ${adjective}`;
+  };
+  return <section className="hud-phrase-compare is-complete" aria-labelledby="hud-phrase-compare-title">
+    <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>A/B complete · no combined score</span><strong id="hud-phrase-compare-title">The same replay through five lenses</strong><small>A {session.baseline.length} attacks · B {session.comparison.length} attacks · the movable-Do frame stayed fixed while both specimens were compared.</small></div><div className="hud-builder-actions"><button type="button" onClick={onReplay}>Replay B again</button><button type="button" onClick={onPromote}>Use B as new A</button><button type="button" onClick={onEnd}>End</button></div></div>
+    <div className="hud-phrase-lens-profile" role="group" aria-label="Five separate phrase comparison lenses">
+      <article className={soundChanged ? "has-change" : "is-invariant"}><header><span>1 · sound</span><em>measured MIDI</em><strong>{soundChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> center {comparison.sound.meanMidiA.toFixed(1)} · span {comparison.sound.pitchSpanA} · attack {Math.round(comparison.sound.meanVelocityA)}</p><i aria-hidden="true">→</i><p><b>B</b> center {comparison.sound.meanMidiB.toFixed(1)} · span {comparison.sound.pitchSpanB} · attack {Math.round(comparison.sound.meanVelocityB)}</p></div><small>Register center {signedPhraseValue(registerDelta, 1)} keys · span {signedPhraseValue(spanDelta)} · mean MIDI attack {signedPhraseValue(velocityDelta)}. This is not acoustic loudness or timbre.</small></article>
+      <article className={comparison.relationships.sameIntervalPath ? "is-invariant" : "has-change"}><header><span>2 · relationships</span><em>measured intervals</em><strong>{comparison.relationships.sameIntervalPath ? "invariant" : "changed"}</strong></header><div><p><b>A</b> {phraseMovePath(comparison.relationships.intervalPathA)}</p><i aria-hidden="true">→</i><p><b>B</b> {phraseMovePath(comparison.relationships.intervalPathB)}</p></div><small>{relationshipCopy}</small></article>
+      <article className={motionChanged ? "has-change" : "is-invariant"}><header><span>3 · motion</span><em>measured timing</em><strong>{motionChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> {(comparison.motion.phraseMsA / 1_000).toFixed(2)} s · {Math.round(comparison.motion.overlapShareA * 100)}% overlapping links</p><i aria-hidden="true">→</i><p><b>B</b> {(comparison.motion.phraseMsB / 1_000).toFixed(2)} s · {Math.round(comparison.motion.overlapShareB * 100)}% overlapping links</p></div><small>{timingCopy} Sounding-overlap share changed {signedPhraseValue(overlapDelta * 100)} points.</small></article>
+      <article className={contextChanged ? "has-change" : "is-invariant"}><header><span>4 · context</span><em>modeled hypothesis</em><strong>{contextChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> {labelPitchClass(comparison.context.leadingCenterA)} leads · ends {labelPitchClass(comparison.context.endingPitchClassA)} · gap {Math.round(comparison.context.clarityA * 100)}</p><i aria-hidden="true">→</i><p><b>B</b> {labelPitchClass(comparison.context.leadingCenterB)} leads · ends {labelPitchClass(comparison.context.endingPitchClassB)} · gap {Math.round(comparison.context.clarityB * 100)}</p></div><small>Twelve center-and-route hypotheses were reranked from performed evidence. The gap is model separation, not confidence or heard key.</small></article>
+      <article className="is-reported"><header><span>5 · experience</span><em>your report</em><strong>{Object.keys(session.reports).length}/3 answered</strong></header><div className="hud-phrase-report-rows">{reportRows.map((row) => <div key={row.id}><span><b>{row.label}</b><small>{reportCopy(row.id)}</small></span><span role="group" aria-label={row.label}><button type="button" aria-pressed={session.reports[row.id] === "a"} onClick={() => onReport(row.id, "a")}>{row.a}</button><button type="button" aria-pressed={session.reports[row.id] === "same"} onClick={() => onReport(row.id, "same")}>same</button><button type="button" aria-pressed={session.reports[row.id] === "b"} onClick={() => onReport(row.id, "b")}>{row.b}</button></span></div>)}</div><small>No MIDI or model value fills this lane. Settledness, energy, and liking remain separate and local to this comparison.</small></article>
+    </div>
+    <p className="hud-phrase-limit">This profile describes two captured performances. It does not decide whether either phrase is better, more musical, stylistically correct, emotionally universal, or causally explained by the largest visible change.</p>
+  </section>;
+}
+
 function characterChoiceLabel(key: keyof PhraseCharacterRatings, value: number | undefined) {
   if (value == null) return "—";
   const question = CHARACTER_QUESTIONS.find((item) => item.key === key)!;
@@ -2009,6 +2159,7 @@ export function PianoLab() {
   const [controlledSonoritySession, setControlledSonoritySession] = useState<ControlledSonoritySession | null>(null);
   const [motionFocusMode, setMotionFocusMode] = useState<MotionFocusMode>("pulse");
   const [pulseMirrorSession, setPulseMirrorSession] = useState<PulseMirrorSession | null>(null);
+  const [phraseCompareSession, setPhraseCompareSession] = useState<PhraseCompareSession | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
   const [lockedDoMidi, setLockedDoMidi] = useState(60);
@@ -2041,7 +2192,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -2092,6 +2243,7 @@ export function PianoLab() {
               });
             }
             if (isPulseMirrorSession(saved.pulseMirrorSession)) setPulseMirrorSession(saved.pulseMirrorSession);
+            if (isPhraseCompareSession(saved.phraseCompareSession)) setPhraseCompareSession(saved.phraseCompareSession);
           }
         }
       } catch {
@@ -2104,6 +2256,7 @@ export function PianoLab() {
         setScaleWalkSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setControlledSonoritySession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setGravityCounterfactualSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
+        setPhraseCompareSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
       }
       setHydrated(true);
     }, 0);
@@ -2112,9 +2265,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 11, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession };
+    const session: PersistedPianoSession = { version: 12, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -2203,6 +2356,12 @@ export function PianoLab() {
   const gravityCounterfactualResult = useMemo<TonalGravityCounterfactual | null>(() => gravityCounterfactualSession
     ? tonalGravityCounterfactual(gravityCounterfactualSession.specimen, gravityCounterfactualSession.targetPitchClass, gravityCounterfactualSession.cue, frozenSpecimenNow(gravityCounterfactualSession.specimen))
     : null, [gravityCounterfactualSession]);
+  const phraseCompareLiveEvents = useMemo(() => phraseCompareSession && !phraseCompareSession.comparison
+    ? phraseEvents.filter((event) => event.id > phraseCompareSession.anchorEventId).slice(-12)
+    : [], [phraseCompareSession, phraseEvents]);
+  const phraseLensComparison = useMemo<PhraseLensComparison | null>(() => phraseCompareSession?.comparison
+    ? comparePhraseLenses(phraseCompareSession.baseline, phraseCompareSession.comparison)
+    : null, [phraseCompareSession]);
   const scaleWalkScale = PIANO_SCALES.find((candidate) => candidate.id === scaleWalkSession?.scaleId) ?? scale;
   const scaleWalkEvents = useMemo(() => scaleWalkSession ? phraseEvents.filter((event) => event.id > scaleWalkSession.anchorEventId) : [], [phraseEvents, scaleWalkSession]);
   const scaleWalkProgress = useMemo<AscendingScaleWalk | null>(() => scaleWalkSession
@@ -2396,6 +2555,7 @@ export function PianoLab() {
     setGravityCounterfactualSession(null);
     setControlledSonoritySession(null);
     setPulseMirrorSession(null);
+    setPhraseCompareSession(null);
     setLatchedNotes(new Map());
     midi.clear();
   };
@@ -2474,6 +2634,73 @@ export function PianoLab() {
       url.searchParams.delete("pianoScale");
       window.history.replaceState(null, "", url);
     }
+  };
+
+  const beginPhraseCompare = () => {
+    const source = latestReplayablePhrase(phraseEvents);
+    if (source.length < 3) return;
+    const rootPitchClass = pitchClassFromMidi(doMidi);
+    setScaleWalkSession(null);
+    setScaleFingerprintSession(null);
+    setGravityCounterfactualSession(null);
+    setControlledSonoritySession(null);
+    setPulseMirrorSession(null);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    setGhostChord(null);
+    setGhostNotes([]);
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(doMidi);
+    setFrameMode("locked");
+    setFocusLens("explore");
+    setPhraseCompareSession({
+      baseline: freezePhraseSpecimen(source, currentHudTime()),
+      anchorEventId: phraseEvents.at(-1)?.id ?? 0,
+      comparison: null,
+      rootPitchClass,
+      scaleId: scale.id,
+      reports: {},
+    });
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoLens", "explore");
+    url.searchParams.set("pianoDo", String(rootPitchClass));
+    url.searchParams.set("pianoScale", scale.id);
+    window.history.replaceState(null, "", url);
+  };
+
+  const capturePhraseCompareReplay = () => {
+    if (!phraseCompareSession || phraseCompareLiveEvents.length < 3) return;
+    setPhraseCompareSession({
+      ...phraseCompareSession,
+      comparison: freezePhraseSpecimen(phraseCompareLiveEvents, currentHudTime()),
+      reports: {},
+    });
+  };
+
+  const replayPhraseCompare = () => {
+    setPhraseCompareSession((current) => current ? {
+      ...current,
+      anchorEventId: phraseEvents.at(-1)?.id ?? 0,
+      comparison: null,
+      reports: {},
+    } : current);
+  };
+
+  const promotePhraseCompareReplay = () => {
+    setPhraseCompareSession((current) => current?.comparison ? {
+      ...current,
+      baseline: current.comparison,
+      anchorEventId: phraseEvents.at(-1)?.id ?? 0,
+      comparison: null,
+      reports: {},
+    } : current);
+  };
+
+  const reportPhraseCompare = (dimension: PhraseCompareDimension, report: PhraseCompareReport) => {
+    setPhraseCompareSession((current) => current?.comparison ? {
+      ...current,
+      reports: { ...current.reports, [dimension]: report },
+    } : current);
   };
 
   const beginScaleWalk = () => {
@@ -2658,6 +2885,7 @@ export function PianoLab() {
   };
 
   const selectFocusLens = (lens: FocusLens) => {
+    if (lens !== "explore") setPhraseCompareSession(null);
     if (lens === "paths") {
       setScaleWalkSession(null);
       setScaleFingerprintSession(null);
@@ -2737,7 +2965,12 @@ export function PianoLab() {
   const gravityCounterfactualCue = GRAVITY_CUE_OPTIONS.find((option) => option.id === gravityCounterfactualSession?.cue);
   const gravityCounterfactualTargetLabel = gravityCounterfactualSession ? pitchClassRoleLabel(gravityCounterfactualSession.targetPitchClass, doMidi, scale, showConventions) : "candidate";
 
-  const newestInsight = focusLens === "chords" && controlledSonoritySession ? !controlledSonoritySession.baselineNotes
+  const newestInsight = focusLens === "explore" && phraseCompareSession ? !phraseCompareSession.comparison || !phraseLensComparison
+    ? `Phrase A is frozen. Play phrase B, changing one property if you can; ${phraseCompareLiveEvents.length} of at least 3 replay attacks are captured.`
+    : phraseLensComparison.relationships.sameIntervalPath
+      ? `The signed interval path stayed invariant${phraseLensComparison.relationships.uniformTransposition ? ` while every pitch shifted ${signedPhraseValue(phraseLensComparison.relationships.uniformTransposition)} keys` : ""}; sound, motion, context, and your report remain separate comparisons.`
+      : `${phraseLensComparison.relationships.changedMoveCount} interval moves changed between A and B; the other four lenses show different consequences without combining them into a verdict.`
+    : focusLens === "chords" && controlledSonoritySession ? !controlledSonoritySession.baselineNotes
     ? "The starting field is only outlined. Perform every exact key to establish a physical and modeled baseline."
     : controlledSonoritySession.replayRequired
       ? "Replay the baseline field, then add or release exactly one note while the other notes stay held."
@@ -2854,8 +3087,8 @@ export function PianoLab() {
           <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{midi.status}</strong></div></div>
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
           <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label>
-          <button type="button" aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{frozen ? "Resume trace" : "Freeze trace"}</button>
-          <button type="button" disabled={focusLens === "paths"} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{focusLens === "paths" ? "Do fixed for path" : frameMode === "locked" ? "Unlock Do" : "Lock Do"}</button>
+          <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{phraseCompareSession ? "Trace live for A/B" : frozen ? "Resume trace" : "Freeze trace"}</button>
+          <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Do fixed for A/B" : focusLens === "paths" ? "Do fixed for path" : frameMode === "locked" ? "Unlock Do" : "Lock Do"}</button>
           <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>Theory names</span></label>
           <button type="button" onClick={clearAll}>Clear</button>
         </div>
@@ -2878,9 +3111,11 @@ export function PianoLab() {
 
       <div className="hud-event-selector" aria-label="Select an event across every view">{events.map((event, index) => <button key={event.id} type="button" aria-pressed={focusedEvent?.id === event.id} onClick={() => { setFocusedId(event.id); const containing = chordGestures.find((gesture) => gesture.attacks.some((attack) => attack.id === event.id)); if (containing) setSelectedChordId(containing.id); }}><strong>{index + 1}</strong><span>{showConventions ? conventionalPitchName(event.note) : relativeSyllable(event.note, doMidi, scale)}</span><small>{durationLabel(event, nowMs || event.onsetMs)}{event.releaseReason === "pedal" ? " · pedal" : ""}</small></button>)}</div>
 
-      {(focusLens === "explore" || focusLens === "chords") ? <ChordGestureLane events={events} measures={chordMeasures} selectedChordId={effectiveSelectedChordId} focusedId={focusedEvent?.id ?? null} boundaryCorrections={boundaryCorrections} doMidi={doMidi} showConventions={showConventions} onBoundaryChange={setBoundaryCorrection} onSelect={(id) => { setSelectedChordId(id); const gesture = chordGestures.find((item) => item.id === id); if (gesture) setFocusedId(gesture.attacks.at(-1)!.id); }} /> : null}
+      {focusLens === "explore" ? <PhraseCompareField session={phraseCompareSession} liveReplayCount={phraseCompareLiveEvents.length} comparison={phraseLensComparison} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPhraseCompare} onCapture={capturePhraseCompareReplay} onReplay={replayPhraseCompare} onPromote={promotePhraseCompareReplay} onReport={reportPhraseCompare} onEnd={() => setPhraseCompareSession(null)} /> : null}
 
-      {focusLens === "explore" ? <div className="piano-hud-main">
+      {((focusLens === "explore" && !phraseCompareSession) || focusLens === "chords") ? <ChordGestureLane events={events} measures={chordMeasures} selectedChordId={effectiveSelectedChordId} focusedId={focusedEvent?.id ?? null} boundaryCorrections={boundaryCorrections} doMidi={doMidi} showConventions={showConventions} onBoundaryChange={setBoundaryCorrection} onSelect={(id) => { setSelectedChordId(id); const gesture = chordGestures.find((item) => item.id === id); if (gesture) setFocusedId(gesture.attacks.at(-1)!.id); }} /> : null}
+
+      {focusLens === "explore" ? !phraseCompareSession ? <div className="piano-hud-main">
         <div className="hud-phrase-stack">
           <StaffView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
           <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
@@ -2889,7 +3124,7 @@ export function PianoLab() {
           <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
           <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         </div>
-      </div> : focusLens === "intervals" ? <div className="piano-focus-grid is-intervals">
+      </div> : null : focusLens === "intervals" ? <div className="piano-focus-grid is-intervals">
         <StaffView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
       </div> : focusLens === "scales" ? <div className="piano-focus-grid is-scales">
@@ -2911,7 +3146,7 @@ export function PianoLab() {
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
       </div>
 
-      {(focusLens === "explore" || focusLens === "chords") ? <div className="piano-hud-analysis">
+      {((focusLens === "explore" && !phraseCompareSession) || focusLens === "chords") ? <div className="piano-hud-analysis">
         <section className="hud-chord-panel" aria-labelledby="hud-chord-title">
           <div className="hud-panel-heading"><span>{selectedGesture ? `${selectedGesture.kind} gesture · ${Math.round(selectedGesture.spreadMs)} ms` : fieldIsLive ? "Held now" : events.length ? "Last outlined field" : "Waiting for a field"}</span><strong id="hud-chord-title">Chord membership</strong><small>Attacks always belong. Inherited held or pedal notes begin included; exclude one when it belongs only to the previous harmony.</small></div>
           {leadingChord ? <div className="hud-chord-result"><span>{leadingChord.exact ? "exact pitch-class match" : "possible outline"}</span><strong>{chordLabel(leadingChord, doMidi, showConventions)}</strong><small>{leadingChord.inversion > 0 ? `inversion ${leadingChord.inversion} · ` : ""}{leadingChord.missingPitchClasses.length ? `${leadingChord.missingPitchClasses.length} missing · ` : ""}{leadingChord.extraPitchClasses.length ? `${leadingChord.extraPitchClasses.length} added` : "no added tones"}</small></div> : fieldPitchClassCount > 5 ? <div className="hud-chord-result"><span>scale-like pitch field</span><strong>{fieldPitchClassCount} distinct positions</strong><small>Too many simultaneous positions for a useful chord-template label; inspect the interval texture and scale lens instead.</small></div> : <p className="hud-empty-copy">Hold two or more notes. The HUD will name exact matches separately from incomplete outlines.</p>}
@@ -2943,11 +3178,11 @@ export function PianoLab() {
         <RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} />
       </div> : null}
 
-      {(focusLens === "explore" || focusLens === "chords") ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
+      {((focusLens === "explore" && !phraseCompareSession) || focusLens === "chords") ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
 
       {focusLens === "intervals" ? <div className="piano-focus-grid is-interval-practice"><IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} /><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
 
-      {focusLens === "explore" ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
+      {focusLens === "explore" && !phraseCompareSession ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
 
       <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Voice strands use nearest keyboard motion, not intended fingering. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>
     </section>

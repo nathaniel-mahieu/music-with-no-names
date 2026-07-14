@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Tonal Gravity Counterfactuals v1.42**. It provides:
+The current milestone is **Five-Lens Phrase A/B v1.43**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
@@ -24,6 +24,7 @@ The current milestone is **Tonal Gravity Counterfactuals v1.42**. It provides:
 - A live, silent ascending scale walk that fixes the current Do and route, accepts the first Do in any MIDI octave, marks one exact next key, and teaches the octave as a reusable physical gap sequence. Wrong attacks preserve completed steps and compare the attempted gap with the expected one; a new Do restarts the same route in a different register; completion exposes the 2:1 frequency doubling alongside the invariant gap fingerprint, fifths coordinate, and changing tonal-gravity context.
 - A twelve-center tonal-gravity field that keeps route compatibility separate from performed evidence: held time, recurrence, attack strength, low-register placement, and phrase endings remain visible contributors rather than collapsing into key certainty.
 - A frozen-phrase center microscope that lets the learner reassign exactly one contextual evidence lane—held time, recurrence, attack, low-register placement, or ending—to one sounded position. Paired before/after center rankings reveal model sensitivity while route fit, the other four cue lanes, every MIDI event, and the learner's actual experience remain explicitly fixed or unclaimed.
+- A whole-phrase A/B experiment inside the existing Piano Explore lens. Freeze the latest three-to-twelve attacks, replay the phrase with one deliberate change, and inspect five separate lanes: measured register/touch/span, signed interval relationships, normalized timing and sounding overlap, modeled competing-center context, and the learner's own settledness/energy/liking comparison. Transposition and proportional timing can remain visibly invariant while absolute keys, duration, or context move; no lane is collapsed into similarity or goodness.
 - Silent resolution forks for center return, minimum hand motion, the near-3:2 fifths neighbor, and a less-recent route tone. The learner chooses an intention, plays the outlined pitch class, and reflects on the result; the control never enters or sounds an answer.
 - Phrase-level scale inference that uses the full sixty-second memory so the seven-attack microscope cannot forget an earlier Do and spuriously reframe the same phrase.
 - Local Web MIDI input with permission-aware device selection, note-on/off, velocity, duration, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and the seven-event phrase remains only in the current browser tab.

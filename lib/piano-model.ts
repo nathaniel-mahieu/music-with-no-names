@@ -215,6 +215,43 @@ export type TonalGravityCounterfactual = {
   scoreDelta: number;
 };
 
+export type PhraseLensComparison = {
+  sound: {
+    meanMidiA: number;
+    meanMidiB: number;
+    pitchSpanA: number;
+    pitchSpanB: number;
+    meanVelocityA: number;
+    meanVelocityB: number;
+  };
+  relationships: {
+    intervalPathA: number[];
+    intervalPathB: number[];
+    changedMoveCount: number;
+    sameIntervalPath: boolean;
+    uniformTransposition: number | null;
+  };
+  motion: {
+    phraseMsA: number;
+    phraseMsB: number;
+    timingShapeDistance: number | null;
+    sameTimingShape: boolean;
+    tempoRatio: number | null;
+    overlapShareA: number;
+    overlapShareB: number;
+  };
+  context: {
+    leadingCenterA: number;
+    leadingCenterB: number;
+    leadingScaleIdA: PianoScale["id"];
+    leadingScaleIdB: PianoScale["id"];
+    clarityA: number;
+    clarityB: number;
+    endingPitchClassA: number;
+    endingPitchClassB: number;
+  };
+};
+
 export type ResolutionFork = {
   id: "center-return" | "least-motion" | "fifths-neighbor" | "fresh-route" | "alternate-route";
   label: string;
@@ -1046,6 +1083,99 @@ export function tonalGravityCounterfactual(
     baselineRank,
     counterfactualRank,
     scoreDelta: targetAfter.score - targetBefore.score,
+  };
+}
+
+function phraseIntervalPath(events: PerformanceEvidenceEvent[]) {
+  return events.slice(1).map((event, index) => event.note - events[index].note);
+}
+
+function phraseOnsetShape(events: PerformanceEvidenceEvent[]) {
+  const gaps = events.slice(1).map((event, index) => Math.max(0, event.onsetMs - events[index].onsetMs));
+  const total = gaps.reduce((sum, gap) => sum + gap, 0);
+  return total > 0 ? gaps.map((gap) => gap / total) : gaps.map(() => 0);
+}
+
+function phraseOverlapShare(events: PerformanceEvidenceEvent[], nowMs: number) {
+  if (events.length < 2) return 0;
+  const overlappingConnections = events.slice(0, -1).filter((event, index) => {
+    const soundEnd = event.releaseMs ?? event.keyReleaseMs ?? nowMs;
+    return soundEnd > events[index + 1].onsetMs;
+  }).length;
+  return overlappingConnections / (events.length - 1);
+}
+
+/**
+ * Compares two learner-declared phrase specimens through separate physical,
+ * relational, temporal, and contextual lenses. It deliberately omits an
+ * aggregate similarity, goodness, or experience score: the listener-facing
+ * lane must be reported by the learner in the interface.
+ */
+export function comparePhraseLenses(
+  phraseA: PerformanceEvidenceEvent[],
+  phraseB: PerformanceEvidenceEvent[],
+): PhraseLensComparison | null {
+  if (phraseA.length < 3 || phraseB.length < 3) return null;
+  const nowA = phraseA.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), phraseA.at(-1)!.onsetMs);
+  const nowB = phraseB.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), phraseB.at(-1)!.onsetMs);
+  const notesA = phraseA.map((event) => event.note);
+  const notesB = phraseB.map((event) => event.note);
+  const intervalPathA = phraseIntervalPath(phraseA);
+  const intervalPathB = phraseIntervalPath(phraseB);
+  const sameLength = phraseA.length === phraseB.length;
+  const changedMoveCount = Math.max(intervalPathA.length, intervalPathB.length)
+    - intervalPathA.filter((move, index) => move === intervalPathB[index]).length;
+  const sameIntervalPath = sameLength && changedMoveCount === 0;
+  const candidateTransposition = sameLength ? phraseB[0].note - phraseA[0].note : null;
+  const uniformTransposition = candidateTransposition != null
+    && phraseA.every((event, index) => phraseB[index].note - event.note === candidateTransposition)
+    ? candidateTransposition
+    : null;
+  const onsetShapeA = phraseOnsetShape(phraseA);
+  const onsetShapeB = phraseOnsetShape(phraseB);
+  const timingShapeDistance = sameLength
+    ? onsetShapeA.reduce((sum, value, index) => sum + Math.abs(value - onsetShapeB[index]), 0) / Math.max(1, onsetShapeA.length)
+    : null;
+  const sameTimingShape = timingShapeDistance != null && timingShapeDistance <= 0.04;
+  const phraseMsA = Math.max(0, phraseA.at(-1)!.onsetMs - phraseA[0].onsetMs);
+  const phraseMsB = Math.max(0, phraseB.at(-1)!.onsetMs - phraseB[0].onsetMs);
+  const gravityA = tonalGravityCandidates(phraseA, nowA, 2);
+  const gravityB = tonalGravityCandidates(phraseB, nowB, 2);
+  return {
+    sound: {
+      meanMidiA: notesA.reduce((sum, note) => sum + note, 0) / notesA.length,
+      meanMidiB: notesB.reduce((sum, note) => sum + note, 0) / notesB.length,
+      pitchSpanA: Math.max(...notesA) - Math.min(...notesA),
+      pitchSpanB: Math.max(...notesB) - Math.min(...notesB),
+      meanVelocityA: phraseA.reduce((sum, event) => sum + (event.velocity ?? 64), 0) / phraseA.length,
+      meanVelocityB: phraseB.reduce((sum, event) => sum + (event.velocity ?? 64), 0) / phraseB.length,
+    },
+    relationships: {
+      intervalPathA,
+      intervalPathB,
+      changedMoveCount,
+      sameIntervalPath,
+      uniformTransposition,
+    },
+    motion: {
+      phraseMsA,
+      phraseMsB,
+      timingShapeDistance,
+      sameTimingShape,
+      tempoRatio: sameTimingShape && phraseMsA > 0 ? phraseMsB / phraseMsA : null,
+      overlapShareA: phraseOverlapShare(phraseA, nowA),
+      overlapShareB: phraseOverlapShare(phraseB, nowB),
+    },
+    context: {
+      leadingCenterA: gravityA[0].rootPitchClass,
+      leadingCenterB: gravityB[0].rootPitchClass,
+      leadingScaleIdA: gravityA[0].scale.id,
+      leadingScaleIdB: gravityB[0].scale.id,
+      clarityA: Math.max(0, gravityA[0].score - (gravityA[1]?.score ?? 0)),
+      clarityB: Math.max(0, gravityB[0].score - (gravityB[1]?.score ?? 0)),
+      endingPitchClassA: pitchClassFromMidi(phraseA.at(-1)!.note),
+      endingPitchClassB: pitchClassFromMidi(phraseB.at(-1)!.note),
+    },
   };
 }
 

@@ -7,6 +7,7 @@ import {
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
+  comparePhraseLenses,
   controlledSonorityChange,
   detectMotifTransformations,
   evaluateAscendingScaleWalk,
@@ -472,6 +473,52 @@ test("normalizes the counterfactual target and refuses an empty specimen", () =>
   assert.equal(tonalGravityCounterfactual(phrase, 16, "duration", 500)?.targetPitchClass, 4);
   assert.equal(tonalGravityCounterfactual([], 0, "duration"), null);
   assert.ok(Math.abs(Object.values(TONAL_GRAVITY_WEIGHTS).reduce((sum, weight) => sum + weight, 0) - 1) < 1e-12);
+});
+
+test("keeps relationship and timing shapes invariant under a transposed slower replay", () => {
+  const phraseA = [
+    { note: 60, onsetMs: 0, releaseMs: 350, velocity: 70 },
+    { note: 64, onsetMs: 500, releaseMs: 850, velocity: 80 },
+    { note: 67, onsetMs: 1_000, releaseMs: 1_300, velocity: 90 },
+  ];
+  const phraseB = [
+    { note: 62, onsetMs: 0, releaseMs: 700, velocity: 80 },
+    { note: 66, onsetMs: 1_000, releaseMs: 1_700, velocity: 90 },
+    { note: 69, onsetMs: 2_000, releaseMs: 2_600, velocity: 100 },
+  ];
+  const comparison = comparePhraseLenses(phraseA, phraseB);
+  assert.ok(comparison);
+  assert.equal(comparison.relationships.sameIntervalPath, true);
+  assert.equal(comparison.relationships.uniformTransposition, 2);
+  assert.deepEqual(comparison.relationships.intervalPathA, [4, 3]);
+  assert.equal(comparison.motion.sameTimingShape, true);
+  assert.equal(comparison.motion.tempoRatio, 2);
+  assert.ok(Math.abs(comparison.sound.meanMidiB - comparison.sound.meanMidiA - 2) < 1e-12);
+  assert.equal(comparison.sound.meanVelocityB - comparison.sound.meanVelocityA, 10);
+  assert.equal(comparison.context.leadingCenterB, (comparison.context.leadingCenterA + 2) % 12);
+});
+
+test("keeps changed phrase lenses separate and refuses undersized specimens", () => {
+  const phraseA = [
+    { note: 60, onsetMs: 0, releaseMs: 650 },
+    { note: 64, onsetMs: 500, releaseMs: 900 },
+    { note: 67, onsetMs: 1_000, releaseMs: 1_200 },
+  ];
+  const phraseB = [
+    { note: 60, onsetMs: 0, releaseMs: 250 },
+    { note: 65, onsetMs: 700, releaseMs: 820 },
+    { note: 69, onsetMs: 1_000, releaseMs: 1_100 },
+  ];
+  const comparison = comparePhraseLenses(phraseA, phraseB);
+  assert.ok(comparison);
+  assert.equal(comparison.relationships.sameIntervalPath, false);
+  assert.equal(comparison.relationships.uniformTransposition, null);
+  assert.equal(comparison.relationships.changedMoveCount, 2);
+  assert.equal(comparison.motion.sameTimingShape, false);
+  assert.equal(comparison.motion.tempoRatio, null);
+  assert.equal(comparison.motion.overlapShareA, 0.5);
+  assert.equal(comparison.motion.overlapShareB, 0);
+  assert.equal(comparePhraseLenses(phraseA.slice(0, 2), phraseB), null);
 });
 
 test("offers contrasting unranked resolution forks without entering a note", () => {

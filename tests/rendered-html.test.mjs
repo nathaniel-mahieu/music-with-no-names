@@ -141,6 +141,12 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Open center microscope/);
   assert.match(pianoLab, /tonalGravityCounterfactual/);
   assert.match(pianoLab, /Route fit and the other four performed cues stayed numerically identical/);
+  assert.match(pianoLab, /What changed across the whole phrase/);
+  assert.match(pianoLab, /The same replay through five lenses/);
+  assert.match(pianoLab, /sound, relationships, motion, context, and your own response/);
+  assert.match(pianoLab, /does not decide whether either phrase is better/);
+  assert.match(pianoModel, /comparePhraseLenses/);
+  assert.doesNotMatch(pianoModel, /PhraseLensComparison[\s\S]{0,900}(goodness|liking|emotion)/i);
   assert.match(pianoLab, /Why the fifths circle is first a spiral/);
   assert.match(pianoLab, /what is gained—and changed—when a pure relationship is adjusted/);
   assert.match(pianoLab, /Stack pure 3:2 moves/);
