@@ -8349,6 +8349,26 @@ footer a {
 .hud-chord-echo-node { stroke-width: 2; }
 .hud-chord-echo-node.is-source { fill: var(--surface-raised); stroke: var(--piano-blue); }
 .hud-chord-echo-node.is-attempt { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-chord-fold-test { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line); }
+.hud-chord-fold-test > div { display: grid; flex: 1 1 560px; gap: 4px; }
+.hud-chord-fold-test span,
+.hud-chord-fold-test small { color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.hud-chord-fold-test strong { font-size: .76rem; font-weight: 500; }
+.hud-chord-fold-test > button { min-height: 36px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .7rem; cursor: pointer; }
+.hud-chord-fold-test > button:hover { background: var(--surface-raised); }
+.hud-chord-fold-test > button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
+.hud-chord-fold-figure { display: block; width: 100%; height: auto; margin-top: 10px; overflow: visible; border-top: 1px solid var(--line); }
+.hud-chord-fold-return { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.hud-chord-fold-segment { stroke: var(--line-strong); stroke-width: 2; }
+.hud-chord-fold-figure .is-attempt .hud-chord-fold-segment { stroke: var(--piano-blue); stroke-dasharray: 5 3; }
+.hud-chord-fold-node { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 2; }
+.hud-chord-fold-figure .is-attempt .hud-chord-fold-node { fill: var(--piano-gold); }
+.hud-chord-fold-close { fill: var(--background); stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 2; }
+.hud-chord-fold-gap-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; }
+.hud-chord-fold-reading { display: grid; grid-template-columns: auto auto minmax(240px, 1fr); gap: 5px 14px; align-items: center; padding: 10px 0 10px 12px; border-left: 3px solid var(--piano-blue); }
+.hud-chord-fold-reading span { color: var(--muted); font-size: .68rem; text-transform: uppercase; }
+.hud-chord-fold-reading strong { font-family: var(--font-mono), monospace; font-size: .78rem; font-weight: 500; }
+.hud-chord-fold-reading small { color: var(--muted); font-size: .67rem; line-height: 1.45; }
 .hud-chord-motion-next { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .hud-chord-motion-next > div { display: grid; flex: 1 1 560px; gap: 4px; }
 .hud-chord-motion-next span,
@@ -9489,6 +9509,10 @@ footer a {
   .hud-chord-echo-arm > div { flex-basis: auto; }
   .hud-chord-echo-arm > button,
   .hud-chord-echo-topline > button { width: 100%; }
+  .hud-chord-fold-test { align-items: stretch; flex-direction: column; }
+  .hud-chord-fold-test > div { flex-basis: auto; }
+  .hud-chord-fold-test > button { width: 100%; }
+  .hud-chord-fold-reading { grid-template-columns: 1fr; }
   .hud-chord-motion-next { align-items: stretch; flex-direction: column; }
   .hud-chord-motion-next > div { flex-basis: auto; }
   .hud-chord-motion-next > button,
@@ -9660,6 +9684,14 @@ footer a {
   .hud-chord-echo-node.is-source { fill: Canvas; stroke: LinkText; }
   .hud-chord-echo-node.is-attempt { fill: Highlight; stroke: HighlightText; }
   .hud-chord-echo-strand { stroke: CanvasText; }
+  .hud-chord-fold-test > button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
+  .hud-chord-fold-return,
+  .hud-chord-fold-segment { stroke: CanvasText; }
+  .hud-chord-fold-figure .is-attempt .hud-chord-fold-segment { stroke: LinkText; }
+  .hud-chord-fold-node { fill: Canvas; stroke: CanvasText; }
+  .hud-chord-fold-figure .is-attempt .hud-chord-fold-node { fill: Highlight; stroke: HighlightText; }
+  .hud-chord-fold-close { fill: Canvas; stroke: GrayText; }
+  .hud-chord-fold-reading { border-left-color: LinkText; }
   .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-chord-motion-strand.is-source { stroke: CanvasText; }
   .hud-chord-motion-strand.is-attempt { stroke: LinkText; }

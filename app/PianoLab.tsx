@@ -16,6 +16,7 @@ import {
   PIANO_SCALES,
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
+  chordGapFingerprint,
   chordTransitionEvidence,
   compareChordMotionEcho,
   compareChordVoicingEcho,
@@ -60,6 +61,7 @@ import {
   voiceLandmarkPath,
   voiceLeadingProfile,
   type ChordCandidate,
+  type ChordGapFingerprint,
   type ChordBoundaryCorrection,
   type ChordGesture,
   type ControlledSonorityFieldId,
@@ -2066,6 +2068,46 @@ function ChordQuestionGuide({ value, onChange }: { value: ChordFocusMode; onChan
   </section>;
 }
 
+function ChordGapFoldFigure({ source, attempt, sourceVoiceCount, attemptVoiceCount }: {
+  source: ChordGapFingerprint;
+  attempt: ChordGapFingerprint;
+  sourceVoiceCount: number;
+  attemptVoiceCount: number;
+}) {
+  const positions = (profile: ChordGapFingerprint) => profile.canonicalGaps.reduce<number[]>((values, gap) => [...values, values.at(-1)! + gap], [0]);
+  const xFor = (position: number) => 92 + (position / 12) * 548;
+  const sameLoop = source.canonicalGaps.length === attempt.canonicalGaps.length
+    && source.canonicalGaps.every((gap, index) => gap === attempt.canonicalGaps[index]);
+  const rows = [
+    { id: "source", label: "source", y: 52, profile: source },
+    { id: "attempt", label: "new", y: 130, profile: attempt },
+  ] as const;
+  const summary = `${sameLoop ? "Same" : "Different"} closed octave-gap loop. Source ${source.canonicalGaps.join(", ")} equal-key steps; new voicing ${attempt.canonicalGaps.join(", ")}. Register and doubling are omitted.`;
+  return <>
+    <svg className="hud-chord-fold-figure" viewBox="0 0 720 184" role="img" aria-label={summary}>
+      <title>Source chord and new voicing folded into normalized twelve-step octave loops</title>
+      <desc>{summary} The comparison start is a canonical rotation, not a chord root or movable Do.</desc>
+      {rows.map((row) => {
+        const rowPositions = positions(row.profile);
+        return <g key={row.id} className={`is-${row.id}`}>
+          <text x="20" y={row.y + 4} className="hud-echo-row-label">{row.label}</text>
+          <path d={`M ${xFor(12)} ${row.y} C ${xFor(12)} ${row.y - 27}, ${xFor(0)} ${row.y - 27}, ${xFor(0)} ${row.y}`} className="hud-chord-fold-return" />
+          {row.profile.canonicalGaps.map((gap, index) => <g key={`${row.id}-gap-${index}`}>
+            <line x1={xFor(rowPositions[index])} x2={xFor(rowPositions[index + 1])} y1={row.y} y2={row.y} className="hud-chord-fold-segment" />
+            <text x={(xFor(rowPositions[index]) + xFor(rowPositions[index + 1])) / 2} y={row.y - 7} className="hud-chord-fold-gap-label">{gap}</text>
+          </g>)}
+          {rowPositions.slice(0, -1).map((position, index) => row.id === "source"
+            ? <circle key={`${row.id}-node-${index}`} cx={xFor(position)} cy={row.y} r="6" className="hud-chord-fold-node"><title>{`Source folded position ${index + 1}; next gap ${row.profile.canonicalGaps[index]} equal keys`}</title></circle>
+            : <rect key={`${row.id}-node-${index}`} x={xFor(position) - 6} y={row.y - 6} width="12" height="12" className="hud-chord-fold-node"><title>{`New-voicing folded position ${index + 1}; next gap ${row.profile.canonicalGaps[index]} equal keys`}</title></rect>)}
+          <circle cx={xFor(12)} cy={row.y} r="4" className="hud-chord-fold-close"><title>Octave closure returns to the first position</title></circle>
+        </g>;
+      })}
+      <text x={xFor(0)} y="177" className="hud-echo-axis-label">comparison start · not root</text><text x={xFor(12)} y="177" className="hud-echo-axis-label is-end">12 = same position</text>
+    </svg>
+    <div className="hud-chord-fold-reading" role="status" aria-live="polite"><span>{sameLoop ? "Same interval loop" : "Interval loop changed"}</span><strong>{source.canonicalGaps.join(" · ")} {sameLoop ? "=" : "≠"} {attempt.canonicalGaps.join(" · ")}</strong><small>Source {sourceVoiceCount} physical key{sourceVoiceCount === 1 ? "" : "s"} → {source.pitchClasses.length} unique octave positions{source.duplicatePitchClassCount ? ` (${source.duplicatePitchClassCount} doubling removed)` : ""}; new {attemptVoiceCount} → {attempt.pitchClasses.length}{attempt.duplicatePitchClassCount ? ` (${attempt.duplicatePitchClassCount} doubling removed)` : ""}. The start is rotated only to compare loops—not to choose root, Do, function, or quality.</small></div>
+  </>;
+}
+
 function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doMidi, scale, soundModelId, showConventions, onStart, onEnd, onReflect }: {
   session: ChordVoicingEchoSession | null;
   sourceEvents: HudNoteEvent[];
@@ -2079,6 +2121,7 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
   onEnd: () => void;
   onReflect: (events: HudNoteEvent[]) => void;
 }) {
+  const [octaveFoldSelection, setOctaveFoldSelection] = useState({ attemptId: attempt?.gesture.id ?? "", revealed: false });
   const label = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
   const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(Math.round(value * 10) / 10)}`;
   if (!session) {
@@ -2100,6 +2143,13 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
 
   const sourceModel = sonorityPerceptionModel(sourceNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
   const attemptModel = sonorityPerceptionModel(attemptNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
+  const sourceGapFingerprint = chordGapFingerprint(sourceNotes);
+  const attemptGapFingerprint = chordGapFingerprint(attemptNotes);
+  const octaveFoldRevealed = comparison.relationshipPreserved
+    && sourceGapFingerprint != null
+    && attemptGapFingerprint != null
+    && octaveFoldSelection.attemptId === attempt.gesture.id
+    && octaveFoldSelection.revealed;
   const sourceTendency = tonalTendency(sourceNotes, doMidi, scale);
   const attemptTendency = tonalTendency(attemptNotes, doMidi, scale);
   const voice = voiceLeadingProfile(sourceNotes, attemptNotes);
@@ -2121,7 +2171,8 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
   return <section className="hud-chord-echo is-comparing" aria-labelledby="hud-chord-echo-title">
     <div className="hud-chord-echo-topline"><div className="hud-panel-heading"><span>{comparison.relationshipPreserved ? "Relationship matched · five lenses" : "Latest independent attempt · five lenses"}</span><strong id="hud-chord-echo-title">What survived the new voicing?</strong><small>{sourceNotes.map(label).join(" · ")} → {attemptNotes.map(label).join(" · ")} · source relationship remains frozen for another attempt</small></div><button type="button" onClick={onEnd}>End echo</button></div>
-    <svg className="hud-chord-echo-figure" viewBox="0 0 720 184" role="img" aria-label={`${relationshipStrong}. Source span ${comparison.sourceSpan} keys; new span ${comparison.attemptSpan}; center shift ${signed(comparison.centerShiftSteps)} keys; ${comparison.bassRoleChanged ? "bass role changed" : "bass role retained or unavailable"}.`}>
+    {comparison.relationshipPreserved && sourceGapFingerprint && attemptGapFingerprint ? <div className="hud-chord-fold-test" aria-labelledby="hud-chord-fold-title"><div><span>Next question · interval identity</span><strong id="hud-chord-fold-title">What remains if register, doubling, and starting pitch disappear?</strong><small>{octaveFoldRevealed ? "Both performed fields are folded into one twelve-step octave. Their unique positions are connected by adjacent equal-key gaps; the comparison start is normalized, not heard as root." : "Fold both performed fields into one octave and compare only the gaps between unique pitch positions. No chord name is needed."} This display-only view changes no MIDI, frequency, voicing, model, or listener report.</small></div><button type="button" aria-pressed={octaveFoldRevealed} onClick={() => setOctaveFoldSelection({ attemptId: attempt.gesture.id, revealed: !octaveFoldRevealed })}>Fold into one octave</button></div> : null}
+    {octaveFoldRevealed && sourceGapFingerprint && attemptGapFingerprint ? <ChordGapFoldFigure source={sourceGapFingerprint} attempt={attemptGapFingerprint} sourceVoiceCount={sourceNotes.length} attemptVoiceCount={attemptNotes.length} /> : <svg className="hud-chord-echo-figure" viewBox="0 0 720 184" role="img" aria-label={`${relationshipStrong}. Source span ${comparison.sourceSpan} keys; new span ${comparison.attemptSpan}; center shift ${signed(comparison.centerShiftSteps)} keys; ${comparison.bassRoleChanged ? "bass role changed" : "bass role retained or unavailable"}.`}>
       <title>Source chord and latest performed voicing on one keyboard-position axis</title>
       <text x="20" y="50" className="hud-echo-row-label">source</text><text x="20" y="132" className="hud-echo-row-label">new</text>
       <line x1="80" x2="640" y1="158" y2="158" className="hud-grid-line" />
@@ -2129,7 +2180,7 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
       {sourceNotes.map((note) => <g key={`source-${note}`}><circle cx={xFor(note)} cy="50" r="7" className="hud-chord-echo-node is-source"><title>{`Source ${label(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle><text x={xFor(note)} y="31" className="hud-point-label">{label(note)}</text></g>)}
       {attemptNotes.map((note) => <g key={`attempt-${note}`}><rect x={xFor(note) - 6} y="124" width="12" height="12" className="hud-chord-echo-node is-attempt"><title>{`New voicing ${label(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect><text x={xFor(note)} y="151" className="hud-point-label">{label(note)}</text></g>)}
       <text x="80" y="177" className="hud-echo-axis-label">lower keyboard position</text><text x="640" y="177" className="hud-echo-axis-label is-end">higher</text>
-    </svg>
+    </svg>}
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the source chord and new voicing">
       <article className="is-measured"><span>Sound</span><em>measured MIDI + modeled spectrum</em><strong>{sourceNotes.length}→{attemptNotes.length} voices · span {comparison.sourceSpan}→{comparison.attemptSpan} keys</strong><small>Modeled roughness {signed(modelDelta)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. The fundamentals and register are measured; the upper partials and acoustic result are assumed.</small></article>
       <article className="is-measured"><span>Relationships</span><em>interpreted pitch classes</em><strong>{relationshipStrong}</strong><small>Bass-relative shapes {comparison.sourceBassRelativeShape.join(" · ")} → {comparison.attemptBassRelativeShape.join(" · ")}. Matching means one set relationship survived exact identity or uniform transposition—not that the experiences were identical.</small></article>

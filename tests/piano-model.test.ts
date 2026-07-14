@@ -6,6 +6,7 @@ import {
   PIANO_SCALES,
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
+  chordGapFingerprint,
   chordTransitionEvidence,
   compareChordMotionEcho,
   compareChordVoicingEcho,
@@ -223,6 +224,23 @@ test("separates a chord relationship from voicing, register, bass role, and doub
   assert.equal(compareChordVoicingEcho([60, 64, 67], [60, 63, 67])?.relationshipPreserved, false);
   assert.equal(compareChordVoicingEcho([60, 72], [62, 74]), null);
   assert.throws(() => compareChordVoicingEcho([60, 64, 128], [62, 66, 69]), RangeError);
+});
+
+test("folds a chord into a transposition- and inversion-invariant gap loop", () => {
+  const source = chordGapFingerprint([60, 64, 67, 72]);
+  const inversion = chordGapFingerprint([64, 67, 72]);
+  const transposition = chordGapFingerprint([62, 66, 69]);
+  const changedThird = chordGapFingerprint([60, 63, 67]);
+  assert.ok(source && inversion && transposition && changedThird);
+  assert.deepEqual(source.pitchClasses, [0, 4, 7]);
+  assert.deepEqual(source.cyclicGaps, [4, 3, 5]);
+  assert.deepEqual(source.canonicalGaps, [3, 5, 4]);
+  assert.equal(source.duplicatePitchClassCount, 1);
+  assert.deepEqual(inversion.canonicalGaps, source.canonicalGaps);
+  assert.deepEqual(transposition.canonicalGaps, source.canonicalGaps);
+  assert.notDeepEqual(changedThird.canonicalGaps, source.canonicalGaps);
+  assert.equal(chordGapFingerprint([60, 72]), null);
+  assert.throws(() => chordGapFingerprint([60, 128]), RangeError);
 });
 
 test("preserves a complete chord move only under one shared transposition", () => {

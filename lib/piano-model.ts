@@ -71,6 +71,13 @@ export type ChordVoicingEchoComparison = {
   voiceCountChanged: boolean;
 };
 
+export type ChordGapFingerprint = {
+  pitchClasses: number[];
+  cyclicGaps: number[];
+  canonicalGaps: number[];
+  duplicatePitchClassCount: number;
+};
+
 export type ChordMotionEchoComparison = {
   sourceBeforePitchClasses: number[];
   sourceAfterPitchClasses: number[];
@@ -752,6 +759,38 @@ export function compareChordVoicingEcho(sourceInput: number[], attemptInput: num
     attemptSpan: span(attemptNotes),
     centerShiftSteps: Math.round((center(attemptNotes) - center(sourceNotes)) * 1000) / 1000,
     voiceCountChanged: sourceNotes.length !== attemptNotes.length,
+  };
+}
+
+/**
+ * Folds a performed chord into one twelve-step octave, removes pitch-class
+ * doubling, and describes the closed loop only by its gaps. The canonical
+ * rotation supplies a comparison anchor; it is not a root or tonal-function
+ * claim. Register, bass role, spelling, and physical voice order are omitted.
+ */
+export function chordGapFingerprint(input: number[]): ChordGapFingerprint | null {
+  if (input.some((note) => !Number.isFinite(note) || note < 0 || note > 127)) {
+    throw new RangeError("Chord gap fingerprint notes must be finite MIDI positions from 0 through 127.");
+  }
+  const notes = [...new Set(input.map(Math.round))].sort((first, second) => first - second);
+  const pitchClasses = [...new Set(notes.map(pitchClassFromMidi))].sort((first, second) => first - second);
+  if (pitchClasses.length < 2) return null;
+  const cyclicGaps = pitchClasses.map((pitchClass, index) => {
+    const next = pitchClasses[(index + 1) % pitchClasses.length] + (index === pitchClasses.length - 1 ? 12 : 0);
+    return next - pitchClass;
+  });
+  const rotations = cyclicGaps.map((_, index) => [...cyclicGaps.slice(index), ...cyclicGaps.slice(0, index)]);
+  const canonicalGaps = rotations.sort((first, second) => {
+    for (let index = 0; index < first.length; index += 1) {
+      if (first[index] !== second[index]) return first[index] - second[index];
+    }
+    return 0;
+  })[0];
+  return {
+    pitchClasses,
+    cyclicGaps,
+    canonicalGaps,
+    duplicatePitchClassCount: notes.length - pitchClasses.length,
   };
 }
 
