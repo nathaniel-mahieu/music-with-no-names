@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Landmark Path Transposition v1.49**. It provides:
+The current milestone is **One-Tone Path Counterfactual v1.50**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A companion-first learning hierarchy: Start, the live Piano companion, and the learner's Personal Lens stay prominent while specialist pitch, time, listening, recording, and landmark labs live in one grouped disclosure instead of competing as eleven equal destinations.
@@ -26,6 +26,7 @@ The current milestone is **Landmark Path Transposition v1.49**. It provides:
 - One-property-at-a-time motif prompts—repeat, transpose, change the rhythm, alter the ending, and return—derived from the learner’s own live phrase rather than a separate exercise screen.
 - A silent Paths focus with generated pop-loop, blues-cycle, classical-cadence, and pedal-point archetypes. Each path fixes the current movable Do, marks compact ghost-key voicings, advances only after an exact pitch-class match in any octave, and reveals carried tones, nearest-voice motion, fifths travel, modeled crunch/repose, and pull without reproducing a song or entering an answer.
 - A path-transposition experiment that appears after any landmark route is completed. One action moves the whole route to the clockwise fifths neighbor, resets the learner to field one, and explicitly separates changed Do and physical frequencies from invariant field order, roles, root offsets, and internal pitch-class shapes. Compact voicings may move individual keys differently. Choosing another Do directly on the fifths compass applies the same safe reset, so stale progress cannot leak between centers.
+- A one-tone path counterfactual after every completed landmark. The learner replays the same route with exactly one authored MIDI key changed in one field while every other target remains physically identical. A five-lens strip separates the key intervention, changed intervals, assumed-spectrum crunch/repose deltas, selected-Do pull/home deltas, and the learner's own report of which path felt more directed. No lane becomes a goodness verdict, and the modeled lanes never fill the listener answer.
 - A single Piano HUD that aligns that phrase across grand staff notation, log-frequency height, a fixed circle of fifths, changing scale frames, chord identity, nearby scale chords, interval texture, and separate perceptual traces.
 - A focused scale-learning sequence that reads the selected route as a cyclic equal-key gap fingerprint before showing its conventional name, preserves the fingerprint under transposition, and rotates the starting gap to preview mode-like hearing.
 - A live, silent ascending scale walk that fixes the current Do and route, accepts the first Do in any MIDI octave, marks one exact next key, and teaches the octave as a reusable physical gap sequence. Wrong attacks preserve completed steps and compare the attempted gap with the expected one; a new Do restarts the same route in a different register; completion exposes the 2:1 frequency doubling alongside the invariant gap fingerprint, fifths coordinate, and changing tonal-gravity context.

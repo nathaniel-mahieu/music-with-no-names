@@ -388,6 +388,10 @@ test("defines transposable, generated landmark paths without song transcriptions
   for (const path of LANDMARK_PATHS) {
     assert.ok(path.steps.length >= 3);
     assert.match(path.provenance, /Generated/);
+    assert.ok(path.counterfactual.stepIndex >= 0 && path.counterfactual.stepIndex < path.steps.length);
+    assert.ok(path.steps[path.counterfactual.stepIndex].pitchOffsets.includes(path.counterfactual.fromPitchOffset));
+    assert.ok(!path.steps[path.counterfactual.stepIndex].pitchOffsets.includes(path.counterfactual.toPitchOffset));
+    assert.match(path.counterfactual.question, /\?$/);
     for (const step of path.steps) {
       assert.ok(step.pitchOffsets.length >= 3);
       assert.ok(step.pitchOffsets.every((offset) => Number.isInteger(offset) && offset >= 0 && offset < 12));
