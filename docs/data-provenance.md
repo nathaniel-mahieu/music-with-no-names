@@ -24,6 +24,8 @@ The v1.52 Rhythm bridge derives its pitchless timeline only from that same tab-s
 
 The v1.53 Journey bridge derives field shape, bass motion, relative onset time, and continuation counts only from that tab-scoped MIDI phrase. It does not capture audio, query or add a corpus, identify a work or style, persist a learned population model, or upload the phrase. Its alternatives are counts inside the current specimen, not recommendations or crowd expectations.
 
+The v1.54 Harmony bridge derives attacked chord fields from that same tab-scoped phrase plus the learner's stored chord-timing and break/join corrections. Its auditory deltas are generated from a fixed nine-partial exact-harmonic teaching spectrum rather than keyboard or DAW audio; MIDI velocity is not treated as loudness. It does not add a corpus, upload a phrase, reconstruct pedal-inherited chord membership, infer emotion, or store a listener model.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
