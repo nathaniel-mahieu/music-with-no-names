@@ -66,7 +66,7 @@ This ledger ties empirical claims to research anchors and marks where the produc
 - **Evidence anchor:** Salimpoor and colleagues reported distinct striatal involvement during anticipation and peak pleasurable experience in a selected listener/stimulus design. DOI: [10.1038/nn.2726](https://doi.org/10.1038/nn.2726).
 - **Product claim allowed:** Anticipation and experienced payoff can be temporally distinct parts of a rewarding arc.
 - **Product claim prohibited:** A feature lane predicts dopamine, universal emotion, or pleasure for an individual.
-- **Implementation status:** Journey separates uncertainty before events, surprise after events, recurrence, and listener annotations. It does not infer neurochemistry.
+- **Implementation status:** Journey separates uncertainty before events, surprise after events, recurrence, and listener annotations. Its v1.53 phrase-first bridge turns a retained MIDI phrase into onset-group field shapes and signed bass moves, then lets repeated gestures accumulate continuation evidence from earlier events only. “No precedent,” “new continuation,” and “seen continuation” describe that transparent phrase-local count; they do not claim a listener expected the event, recognized a form, or experienced surprise. It does not infer neurochemistry.
 
 ## Model governance
 

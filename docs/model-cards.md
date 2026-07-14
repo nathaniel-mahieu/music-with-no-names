@@ -74,12 +74,13 @@ These cards describe educational models used by Music With No Names. A model out
 
 ## Journey prediction models
 
-- **Version:** `mwno-prediction-1`.
-- **Piece-local model:** transition counts are learned incrementally only from earlier events in the generated sequence.
+- **Version:** `mwno-prediction-2`.
+- **Live phrase trail:** attacks beginning within 70 ms of a group's first onset form one field event. Each field is represented by pitch offsets from its bass, signed bass motion from the preceding field, and onset spacing divided by the phrase's median inter-group gap. The exact field-shape-plus-bass-motion gesture is transposition invariant; proportional tempo scaling preserves its timing profile.
+- **Piece-local model:** transition counts are learned incrementally only from earlier events in the current generated or live sequence.
 - **Synthetic-corpus model:** a small declared gesture-transition prior used for teaching model dependence. It is not trained on, or representative of, a musical culture.
 - **Listener-personalized model:** transition counts begin with next-gesture expectations the listener explicitly teaches and stores locally, then update with the current piece. With no observations it reduces to the piece-local model.
-- **Outputs:** alternatives, uncertainty before an event, and surprise after an event.
-- **Limits:** gestures are curated labels; no claim is made that transition counts capture human expectation. Listener annotations remain separate lanes.
+- **Outputs:** alternatives, uncertainty before an event, surprise after an event, and a live event-by-event trail that distinguishes opening, a gesture with no earlier continuation, a new continuation outside prior evidence, and a continuation already supported by the phrase.
+- **Limits:** generated-journey gestures are curated labels; live gestures are deliberately coarse MIDI relationships. Exact recurrence ignores register while field shape retains voicing above the bass. Timing is displayed but does not determine the continuation key. Transition counts describe only this specimen and do not capture a listener's expectation, phrase boundary, style, intention, emotion, or musical quality. Listener annotations remain separate lanes.
 
 ## Recording analysis
 

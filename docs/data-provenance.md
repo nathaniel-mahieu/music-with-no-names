@@ -22,6 +22,8 @@ The v1.51 live bridge does not add a recording corpus. Its live square is derive
 
 The v1.52 Rhythm bridge derives its pitchless timeline only from that same tab-scoped MIDI phrase. It does not capture audio, fetch timing examples, add the phrase to a dataset, or upload attacks, velocity, or release times. Its ratio landmarks are authored mathematical reference coordinates, not learned genre norms.
 
+The v1.53 Journey bridge derives field shape, bass motion, relative onset time, and continuation counts only from that tab-scoped MIDI phrase. It does not capture audio, query or add a corpus, identify a work or style, persist a learned population model, or upload the phrase. Its alternatives are counts inside the current specimen, not recommendations or crowd expectations.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
