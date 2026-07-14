@@ -246,7 +246,7 @@ export function GuideLab({ onNavigate }: { onNavigate: (destination: Destination
         <dl>
           <div><dt>Recording</dt><dd><strong>mwno-audio-0.3.0</strong><span>Mixed-audio descriptors are correctable hypotheses.</span></dd></div>
           <div><dt>Prediction</dt><dd><strong>mwno-prediction-1</strong><span>Piece-local counts or a declared synthetic teaching prior.</span></dd></div>
-          <div><dt>Auditory</dt><dd><strong>mwno-ear-1</strong><span>Uncalibrated educational roughness, template, and fusion models.</span></dd></div>
+          <div><dt>Auditory</dt><dd><strong>mwno-ear-2</strong><span>Uncalibrated educational roughness, template, and fusion models with release-gated live interval evidence.</span></dd></div>
           <div><dt>Data</dt><dd><strong>local + generated</strong><span>No bundled commercial audio or hidden genre corpus.</span></dd></div>
         </dl>
       </div>

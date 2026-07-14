@@ -28,6 +28,8 @@ The v1.54 Harmony bridge derives attacked chord fields from that same tab-scoped
 
 The v1.55 Ear bridge derives one interval from the latest two valid attacks in that same tab-scoped phrase. Key numbers and event timing supply equal-tempered fundamentals, movement, onset spacing, and release-proven overlap; they do not supply audio or upper partials. Four generated spectra—sine, exact harmonic, mellow-piano proxy, and bright-piano proxy—are compared only after overlap is proven. No phrase or audio is uploaded, no keyboard or DAW spectrum is analyzed, MIDI velocity is not acoustic loudness, and no sensory proxy is stored as a listener response, preference, emotion, or quality label.
 
+The v1.56 Interval Context Echo uses only two frozen tab-scoped MIDI events and one later two-attack replay. It derives key span, equal-tempered fundamentals, attack gap, direction, release-proven overlap, and the second attack's sounding MIDI field from those local events. Current movable-Do labels are a selected teaching overlay. The chosen teaching spectrum contributes roughness and partial overlap only when both pairs prove simultaneous overlap; no keyboard or DAW audio, listener response, or inferred musical function is added or uploaded.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
