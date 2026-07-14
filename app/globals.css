@@ -8392,6 +8392,29 @@ footer a {
 .hud-chord-motion-node.is-source.is-after { fill: var(--piano-blue); stroke: var(--foreground); }
 .hud-chord-motion-node.is-attempt.is-before { fill: var(--surface-raised); stroke: var(--foreground); }
 .hud-chord-motion-node.is-attempt.is-after { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-chord-gesture-test { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line); }
+.hud-chord-gesture-test > div:first-child { display: grid; flex: 1 1 540px; gap: 4px; }
+.hud-chord-gesture-test > div:first-child span,
+.hud-chord-gesture-test > div:first-child small { color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.hud-chord-gesture-test > div:first-child strong { font-size: .76rem; font-weight: 500; }
+.hud-chord-gesture-test > button { min-height: 36px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .7rem; cursor: pointer; }
+.hud-chord-gesture-test > button:hover { background: var(--surface-raised); }
+.hud-chord-gesture-test > button[aria-expanded="true"] { color: var(--background); background: var(--foreground); }
+.hud-chord-gesture-detail { flex: 1 1 100%; min-width: 0; }
+.hud-chord-gesture-detail svg { display: block; width: 100%; height: auto; overflow: visible; border-top: 1px solid var(--line); }
+.hud-chord-gesture-axis { stroke: var(--line); stroke-width: 1; }
+.hud-chord-gesture-hold { stroke: var(--line-strong); stroke-width: 3; }
+.hud-chord-gesture-hold.is-pedal { stroke: var(--piano-blue); stroke-dasharray: 5 3; }
+.hud-chord-gesture-attack { stroke-width: 2; }
+.hud-chord-gesture-attack.is-before { fill: var(--surface-raised); stroke: var(--foreground); }
+.hud-chord-gesture-attack.is-after { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-chord-gesture-readout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 16px; padding: 10px 0 10px 12px; border-left: 3px solid var(--piano-blue); }
+.hud-chord-gesture-readout span { color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.hud-chord-gesture-readout span b { color: var(--foreground); font-weight: 500; }
+.hud-chord-gesture-readout strong,
+.hud-chord-gesture-readout small { grid-column: 1 / -1; }
+.hud-chord-gesture-readout strong { font-size: .73rem; font-weight: 500; line-height: 1.45; }
+.hud-chord-gesture-readout small { color: var(--muted); font-size: .67rem; line-height: 1.45; }
 .hud-chord-frame-test { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line); }
 .hud-chord-frame-test > div:first-child { display: grid; flex: 1 1 520px; gap: 4px; }
 .hud-chord-frame-test span,
@@ -9625,6 +9648,12 @@ footer a {
   .hud-chord-motion-next > button,
   .hud-chord-motion-actions,
   .hud-chord-motion-actions button { width: 100%; }
+  .hud-chord-gesture-test { align-items: stretch; flex-direction: column; }
+  .hud-chord-gesture-test > div:first-child { flex-basis: auto; }
+  .hud-chord-gesture-test > button { width: 100%; }
+  .hud-chord-gesture-readout { grid-template-columns: 1fr; }
+  .hud-chord-gesture-readout strong,
+  .hud-chord-gesture-readout small { grid-column: auto; }
   .hud-chord-frame-test { align-items: stretch; flex-direction: column; }
   .hud-chord-frame-test > div:first-child { flex-basis: auto; }
   .hud-chord-frame-options { width: 100%; }
@@ -9839,6 +9868,13 @@ footer a {
   .hud-chord-motion-node.is-attempt.is-before { fill: Canvas; stroke: CanvasText; }
   .hud-chord-motion-node.is-source.is-after { fill: LinkText; stroke: Canvas; }
   .hud-chord-motion-node.is-attempt.is-after { fill: Highlight; stroke: HighlightText; }
+  .hud-chord-gesture-test > button[aria-expanded="true"] { color: HighlightText; background: Highlight; }
+  .hud-chord-gesture-axis { stroke: GrayText; }
+  .hud-chord-gesture-hold { stroke: CanvasText; }
+  .hud-chord-gesture-hold.is-pedal { stroke: LinkText; }
+  .hud-chord-gesture-attack.is-before { fill: Canvas; stroke: CanvasText; }
+  .hud-chord-gesture-attack.is-after { fill: Highlight; stroke: HighlightText; }
+  .hud-chord-gesture-readout { border-left-color: LinkText; }
   .hud-chord-frame-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-last-attack-reading { border-left-color: Highlight; }
   .hud-last-attack-reading.is-attributable { border-left-color: LinkText; }

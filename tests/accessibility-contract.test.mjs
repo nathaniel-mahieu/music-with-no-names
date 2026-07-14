@@ -207,7 +207,15 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /replay Do moved \+ same route/);
   assert.match(piano, /restored the same relative-role path under this model; it did not prove the same heard function/);
   assert.match(piano, /The display-only Do counterfactual never supplies your report/);
-  assert.match(piano, /version: 17/);
+  assert.match(piano, />Did the hands make the same time-shape\?</);
+  assert.match(piano, /"Compare gesture timing"/);
+  assert.match(piano, /aria-expanded=\{gestureTimingRevealed\}/);
+  assert.match(piano, /aria-controls="hud-chord-gesture-detail"/);
+  assert.match(piano, /<svg viewBox="0 0 720 150" role="img"/);
+  assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
+  assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
+  assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
+  assert.match(piano, /version: 18/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);
@@ -224,6 +232,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-chord-fold-segment\.is-changed \{ stroke: Highlight/);
   assert.match(css, /\.hud-chord-motion-node\.is-source\.is-before[\s\S]*CanvasText/);
   assert.match(css, /\.hud-chord-motion-node\.is-attempt\.is-after[\s\S]*HighlightText/);
+  assert.match(css, /\.hud-chord-gesture-test > button\[aria-expanded="true"\]/);
+  assert.match(css, /\.hud-chord-gesture-hold\.is-pedal[\s\S]*stroke-dasharray/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-gesture-test > button \{ width: 100%/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-chord-gesture-attack\.is-after \{ fill: Highlight/);
   assert.match(css, /\.hud-chord-frame-options button\[aria-pressed="true"\][\s\S]*background: var\(--foreground\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-question-options \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-motion-actions button \{ width: 100%/);

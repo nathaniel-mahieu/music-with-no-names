@@ -112,6 +112,33 @@ export type ChordMotionEchoComparison = {
   attemptLeftPitchClassCount: number;
 };
 
+export type ChordGestureBridgeEvidence = {
+  kind: "overlap" | "silence" | "touching" | "unknown";
+  durationMs: number | null;
+  pedalExtended: boolean;
+};
+
+export type ChordGestureTimingProfile = {
+  beforeSpreadMs: number;
+  afterSpreadMs: number;
+  anchorGapMs: number;
+  beforeMeanVelocity: number | null;
+  afterMeanVelocity: number | null;
+  bridge: ChordGestureBridgeEvidence;
+};
+
+export type ChordGestureTimingComparison = {
+  source: ChordGestureTimingProfile;
+  attempt: ChordGestureTimingProfile;
+  deltas: {
+    beforeSpreadMs: number;
+    afterSpreadMs: number;
+    anchorGapMs: number;
+    beforeMeanVelocity: number | null;
+    afterMeanVelocity: number | null;
+  };
+};
+
 export type TimedNoteAttack = RollingNoteEvent & {
   id: number;
   onsetMs: number;
@@ -978,6 +1005,87 @@ export function compareChordMotionEcho(
     attemptEnteredPitchClassCount: attemptCounts.entered,
     sourceLeftPitchClassCount: sourceCounts.left,
     attemptLeftPitchClassCount: attemptCounts.left,
+  };
+}
+
+type ChordGestureTimingEvent = {
+  onsetMs: number;
+  velocity?: number;
+  keyReleaseMs?: number | null;
+  releaseMs?: number | null;
+  releaseReason?: "key" | "pedal" | null;
+};
+
+/**
+ * Compares how the same two chord fields were physically attacked and released.
+ * This evidence is deliberately independent of the pitch-class match: it reads
+ * attack spread, anchor-to-anchor time, MIDI velocity, and only those sounding
+ * bridges that the recorded release state can prove.
+ */
+export function compareChordGestureTiming(
+  sourceBeforeEvents: ChordGestureTimingEvent[],
+  sourceAfterEvents: ChordGestureTimingEvent[],
+  attemptBeforeEvents: ChordGestureTimingEvent[],
+  attemptAfterEvents: ChordGestureTimingEvent[],
+): ChordGestureTimingComparison | null {
+  const fields = [sourceBeforeEvents, sourceAfterEvents, attemptBeforeEvents, attemptAfterEvents];
+  if (fields.some((events) => events.length === 0)) return null;
+  const invalid = fields.flat().some((event) => !Number.isFinite(event.onsetMs)
+    || (event.velocity != null && (!Number.isFinite(event.velocity) || event.velocity < 0 || event.velocity > 127))
+    || (event.keyReleaseMs != null && (!Number.isFinite(event.keyReleaseMs) || event.keyReleaseMs < event.onsetMs))
+    || (event.releaseMs != null && (!Number.isFinite(event.releaseMs) || event.releaseMs < event.onsetMs)));
+  if (invalid) throw new RangeError("Chord gesture timing requires finite MIDI times and velocities from 0 through 127.");
+
+  const start = (events: ChordGestureTimingEvent[]) => Math.min(...events.map((event) => event.onsetMs));
+  const spread = (events: ChordGestureTimingEvent[]) => Math.max(...events.map((event) => event.onsetMs)) - start(events);
+  const meanVelocity = (events: ChordGestureTimingEvent[]) => {
+    const values = events.map((event) => event.velocity).filter((value): value is number => value != null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
+  const bridge = (beforeEvents: ChordGestureTimingEvent[], afterStartMs: number): ChordGestureBridgeEvidence => {
+    const finalRelease = (event: ChordGestureTimingEvent) => event.releaseMs ?? (event.releaseReason === "key" ? event.keyReleaseMs : null);
+    const knownReleases = beforeEvents.map(finalRelease).filter((value): value is number => value != null);
+    const provingOverlap = beforeEvents.filter((event) => (finalRelease(event) ?? -Infinity) > afterStartMs);
+    if (provingOverlap.length) {
+      const latestRelease = Math.max(...provingOverlap.map((event) => finalRelease(event)!));
+      return {
+        kind: "overlap",
+        durationMs: latestRelease - afterStartMs,
+        pedalExtended: provingOverlap.some((event) => event.releaseReason === "pedal"),
+      };
+    }
+    if (knownReleases.length !== beforeEvents.length) return { kind: "unknown", durationMs: null, pedalExtended: false };
+    const latestRelease = Math.max(...knownReleases);
+    if (latestRelease === afterStartMs) return { kind: "touching", durationMs: 0, pedalExtended: false };
+    return { kind: "silence", durationMs: afterStartMs - latestRelease, pedalExtended: false };
+  };
+  const profile = (beforeEvents: ChordGestureTimingEvent[], afterEvents: ChordGestureTimingEvent[]): ChordGestureTimingProfile | null => {
+    const beforeStart = start(beforeEvents);
+    const afterStart = start(afterEvents);
+    if (afterStart <= beforeStart) return null;
+    return {
+      beforeSpreadMs: spread(beforeEvents),
+      afterSpreadMs: spread(afterEvents),
+      anchorGapMs: afterStart - beforeStart,
+      beforeMeanVelocity: meanVelocity(beforeEvents),
+      afterMeanVelocity: meanVelocity(afterEvents),
+      bridge: bridge(beforeEvents, afterStart),
+    };
+  };
+  const source = profile(sourceBeforeEvents, sourceAfterEvents);
+  const attempt = profile(attemptBeforeEvents, attemptAfterEvents);
+  if (!source || !attempt) return null;
+  const velocityDelta = (attemptValue: number | null, sourceValue: number | null) => attemptValue == null || sourceValue == null ? null : attemptValue - sourceValue;
+  return {
+    source,
+    attempt,
+    deltas: {
+      beforeSpreadMs: attempt.beforeSpreadMs - source.beforeSpreadMs,
+      afterSpreadMs: attempt.afterSpreadMs - source.afterSpreadMs,
+      anchorGapMs: attempt.anchorGapMs - source.anchorGapMs,
+      beforeMeanVelocity: velocityDelta(attempt.beforeMeanVelocity, source.beforeMeanVelocity),
+      afterMeanVelocity: velocityDelta(attempt.afterMeanVelocity, source.afterMeanVelocity),
+    },
   };
 }
 

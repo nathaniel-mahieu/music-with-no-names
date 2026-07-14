@@ -19,6 +19,7 @@ import {
   chordGapFingerprint,
   chordTransitionEvidence,
   compareChordGapMutation,
+  compareChordGestureTiming,
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
@@ -216,6 +217,8 @@ type ChordVoicingEchoSession = {
 type ChordMotionEchoSession = {
   sourceBeforeEvents: HudNoteEvent[];
   sourceAfterEvents: HudNoteEvent[];
+  sourceBeforeAttackEventIds?: number[];
+  sourceAfterAttackEventIds?: number[];
   sourceBeforeNotes: number[];
   sourceAfterNotes: number[];
   anchorEventId: number;
@@ -263,7 +266,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -446,6 +449,11 @@ function isChordMotionEchoSession(value: unknown): value is ChordMotionEchoSessi
       && (event.releaseMs == null || Number.isFinite(event.releaseMs))
       && (event.source === "midi" || event.source === "screen")
       && isMidiNoteList(event.fieldNotes));
+  const validAttackIds = (ids: unknown, events: unknown) => ids == null || (Array.isArray(ids)
+    && Array.isArray(events)
+    && ids.length >= 2
+    && new Set(ids).size === ids.length
+    && ids.every((id) => Number.isInteger(id) && events.some((event) => event?.id === id)));
   return Number.isInteger(session.anchorEventId)
     && session.anchorEventId! >= 0
     && Number.isInteger(session.attemptAnchorEventId)
@@ -454,6 +462,8 @@ function isChordMotionEchoSession(value: unknown): value is ChordMotionEchoSessi
     && validNotes(session.sourceAfterNotes)
     && validEvents(session.sourceBeforeEvents)
     && validEvents(session.sourceAfterEvents)
+    && validAttackIds(session.sourceBeforeAttackEventIds, session.sourceBeforeEvents)
+    && validAttackIds(session.sourceAfterAttackEventIds, session.sourceAfterEvents)
     && Number.isInteger(session.rootPitchClass)
     && session.rootPitchClass! >= 0
     && session.rootPitchClass! < 12
@@ -2558,6 +2568,7 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
   onReflect: (events: HudNoteEvent[]) => void;
 }) {
   const [contextFrameSelection, setContextFrameSelection] = useState({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: false });
+  const [gestureTimingRevealAnchor, setGestureTimingRevealAnchor] = useState<number | null>(null);
   const noteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
   const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(Math.round(value * 10) / 10)}`;
   const sourceBeforeNotes = uniqueSorted(session.sourceBeforeNotes);
@@ -2572,6 +2583,14 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
 
   const attemptBeforeNotes = uniqueSorted(attempt.beforeNotes);
   const attemptAfterNotes = uniqueSorted(attempt.afterNotes);
+  const sourceBeforeAttacks = session.sourceBeforeAttackEventIds
+    ? sourceBeforeEvents.filter((event) => session.sourceBeforeAttackEventIds!.includes(event.id))
+    : sourceBeforeEvents;
+  const sourceAfterAttacks = session.sourceAfterAttackEventIds
+    ? sourceAfterEvents.filter((event) => session.sourceAfterAttackEventIds!.includes(event.id))
+    : sourceAfterEvents;
+  const gestureTiming = compareChordGestureTiming(sourceBeforeAttacks, sourceAfterAttacks, attempt.beforeGesture.attacks, attempt.afterGesture.attacks);
+  const gestureTimingRevealed = gestureTimingRevealAnchor === session.attemptAnchorEventId;
   const canMoveContextFrame = comparison.relationshipPreserved && comparison.transpositionSteps != null && comparison.transpositionSteps !== 0;
   const contextFollowsReplay = canMoveContextFrame
     && contextFrameSelection.attemptAnchorEventId === session.attemptAnchorEventId
@@ -2608,6 +2627,42 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
   const modelScore = (value: number) => Math.round(value * 100);
   const bassCopy = (profile: ReturnType<typeof voiceLeadingProfile>) => profile.bassMotion === 0 ? "held" : `${profile.bassMotion > 0 ? "up" : "down"} ${Math.abs(profile.bassMotion)}`;
+  const finalRelease = (event: HudNoteEvent) => event.releaseMs ?? (event.releaseReason === "key" ? event.keyReleaseMs : null);
+  const rowDuration = (beforeEvents: HudNoteEvent[], afterEvents: HudNoteEvent[]) => {
+    const origin = Math.min(...beforeEvents.map((event) => event.onsetMs));
+    return Math.max(
+      ...afterEvents.map((event) => event.onsetMs - origin),
+      ...beforeEvents.map((event) => (finalRelease(event) ?? event.onsetMs) - origin),
+      1,
+    );
+  };
+  const gestureTimelineDuration = Math.max(
+    rowDuration(sourceBeforeAttacks, sourceAfterAttacks),
+    rowDuration(attempt.beforeGesture.attacks, attempt.afterGesture.attacks),
+  );
+  const gestureX = (onsetMs: number, originMs: number) => 116 + ((onsetMs - originMs) / gestureTimelineDuration) * 516;
+  const bridgeLabel = (profile: NonNullable<typeof gestureTiming>["source"]) => profile.bridge.kind === "unknown"
+    ? "release bridge unknown"
+    : profile.bridge.kind === "touching"
+      ? "releases touch next attack"
+      : `${Math.round(profile.bridge.durationMs!)} ms ${profile.bridge.kind}${profile.bridge.pedalExtended ? " · pedal-extended" : ""}`;
+  const timingProfileLabel = (profile: NonNullable<typeof gestureTiming>["source"]) => `spread ${Math.round(profile.beforeSpreadMs)}→${Math.round(profile.afterSpreadMs)} ms · next anchor ${Math.round(profile.anchorGapMs)} ms · ${bridgeLabel(profile)} · MIDI attack mean ${profile.beforeMeanVelocity == null ? "—" : Math.round(profile.beforeMeanVelocity)}→${profile.afterMeanVelocity == null ? "—" : Math.round(profile.afterMeanVelocity)}`;
+  const gestureDeltaLabel = gestureTiming ? `Replay changed attack spread ${signed(gestureTiming.deltas.beforeSpreadMs)} then ${signed(gestureTiming.deltas.afterSpreadMs)} ms; chord-anchor spacing ${signed(gestureTiming.deltas.anchorGapMs)} ms; MIDI attack means ${gestureTiming.deltas.beforeMeanVelocity == null ? "—" : signed(gestureTiming.deltas.beforeMeanVelocity)} then ${gestureTiming.deltas.afterMeanVelocity == null ? "—" : signed(gestureTiming.deltas.afterMeanVelocity)}.` : "";
+  const renderGestureRow = (label: string, beforeEvents: HudNoteEvent[], afterEvents: HudNoteEvent[], y: number) => {
+    const origin = Math.min(...beforeEvents.map((event) => event.onsetMs));
+    return <g>
+      <text x="18" y={y + 4} className="hud-echo-row-label">{label}</text>
+      <line x1="116" x2="632" y1={y} y2={y} className="hud-chord-gesture-axis" />
+      {beforeEvents.map((event) => {
+        const release = finalRelease(event);
+        return <g key={`${label}-before-${event.id}`}>
+          {release != null ? <line x1={gestureX(event.onsetMs, origin)} x2={gestureX(release, origin)} y1={y} y2={y} className={`hud-chord-gesture-hold${event.releaseReason === "pedal" ? " is-pedal" : ""}`}><title>{`${label} first chord: ${Math.round(release - event.onsetMs)} ms sounding evidence${event.releaseReason === "pedal" ? ", pedal-extended" : ""}`}</title></line> : null}
+          <circle cx={gestureX(event.onsetMs, origin)} cy={y} r="5" className="hud-chord-gesture-attack is-before"><title>{`${label} first-chord attack at ${Math.round(event.onsetMs - origin)} ms; MIDI velocity ${event.velocity}`}</title></circle>
+        </g>;
+      })}
+      {afterEvents.map((event) => <rect key={`${label}-after-${event.id}`} x={gestureX(event.onsetMs, origin) - 5} y={y - 5} width="10" height="10" className="hud-chord-gesture-attack is-after"><title>{`${label} second-chord attack at ${Math.round(event.onsetMs - origin)} ms; MIDI velocity ${event.velocity}`}</title></rect>)}
+    </g>;
+  };
   return <section className="hud-chord-motion-echo is-comparing" aria-labelledby="hud-chord-motion-title">
     <div className="hud-chord-echo-topline"><div className="hud-panel-heading"><span>{comparison.relationshipPreserved ? "Whole move matched · five lenses" : "Whole move changed · five lenses"}</span><strong id="hud-chord-motion-title">What survived across both chords?</strong><small>source {sourceMoveLabel} · replay {attemptMoveLabel}</small></div><div className="hud-chord-motion-actions"><button type="button" onClick={onRetry}>Try another move</button><button type="button" onClick={onEnd}>End move echo</button></div></div>
     <svg className="hud-chord-motion-figure" viewBox="0 0 720 228" role="img" aria-label={`${relationshipStrong}. Source nearest-key travel ${sourceVoice.totalMotion}; replay travel ${attemptVoice.totalMotion}. Source bass ${bassCopy(sourceVoice)}; replay bass ${bassCopy(attemptVoice)}.`}>
@@ -2622,6 +2677,12 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
       {attemptAfterNotes.map((note) => <rect key={`aa-${note}`} x={xFor(note) - 6} y="176" width="12" height="12" className="hud-chord-motion-node is-attempt is-after"><title>{`Replay after: ${replayNoteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
       <line x1="92" x2="640" y1="207" y2="207" className="hud-grid-line" /><text x="92" y="222" className="hud-echo-axis-label">lower keyboard position</text><text x="640" y="222" className="hud-echo-axis-label is-end">higher</text>
     </svg>
+    {comparison.relationshipPreserved && gestureTiming ? <div className="hud-chord-gesture-test"><div><span>Next question · same pitch relationship</span><strong>Did the hands make the same time-shape?</strong><small>The two-field pitch-class transformation stayed fixed. Attack spread, chord spacing, releases, pedal evidence, and MIDI velocity can vary independently.</small></div><button type="button" aria-expanded={gestureTimingRevealed} aria-controls="hud-chord-gesture-detail" onClick={() => setGestureTimingRevealAnchor(gestureTimingRevealed ? null : session.attemptAnchorEventId)}>{gestureTimingRevealed ? "Hide gesture timing" : "Compare gesture timing"}</button>{gestureTimingRevealed ? <div id="hud-chord-gesture-detail" className="hud-chord-gesture-detail"><svg viewBox="0 0 720 150" role="img" aria-label={`Source ${timingProfileLabel(gestureTiming.source)}. Replay ${timingProfileLabel(gestureTiming.attempt)}. ${gestureDeltaLabel}`}>
+      <title>Two performances of the same chord relationship aligned to each first attack</title>
+      {renderGestureRow("source", sourceBeforeAttacks, sourceAfterAttacks, 42)}
+      {renderGestureRow("replay", attempt.beforeGesture.attacks, attempt.afterGesture.attacks, 96)}
+      <text x="116" y="133" className="hud-echo-axis-label">first attack · circles</text><text x="632" y="133" className="hud-echo-axis-label is-end">later · squares begin chord 2</text>
+    </svg><div className="hud-chord-gesture-readout"><span><b>Source</b> · {timingProfileLabel(gestureTiming.source)}</span><span><b>Replay</b> · {timingProfileLabel(gestureTiming.attempt)}</span><strong>{gestureDeltaLabel}</strong><small>Lines are recorded MIDI sounding evidence; dashed lines mark pedal-ended notes. Missing releases remain unknown. Velocity is an attack control, not measured acoustic loudness. This view does not infer meter, groove, intention, feeling, preference, or quality.</small></div></div> : null}</div> : null}
     {canMoveContextFrame ? <div className="hud-chord-frame-test" aria-labelledby="hud-chord-frame-title"><div><span>Second question · movable Do</span><strong id="hud-chord-frame-title">Does the tonal job travel when the reference frame travels?</strong><small>{contextFollowsReplay ? `Replay Do moved ${signed(comparison.transpositionSteps!)} keys with the structural replay. MIDI, frequencies, voicings, and the relationship match did not change.` : `Replay Do remains fixed at the source center. The same structural move therefore occupies new relative roles.`} This is a display-only context counterfactual and never enters or sounds a note.</small></div><div className="hud-chord-frame-options" role="group" aria-label="Choose the replay's movable Do reference frame"><button type="button" aria-pressed={!contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: false })}>Keep Do fixed</button><button type="button" aria-pressed={contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: true })}>Move Do {signed(comparison.transpositionSteps!)}</button></div></div> : null}
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the source and replayed chord move">
       <article className="is-measured"><span>Sound</span><em>measured MIDI + modeled spectrum</em><strong>span {span(sourceBeforeNotes)}→{span(sourceAfterNotes)} vs {span(attemptBeforeNotes)}→{span(attemptAfterNotes)} keys</strong><small>Modeled roughness source {modelScore(sourceBeforeModel.roughness)}→{modelScore(sourceAfterModel.roughness)} · replay {modelScore(attemptBeforeModel.roughness)}→{modelScore(attemptAfterModel.roughness)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. Upper partials and acoustic result are assumed.</small></article>
@@ -3130,7 +3191,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -3252,7 +3313,7 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 17, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 18, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
   }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
@@ -4062,7 +4123,18 @@ export function PianoLab() {
     setLockedScaleId(scale.id);
     setLockedDoMidi(doMidi);
     setFrameMode("locked");
-    setChordMotionEchoSession({ sourceBeforeEvents, sourceAfterEvents, sourceBeforeNotes, sourceAfterNotes, anchorEventId, attemptAnchorEventId: anchorEventId, rootPitchClass: pitchClassFromMidi(doMidi), scaleId: scale.id });
+    setChordMotionEchoSession({
+      sourceBeforeEvents,
+      sourceAfterEvents,
+      sourceBeforeAttackEventIds: before.gesture.attacks.map((event) => event.id),
+      sourceAfterAttackEventIds: after.gesture.attacks.map((event) => event.id),
+      sourceBeforeNotes,
+      sourceAfterNotes,
+      anchorEventId,
+      attemptAnchorEventId: anchorEventId,
+      rootPitchClass: pitchClassFromMidi(doMidi),
+      scaleId: scale.id,
+    });
     const url = new URL(window.location.href);
     url.searchParams.set("pianoLens", "chords");
     url.searchParams.set("pianoChord", "change");

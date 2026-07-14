@@ -9,6 +9,7 @@ import {
   chordGapFingerprint,
   chordTransitionEvidence,
   compareChordGapMutation,
+  compareChordGestureTiming,
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
@@ -357,6 +358,63 @@ test("preserves a complete chord move only under one shared transposition", () =
 
   assert.equal(compareChordMotionEcho([60, 72], [65, 69], [62, 74], [67, 71]), null);
   assert.throws(() => compareChordMotionEcho([60, 64, 67], [60, 65, 128], [62, 66, 69], [62, 67, 71]), RangeError);
+});
+
+test("separates a matched chord move's attack and release gesture from its pitch relationships", () => {
+  const timing = compareChordGestureTiming(
+    [
+      { onsetMs: 0, velocity: 70, releaseMs: 650, releaseReason: "pedal" },
+      { onsetMs: 40, velocity: 90, releaseMs: 620, releaseReason: "key" },
+    ],
+    [
+      { onsetMs: 600, velocity: 100 },
+      { onsetMs: 630, velocity: 80 },
+    ],
+    [
+      { onsetMs: 1_000, velocity: 50, releaseMs: 1_350, releaseReason: "key" },
+      { onsetMs: 1_080, velocity: 70, releaseMs: 1_320, releaseReason: "key" },
+    ],
+    [
+      { onsetMs: 1_400, velocity: 110 },
+      { onsetMs: 1_410, velocity: 90 },
+    ],
+  );
+  assert.ok(timing);
+  assert.deepEqual(timing.source, {
+    beforeSpreadMs: 40,
+    afterSpreadMs: 30,
+    anchorGapMs: 600,
+    beforeMeanVelocity: 80,
+    afterMeanVelocity: 90,
+    bridge: { kind: "overlap", durationMs: 50, pedalExtended: true },
+  });
+  assert.deepEqual(timing.attempt, {
+    beforeSpreadMs: 80,
+    afterSpreadMs: 10,
+    anchorGapMs: 400,
+    beforeMeanVelocity: 60,
+    afterMeanVelocity: 100,
+    bridge: { kind: "silence", durationMs: 50, pedalExtended: false },
+  });
+  assert.deepEqual(timing.deltas, {
+    beforeSpreadMs: 40,
+    afterSpreadMs: -20,
+    anchorGapMs: -200,
+    beforeMeanVelocity: -20,
+    afterMeanVelocity: 10,
+  });
+
+  const unknownRelease = compareChordGestureTiming(
+    [{ onsetMs: 0, velocity: 80, keyReleaseMs: 200, releaseMs: null, releaseReason: null }],
+    [{ onsetMs: 500, velocity: 80 }],
+    [{ onsetMs: 1_000, velocity: 80, releaseMs: 1_400, releaseReason: "key" }],
+    [{ onsetMs: 1_500, velocity: 80 }],
+  );
+  assert.equal(unknownRelease?.source.bridge.kind, "unknown");
+  assert.equal(compareChordGestureTiming([], [{ onsetMs: 1 }], [{ onsetMs: 2 }], [{ onsetMs: 3 }]), null);
+  assert.equal(compareChordGestureTiming([{ onsetMs: 10 }], [{ onsetMs: 5 }], [{ onsetMs: 20 }], [{ onsetMs: 25 }]), null);
+  assert.throws(() => compareChordGestureTiming([{ onsetMs: 0, velocity: 128 }], [{ onsetMs: 1 }], [{ onsetMs: 2 }], [{ onsetMs: 3 }]), RangeError);
+  assert.throws(() => compareChordGestureTiming([{ onsetMs: 10, releaseMs: 9 }], [{ onsetMs: 20 }], [{ onsetMs: 30 }], [{ onsetMs: 40 }]), RangeError);
 });
 
 test("preserves a chord move's selected-context path only when movable Do follows it", () => {
