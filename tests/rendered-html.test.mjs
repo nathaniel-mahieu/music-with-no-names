@@ -170,6 +170,16 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /frequency doubled/);
   assert.match(pianoLab, /evaluateAscendingScaleWalk/);
   assert.match(pianoLab, /scaleWalkSession/);
+  assert.match(pianoLab, /Change one note inside the whole/);
+  assert.match(pianoLab, /Nothing here plays or enters an answer/);
+  assert.match(pianoLab, /More than one note changed/);
+  assert.match(pianoLab, /conditional felt possibility/);
+  assert.match(pianoLab, /This is an invitation to listen, not an emotion prediction/);
+  assert.match(pianoLab, /controlledSonorityChange/);
+  assert.match(pianoLab, /sonorityAffordances/);
+  assert.match(pianoLab, /controlledSonoritySession/);
+  assert.match(pianoLab, /replayRequired/);
+  assert.match(pianoLab, /The comparison stays paused until the exact baseline is sounding/);
   assert.match(pianoLab, /setResolutionForkSet\(resolutionForkSet \?\? nextNoteForks\)/);
   assert.match(pianoLab, /pianoLens/);
   assert.doesNotMatch(pianoLab, /placeNearbyChord/);

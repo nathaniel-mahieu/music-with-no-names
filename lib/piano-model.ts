@@ -113,6 +113,34 @@ export type AscendingScaleWalk = {
   lastAttempt: ScaleWalkAttempt | null;
 };
 
+export type ControlledSonorityFieldId = "aligned" | "lowered-middle" | "held-open" | "close-cluster";
+
+export type ControlledSonorityField = {
+  id: ControlledSonorityFieldId;
+  label: string;
+  offsets: number[];
+  relationship: string;
+  instruction: string;
+};
+
+export type ControlledSonorityChange = {
+  kind: "same" | "one-added" | "one-removed" | "multiple";
+  baselineNotes: number[];
+  currentNotes: number[];
+  keptNotes: number[];
+  addedNotes: number[];
+  removedNotes: number[];
+  changedNote: number | null;
+  changedIntervals: Array<{
+    lower: number;
+    upper: number;
+    distance: ReturnType<typeof intervalLandmark>;
+  }>;
+  baselineSpan: number;
+  currentSpan: number;
+  spanDelta: number;
+};
+
 export type PerformanceEvidenceEvent = RollingNoteEvent & {
   velocity?: number;
   onsetMs: number;
@@ -298,6 +326,41 @@ export const PIANO_SCALES: PianoScale[] = [
     character: "A close middle pair creates expressive friction and motion.",
     steps: [3, 2, 1, 1, 3, 2],
     solfege: ["Do", "Me", "Fa", "Fi", "Sol", "Te"],
+  },
+];
+
+/**
+ * Silent, equal-key starting fields for one-change MIDI experiments. They are
+ * physical comparison recipes, not emotion buttons or aesthetic rankings.
+ */
+export const CONTROLLED_SONORITY_FIELDS: ControlledSonorityField[] = [
+  {
+    id: "aligned",
+    label: "Compact aligned field",
+    offsets: [0, 4, 7],
+    relationship: "two wider gaps · near a 4:5:6 relation",
+    instruction: "Build Do–Mi–Sol, then change exactly one note.",
+  },
+  {
+    id: "lowered-middle",
+    label: "Lowered-middle field",
+    offsets: [0, 3, 7],
+    relationship: "lower the middle by one equal key",
+    instruction: "Build Do–Me–Sol, then compare one addition or removal.",
+  },
+  {
+    id: "held-open",
+    label: "Held-open field",
+    offsets: [0, 5, 7],
+    relationship: "two linked spans around a close upper pair",
+    instruction: "Build Do–Fa–Sol, then disturb only one relationship source.",
+  },
+  {
+    id: "close-cluster",
+    label: "Close cluster",
+    offsets: [0, 1, 2],
+    relationship: "two adjacent equal-key gaps",
+    instruction: "Build three neighboring keys, then widen or thin the field once.",
   },
 ];
 
@@ -572,6 +635,51 @@ export function pairwiseIntervals(notes: number[]) {
     }
   }
   return pairs;
+}
+
+/**
+ * Attributes a field change only when exactly one MIDI note was added or
+ * removed. More complex changes remain visible but are not given a one-note
+ * causal explanation.
+ */
+export function controlledSonorityChange(baseline: number[], current: number[]): ControlledSonorityChange {
+  const normalize = (notes: number[]) => [...new Set(notes.filter(Number.isFinite).map(Math.round).filter((note) => note >= 0 && note <= 127))].sort((a, b) => a - b);
+  const baselineNotes = normalize(baseline);
+  const currentNotes = normalize(current);
+  const baselineSet = new Set(baselineNotes);
+  const currentSet = new Set(currentNotes);
+  const keptNotes = baselineNotes.filter((note) => currentSet.has(note));
+  const addedNotes = currentNotes.filter((note) => !baselineSet.has(note));
+  const removedNotes = baselineNotes.filter((note) => !currentSet.has(note));
+  const kind = addedNotes.length === 0 && removedNotes.length === 0
+    ? "same"
+    : addedNotes.length === 1 && removedNotes.length === 0
+      ? "one-added"
+      : removedNotes.length === 1 && addedNotes.length === 0
+        ? "one-removed"
+        : "multiple";
+  const changedNote = kind === "one-added" ? addedNotes[0] : kind === "one-removed" ? removedNotes[0] : null;
+  const changedIntervals = changedNote == null ? [] : keptNotes.map((kept) => {
+    const lower = Math.min(kept, changedNote);
+    const upper = Math.max(kept, changedNote);
+    return { lower, upper, distance: intervalLandmark(upper - lower) };
+  });
+  const span = (notes: number[]) => notes.length < 2 ? 0 : notes.at(-1)! - notes[0];
+  const baselineSpan = span(baselineNotes);
+  const currentSpan = span(currentNotes);
+  return {
+    kind,
+    baselineNotes,
+    currentNotes,
+    keptNotes,
+    addedNotes,
+    removedNotes,
+    changedNote,
+    changedIntervals,
+    baselineSpan,
+    currentSpan,
+    spanDelta: currentSpan - baselineSpan,
+  };
 }
 
 export function scaleCoverage(notes: number[], doMidi: number, scale: PianoScale) {

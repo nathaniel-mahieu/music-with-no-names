@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CONTROLLED_SONORITY_FIELDS,
   LANDMARK_PATHS,
   PIANO_SCALES,
   articulationTimeline,
   chordTransitionEvidence,
+  controlledSonorityChange,
   detectMotifTransformations,
   evaluateAscendingScaleWalk,
   fifthStepForPitchClass,
@@ -110,6 +112,35 @@ test("describes keyboard intervals beside nearby physical landmarks", () => {
   assert.equal(octave.equalKeyboardRatio, 2);
   assert.equal(octave.errorCents, 0);
   assert.equal(pairwiseIntervals([60, 64, 67]).length, 3);
+});
+
+test("declares controlled sonority fields as physical starting recipes", () => {
+  assert.deepEqual(CONTROLLED_SONORITY_FIELDS.map((field) => field.id), ["aligned", "lowered-middle", "held-open", "close-cluster"]);
+  assert.ok(CONTROLLED_SONORITY_FIELDS.every((field) => field.offsets.length === 3));
+  assert.ok(CONTROLLED_SONORITY_FIELDS.every((field) => field.offsets[0] === 0));
+  assert.ok(CONTROLLED_SONORITY_FIELDS.every((field) => !/good|happy|sad|emotion/i.test(`${field.label} ${field.relationship} ${field.instruction}`)));
+});
+
+test("attributes exactly one added note to only its new interval relationships", () => {
+  const change = controlledSonorityChange([64, 60, 64], [67, 64, 60]);
+  assert.equal(change.kind, "one-added");
+  assert.equal(change.changedNote, 67);
+  assert.deepEqual(change.keptNotes, [60, 64]);
+  assert.deepEqual(change.changedIntervals.map((pair) => [pair.lower, pair.upper, pair.distance.semitones]), [[60, 67, 7], [64, 67, 3]]);
+  assert.equal(change.baselineSpan, 4);
+  assert.equal(change.currentSpan, 7);
+  assert.equal(change.spanDelta, 3);
+});
+
+test("attributes one removed note but refuses a one-note story for multiple changes", () => {
+  const removed = controlledSonorityChange([60, 64, 67], [60, 67]);
+  assert.equal(removed.kind, "one-removed");
+  assert.equal(removed.changedNote, 64);
+  assert.deepEqual(removed.changedIntervals.map((pair) => pair.distance.semitones), [4, 3]);
+  const multiple = controlledSonorityChange([60, 64, 67], [62, 65, 69]);
+  assert.equal(multiple.kind, "multiple");
+  assert.equal(multiple.changedNote, null);
+  assert.deepEqual(multiple.changedIntervals, []);
 });
 
 test("measures scale membership without turning it into quality", () => {

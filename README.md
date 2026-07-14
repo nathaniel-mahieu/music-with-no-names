@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Guided Scale Walk v1.38**. It provides:
+The current milestone is **Controlled Sonority Fields v1.39**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
@@ -25,6 +25,7 @@ The current milestone is **Guided Scale Walk v1.38**. It provides:
 - Local Web MIDI input with permission-aware device selection, note-on/off, velocity, duration, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and the seven-event phrase remains only in the current browser tab.
 - Interval Echo practice that asks the learner to reproduce a spacing from a different starting key without playing an answer.
 - A causal chord comparison that states which pitch positions entered, left, or stayed in the interpretation before showing separate roughness, pull, and repose deltas; it does not confuse membership with a physical key release.
+- A controlled live chord experiment with four physical starting fields and a learner-supplied baseline option. Silent outlined keys establish an exact register; adding or releasing one note reveals only that note's gained or lost intervals, then keeps assumed auditory effects, selected tonal context, and conditional felt possibilities in separate lanes. If several notes change—or a saved baseline is only partly replayed—the HUD pauses causal claims instead of inventing a one-note story.
 - Correctable chord grouping: any selected attack can explicitly start a new chord, join the previous chord, or return to timing-based inference.
 - Correctable inherited membership: held or pedal-carried notes enter a chord reading as visibly inherited members and can be excluded or restored one at a time. The correction updates chord identity, tonal pull, novelty, root travel, nearby moves, and voice leading while leaving the physically sounding interval texture and modeled roughness unchanged.
 - An explicit voice-leading coach that traces nearest held, rising, falling, added, and released voices; identifies parallel, contrary, oblique, bass, and largest-leap motion; and keeps these observations separate from harmonic quality.
