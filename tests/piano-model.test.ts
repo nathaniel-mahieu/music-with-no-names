@@ -9,6 +9,7 @@ import {
   controlledSonorityChange,
   detectMotifTransformations,
   evaluateAscendingScaleWalk,
+  evaluatePerformedScaleFingerprint,
   fifthStepForPitchClass,
   fifthsCircle,
   fifthsSpiral,
@@ -21,6 +22,7 @@ import {
   landmarkStepPitchClasses,
   landmarkTransitionProfile,
   matchesLandmarkStep,
+  matchScaleFingerprint,
   nearbyScaleChords,
   noteContext,
   pairwiseIntervals,
@@ -92,6 +94,50 @@ test("restarts an active scale walk when Do is played in a new octave", () => {
   assert.equal(restarted.nextIndex, 1);
   assert.deepEqual(restarted.matchedNotes, [60]);
   assert.equal(restarted.lastAttempt?.kind, "restarted");
+});
+
+test("builds an unnamed scale fingerprint from an arbitrary performed origin", () => {
+  const low = evaluatePerformedScaleFingerprint([48, 50, 52, 53, 55, 57, 59, 60]);
+  const high = evaluatePerformedScaleFingerprint([61, 63, 65, 66, 68, 70, 72, 73]);
+  assert.equal(low.status, "complete");
+  assert.equal(high.status, "complete");
+  assert.deepEqual(low.steps, [2, 2, 1, 2, 2, 2, 1]);
+  assert.deepEqual(high.steps, low.steps);
+  assert.deepEqual(high.positions, low.positions);
+  assert.equal(high.octaveRemaining, 0);
+});
+
+test("preserves a performed fingerprint after descending or overshooting attacks", () => {
+  const result = evaluatePerformedScaleFingerprint([60, 62, 61, 64, 75, 65, 67, 69, 71, 72]);
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.matchedNotes, [60, 62, 64, 65, 67, 69, 71, 72]);
+  assert.deepEqual(result.steps, [2, 2, 1, 2, 2, 2, 1]);
+  assert.equal(result.errorCount, 2);
+});
+
+test("repairs only the wrong gap while replaying a fingerprint elsewhere", () => {
+  const expected = [2, 2, 1, 2, 2, 2, 1];
+  const retry = evaluatePerformedScaleFingerprint([55, 57, 58], expected);
+  assert.equal(retry.status, "building");
+  assert.deepEqual(retry.steps, [2]);
+  assert.equal(retry.expectedGap, 2);
+  assert.equal(retry.lastAttempt?.reason, "wrong-gap");
+  const repaired = evaluatePerformedScaleFingerprint([55, 57, 58, 59, 60, 62, 64, 66, 67], expected);
+  assert.equal(repaired.status, "complete");
+  assert.deepEqual(repaired.steps, expected);
+  assert.equal(repaired.errorCount, 1);
+  assert.deepEqual(evaluatePerformedScaleFingerprint([60, 72], [6, 6, 1]).steps, [12]);
+});
+
+test("translates exact and rotated fingerprints only after structure is known", () => {
+  const exact = matchScaleFingerprint([2, 2, 1, 2, 2, 2, 1]);
+  assert.equal(exact[0].scale.id, "bright-seven");
+  assert.equal(exact[0].rotation, 0);
+  assert.equal(exact[0].exactFromDo, true);
+  const rotated = matchScaleFingerprint([1, 2, 2, 2, 1, 2, 2]);
+  assert.equal(rotated[0].scale.id, "bright-seven");
+  assert.equal(rotated[0].rotation, 2);
+  assert.equal(matchScaleFingerprint([2, 2, 2, 2, 2, 2]).length, 0);
 });
 
 test("keeps movable-Do context invariant under transposition", () => {

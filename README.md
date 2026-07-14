@@ -4,13 +4,14 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Live Pulse Mirror v1.40**. It provides:
+The current milestone is **Performed Scale Fingerprints v1.41**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
 - A three-lane explanation of every reflected phrase: measured MIDI facts, modeled teaching proxies, and listener-reported experience remain visibly separate. Relationship signatures follow intervals and normalized timing rather than absolute pitch or tempo, so transposed and uniformly time-scaled versions can be compared without treating them as identical experiences.
 - Local-only phrase reports that persist across visits, appear in the Personal Lens, join portable JSON export and the two-step deletion flow, and never upload MIDI or infer emotion, familiarity, or liking.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
+- A learner-authored scale-fingerprint builder inside the single Piano HUD. Any first key becomes position zero; upward attacks create an unnamed ordered gap route; only an exact twelve-key span closes the octave at 2:1. Descending, overshooting, or wrong replay moves preserve the valid prefix so one relationship can be repaired. After closure, the learner can transpose the same gaps, rotate which gap comes first, and reveal optional catalog names only after the physical structure is understood.
 - A persistent live phrase ribbon that keeps sixty seconds of attacks, velocity, key release, sounding duration, pedal-extended tails, and silence while the coordinated staff, frequency, chord, and evidence views magnify the latest seven attacks.
 - A learner-declared Live Pulse Mirror inside the Piano Motion focus. Repeat one key four times to establish a physical time unit, then place later attack clusters around pulse lines and inspect onset-spacing ratios. The coordinate is silent, survives reload, and never claims to detect meter, groove, timing accuracy, or musical goodness.
 - Four one-question Motion modes—Pulse, Touch, Voices, and Motif—that keep the same phrase while hiding unrelated diagnostics. Each mode is URL-addressable and tab-persistent.

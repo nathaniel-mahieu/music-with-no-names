@@ -20,6 +20,7 @@ import {
   conventionalPitchName,
   detectMotifTransformations,
   evaluateAscendingScaleWalk,
+  evaluatePerformedScaleFingerprint,
   fifthStepForPitchClass,
   fifthsCircle,
   fifthsSpiral,
@@ -30,6 +31,7 @@ import {
   intervalLandmark,
   landmarkTransitionProfile,
   matchesLandmarkStep,
+  matchScaleFingerprint,
   nearbyScaleChords,
   nearestMidiForPitchClass,
   noteContext,
@@ -62,6 +64,7 @@ import {
   type ResolutionFork,
   type ScaleCandidate,
   type AscendingScaleWalk,
+  type PerformedScaleFingerprint,
   type TonalGravityCandidate,
 } from "@/lib/piano-model";
 import { sonorityAffordances, sonorityPerceptionModel } from "@/lib/sonority-model";
@@ -147,6 +150,13 @@ type ScaleWalkSession = {
   rootPitchClass: number;
   scaleId: PianoScale["id"];
 };
+type ScaleFingerprintSession = {
+  anchorEventId: number;
+  exercise: "build" | "transpose" | "rotate";
+  sourceSteps: number[] | null;
+  expectedSteps: number[] | null;
+  revealNames: boolean;
+};
 type ControlledSonoritySession = {
   recipeId: ControlledSonorityFieldId | "live";
   rootPitchClass: number;
@@ -167,7 +177,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -185,6 +195,7 @@ type PersistedPianoSession = {
   landmarkStepIndex?: number;
   soundModelId?: PianoSoundModelId;
   scaleWalkSession?: ScaleWalkSession | null;
+  scaleFingerprintSession?: ScaleFingerprintSession | null;
   controlledSonoritySession?: ControlledSonoritySession | null;
   motionFocusMode?: MotionFocusMode;
   pulseMirrorSession?: PulseMirrorSession | null;
@@ -279,6 +290,22 @@ function isPulseMirrorSession(value: unknown): value is PulseMirrorSession {
     && Array.isArray(session.capturedTapEventIds)
     && (session.capturedTapEventIds.length === 0 || session.capturedTapEventIds.length === 4)
     && session.capturedTapEventIds.every((id) => Number.isInteger(id) && id > session.anchorEventId!);
+}
+
+function isScaleFingerprintSession(value: unknown): value is ScaleFingerprintSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<ScaleFingerprintSession>;
+  const validSteps = (steps: unknown) => steps == null || (Array.isArray(steps)
+    && steps.length >= 1
+    && steps.every((step) => Number.isInteger(step) && step > 0 && step < 12)
+    && steps.reduce((sum, step) => sum + step, 0) === 12);
+  return Number.isInteger(session.anchorEventId)
+    && session.anchorEventId! >= 0
+    && (session.exercise === "build" || session.exercise === "transpose" || session.exercise === "rotate")
+    && validSteps(session.sourceSteps)
+    && validSteps(session.expectedSteps)
+    && typeof session.revealNames === "boolean"
+    && (session.exercise === "build" || (session.sourceSteps != null && session.expectedSteps != null));
 }
 
 function currentHudTime() {
@@ -758,6 +785,89 @@ function fifthsCoordinateLabel(offset: number) {
   return `${signed > 0 ? "+" : ""}${signed} repeated-fifth move${Math.abs(signed) === 1 ? "" : "s"} from Do`;
 }
 
+function PerformedScaleFingerprintBuilder({
+  session,
+  progress,
+  showConventions,
+  onStart,
+  onRestart,
+  onReplay,
+  onReveal,
+  onEnd,
+}: {
+  session: ScaleFingerprintSession | null;
+  progress: PerformedScaleFingerprint | null;
+  showConventions: boolean;
+  onStart: () => void;
+  onRestart: () => void;
+  onReplay: (steps: number[], exercise: "transpose" | "rotate") => void;
+  onReveal: () => void;
+  onEnd: () => void;
+}) {
+  if (!session || !progress) {
+    return <div className="hud-scale-builder is-inactive">
+      <div className="hud-builder-intro">
+        <div className="hud-subheading"><span>Author a relationship · no sound</span><strong>Discover a scale with your hands</strong><small>Choose any starting key, move only upward, and return exactly one octave higher. The HUD records the gaps you create before comparing them with any named scale.</small></div>
+        <button type="button" className="piano-primary-action" onClick={onStart}>Build an unnamed scale</button>
+      </div>
+      <p>The first attack becomes position 0. No Do, note name, or route is chosen for you.</p>
+    </div>;
+  }
+
+  const replaying = session.exercise !== "build";
+  const wrongAttempt = progress.lastAttempt?.kind === "try-again";
+  const matches = progress.status === "complete" ? matchScaleFingerprint(progress.steps) : [];
+  const sourceSteps = session.sourceSteps ?? progress.steps;
+  const rotatedSteps = sourceSteps.length ? [...sourceSteps.slice(1), sourceSteps[0]] : [];
+  const completedMoveCount = progress.steps.length;
+  const heading = session.exercise === "build" ? "Build an unnamed octave route" : session.exercise === "transpose" ? "Preserve the fingerprint elsewhere" : "Make a different gap follow home";
+  let cue = progress.status === "waiting" ? "Play any starting key" : progress.status === "complete" ? "The octave loop closes" : replaying ? `Move +${progress.expectedGap} ${progress.expectedGap === 1 ? "key" : "keys"}` : `${progress.octaveRemaining} equal key steps remain`;
+  let feedback = progress.status === "waiting"
+    ? replaying ? "This first key may be anywhere; it establishes a new physical and frequency origin." : "There is no correct first key. Your next upward moves will author the route."
+    : progress.status === "complete"
+      ? session.exercise === "build" ? `You made ${progress.steps.join("–")}. The gaps total 12, so the last frequency is exactly 2× the first on an equal-tempered keyboard.` : session.exercise === "transpose" ? `You preserved ${progress.steps.join("–")} from a new starting key. Absolute frequencies and hand position changed; the ordered relationships did not.` : `You preserved the same cyclic gaps as ${session.sourceSteps?.join("–")}, but ${progress.steps[0]} now follows the starting point.`
+      : replaying ? `${completedMoveCount} of ${session.expectedSteps?.length ?? 0} gaps preserved. Only the next expected move can advance the route.` : `${completedMoveCount} gaps authored: ${progress.steps.length ? progress.steps.join("–") : "none yet"}. Stop only when the last key is exactly 12 above the first.`;
+  if (wrongAttempt) {
+    feedback = progress.lastAttempt?.reason === "wrong-gap"
+      ? `You moved ${progress.lastAttempt.actualGap! > 0 ? "+" : ""}${progress.lastAttempt.actualGap}; this replay asks for +${progress.lastAttempt.expectedGap}. The valid prefix stays intact—repair only this move.`
+      : progress.lastAttempt?.reason === "beyond-octave"
+        ? "That key passed the octave boundary. The valid gaps stay intact; return to an upward key no more than 12 steps above the start."
+        : "That move did not rise. The valid gaps stay intact; choose a key above the last accepted position.";
+    cue = "Compare only the last move";
+  }
+
+  return <div className={`hud-scale-builder is-active ${wrongAttempt ? "has-error" : ""}`} aria-label="Performed scale fingerprint builder">
+    <div className="hud-builder-topline">
+      <div className="hud-subheading"><span>{session.exercise === "build" ? "learner-authored route" : session.exercise === "transpose" ? "transposition test" : "rotation test"}</span><strong>{heading}</strong><small>{replaying ? `target gaps ${session.expectedSteps?.join("–")}` : "catalog scale names hidden until the octave relationship is complete"}</small></div>
+      <div className="hud-builder-actions"><button type="button" onClick={onRestart}>Restart</button><button type="button" onClick={onEnd}>End</button></div>
+    </div>
+    <div className="hud-builder-octave" role="img" aria-label={progress.positions.length ? `${progress.positions.length} accepted positions from 0 through ${progress.positions.at(-1)}; ${progress.octaveRemaining} equal key steps remain to the octave` : "No accepted positions yet; the first attack will become position 0 and the octave will close at position 12"}>
+      {Array.from({ length: 13 }, (_, position) => {
+        const acceptedIndex = progress.positions.indexOf(position);
+        const accepted = acceptedIndex >= 0;
+        const current = position === progress.positions.at(-1);
+        return <span key={position} className={`${accepted ? "is-accepted" : ""} ${current ? "is-current" : ""}`}><i>{accepted ? acceptedIndex + 1 : "·"}</i><small>{position === 0 ? "start" : position === 12 ? "2×" : position}</small></span>;
+      })}
+    </div>
+    <div className="hud-builder-gaps" aria-label={progress.steps.length ? `Accepted gaps ${progress.steps.join(", ")}` : "No gaps accepted yet"}>
+      {progress.steps.map((step, index) => <span key={`${index}-${step}`} style={{ "--builder-gap": step } as CSSProperties}><strong>{step}</strong><small>{step === 1 ? "close" : step === 2 ? "whole" : "wide"}</small></span>)}
+      {!progress.steps.length ? <p>Your ordered gap fingerprint will grow here.</p> : null}
+    </div>
+    <div className="hud-builder-feedback" role="status" aria-live="polite"><span>{progress.status === "complete" ? "Invariant ready" : wrongAttempt ? "Repair one relationship" : "Current question"}</span><strong>{cue}</strong><small>{feedback}</small></div>
+    {progress.status === "complete" ? <div className="hud-builder-complete">
+      <div className="hud-builder-actions">
+        <button type="button" className="piano-primary-action" onClick={() => onReplay(sourceSteps, "transpose")}>Test the same gaps elsewhere</button>
+        <button type="button" onClick={() => onReplay(rotatedSteps, "rotate")}>Rotate which gap comes first</button>
+        {!session.revealNames ? <button type="button" onClick={onReveal}>Reveal theory translations</button> : null}
+      </div>
+      {session.revealNames ? <div className="hud-builder-translations">
+        <span>optional conventional translation · structure came first</span>
+        {matches.length ? matches.map((match) => <p key={`${match.scale.id}-${match.rotation}`}><strong>{match.exactFromDo ? match.scale.conventionalName : `${match.scale.conventionalName} · cyclic rotation ${match.rotation + 1}`}</strong><small>{showConventions && progress.baseMidi != null ? `started on ${conventionalPitchName(progress.baseMidi)} · ` : ""}{match.exactFromDo ? match.scale.character : "Same pitch-class collection, different starting gap; tonal context determines whether that start behaves like home."}</small></p>) : <p><strong>No exact route in this small teaching catalog</strong><small>The fingerprint is still physically valid. A missing label is not a musical or aesthetic judgment.</small></p>}
+      </div> : <p className="hud-builder-name-hold">The physical result is complete. Catalog scale names remain hidden so you can first compare the ordered gaps, octave closure, and what survives a new starting key.</p>}
+    </div> : null}
+  </div>;
+}
+
 function GuidedScaleWalk({
   session,
   events,
@@ -860,6 +970,8 @@ function ScalePracticeField({
   forks,
   target,
   targetMatched,
+  fingerprintSession,
+  fingerprintProgress,
   walkSession,
   walkEvents,
   walkProgress,
@@ -868,6 +980,11 @@ function ScalePracticeField({
   onRotate,
   onChooseTarget,
   onClearTarget,
+  onStartFingerprint,
+  onRestartFingerprint,
+  onReplayFingerprint,
+  onRevealFingerprint,
+  onEndFingerprint,
   onStartWalk,
   onRestartWalk,
   onEndWalk,
@@ -881,6 +998,8 @@ function ScalePracticeField({
   forks: ResolutionFork[];
   target: ResolutionTarget | null;
   targetMatched: boolean;
+  fingerprintSession: ScaleFingerprintSession | null;
+  fingerprintProgress: PerformedScaleFingerprint | null;
   walkSession: ScaleWalkSession | null;
   walkEvents: HudNoteEvent[];
   walkProgress: AscendingScaleWalk | null;
@@ -889,6 +1008,11 @@ function ScalePracticeField({
   onRotate: () => void;
   onChooseTarget: (fork: ResolutionFork) => void;
   onClearTarget: () => void;
+  onStartFingerprint: () => void;
+  onRestartFingerprint: () => void;
+  onReplayFingerprint: (steps: number[], exercise: "transpose" | "rotate") => void;
+  onRevealFingerprint: () => void;
+  onEndFingerprint: () => void;
   onStartWalk: () => void;
   onRestartWalk: () => void;
   onEndWalk: () => void;
@@ -906,9 +1030,12 @@ function ScalePracticeField({
   const forkDoMidi = target?.frameRootPitchClass == null ? doMidi : nearestMidiForPitchClass(target.frameRootPitchClass, doMidi);
   const movementLabel = (movement: number) => movement === 0 ? "repeat" : `${movement > 0 ? "+" : ""}${movement} key step${Math.abs(movement) === 1 ? "" : "s"}`;
   return <section className="hud-scale-practice" aria-labelledby="hud-scale-practice-title">
-    <div className="hud-panel-heading"><span>Shape · center · choice</span><strong id="hud-scale-practice-title">Scale fingerprint + tonal gravity</strong><small>One performed phrase, three separate questions. These are hypotheses and invitations—not a key detector or a goodness score.</small></div>
-    <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} />
-    <div className="hud-scale-learning-grid">
+    <div className="hud-panel-heading"><span>Author · preserve · contextualize</span><strong id="hud-scale-practice-title">Scale relationships with your hands</strong><small>First author an unnamed route. Then preserve it elsewhere or compare it with a selected frame. Tonal center remains a contextual hypothesis, never a goodness score.</small></div>
+    {fingerprintSession ? <PerformedScaleFingerprintBuilder session={fingerprintSession} progress={fingerprintProgress} showConventions={showConventions} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} /> : walkSession ? <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} /> : <div className="hud-scale-experiment-choices" aria-label="Choose one scale experiment">
+      <PerformedScaleFingerprintBuilder session={null} progress={null} showConventions={showConventions} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} />
+      <GuidedScaleWalk session={null} events={[]} progress={null} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} />
+    </div>}
+    {!fingerprintSession && !walkSession ? <div className="hud-scale-learning-grid">
       <div className="hud-fingerprint-field">
         <div className="hud-subheading"><span>Selected frame · derived shape</span><strong>Read the gaps before the name</strong><small>{new Set(phraseEvents.map((event) => pitchClassFromMidi(event.note))).size} measured pitch classes encountered in phrase memory</small></div>
         <div className="hud-fingerprint" role="img" aria-label={`Cyclic scale gap fingerprint ${fingerprint.steps.join(", ")} equal-key steps`}>
@@ -952,7 +1079,7 @@ function ScalePracticeField({
         {target ? <div className={`hud-resolution-feedback ${targetMatched ? "is-match" : ""}`} role="status"><span>{targetMatched ? "You played the fork" : "Silent target armed"}</span><strong>{pitchClassRoleLabel(target.pitchClass, forkDoMidi, forkScale, showConventions)} · any octave</strong><small>{targetMatched ? "Notice whether it felt like return, continuation, opening, or surprise; the model does not decide that response." : "One pitch class is dashed on the keyboard. No note was entered or sounded."}</small><button type="button" onClick={onClearTarget}>Clear fork</button></div> : null}
         {!forks.length ? <p>Play at least one note to reveal contrasting continuation intentions.</p> : null}
       </div>
-    </div>
+    </div> : null}
   </section>;
 }
 
@@ -1714,6 +1841,7 @@ export function PianoLab() {
   const [characterStorageReady, setCharacterStorageReady] = useState(false);
   const [characterDeleteArmed, setCharacterDeleteArmed] = useState(false);
   const [fingerprintRotation, setFingerprintRotation] = useState(0);
+  const [scaleFingerprintSession, setScaleFingerprintSession] = useState<ScaleFingerprintSession | null>(null);
   const [scaleWalkSession, setScaleWalkSession] = useState<ScaleWalkSession | null>(null);
   const [controlledSonoritySession, setControlledSonoritySession] = useState<ControlledSonoritySession | null>(null);
   const [motionFocusMode, setMotionFocusMode] = useState<MotionFocusMode>("pulse");
@@ -1750,7 +1878,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -1792,6 +1920,7 @@ export function PianoLab() {
               && PIANO_SCALES.some((candidate) => candidate.id === saved.scaleWalkSession!.scaleId)) {
               setScaleWalkSession(saved.scaleWalkSession);
             }
+            if (isScaleFingerprintSession(saved.scaleFingerprintSession)) setScaleFingerprintSession(saved.scaleFingerprintSession);
             if (isControlledSonoritySession(saved.controlledSonoritySession)) {
               setControlledSonoritySession({
                 ...saved.controlledSonoritySession,
@@ -1818,9 +1947,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 9, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession };
+    const session: PersistedPianoSession = { version: 10, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -1902,6 +2031,10 @@ export function PianoLab() {
     : discovered ?? { scale: DEFAULT_SCALE, rootPitchClass: 0, uniqueNoteCount: 0, inScaleCount: 0, routeCoveredCount: 0, matchFraction: 0, coverageFraction: 0, homePresent: false, fit: 0 };
   const doMidi = nearestMidiForPitchClass(frame.rootPitchClass, 60);
   const scale = frame.scale;
+  const scaleFingerprintEvents = useMemo(() => scaleFingerprintSession ? phraseEvents.filter((event) => event.id > scaleFingerprintSession.anchorEventId) : [], [phraseEvents, scaleFingerprintSession]);
+  const performedScaleFingerprint = useMemo<PerformedScaleFingerprint | null>(() => scaleFingerprintSession
+    ? evaluatePerformedScaleFingerprint(scaleFingerprintEvents.map((event) => event.note), scaleFingerprintSession.expectedSteps)
+    : null, [scaleFingerprintEvents, scaleFingerprintSession]);
   const scaleWalkScale = PIANO_SCALES.find((candidate) => candidate.id === scaleWalkSession?.scaleId) ?? scale;
   const scaleWalkEvents = useMemo(() => scaleWalkSession ? phraseEvents.filter((event) => event.id > scaleWalkSession.anchorEventId) : [], [phraseEvents, scaleWalkSession]);
   const scaleWalkProgress = useMemo<AscendingScaleWalk | null>(() => scaleWalkSession
@@ -2090,6 +2223,7 @@ export function PianoLab() {
     setExperienceSaved(false);
     setCharacterDeleteArmed(false);
     setFingerprintRotation(0);
+    setScaleFingerprintSession(null);
     setScaleWalkSession(null);
     setControlledSonoritySession(null);
     setPulseMirrorSession(null);
@@ -2181,6 +2315,7 @@ export function PianoLab() {
     setGhostNotes([]);
     setFingerprintRotation(0);
     setControlledSonoritySession(null);
+    setScaleFingerprintSession(null);
     setLockedScaleId(scale.id);
     setLockedDoMidi(doMidi);
     setFrameMode("locked");
@@ -2196,11 +2331,35 @@ export function PianoLab() {
     setScaleWalkSession({ ...scaleWalkSession, anchorEventId: phraseEvents.at(-1)?.id ?? 0 });
   };
 
+  const beginScaleFingerprint = () => {
+    setScaleWalkSession(null);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    setGhostChord(null);
+    setGhostNotes([]);
+    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise: "build", sourceSteps: null, expectedSteps: null, revealNames: false });
+  };
+
+  const restartScaleFingerprint = () => {
+    setScaleFingerprintSession((current) => current ? { ...current, anchorEventId: phraseEvents.at(-1)?.id ?? 0, revealNames: false } : current);
+  };
+
+  const replayScaleFingerprint = (steps: number[], exercise: "transpose" | "rotate") => {
+    const sourceSteps = scaleFingerprintSession?.sourceSteps ?? performedScaleFingerprint?.steps ?? steps;
+    setScaleWalkSession(null);
+    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise, sourceSteps: [...sourceSteps], expectedSteps: [...steps], revealNames: false });
+  };
+
+  const revealScaleFingerprint = () => {
+    setScaleFingerprintSession((current) => current ? { ...current, revealNames: true } : current);
+  };
+
   const beginControlledSonority = (recipeId: ControlledSonorityFieldId) => {
     const recipe = CONTROLLED_SONORITY_FIELDS.find((field) => field.id === recipeId);
     if (!recipe) return;
     const rootPitchClass = pitchClassFromMidi(doMidi);
     setScaleWalkSession(null);
+    setScaleFingerprintSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setGhostChord(null);
@@ -2219,6 +2378,7 @@ export function PianoLab() {
     if (activeNoteNumbers.length < 2) return;
     const rootPitchClass = pitchClassFromMidi(doMidi);
     setScaleWalkSession(null);
+    setScaleFingerprintSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setGhostChord(null);
@@ -2294,6 +2454,7 @@ export function PianoLab() {
   const selectFocusLens = (lens: FocusLens) => {
     if (lens === "paths") {
       setScaleWalkSession(null);
+      setScaleFingerprintSession(null);
       setControlledSonoritySession(null);
       setLockedScaleId(scale.id);
       setLockedDoMidi(doMidi);
@@ -2327,6 +2488,7 @@ export function PianoLab() {
 
   const selectLandmarkPath = (id: LandmarkPathId) => {
     setScaleWalkSession(null);
+    setScaleFingerprintSession(null);
     setControlledSonoritySession(null);
     setLockedScaleId(scale.id);
     setLockedDoMidi(doMidi);
@@ -2376,6 +2538,13 @@ export function PianoLab() {
           : controlledSonorityComparison
             ? `${showConventions ? conventionalPitchName(controlledSonorityComparison.changedNote!) : relativeSyllable(controlledSonorityComparison.changedNote!, doMidi, scale)} ${controlledSonorityComparison.kind === "one-added" ? "created" : "removed"} ${controlledSonorityComparison.changedIntervals.length} pairwise relationship${controlledSonorityComparison.changedIntervals.length === 1 ? "" : "s"}; the physical, auditory, contextual, and felt-possibility lanes show different consequences.`
             : "Choose or perform a starting field before making one controlled change."
+    : focusLens === "scales" && performedScaleFingerprint ? performedScaleFingerprint.status === "waiting"
+    ? scaleFingerprintSession?.exercise === "build" ? "Play any key to establish position 0; no note name or Do is required." : "Play any key to transpose this fingerprint; the first attack establishes a new origin."
+    : performedScaleFingerprint.status === "complete"
+      ? scaleFingerprintSession?.exercise === "build" ? `You authored ${performedScaleFingerprint.steps.join("–")}; its gaps total 12 and the octave closes at 2:1.` : `You preserved ${performedScaleFingerprint.steps.join("–")} while the absolute starting frequency and hand position changed.`
+      : performedScaleFingerprint.lastAttempt?.kind === "try-again"
+        ? "The last move did not satisfy the current gap relationship. Valid earlier gaps were preserved so you can repair only that move."
+        : `${performedScaleFingerprint.steps.length} gaps authored; ${performedScaleFingerprint.octaveRemaining} equal key steps remain before the frequency doubles.`
     : focusLens === "scales" && scaleWalkProgress ? scaleWalkProgress.status === "waiting-do"
     ? "The scale frame is fixed. Play Do in any octave to establish a register; the walk will judge relationships, not absolute note names."
     : scaleWalkProgress.status === "complete"
@@ -2443,6 +2612,7 @@ export function PianoLab() {
     const resolutionGhost = resolutionTarget != null && pitchClassFromMidi(note) === resolutionTarget.pitchClass;
     const landmarkGhost = focusLens === "paths" && landmarkTargetNotes.includes(note);
     const scaleWalkTarget = focusLens === "scales" && scaleWalkProgress?.status === "walking" && note === scaleWalkProgress.expectedMidi;
+    const scaleFingerprintTarget = focusLens === "scales" && scaleFingerprintSession?.exercise !== "build" && performedScaleFingerprint?.status === "building" && note === performedScaleFingerprint.expectedMidi;
     const sonorityReferenceNotes = !controlledSonoritySession
       ? []
       : !controlledSonoritySession.baselineNotes
@@ -2453,12 +2623,12 @@ export function PianoLab() {
     const sonorityGhost = focusLens === "chords" && sonorityReferenceNotes.includes(note);
     const ghost = chordGhost || resolutionGhost || landmarkGhost || sonorityGhost;
     const home = context.stepsWithinOctave === 0;
-    const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", attacked ? "is-chord-member" : "", inherited && chordMember ? "is-inherited" : "", inheritedExcluded ? "is-excluded" : "", ghost ? "is-ghost" : "", sonorityGhost ? "is-sonority-target" : "", scaleWalkTarget ? "is-scale-walk-target" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
+    const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", attacked ? "is-chord-member" : "", inherited && chordMember ? "is-inherited" : "", inheritedExcluded ? "is-excluded" : "", ghost ? "is-ghost" : "", sonorityGhost ? "is-sonority-target" : "", scaleWalkTarget ? "is-scale-walk-target" : "", scaleFingerprintTarget ? "is-scale-builder-target" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
       "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
       "--key-width": `${100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
-    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${attacked ? ", attacked in selected chord" : inheritedExcluded ? ", sounding but excluded from selected chord interpretation" : inherited ? ", inherited and included in selected chord interpretation" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : sonorityGhost ? ", silent controlled sonority reference" : scaleWalkTarget ? ", silent guided scale-walk target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost || scaleWalkTarget ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
+    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${attacked ? ", attacked in selected chord" : inheritedExcluded ? ", sounding but excluded from selected chord interpretation" : inherited ? ", inherited and included in selected chord interpretation" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : sonorityGhost ? ", silent controlled sonority reference" : scaleWalkTarget ? ", silent guided scale-walk target" : scaleFingerprintTarget ? ", silent performed fingerprint target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost || scaleWalkTarget || scaleFingerprintTarget ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
   };
 
   const exactChord = chordCandidates.find((candidate) => candidate.exact);
@@ -2511,10 +2681,12 @@ export function PianoLab() {
         <StaffView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
       </div> : focusLens === "scales" ? <div className="piano-focus-grid is-scales">
-        <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
-        <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
-        <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
-        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
+        {!scaleFingerprintSession && !scaleWalkSession ? <>
+          <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
+          <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
+          <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
+        </> : null}
+        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}

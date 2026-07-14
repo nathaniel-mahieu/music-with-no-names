@@ -113,6 +113,34 @@ export type AscendingScaleWalk = {
   lastAttempt: ScaleWalkAttempt | null;
 };
 
+export type PerformedScaleFingerprintAttempt = {
+  note: number;
+  kind: "started" | "extended" | "complete" | "try-again";
+  actualGap: number | null;
+  expectedGap: number | null;
+  reason: "descending" | "beyond-octave" | "wrong-gap" | null;
+};
+
+export type PerformedScaleFingerprint = {
+  status: "waiting" | "building" | "complete";
+  baseMidi: number | null;
+  matchedNotes: number[];
+  positions: number[];
+  steps: number[];
+  octaveRemaining: number;
+  expectedMidi: number | null;
+  expectedGap: number | null;
+  attemptCount: number;
+  errorCount: number;
+  lastAttempt: PerformedScaleFingerprintAttempt | null;
+};
+
+export type ScaleFingerprintMatch = {
+  scale: PianoScale;
+  rotation: number;
+  exactFromDo: boolean;
+};
+
 export type ControlledSonorityFieldId = "aligned" | "lowered-middle" | "held-open" | "close-cluster";
 
 export type ControlledSonorityField = {
@@ -550,6 +578,77 @@ export function evaluateAscendingScaleWalk(notes: number[], doPitchClass: number
   };
 }
 
+/**
+ * Builds an unnamed, strictly ascending route from performed key attacks. The
+ * first attack establishes an arbitrary origin; reaching exactly twelve equal
+ * key steps closes the octave. When expectedSteps is supplied, only the next
+ * required gap advances, so one wrong move can be repaired without erasing the
+ * relationships already performed.
+ */
+export function evaluatePerformedScaleFingerprint(notes: number[], expectedSteps: number[] | null = null): PerformedScaleFingerprint {
+  const expectedCandidate = expectedSteps?.filter((step) => Number.isInteger(step) && step > 0) ?? null;
+  const expected = expectedCandidate?.reduce((sum, step) => sum + step, 0) === 12 ? expectedCandidate : null;
+  const expectedTotal = expected?.reduce((sum, step) => sum + step, 0) ?? 12;
+  const usable = notes.filter(Number.isFinite).map(Math.round);
+  let baseMidi: number | null = null;
+  let matchedNotes: number[] = [];
+  let positions: number[] = [];
+  let steps: number[] = [];
+  let attemptCount = 0;
+  let errorCount = 0;
+  let lastAttempt: PerformedScaleFingerprintAttempt | null = null;
+
+  for (const note of usable) {
+    if (baseMidi != null && positions.at(-1) === expectedTotal) break;
+    attemptCount += 1;
+    if (baseMidi == null) {
+      baseMidi = note;
+      matchedNotes = [note];
+      positions = [0];
+      lastAttempt = { note, kind: "started", actualGap: null, expectedGap: expected?.[0] ?? null, reason: null };
+      continue;
+    }
+
+    const previous = matchedNotes.at(-1)!;
+    const actualGap = note - previous;
+    const nextExpectedGap = expected?.[steps.length] ?? null;
+    const nextPosition = note - baseMidi;
+    let reason: PerformedScaleFingerprintAttempt["reason"] = null;
+    if (actualGap <= 0) reason = "descending";
+    else if (nextPosition > expectedTotal) reason = "beyond-octave";
+    else if (nextExpectedGap != null && actualGap !== nextExpectedGap) reason = "wrong-gap";
+
+    if (reason) {
+      errorCount += 1;
+      lastAttempt = { note, kind: "try-again", actualGap, expectedGap: nextExpectedGap, reason };
+      continue;
+    }
+
+    matchedNotes = [...matchedNotes, note];
+    positions = [...positions, nextPosition];
+    steps = [...steps, actualGap];
+    const complete = nextPosition === expectedTotal && (!expected || steps.length === expected.length);
+    lastAttempt = { note, kind: complete ? "complete" : "extended", actualGap, expectedGap: nextExpectedGap, reason: null };
+  }
+
+  const lastPosition = positions.at(-1) ?? 0;
+  const complete = baseMidi != null && lastPosition === expectedTotal && (!expected || steps.length === expected.length);
+  const expectedGap = complete ? null : expected?.[steps.length] ?? null;
+  return {
+    status: baseMidi == null ? "waiting" : complete ? "complete" : "building",
+    baseMidi,
+    matchedNotes,
+    positions,
+    steps,
+    octaveRemaining: Math.max(0, expectedTotal - lastPosition),
+    expectedMidi: baseMidi == null || expectedGap == null ? null : matchedNotes.at(-1)! + expectedGap,
+    expectedGap,
+    attemptCount,
+    errorCount,
+    lastAttempt,
+  };
+}
+
 export function pitchClassFromMidi(note: number) {
   return modulo(Math.round(note), 12);
 }
@@ -899,6 +998,22 @@ export function scaleFingerprint(scale: PianoScale, rotation = 0) {
   const positions: number[] = [0];
   steps.slice(0, -1).forEach((step) => positions.push(positions.at(-1)! + step));
   return { steps, positions, rotation: normalizedRotation, total: steps.reduce((sum, step) => sum + step, 0) };
+}
+
+/** Finds catalog translations without treating a conventional name as the scale itself. */
+export function matchScaleFingerprint(steps: number[]): ScaleFingerprintMatch[] {
+  if (!steps.length || steps.some((step) => !Number.isInteger(step) || step <= 0) || steps.reduce((sum, step) => sum + step, 0) !== 12) return [];
+  const matches: ScaleFingerprintMatch[] = [];
+  PIANO_SCALES.forEach((scale) => {
+    if (scale.steps.length !== steps.length) return;
+    for (let rotation = 0; rotation < scale.steps.length; rotation += 1) {
+      const candidate = scaleFingerprint(scale, rotation).steps;
+      if (candidate.every((step, index) => step === steps[index])) {
+        matches.push({ scale, rotation, exactFromDo: rotation === 0 });
+      }
+    }
+  });
+  return matches;
 }
 
 /** Returns contrasting, unranked next-note intentions. It does not predict a correct continuation. */

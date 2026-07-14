@@ -132,7 +132,11 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Silent ghost targets/);
   assert.match(pianoLab, /silent chord target/);
   assert.match(pianoLab, /silent resolution target/);
-  assert.match(pianoLab, /Scale fingerprint \+ tonal gravity/);
+  assert.match(pianoLab, /Scale relationships with your hands/);
+  assert.match(pianoLab, /Build an unnamed scale/);
+  assert.match(pianoLab, /Reveal theory translations/);
+  assert.match(pianoLab, /evaluatePerformedScaleFingerprint/);
+  assert.match(pianoLab, /matchScaleFingerprint/);
   assert.match(pianoLab, /Why the fifths circle is first a spiral/);
   assert.match(pianoLab, /what is gained—and changed—when a pure relationship is adjusted/);
   assert.match(pianoLab, /Stack pure 3:2 moves/);
