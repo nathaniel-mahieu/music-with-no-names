@@ -208,6 +208,21 @@ export type PerformedScaleFingerprint = {
   lastAttempt: PerformedScaleFingerprintAttempt | null;
 };
 
+export type ScaleGapMutationComparison = {
+  kind: "same" | "one-position" | "different-count" | "multiple";
+  sourceSteps: number[];
+  attemptSteps: number[];
+  sourcePositions: number[];
+  attemptPositions: number[];
+  retainedPositions: number[];
+  sourceOnlyPositions: number[];
+  attemptOnlyPositions: number[];
+  gapDeltas: number[] | null;
+  changedGapCount: number;
+  changedPositionCount: number;
+  movedSteps: number | null;
+};
+
 export type ScaleFingerprintMatch = {
   scale: PianoScale;
   rotation: number;
@@ -1070,6 +1085,60 @@ export function evaluatePerformedScaleFingerprint(notes: number[], expectedSteps
     attemptCount,
     errorCount,
     lastAttempt,
+  };
+}
+
+/**
+ * Compares two completed octave routes by their physical landing positions.
+ * A one-position result means the origin, octave closure, and every other
+ * landing stayed fixed while one internal landing moved. It does not infer a
+ * scale name, tonal center, voice, or perceptual quality.
+ */
+export function compareScaleGapMutation(sourceInput: number[], attemptInput: number[]): ScaleGapMutationComparison {
+  const validate = (steps: number[], label: string) => {
+    if (!Array.isArray(steps)
+      || steps.length < 2
+      || steps.some((step) => !Number.isInteger(step) || step <= 0 || step >= 12)
+      || steps.reduce((sum, step) => sum + step, 0) !== 12) {
+      throw new RangeError(`${label} scale gaps must be positive integer steps that close exactly at twelve.`);
+    }
+  };
+  validate(sourceInput, "Source");
+  validate(attemptInput, "Attempt");
+  const positions = (steps: number[]) => steps.reduce<number[]>((values, step) => [...values, values.at(-1)! + step], [0]);
+  const sourceSteps = [...sourceInput];
+  const attemptSteps = [...attemptInput];
+  const sourcePositions = positions(sourceSteps);
+  const attemptPositions = positions(attemptSteps);
+  const sourceSet = new Set(sourcePositions);
+  const attemptSet = new Set(attemptPositions);
+  const retainedPositions = sourcePositions.filter((position) => attemptSet.has(position));
+  const sourceOnlyPositions = sourcePositions.filter((position) => !attemptSet.has(position));
+  const attemptOnlyPositions = attemptPositions.filter((position) => !sourceSet.has(position));
+  const sameCount = sourceSteps.length === attemptSteps.length;
+  const gapDeltas = sameCount ? attemptSteps.map((step, index) => step - sourceSteps[index]) : null;
+  const changedGapCount = gapDeltas?.filter((delta) => delta !== 0).length ?? 0;
+  const changedPositionCount = Math.max(sourceOnlyPositions.length, attemptOnlyPositions.length);
+  const kind = !sameCount
+    ? "different-count"
+    : sourceOnlyPositions.length === 0 && attemptOnlyPositions.length === 0
+      ? "same"
+      : sourceOnlyPositions.length === 1 && attemptOnlyPositions.length === 1
+        ? "one-position"
+        : "multiple";
+  return {
+    kind,
+    sourceSteps,
+    attemptSteps,
+    sourcePositions,
+    attemptPositions,
+    retainedPositions,
+    sourceOnlyPositions,
+    attemptOnlyPositions,
+    gapDeltas,
+    changedGapCount,
+    changedPositionCount,
+    movedSteps: kind === "one-position" ? attemptOnlyPositions[0] - sourceOnlyPositions[0] : null,
   };
 }
 

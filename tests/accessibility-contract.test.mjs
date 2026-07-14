@@ -43,6 +43,12 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /id="hud-chord-window"/);
   assert.match(piano, /aria-label="Guided ascending scale walk"/);
   assert.match(piano, /aria-label="Performed scale fingerprint builder"/);
+  assert.match(piano, /aria-label="Scale landing mutation comparison"/);
+  assert.match(piano, />Change one landing<\/button>/);
+  assert.match(piano, /Change one landing, keep the octave/);
+  assert.match(piano, /hud-scale-mutation-reading[\s\S]*role="status" aria-live="polite"/);
+  assert.match(piano, /`Δ\$\{signed\(delta\)\}`/);
+  assert.match(piano, /More than one landing moved, so no single-position explanation is justified/);
   assert.match(piano, /aria-label="Choose one scale experiment"/);
   assert.match(piano, /silent performed fingerprint target/);
   assert.match(piano, /aria-label="Tonal gravity counterfactual microscope"/);
@@ -129,6 +135,11 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-partial-link\.is-interaction[\s\S]*Highlight/);
   assert.match(css, /\.hud-echo-span\.is-source[\s\S]*LinkText/);
   assert.match(css, /\.hud-echo-span\.is-attempt[\s\S]*Highlight/);
+  assert.match(css, /\.hud-scale-mutation-routes \.is-source \.is-present i[\s\S]*border-radius: 50%/);
+  assert.match(css, /\.hud-scale-mutation-routes \.is-attempt \.is-present i[\s\S]*border-style: dashed/);
+  assert.match(css, /\.hud-scale-mutation-routes \.is-present\.is-changed i[\s\S]*border: 3px double/);
+  assert.match(css, /\.hud-scale-mutation-gaps \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.hud-scale-mutation-reading \{ border-left-color: LinkText/);
   assert.match(piano, /aria-label="Interval context lesson"/);
   assert.match(piano, /aria-label="Five separate lenses for the source and echoed interval"/);
   assert.match(piano, />Reflect on source \+ echo<\/button>/);

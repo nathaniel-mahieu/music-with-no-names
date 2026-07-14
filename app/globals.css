@@ -8900,6 +8900,28 @@ footer a {
 .hud-builder-feedback strong { font-family: var(--font-display), Georgia, serif; font-size: 1.12rem; font-weight: 400; }
 .hud-builder-feedback small { max-width: 94ch; color: var(--muted); font-size: .72rem; line-height: 1.45; }
 .hud-builder-complete { padding: 13px 14px; border-top: 1px solid var(--line); }
+.hud-scale-mutation { display: grid; gap: 11px; }
+.hud-scale-mutation-routes { display: grid; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-scale-mutation-routes > div { display: grid; grid-template-columns: 52px minmax(0, 1fr); min-width: 0; align-items: stretch; }
+.hud-scale-mutation-routes > div + div { border-top: 1px solid var(--line); }
+.hud-scale-mutation-routes > div > strong { display: grid; place-content: center start; color: var(--muted); font-size: .65rem; font-weight: 500; text-transform: uppercase; }
+.hud-scale-mutation-routes > div > div { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); min-width: 0; }
+.hud-scale-mutation-routes span { display: grid; min-width: 0; min-height: 42px; place-content: center; border-left: 1px solid var(--line); }
+.hud-scale-mutation-routes i { display: grid; width: 18px; height: 18px; place-content: center; border: 1px solid transparent; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .56rem; font-style: normal; }
+.hud-scale-mutation-routes .is-source .is-present i { border-color: var(--piano-blue); border-radius: 50%; background: var(--surface-raised); }
+.hud-scale-mutation-routes .is-attempt .is-present i { border-color: var(--piano-blue); border-style: dashed; background: var(--piano-gold); }
+.hud-scale-mutation-routes .is-present.is-changed i { border: 3px double var(--piano-coral); color: var(--foreground); }
+.hud-scale-mutation-gaps { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 1px; background: var(--line); }
+.hud-scale-mutation-gaps > span { display: grid; min-width: 0; gap: 2px; padding: 7px 6px; background: var(--background); text-align: center; }
+.hud-scale-mutation-gaps > span.is-changed { box-shadow: inset 0 3px var(--piano-coral); }
+.hud-scale-mutation-gaps small,
+.hud-scale-mutation-gaps em { color: var(--muted); font-size: .58rem; font-style: normal; }
+.hud-scale-mutation-gaps strong { font-family: var(--font-mono), monospace; font-size: .72rem; font-weight: 500; }
+.hud-scale-mutation-gaps > span.is-changed em { color: var(--foreground); font-weight: 500; }
+.hud-scale-mutation-reading { display: grid; gap: 4px; padding: 11px 0 11px 13px; border-left: 3px solid var(--piano-blue); }
+.hud-scale-mutation-reading > span { color: var(--piano-gold); font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-scale-mutation-reading > strong { font-size: .82rem; font-weight: 500; }
+.hud-scale-mutation-reading > small { color: var(--muted); font-size: .69rem; line-height: 1.45; }
 .hud-builder-translations { display: grid; gap: 7px; margin-top: 12px; padding: 11px 0 0 12px; border-left: 2px solid var(--piano-gold); }
 .hud-builder-translations > span { color: var(--piano-gold); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; }
 .hud-builder-translations p { display: grid; gap: 3px; margin: 0; }
@@ -9615,6 +9637,9 @@ footer a {
   .hud-builder-octave > span { min-height: 47px; }
   .hud-builder-octave i { width: 18px; height: 18px; font-size: .58rem; }
   .hud-builder-octave small { font-size: .55rem; }
+  .hud-scale-mutation-routes > div { grid-template-columns: 40px minmax(0, 1fr); }
+  .hud-scale-mutation-routes i { width: 15px; height: 15px; font-size: .5rem; }
+  .hud-scale-mutation-gaps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .hud-gravity-counterfactual-intro > button { width: 100%; }
   .hud-gravity-counterfactual-chart { gap: 2px; padding-inline: 8px; }
   .hud-gravity-counterfactual-chart strong { font-size: .59rem; }
@@ -9698,6 +9723,11 @@ footer a {
   .hud-chord-fold-gap-label.is-changed { fill: CanvasText; }
   .hud-chord-fold-close { fill: Canvas; stroke: GrayText; }
   .hud-chord-fold-reading { border-left-color: LinkText; }
+  .hud-scale-mutation-routes .is-source .is-present i { color: CanvasText; border-color: LinkText; background: Canvas; }
+  .hud-scale-mutation-routes .is-attempt .is-present i { color: HighlightText; border-color: CanvasText; background: Highlight; }
+  .hud-scale-mutation-routes .is-present.is-changed i { border-color: Highlight; }
+  .hud-scale-mutation-gaps > span.is-changed { box-shadow: inset 0 3px Highlight; }
+  .hud-scale-mutation-reading { border-left-color: LinkText; }
   .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-chord-motion-strand.is-source { stroke: CanvasText; }
   .hud-chord-motion-strand.is-attempt { stroke: LinkText; }

@@ -23,6 +23,7 @@ import {
   compareChordVoicingEcho,
   compareIntervalEcho,
   comparePhraseLenses,
+  compareScaleGapMutation,
   controlledSonorityChange,
   conventionalPitchName,
   detectMotifTransformations,
@@ -75,6 +76,7 @@ import {
   type PianoScale,
   type ResolutionFork,
   type ScaleCandidate,
+  type ScaleGapMutationComparison,
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type PhraseLensComparison,
@@ -178,7 +180,7 @@ type ScaleWalkSession = {
 };
 type ScaleFingerprintSession = {
   anchorEventId: number;
-  exercise: "build" | "transpose" | "rotate";
+  exercise: "build" | "transpose" | "rotate" | "mutate";
   sourceSteps: number[] | null;
   expectedSteps: number[] | null;
   revealNames: boolean;
@@ -479,11 +481,13 @@ function isScaleFingerprintSession(value: unknown): value is ScaleFingerprintSes
     && steps.reduce((sum, step) => sum + step, 0) === 12);
   return Number.isInteger(session.anchorEventId)
     && session.anchorEventId! >= 0
-    && (session.exercise === "build" || session.exercise === "transpose" || session.exercise === "rotate")
+    && (session.exercise === "build" || session.exercise === "transpose" || session.exercise === "rotate" || session.exercise === "mutate")
     && validSteps(session.sourceSteps)
     && validSteps(session.expectedSteps)
     && typeof session.revealNames === "boolean"
-    && (session.exercise === "build" || (session.sourceSteps != null && session.expectedSteps != null));
+    && (session.exercise === "build"
+      || (session.exercise === "mutate" && session.sourceSteps != null && session.expectedSteps == null)
+      || (session.sourceSteps != null && session.expectedSteps != null));
 }
 
 function isGravityCounterfactualSession(value: unknown): value is GravityCounterfactualSession {
@@ -1052,6 +1056,49 @@ function fifthsCoordinateLabel(offset: number) {
   return `${signed > 0 ? "+" : ""}${signed} repeated-fifth move${Math.abs(signed) === 1 ? "" : "s"} from Do`;
 }
 
+function ScaleGapMutationResult({ comparison }: { comparison: ScaleGapMutationComparison }) {
+  const sourceSet = new Set(comparison.sourcePositions);
+  const attemptSet = new Set(comparison.attemptPositions);
+  const sourceOnly = new Set(comparison.sourceOnlyPositions);
+  const attemptOnly = new Set(comparison.attemptOnlyPositions);
+  const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
+  const rows = [
+    { id: "source", label: "source", positions: sourceSet, changed: sourceOnly },
+    { id: "attempt", label: "new", positions: attemptSet, changed: attemptOnly },
+  ] as const;
+  const headline = comparison.kind === "one-position"
+    ? `Landing ${comparison.sourceOnlyPositions[0]} → ${comparison.attemptOnlyPositions[0]}`
+    : comparison.kind === "same"
+      ? "Every landing stayed fixed"
+      : comparison.kind === "different-count"
+        ? `Landing count ${comparison.sourcePositions.length} → ${comparison.attemptPositions.length}`
+        : `${comparison.changedPositionCount} internal landings changed`;
+  const detail = comparison.kind === "one-position"
+    ? `${signed(comparison.movedSteps!)} equal-key step${Math.abs(comparison.movedSteps!) === 1 ? "" : "s"}; ${comparison.changedGapCount} neighboring gap${comparison.changedGapCount === 1 ? "" : "s"} changed while every retained landing and the octave closure stayed fixed.`
+    : comparison.kind === "same"
+      ? "The source was reproduced exactly. Restart and move one internal landing by one key while keeping all the others."
+      : comparison.kind === "different-count"
+        ? "A landing was added or removed, so this attempt changes the route's density as well as its spacing. Restart and keep the same number of landings."
+        : "More than one landing moved, so no single-position explanation is justified. Restart and change only one internal landing.";
+  const summary = `${headline}. Source gaps ${comparison.sourceSteps.join(", ")}; new gaps ${comparison.attemptSteps.join(", ")}. Both routes total twelve equal-key steps.`;
+  return <section className={`hud-scale-mutation is-${comparison.kind}`} aria-label="Scale landing mutation comparison">
+    <div className="hud-scale-mutation-routes" role="img" aria-label={summary}>
+      {rows.map((row) => <div key={row.id} className={`is-${row.id}`}><strong>{row.label}</strong><div>{Array.from({ length: 13 }, (_, position) => {
+        const present = row.positions.has(position);
+        const changed = row.changed.has(position);
+        return <span key={position} className={`${present ? "is-present" : ""} ${changed ? "is-changed" : ""}`}><i>{present ? position : ""}</i></span>;
+      })}</div></div>)}
+    </div>
+    {comparison.gapDeltas ? <div className="hud-scale-mutation-gaps" aria-label={`Gap comparison: ${comparison.sourceSteps.map((gap, index) => `${gap} to ${comparison.attemptSteps[index]}, delta ${comparison.gapDeltas![index]}`).join("; ")}`}>
+      {comparison.sourceSteps.map((gap, index) => {
+        const delta = comparison.gapDeltas![index];
+        return <span key={index} className={delta !== 0 ? "is-changed" : ""}><small>gap {index + 1}</small><strong>{gap}{delta === 0 ? "" : `→${comparison.attemptSteps[index]}`}</strong><em>{delta === 0 ? "held" : `Δ${signed(delta)}`}</em></span>;
+      })}
+    </div> : null}
+    <div className="hud-scale-mutation-reading" role="status" aria-live="polite"><span>{comparison.kind === "one-position" ? "One cause isolated" : "Compare the control"}</span><strong>{headline}</strong><small>{detail} Both gap lists still sum to 12, so frequency still doubles at the final landing.</small></div>
+  </section>;
+}
+
 function PerformedScaleFingerprintBuilder({
   session,
   progress,
@@ -1067,7 +1114,7 @@ function PerformedScaleFingerprintBuilder({
   showConventions: boolean;
   onStart: () => void;
   onRestart: () => void;
-  onReplay: (steps: number[], exercise: "transpose" | "rotate") => void;
+  onReplay: (steps: number[], exercise: "transpose" | "rotate" | "mutate") => void;
   onReveal: () => void;
   onEnd: () => void;
 }) {
@@ -1081,19 +1128,21 @@ function PerformedScaleFingerprintBuilder({
     </div>;
   }
 
-  const replaying = session.exercise !== "build";
+  const replaying = session.exercise === "transpose" || session.exercise === "rotate";
+  const mutating = session.exercise === "mutate";
   const wrongAttempt = progress.lastAttempt?.kind === "try-again";
   const matches = progress.status === "complete" ? matchScaleFingerprint(progress.steps) : [];
   const sourceSteps = session.sourceSteps ?? progress.steps;
   const rotatedSteps = sourceSteps.length ? [...sourceSteps.slice(1), sourceSteps[0]] : [];
+  const mutationComparison = mutating && progress.status === "complete" ? compareScaleGapMutation(sourceSteps, progress.steps) : null;
   const completedMoveCount = progress.steps.length;
-  const heading = session.exercise === "build" ? "Build an unnamed octave route" : session.exercise === "transpose" ? "Preserve the fingerprint elsewhere" : "Make a different gap follow home";
-  let cue = progress.status === "waiting" ? "Play any starting key" : progress.status === "complete" ? "The octave loop closes" : replaying ? `Move +${progress.expectedGap} ${progress.expectedGap === 1 ? "key" : "keys"}` : `${progress.octaveRemaining} equal key steps remain`;
+  const heading = session.exercise === "build" ? "Build an unnamed octave route" : session.exercise === "transpose" ? "Preserve the fingerprint elsewhere" : session.exercise === "rotate" ? "Make a different gap follow home" : "Change one landing, keep the octave";
+  let cue = progress.status === "waiting" ? "Play any starting key" : progress.status === "complete" ? mutating ? mutationComparison?.kind === "one-position" ? "One changed landing isolated" : "Compare the attempted control" : "The octave loop closes" : replaying ? `Move +${progress.expectedGap} ${progress.expectedGap === 1 ? "key" : "keys"}` : mutating ? `${progress.octaveRemaining} steps remain · keep the same landing count` : `${progress.octaveRemaining} equal key steps remain`;
   let feedback = progress.status === "waiting"
-    ? replaying ? "This first key may be anywhere; it establishes a new physical and frequency origin." : "There is no correct first key. Your next upward moves will author the route."
+      ? replaying ? "This first key may be anywhere; it establishes a new physical and frequency origin." : mutating ? `Start anywhere. Use ${sourceSteps.join("–")} as the control, move exactly one internal landing by one key, and keep every other landing—including 0 and 12—fixed.` : "There is no correct first key. Your next upward moves will author the route."
     : progress.status === "complete"
-      ? session.exercise === "build" ? `You made ${progress.steps.join("–")}. The gaps total 12, so the last frequency is exactly 2× the first on an equal-tempered keyboard.` : session.exercise === "transpose" ? `You preserved ${progress.steps.join("–")} from a new starting key. Absolute frequencies and hand position changed; the ordered relationships did not.` : `You preserved the same cyclic gaps as ${session.sourceSteps?.join("–")}, but ${progress.steps[0]} now follows the starting point.`
-      : replaying ? `${completedMoveCount} of ${session.expectedSteps?.length ?? 0} gaps preserved. Only the next expected move can advance the route.` : `${completedMoveCount} gaps authored: ${progress.steps.length ? progress.steps.join("–") : "none yet"}. Stop only when the last key is exactly 12 above the first.`;
+      ? session.exercise === "build" ? `You made ${progress.steps.join("–")}. The gaps total 12, so the last frequency is exactly 2× the first on an equal-tempered keyboard.` : session.exercise === "transpose" ? `You preserved ${progress.steps.join("–")} from a new starting key. Absolute frequencies and hand position changed; the ordered relationships did not.` : session.exercise === "rotate" ? `You preserved the same cyclic gaps as ${session.sourceSteps?.join("–")}, but ${progress.steps[0]} now follows the starting point.` : mutationComparison?.kind === "one-position" ? `You changed one landing while ${mutationComparison.retainedPositions.length} positions—including origin and octave closure—stayed fixed.` : "The route closes at the octave; now compare whether exactly one internal landing changed."
+      : replaying ? `${completedMoveCount} of ${session.expectedSteps?.length ?? 0} gaps preserved. Only the next expected move can advance the route.` : mutating ? `${completedMoveCount} of ${sourceSteps.length} source gaps rebuilt: ${progress.steps.length ? progress.steps.join("–") : "none yet"}. Keep the same number of landings and close exactly at 12.` : `${completedMoveCount} gaps authored: ${progress.steps.length ? progress.steps.join("–") : "none yet"}. Stop only when the last key is exactly 12 above the first.`;
   if (wrongAttempt) {
     feedback = progress.lastAttempt?.reason === "wrong-gap"
       ? `You moved ${progress.lastAttempt.actualGap! > 0 ? "+" : ""}${progress.lastAttempt.actualGap}; this replay asks for +${progress.lastAttempt.expectedGap}. The valid prefix stays intact—repair only this move.`
@@ -1105,7 +1154,7 @@ function PerformedScaleFingerprintBuilder({
 
   return <div className={`hud-scale-builder is-active ${wrongAttempt ? "has-error" : ""}`} aria-label="Performed scale fingerprint builder">
     <div className="hud-builder-topline">
-      <div className="hud-subheading"><span>{session.exercise === "build" ? "learner-authored route" : session.exercise === "transpose" ? "transposition test" : "rotation test"}</span><strong>{heading}</strong><small>{replaying ? `target gaps ${session.expectedSteps?.join("–")}` : "catalog scale names hidden until the octave relationship is complete"}</small></div>
+      <div className="hud-subheading"><span>{session.exercise === "build" ? "learner-authored route" : session.exercise === "transpose" ? "transposition test" : session.exercise === "rotate" ? "rotation test" : "one-position experiment"}</span><strong>{heading}</strong><small>{replaying ? `target gaps ${session.expectedSteps?.join("–")}` : mutating ? `source gaps ${sourceSteps.join("–")} · move one internal landing; keep 0 and 12` : "catalog scale names hidden until the octave relationship is complete"}</small></div>
       <div className="hud-builder-actions"><button type="button" onClick={onRestart}>Restart</button><button type="button" onClick={onEnd}>End</button></div>
     </div>
     <div className="hud-builder-octave" role="img" aria-label={progress.positions.length ? `${progress.positions.length} accepted positions from 0 through ${progress.positions.at(-1)}; ${progress.octaveRemaining} equal key steps remain to the octave` : "No accepted positions yet; the first attack will become position 0 and the octave will close at position 12"}>
@@ -1120,17 +1169,18 @@ function PerformedScaleFingerprintBuilder({
       {progress.steps.map((step, index) => <span key={`${index}-${step}`} style={{ "--builder-gap": step } as CSSProperties}><strong>{step}</strong><small>{step === 1 ? "close" : step === 2 ? "whole" : "wide"}</small></span>)}
       {!progress.steps.length ? <p>Your ordered gap fingerprint will grow here.</p> : null}
     </div>
-    <div className="hud-builder-feedback" role="status" aria-live="polite"><span>{progress.status === "complete" ? "Invariant ready" : wrongAttempt ? "Repair one relationship" : "Current question"}</span><strong>{cue}</strong><small>{feedback}</small></div>
+    <div className="hud-builder-feedback" role="status" aria-live="polite"><span>{progress.status === "complete" ? mutating ? "Control result" : "Invariant ready" : wrongAttempt ? "Repair one relationship" : "Current question"}</span><strong>{cue}</strong><small>{feedback}</small></div>
     {progress.status === "complete" ? <div className="hud-builder-complete">
-      <div className="hud-builder-actions">
+      {mutationComparison ? <ScaleGapMutationResult comparison={mutationComparison} /> : <><div className="hud-builder-actions">
         <button type="button" className="piano-primary-action" onClick={() => onReplay(sourceSteps, "transpose")}>Test the same gaps elsewhere</button>
         <button type="button" onClick={() => onReplay(rotatedSteps, "rotate")}>Rotate which gap comes first</button>
+        <button type="button" onClick={() => onReplay(progress.steps, "mutate")}>Change one landing</button>
         {!session.revealNames ? <button type="button" onClick={onReveal}>Reveal theory translations</button> : null}
       </div>
       {session.revealNames ? <div className="hud-builder-translations">
         <span>optional conventional translation · structure came first</span>
         {matches.length ? matches.map((match) => <p key={`${match.scale.id}-${match.rotation}`}><strong>{match.exactFromDo ? match.scale.conventionalName : `${match.scale.conventionalName} · cyclic rotation ${match.rotation + 1}`}</strong><small>{showConventions && progress.baseMidi != null ? `started on ${conventionalPitchName(progress.baseMidi)} · ` : ""}{match.exactFromDo ? match.scale.character : "Same pitch-class collection, different starting gap; tonal context determines whether that start behaves like home."}</small></p>) : <p><strong>No exact route in this small teaching catalog</strong><small>The fingerprint is still physically valid. A missing label is not a musical or aesthetic judgment.</small></p>}
-      </div> : <p className="hud-builder-name-hold">The physical result is complete. Catalog scale names remain hidden so you can first compare the ordered gaps, octave closure, and what survives a new starting key.</p>}
+      </div> : <p className="hud-builder-name-hold">The physical result is complete. Catalog scale names remain hidden so you can first compare the ordered gaps, octave closure, and what survives a new starting key.</p>}</>}
     </div> : null}
   </div>;
 }
@@ -1377,7 +1427,7 @@ function ScalePracticeField({
   onClearTarget: () => void;
   onStartFingerprint: () => void;
   onRestartFingerprint: () => void;
-  onReplayFingerprint: (steps: number[], exercise: "transpose" | "rotate") => void;
+  onReplayFingerprint: (steps: number[], exercise: "transpose" | "rotate" | "mutate") => void;
   onRevealFingerprint: () => void;
   onEndFingerprint: () => void;
   onStartGravityCounterfactual: () => void;
@@ -3610,10 +3660,10 @@ export function PianoLab() {
     setScaleFingerprintSession((current) => current ? { ...current, anchorEventId: phraseEvents.at(-1)?.id ?? 0, revealNames: false } : current);
   };
 
-  const replayScaleFingerprint = (steps: number[], exercise: "transpose" | "rotate") => {
-    const sourceSteps = scaleFingerprintSession?.sourceSteps ?? performedScaleFingerprint?.steps ?? steps;
+  const replayScaleFingerprint = (steps: number[], exercise: "transpose" | "rotate" | "mutate") => {
+    const sourceSteps = exercise === "mutate" ? steps : scaleFingerprintSession?.sourceSteps ?? performedScaleFingerprint?.steps ?? steps;
     setScaleWalkSession(null);
-    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise, sourceSteps: [...sourceSteps], expectedSteps: [...steps], revealNames: false });
+    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise, sourceSteps: [...sourceSteps], expectedSteps: exercise === "mutate" ? null : [...steps], revealNames: false });
   };
 
   const revealScaleFingerprint = () => {
@@ -4037,9 +4087,9 @@ export function PianoLab() {
     : focusLens === "chords" && chordFocusMode === "cause"
       ? "Choose a silent starting field or hold your own, then change exactly one note while the rest stay fixed."
     : focusLens === "scales" && performedScaleFingerprint ? performedScaleFingerprint.status === "waiting"
-    ? scaleFingerprintSession?.exercise === "build" ? "Play any key to establish position 0; no note name or Do is required." : "Play any key to transpose this fingerprint; the first attack establishes a new origin."
+    ? scaleFingerprintSession?.exercise === "build" ? "Play any key to establish position 0; no note name or Do is required." : scaleFingerprintSession?.exercise === "mutate" ? "Play any key to establish a new position 0, then rebuild the route with exactly one internal landing moved." : "Play any key to transpose this fingerprint; the first attack establishes a new origin."
     : performedScaleFingerprint.status === "complete"
-      ? scaleFingerprintSession?.exercise === "build" ? `You authored ${performedScaleFingerprint.steps.join("–")}; its gaps total 12 and the octave closes at 2:1.` : `You preserved ${performedScaleFingerprint.steps.join("–")} while the absolute starting frequency and hand position changed.`
+      ? scaleFingerprintSession?.exercise === "build" ? `You authored ${performedScaleFingerprint.steps.join("–")}; its gaps total 12 and the octave closes at 2:1.` : scaleFingerprintSession?.exercise === "mutate" ? "The changed route closes at 2:1; compare its landing positions to see whether one cause was isolated." : `You preserved ${performedScaleFingerprint.steps.join("–")} while the absolute starting frequency and hand position changed.`
       : performedScaleFingerprint.lastAttempt?.kind === "try-again"
         ? "The last move did not satisfy the current gap relationship. Valid earlier gaps were preserved so you can repair only that move."
         : `${performedScaleFingerprint.steps.length} gaps authored; ${performedScaleFingerprint.octaveRemaining} equal key steps remain before the frequency doubles.`
@@ -4115,7 +4165,7 @@ export function PianoLab() {
     const resolutionGhost = resolutionTarget != null && pitchClassFromMidi(note) === resolutionTarget.pitchClass;
     const landmarkGhost = focusLens === "paths" && landmarkTargetNotes.includes(note);
     const scaleWalkTarget = focusLens === "scales" && scaleWalkProgress?.status === "walking" && note === scaleWalkProgress.expectedMidi;
-    const scaleFingerprintTarget = focusLens === "scales" && scaleFingerprintSession?.exercise !== "build" && performedScaleFingerprint?.status === "building" && note === performedScaleFingerprint.expectedMidi;
+    const scaleFingerprintTarget = focusLens === "scales" && performedScaleFingerprint?.status === "building" && performedScaleFingerprint.expectedMidi != null && note === performedScaleFingerprint.expectedMidi;
     const sonorityReferenceNotes = !controlledSonoritySession
       ? []
       : !controlledSonoritySession.baselineNotes

@@ -12,6 +12,7 @@ import {
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
+  compareScaleGapMutation,
   comparePhraseLenses,
   phraseChangeProfile,
   controlledSonorityChange,
@@ -140,6 +141,30 @@ test("repairs only the wrong gap while replaying a fingerprint elsewhere", () =>
   assert.deepEqual(repaired.steps, expected);
   assert.equal(repaired.errorCount, 1);
   assert.deepEqual(evaluatePerformedScaleFingerprint([60, 72], [6, 6, 1]).steps, [12]);
+});
+
+test("shows how one changed scale landing trades space between neighboring gaps", () => {
+  const source = [2, 2, 1, 2, 2, 2, 1];
+  const loweredThird = compareScaleGapMutation(source, [2, 1, 2, 2, 2, 2, 1]);
+  assert.equal(loweredThird.kind, "one-position");
+  assert.deepEqual(loweredThird.sourcePositions, [0, 2, 4, 5, 7, 9, 11, 12]);
+  assert.deepEqual(loweredThird.attemptPositions, [0, 2, 3, 5, 7, 9, 11, 12]);
+  assert.deepEqual(loweredThird.sourceOnlyPositions, [4]);
+  assert.deepEqual(loweredThird.attemptOnlyPositions, [3]);
+  assert.deepEqual(loweredThird.retainedPositions, [0, 2, 5, 7, 9, 11, 12]);
+  assert.equal(loweredThird.movedSteps, -1);
+  assert.deepEqual(loweredThird.gapDeltas, [0, -1, 1, 0, 0, 0, 0]);
+  assert.equal(loweredThird.changedGapCount, 2);
+  assert.equal(loweredThird.sourceSteps.reduce((sum, step) => sum + step, 0), 12);
+  assert.equal(loweredThird.attemptSteps.reduce((sum, step) => sum + step, 0), 12);
+
+  const same = compareScaleGapMutation(source, source);
+  assert.equal(same.kind, "same");
+  assert.equal(same.changedPositionCount, 0);
+  assert.equal(compareScaleGapMutation(source, [2, 2, 2, 2, 2, 2]).kind, "different-count");
+  assert.equal(compareScaleGapMutation(source, [1, 2, 2, 2, 2, 2, 1]).kind, "multiple");
+  assert.throws(() => compareScaleGapMutation(source, [2, 2, 1]), RangeError);
+  assert.throws(() => compareScaleGapMutation([0, 12], [6, 6]), RangeError);
 });
 
 test("translates exact and rotated fingerprints only after structure is known", () => {
