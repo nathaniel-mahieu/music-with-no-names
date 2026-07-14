@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { estimateTapTempo, livePulseMirror, nestedCyclePhases, pulseHypotheses, syncopationIndex } from "../lib/rhythm-model.ts";
+import { estimateTapTempo, livePulseMirror, liveRhythmPhraseProfile, nestedCyclePhases, pulseHypotheses, syncopationIndex } from "../lib/rhythm-model.ts";
 
 function pattern(active: number[]) {
   return Array.from({ length: 12 }, (_, index) => active.includes(index));
@@ -72,4 +72,64 @@ test("refuses implausibly fast or slow four-tap anchors", () => {
   assert.match(fast.invalidReason ?? "", /shorter than 180/);
   assert.equal(slow.status, "invalid");
   assert.match(slow.invalidReason ?? "", /longer than 2 seconds/);
+});
+
+test("turns a retained phrase into pitchless local gap ratios", () => {
+  const profile = liveRhythmPhraseProfile([
+    { id: 1, note: 60, onsetMs: 0, releaseMs: 300, velocity: 48 },
+    { id: 2, note: 64, onsetMs: 500, releaseMs: 730, velocity: 70 },
+    { id: 3, note: 67, onsetMs: 750, releaseMs: 900, velocity: 82 },
+    { id: 4, note: 72, onsetMs: 1_250, releaseMs: 1_500, velocity: 60 },
+  ]);
+  assert.ok(profile);
+  assert.equal(profile.localUnitMs, 500);
+  assert.deepEqual(profile.gaps.map((gap) => gap.ratioLabel), ["1:1", "1:2", "1:1"]);
+  assert.deepEqual(profile.gaps.map((gap) => gap.repeated), [true, false, true]);
+  assert.equal(profile.repeatedGapShare, 2 / 3);
+  assert.equal(profile.velocityRange, 34);
+  assert.deepEqual(profile.clusters.slice(0, 3).map((cluster) => cluster.connection), ["silence", "connected", "silence"]);
+});
+
+test("pitch changes and proportional tempo changes preserve the gap fingerprint", () => {
+  const source = [0, 400, 800, 1_600].map((onsetMs, index) => ({ id: index + 1, note: 60 + index * 2, onsetMs, releaseMs: onsetMs + 200 }));
+  const moved = source.map((event) => ({ ...event, note: event.note + 11 }));
+  const slower = source.map((event) => ({ ...event, onsetMs: event.onsetMs * 2, releaseMs: event.releaseMs * 2 }));
+  const sourceProfile = liveRhythmPhraseProfile(source);
+  const movedProfile = liveRhythmPhraseProfile(moved);
+  const slowerProfile = liveRhythmPhraseProfile(slower);
+  assert.ok(sourceProfile && movedProfile && slowerProfile);
+  assert.deepEqual(movedProfile.gaps.map((gap) => gap.ratioLabel), sourceProfile.gaps.map((gap) => gap.ratioLabel));
+  assert.deepEqual(slowerProfile.gaps.map((gap) => gap.ratioLabel), sourceProfile.gaps.map((gap) => gap.ratioLabel));
+  assert.equal(slowerProfile.localUnitMs, sourceProfile.localUnitMs * 2);
+  assert.equal(slowerProfile.repeatedGapShare, sourceProfile.repeatedGapShare);
+});
+
+test("clusters chord attacks before measuring rhythm and refuses insufficient timing evidence", () => {
+  const profile = liveRhythmPhraseProfile([
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 30 },
+    { id: 3, note: 67, onsetMs: 500 },
+    { id: 4, note: 72, onsetMs: 1_000 },
+  ]);
+  assert.ok(profile);
+  assert.equal(profile.clusterCount, 3);
+  assert.equal(profile.clusters[0].attackCount, 2);
+  assert.deepEqual(profile.gaps.map((gap) => gap.ratioLabel), ["1:1", "1:1"]);
+  assert.equal(liveRhythmPhraseProfile([
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 20 },
+    { id: 3, note: 67, onsetMs: 40 },
+    { id: 4, note: 72, onsetMs: 60 },
+  ]), null);
+});
+
+test("does not call distant gap lengths repetitions just because they share a nearest landmark", () => {
+  const onsets = [0, 100, 600, 3_600, 9_600, 10_100];
+  const profile = liveRhythmPhraseProfile(onsets.map((onsetMs, index) => ({ id: index + 1, note: 60 + index, onsetMs })));
+  assert.ok(profile);
+  assert.equal(profile.localUnitMs, 500);
+  assert.equal(profile.gaps[2].ratioLabel, "4:1");
+  assert.equal(profile.gaps[3].ratioLabel, "4:1");
+  assert.equal(profile.gaps[2].repeated, false);
+  assert.equal(profile.gaps[3].repeated, false);
 });

@@ -1919,6 +1919,246 @@ footer a {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.rhythm-live-bridge {
+  display: grid;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.rhythm-live-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.52fr);
+  gap: 32px;
+  align-items: end;
+  padding: clamp(28px, 4vw, 52px) clamp(22px, 5vw, 72px) 24px;
+}
+
+.rhythm-live-heading h3 {
+  max-width: 28ch;
+  margin: 8px 0 0;
+  font-size: clamp(1.55rem, 3vw, 3rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.rhythm-live-heading > p,
+.rhythm-live-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.rhythm-live-status {
+  padding: 0 clamp(22px, 5vw, 72px) 28px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+}
+
+.rhythm-live-figure {
+  padding: clamp(26px, 4vw, 48px) clamp(22px, 5vw, 72px);
+  border-top: 1px solid var(--line);
+}
+
+.rhythm-live-axis {
+  position: relative;
+  height: 116px;
+  margin: 0 5px 28px;
+}
+
+.rhythm-live-axis > i {
+  position: absolute;
+  right: 0;
+  top: 52px;
+  left: 0;
+  height: 1px;
+  background: var(--line-strong);
+}
+
+.rhythm-live-axis > span {
+  position: absolute;
+  top: 52px;
+  left: var(--rhythm-left);
+  display: grid;
+  place-items: center;
+  width: var(--rhythm-size);
+  height: var(--rhythm-size);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--tone-a);
+  color: var(--surface);
+  box-shadow: 0 0 0 1px var(--tone-a);
+  transform: translate(-50%, -50%);
+}
+
+.rhythm-live-axis > span.is-cluster {
+  border-radius: 2px;
+}
+
+.rhythm-live-axis > span b {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.5rem;
+  font-style: normal;
+}
+
+.rhythm-live-axis > span small {
+  position: absolute;
+  top: calc(100% + 6px);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.52rem;
+  white-space: nowrap;
+}
+
+.rhythm-live-axis > small {
+  position: absolute;
+  bottom: 0;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+}
+
+.rhythm-live-axis > small:first-of-type { left: 0; }
+.rhythm-live-axis > small:last-of-type { right: 0; }
+
+.rhythm-live-readouts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+}
+
+.rhythm-live-readouts > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 18px;
+  background: var(--surface-soft);
+}
+
+.rhythm-live-readouts span,
+.rhythm-live-gaps > li > span {
+  color: var(--faint);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rhythm-live-readouts strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.rhythm-live-readouts small {
+  color: var(--muted);
+  font-size: 0.6rem;
+  line-height: 1.4;
+}
+
+.rhythm-live-gaps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin: 24px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.rhythm-live-gaps > li {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 15px 13px;
+  border-right: 1px solid var(--line);
+}
+
+.rhythm-live-gaps > li:last-child { border-right: 0; }
+.rhythm-live-gaps > li.is-repeated { box-shadow: inset 0 3px var(--tone-a); }
+
+.rhythm-live-gaps strong {
+  margin: 3px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+}
+
+.rhythm-live-gaps small,
+.rhythm-live-gaps em {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.rhythm-live-gaps em { color: var(--foreground); }
+
+.rhythm-live-boundary,
+.rhythm-live-empty {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  align-items: center;
+  padding: 22px clamp(22px, 5vw, 72px);
+  background: var(--surface-soft);
+}
+
+.rhythm-live-boundary p,
+.rhythm-live-empty p {
+  max-width: 90ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.rhythm-live-boundary strong,
+.rhythm-live-empty strong { color: var(--foreground); }
+.rhythm-live-empty > div { display: grid; gap: 7px; }
+
+.rhythm-live-boundary button,
+.rhythm-live-empty button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--foreground);
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.rhythm-authoring-disclosure {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.rhythm-authoring-disclosure > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px clamp(22px, 5vw, 72px);
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.rhythm-authoring-disclosure > summary strong {
+  margin-right: auto;
+  font-size: 0.78rem;
+}
+
+.rhythm-authoring-disclosure > summary span {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.rhythm-authoring-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
+
 .atlas-live-bridge {
   display: grid;
   gap: 0;
@@ -6087,6 +6327,10 @@ footer a {
     grid-template-columns: 1fr;
     gap: 18px;
   }
+
+  .rhythm-live-readouts {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 620px) {
@@ -6120,6 +6364,30 @@ footer a {
   .atlas-live-lane {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .rhythm-live-heading,
+  .rhythm-live-boundary,
+  .rhythm-live-empty,
+  .rhythm-authoring-disclosure > summary {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .rhythm-live-heading,
+  .rhythm-live-boundary,
+  .rhythm-live-empty,
+  .rhythm-authoring-disclosure > summary {
+    display: grid;
+  }
+
+  .rhythm-live-boundary button,
+  .rhythm-live-empty button { width: 100%; }
+
+  .rhythm-live-gaps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rhythm-live-gaps > li:nth-child(2n) { border-right: 0; }
 }
 
 /* Scale Lab: movable relationships rendered as physical octave geometry. */
@@ -8687,4 +8955,6 @@ footer a {
   .atlas-curator-marker { border-color: Canvas; background: Highlight; box-shadow: 0 0 0 1px Highlight; }
   .atlas-live-key { color: LinkText; }
   .atlas-curator-key { color: Highlight; }
+  .rhythm-live-axis > span { border-color: Canvas; background: LinkText; color: Canvas; box-shadow: 0 0 0 1px LinkText; }
+  .rhythm-live-gaps > li.is-repeated { box-shadow: inset 0 3px LinkText; }
 }

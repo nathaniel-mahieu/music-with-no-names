@@ -150,13 +150,13 @@ const LAB_COPY: Record<
     principleBottom: "every voice changes the whole",
   },
   rhythm: {
-    eyebrow: "Build rhythm from relative time",
-    title: "Place sounds in a cycle and feel the pattern move.",
+    eyebrow: "Find rhythm inside your own phrase",
+    title: "Remove pitch. See the shape made by time.",
     description:
-      "Add or remove events around a repeating pulse. Change tempo and small timing offsets while keeping the pattern’s relative shape.",
-    principleTop: "Relative timing",
-    principleMain: "repeating cycle",
-    principleBottom: "heard at a chosen tempo",
+      "Carry a silent Piano phrase into a timing-only view. Chords become onset groups; gaps become local ratios; releases distinguish overlap from silence.",
+    principleTop: "One phrase",
+    principleMain: "→ timing shape",
+    principleBottom: "before pulse, meter, or groove labels",
   },
   journey: {
     eyebrow: "Hear how expectation grows over time",
@@ -759,7 +759,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.51
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.52
         </div>
       </header>
 
@@ -1013,7 +1013,7 @@ export function RatioLab() {
         ) : activeLab === "harmony" ? (
           <HarmonyLab />
         ) : activeLab === "rhythm" ? (
-          <RhythmLab />
+          <RhythmLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "journey" ? (
           <JourneyLab />
         ) : activeLab === "recording" ? (

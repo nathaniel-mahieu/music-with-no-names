@@ -11,6 +11,47 @@ export type LivePulseEvent = {
   velocity?: number;
 };
 
+export type LiveRhythmPhraseEvent = LivePulseEvent & {
+  releaseMs?: number | null;
+};
+
+export type LiveRhythmConnection = "overlap" | "connected" | "silence" | "unknown" | "ending";
+
+export type LiveRhythmCluster = {
+  eventIds: number[];
+  onsetMs: number;
+  relativeOnset: number;
+  attackCount: number;
+  meanVelocity: number;
+  endMs: number | null;
+  durationMs: number | null;
+  connection: LiveRhythmConnection;
+  connectionMs: number | null;
+};
+
+export type LiveRhythmGap = {
+  fromCluster: number;
+  toCluster: number;
+  gapMs: number;
+  localMultiple: number;
+  nearestMultiple: number;
+  ratioLabel: string;
+  errorPercent: number;
+  repeated: boolean;
+};
+
+export type LiveRhythmPhraseProfile = {
+  attackCount: number;
+  clusterCount: number;
+  elapsedMs: number;
+  localUnitMs: number;
+  repeatedGapShare: number;
+  velocityRange: number;
+  knownConnectionCount: number;
+  clusters: LiveRhythmCluster[];
+  gaps: LiveRhythmGap[];
+};
+
 export type LivePulsePlacement = {
   eventIds: number[];
   onsetMs: number;
@@ -81,14 +122,101 @@ function circularDistance(first: number, second: number) {
   return Math.min(distance, 1 - distance);
 }
 
-function clusterLiveOnsets(events: LivePulseEvent[], windowMs: number) {
-  const clusters: LivePulseEvent[][] = [];
+function clusterLiveOnsets<T extends LivePulseEvent>(events: T[], windowMs: number) {
+  const clusters: T[][] = [];
   events.forEach((event) => {
     const current = clusters.at(-1);
     if (current && event.onsetMs - current[0].onsetMs <= windowMs) current.push(event);
     else clusters.push([event]);
   });
   return clusters;
+}
+
+/**
+ * Removes pitch identity from a retained MIDI phrase and exposes onset-group
+ * spacing against the phrase's own median gap. The median is a local ruler,
+ * not an inferred beat, meter, tempo intention, or groove score.
+ */
+export function liveRhythmPhraseProfile(
+  events: LiveRhythmPhraseEvent[],
+  clusterWindowMs = 70,
+): LiveRhythmPhraseProfile | null {
+  const usable = events
+    .filter((event) => Number.isInteger(event.id)
+      && Number.isInteger(event.note)
+      && event.note >= 0
+      && event.note <= 127
+      && Number.isFinite(event.onsetMs)
+      && event.onsetMs >= 0
+      && (event.velocity == null || (Number.isInteger(event.velocity) && event.velocity >= 0 && event.velocity <= 127))
+      && (event.releaseMs == null || (Number.isFinite(event.releaseMs) && event.releaseMs >= event.onsetMs)))
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  if (usable.length < 4) return null;
+
+  const grouped = clusterLiveOnsets(usable, Math.max(0, clusterWindowMs));
+  if (grouped.length < 3) return null;
+  const onsetGaps = grouped.slice(1).map((cluster, index) => cluster[0].onsetMs - grouped[index][0].onsetMs);
+  const localUnitMs = median(onsetGaps);
+  const elapsedMs = grouped.at(-1)![0].onsetMs - grouped[0][0].onsetMs;
+  if (!Number.isFinite(localUnitMs) || localUnitMs <= 0 || elapsedMs <= 0) return null;
+
+  const rawGaps = onsetGaps.map((gapMs, index) => {
+    const localMultiple = gapMs / localUnitMs;
+    const landmark = [...GAP_LANDMARKS].sort(
+      (first, second) => Math.abs(Math.log2(localMultiple / first.value)) - Math.abs(Math.log2(localMultiple / second.value)),
+    )[0];
+    return {
+      fromCluster: index,
+      toCluster: index + 1,
+      gapMs,
+      localMultiple,
+      nearestMultiple: landmark.value,
+      ratioLabel: landmark.label,
+      errorPercent: (localMultiple / landmark.value - 1) * 100,
+    };
+  });
+  const gaps = rawGaps.map((gap, index) => ({
+    ...gap,
+    repeated: rawGaps.some((other, otherIndex) => otherIndex !== index && Math.abs(Math.log2(gap.localMultiple / other.localMultiple)) <= 0.12),
+  }));
+  const connectionToleranceMs = Math.max(25, Math.min(80, localUnitMs * 0.1));
+  let knownConnectionCount = 0;
+  const clusters = grouped.map((cluster, index): LiveRhythmCluster => {
+    const releases = cluster.map((event) => event.releaseMs).filter((release): release is number => release != null);
+    const endMs = releases.length === cluster.length ? Math.max(...releases) : null;
+    const nextOnset = grouped[index + 1]?.[0].onsetMs ?? null;
+    const connectionMs = endMs == null || nextOnset == null ? null : endMs - nextOnset;
+    let connection: LiveRhythmConnection = index === grouped.length - 1 ? "ending" : "unknown";
+    if (connectionMs != null) {
+      knownConnectionCount += 1;
+      if (connectionMs > connectionToleranceMs) connection = "overlap";
+      else if (connectionMs < -connectionToleranceMs) connection = "silence";
+      else connection = "connected";
+    }
+    return {
+      eventIds: cluster.map((event) => event.id),
+      onsetMs: cluster[0].onsetMs,
+      relativeOnset: (cluster[0].onsetMs - grouped[0][0].onsetMs) / elapsedMs,
+      attackCount: cluster.length,
+      meanVelocity: Math.round(cluster.reduce((sum, event) => sum + (event.velocity ?? 64), 0) / cluster.length),
+      endMs,
+      durationMs: endMs == null ? null : Math.max(0, endMs - cluster[0].onsetMs),
+      connection,
+      connectionMs,
+    };
+  });
+  const velocities = usable.map((event) => event.velocity ?? 64);
+  return {
+    attackCount: usable.length,
+    clusterCount: clusters.length,
+    elapsedMs,
+    localUnitMs,
+    repeatedGapShare: gaps.filter((gap) => gap.repeated).length / gaps.length,
+    velocityRange: Math.max(...velocities) - Math.min(...velocities),
+    knownConnectionCount,
+    clusters,
+    gaps,
+  };
 }
 
 /**

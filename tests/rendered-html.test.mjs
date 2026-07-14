@@ -251,11 +251,14 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(harmonyLab, /Emotion is not inside a ratio/);
   assert.match(harmonyLab, /three to six pitches together/);
   assert.match(harmonyLab, /Add source/);
-  assert.match(rhythmLab, /Build a pattern, then feel it at different speeds/);
+  assert.match(rhythmLab, /See the timing shape before naming the beat/);
   assert.match(rhythmLab, /Anchor resistance/);
   assert.match(rhythmLab, /Competing pulse hypotheses/);
   assert.match(rhythmLab, /Transparent syncopation/);
   assert.match(rhythmLab, /Embodied pulse input/);
+  assert.match(rhythmLab, /What remains when every pitch becomes the same point/);
+  assert.match(rhythmLab, /median onset gap · not a detected beat/);
+  assert.match(rhythmLab, /Replay these gaps on new keys/);
   assert.match(journeyLab, /Follow a phrase as it repeats, changes, and returns/);
   assert.match(journeyLab, /Acoustic Microscope/);
   assert.match(journeyLab, /Expected alternatives/);

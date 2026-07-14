@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { cyclicOnsetIntervals } from "@/lib/music-math";
-import { estimateTapTempo, nestedCyclePhases, pulseHypotheses, syncopationIndex } from "@/lib/rhythm-model";
+import { estimateTapTempo, liveRhythmPhraseProfile, nestedCyclePhases, pulseHypotheses, syncopationIndex, type LiveRhythmCluster } from "@/lib/rhythm-model";
 import { SYNTH_MASTER_GAIN, configureSafetyCompressor } from "@/lib/audio-level";
+import { PIANO_SESSION_KEY, parsePianoPhraseSpecimen, type PianoPhraseSpecimenEvent } from "@/lib/piano-session";
 
 const PULSE_COUNT = 12;
 const ANCHORS = new Set([0, 3, 6, 9]);
@@ -61,13 +62,113 @@ function scheduleClick(
   oscillator.stop(time + 0.06);
 }
 
-export function RhythmLab() {
+function durationLabel(milliseconds: number) {
+  return milliseconds >= 1_000 ? `${(milliseconds / 1_000).toFixed(1)} s` : `${Math.round(milliseconds)} ms`;
+}
+
+function connectionLabel(cluster: LiveRhythmCluster) {
+  if (cluster.connection === "ending") return "phrase ending";
+  if (cluster.connection === "unknown" || cluster.connectionMs == null) return "release unavailable";
+  if (cluster.connection === "overlap") return `${durationLabel(cluster.connectionMs)} overlap`;
+  if (cluster.connection === "silence") return `${durationLabel(Math.abs(cluster.connectionMs))} silence`;
+  return `edges meet within ${durationLabel(Math.abs(cluster.connectionMs))}`;
+}
+
+function LivePhraseRhythmBridge({
+  phrase,
+  hydrated,
+  onNavigateToPiano,
+}: {
+  phrase: PianoPhraseSpecimenEvent[];
+  hydrated: boolean;
+  onNavigateToPiano?: () => void;
+}) {
+  const profile = useMemo(() => liveRhythmPhraseProfile(phrase), [phrase]);
+  const recentGaps = profile?.gaps.slice(-6) ?? [];
+  const accessibleRatios = profile?.gaps.slice(-12).map((gap) => `${gap.localMultiple.toFixed(2)} times the local unit, nearest ${gap.ratioLabel}`).join(", ") ?? "";
+  return (
+    <section className="rhythm-live-bridge" aria-labelledby="rhythm-live-title">
+      <div className="rhythm-live-heading">
+        <div>
+          <span className="workspace-label">Live phrase · pitch removed</span>
+          <h3 id="rhythm-live-title">What remains when every pitch becomes the same point?</h3>
+        </div>
+        <p>Onsets become groups. Gaps become ratios. Releases reveal overlap or silence.</p>
+      </div>
+
+      {!hydrated ? (
+        <p className="rhythm-live-status" role="status">Reading the retained phrase…</p>
+      ) : profile ? (
+        <>
+          <p className="rhythm-live-status">{profile.attackCount} attacks → {profile.clusterCount} onset groups · {durationLabel(profile.elapsedMs)} span · MIDI timing only</p>
+          <div
+            className="rhythm-live-figure"
+            role="img"
+            aria-label={`Pitchless timing profile with ${profile.clusterCount} onset groups across ${durationLabel(profile.elapsedMs)}. The median onset gap is ${durationLabel(profile.localUnitMs)}. Recent local gap ratios are ${accessibleRatios}. ${profile.knownConnectionCount} connections include complete release evidence.`}
+          >
+            <div className="rhythm-live-axis" aria-hidden="true">
+              <i />
+              {profile.clusters.map((cluster, index) => (
+                <span
+                  key={cluster.eventIds.join("-")}
+                  className={cluster.attackCount > 1 ? "is-cluster" : ""}
+                  style={{
+                    "--rhythm-left": `${Math.min(98, Math.max(2, cluster.relativeOnset * 100))}%`,
+                    "--rhythm-size": `${Math.min(22, 10 + cluster.attackCount * 3)}px`,
+                  } as CSSProperties}
+                >
+                  <b>{index + 1}</b>
+                  {cluster.attackCount > 1 ? <small>×{cluster.attackCount}</small> : null}
+                </span>
+              ))}
+              <small>start</small><small>{durationLabel(profile.elapsedMs)}</small>
+            </div>
+            <div className="rhythm-live-readouts">
+              <div><span>Local ruler</span><strong>{durationLabel(profile.localUnitMs)} = 1</strong><small>median onset gap · not a detected beat</small></div>
+              <div><span>Returning gap shapes</span><strong>{Math.round(profile.repeatedGapShare * 100)}%</strong><small>share of normalized gap lengths that recur closely</small></div>
+              <div><span>MIDI attack range</span><strong>{profile.velocityRange}</strong><small>key-attack values · not acoustic loudness</small></div>
+            </div>
+            <ol className="rhythm-live-gaps" aria-label="Latest onset gaps">
+              {recentGaps.map((gap) => {
+                const source = profile.clusters[gap.fromCluster];
+                return (
+                  <li key={`${gap.fromCluster}-${gap.toCluster}`} className={gap.repeated ? "is-repeated" : ""}>
+                    <span>{gap.fromCluster + 1} → {gap.toCluster + 1}</span>
+                    <strong>{gap.localMultiple.toFixed(2)}×</strong>
+                    <small>{durationLabel(gap.gapMs)} · nearest {gap.ratioLabel}</small>
+                    <em>{gap.repeated ? "shape returns" : "new shape"} · {connectionLabel(source)}</em>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          <div className="rhythm-live-boundary">
+            <p><strong>Keep the distinction:</strong> the median gap is a phrase-local ruler, not a detected pulse. A repeated ratio can help a gesture feel recognizable, while touch, meter, accent, expectation, and the listener still shape the experience. This is not a groove or quality score.</p>
+            {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Replay these gaps on new keys</button> : null}
+          </div>
+        </>
+      ) : (
+        <div className="rhythm-live-empty">
+          <div>
+            <strong>{phrase.length ? `${phrase.length} retained attack${phrase.length === 1 ? "" : "s"}, but not enough separated timing yet` : "No retained phrase yet"}</strong>
+            <p>Play at least four attacks across three distinct onset groups. Notes arriving within 70 ms count as one rhythmic event, so a chord cannot masquerade as a fast rhythm.</p>
+          </div>
+          {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Build a phrase in Piano</button> : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function RhythmLab({ onNavigateToPiano }: { onNavigateToPiano?: () => void }) {
   const [pattern, setPattern] = useState(() => buildPattern(RHYTHM_PRESETS[1].active));
   const [pulseRate, setPulseRate] = useState(180);
   const [oddDelayMs, setOddDelayMs] = useState(18);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
   const [tapTimes, setTapTimes] = useState<number[]>([]);
+  const [phraseSpecimen, setPhraseSpecimen] = useState<PianoPhraseSpecimenEvent[]>([]);
+  const [phraseHydrated, setPhraseHydrated] = useState(false);
   const engineRef = useRef<RhythmEngine | null>(null);
   const patternRef = useRef(pattern);
   const pulseRateRef = useRef(pulseRate);
@@ -162,6 +263,15 @@ export function RhythmLab() {
 
   useEffect(() => stop, [stop]);
 
+  useEffect(() => {
+    try {
+      setPhraseSpecimen(parsePianoPhraseSpecimen(window.sessionStorage.getItem(PIANO_SESSION_KEY)) ?? []);
+    } catch {
+      setPhraseSpecimen([]);
+    }
+    setPhraseHydrated(true);
+  }, []);
+
   const toggleStep = (index: number) => {
     setPattern((current) => {
       const next = current.map((isActive, currentIndex) =>
@@ -183,15 +293,19 @@ export function RhythmLab() {
     <section className="advanced-lab rhythm-lab" aria-labelledby="rhythm-title">
       <div className="lab-intro">
         <div>
-          <p className="section-kicker">Rhythm Lab · one cycle, twelve places for sound</p>
-          <h2 id="rhythm-title">Build a pattern, then feel it at different speeds.</h2>
+          <p className="section-kicker">Rhythm Lab · the same phrase, heard as time</p>
+          <h2 id="rhythm-title">See the timing shape before naming the beat.</h2>
         </div>
         <p>
-          Turn positions on or off, then change tempo and timing. Notice which parts of the pattern stay recognizable.
+          Begin with what your hands played. Remove pitch identity, group chord attacks, and compare every gap with a local ruler before opening a pulse grid.
         </p>
       </div>
 
-      <div className="lab-workspace rhythm-workspace">
+      <LivePhraseRhythmBridge phrase={phraseSpecimen} hydrated={phraseHydrated} onNavigateToPiano={onNavigateToPiano} />
+
+      <details className="rhythm-authoring-disclosure">
+        <summary><strong>Build or hear an authored cycle</strong><span>optional twelve-position grid, pulse hypotheses, timing bias, and click playback</span></summary>
+        <div className="lab-workspace rhythm-workspace">
         <div className="lab-controls">
           <div className="workspace-heading">
             <div>
@@ -351,11 +465,12 @@ export function RhythmLab() {
         </div>
       </div>
 
-      <div className="lab-learning-note">
-        <strong>Try this:</strong> keep the 3:3:2:2:2 pattern and sweep the pulse rate.
-        Then add timing bias. The symbolic ratios stay fixed while movement, urgency,
-        and groove change in the body.
-      </div>
+        <div className="lab-learning-note">
+          <strong>Try this:</strong> keep the 3:3:2:2:2 pattern and sweep the pulse rate.
+          Then add timing bias. The symbolic ratios stay fixed while movement, urgency,
+          and groove change in the body.
+        </div>
+      </details>
     </section>
   );
 }

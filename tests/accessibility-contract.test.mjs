@@ -12,10 +12,11 @@ test("every learning lab exposes a named semantic region", async () => {
 });
 
 test("dynamic visuals and status changes expose nonvisual descriptions", async () => {
-  const [ratio, scale, piano, recording, journey, atlas] = await Promise.all([
+  const [ratio, scale, piano, rhythm, recording, journey, atlas] = await Promise.all([
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RecordingLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/JourneyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/AtlasLab.tsx", import.meta.url), "utf8"),
@@ -64,17 +65,22 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Motion learning question"/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
+  assert.match(rhythm, /aria-labelledby="rhythm-live-title"/);
+  assert.match(rhythm, /role="img"/);
+  assert.match(rhythm, /Pitchless timing profile with/);
+  assert.match(rhythm, /<details className="rhythm-authoring-disclosure"/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);
 });
 
 test("focus, reduced-motion, and non-color contracts are present", async () => {
-  const [css, ratio, scale, piano] = await Promise.all([
+  const [css, ratio, scale, piano, rhythm] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(css, /select:focus-visible/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
@@ -117,4 +123,6 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-pulse-onset[\s\S]*Highlight/);
   assert.match(css, /\.hud-walk-route li\.is-current[\s\S]*box-shadow/);
   assert.match(css, /\.piano-key\.is-active,[\s\S]*Highlight/);
+  assert.match(css, /\.rhythm-live-axis > span[\s\S]*background: LinkText/);
+  assert.doesNotMatch(rhythm, /tabIndex=\{?[1-9]/);
 });
