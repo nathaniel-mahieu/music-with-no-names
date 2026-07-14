@@ -105,6 +105,16 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Particular performances · no average/);
   assert.match(piano, /Did moving the relationship change your experience\?/);
   assert.match(piano, /They do not establish your recognition threshold or a general law about transposition/);
+  assert.match(piano, />Reflect on the whole arc<\/button>/);
+  assert.match(piano, /motifReturnArcEventIds\(session\.sourceEvents\.map/);
+  assert.match(piano, /The source aged out of the sixty-second phrase\. Start a new arc to reflect on its exact timing/);
+  assert.match(piano, /holdBoundedExperienceSpecimen\("motif-return", specimen\)/);
+  assert.match(piano, /prompt\s*\.replace\("this phrase", "this source–variation–return arc"\)/);
+  assert.match(piano, /replace\("this relationship path", "this source–variation–return arc"\)/);
+  assert.match(piano, /replace\("this particular experience", "this source–variation–return experience"\)/);
+  assert.match(piano, /origin === "motif-return" \? "motif source \+ variation \+ return"/);
+  assert.match(piano, /The exact source, latest variation, and relationship return are frozen together/);
+  assert.match(piano, /Save this return-arc report/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
   assert.match(piano, /aria-labelledby="hud-phrase-breath-title"/);

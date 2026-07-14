@@ -2604,6 +2604,29 @@ export function motifReturnArc(comparisons: MotifEchoComparison[]): MotifReturnA
   };
 }
 
+/**
+ * Selects the exact performed events that close the latest learner-bounded
+ * source → variation → relationship-return arc. Event timing remains outside
+ * this helper so callers can refuse a handoff when any live event has expired.
+ */
+export function motifReturnArcEventIds(
+  sourceEventIds: number[],
+  comparisons: MotifEchoComparison[],
+): number[] | null {
+  const arc = motifReturnArc(comparisons);
+  const variationIndex = arc.variationIndices.at(-1);
+  const returnIndex = arc.returnAfterVariationIndex;
+  if (variationIndex == null || returnIndex == null) return null;
+  const variation = comparisons[variationIndex];
+  const relationshipReturn = comparisons[returnIndex];
+  if (!variation || !relationshipReturn || !sourceEventIds.length) return null;
+  const statementLength = sourceEventIds.length;
+  if (variation.targetEventIds.length !== statementLength || relationshipReturn.targetEventIds.length !== statementLength) return null;
+  const ids = [...sourceEventIds, ...variation.targetEventIds, ...relationshipReturn.targetEventIds];
+  if (!ids.every(Number.isInteger) || new Set(ids).size !== ids.length) return null;
+  return ids;
+}
+
 /** Retains a few particular performances without averaging them into a rule. */
 export function upsertMotifReturnObservation(
   observations: MotifReturnObservation[],

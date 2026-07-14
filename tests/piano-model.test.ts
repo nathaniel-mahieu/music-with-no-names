@@ -39,6 +39,7 @@ import {
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
   motifReturnArc,
+  motifReturnArcEventIds,
   upsertMotifReturnObservation,
   matchesLandmarkStep,
   matchScaleFingerprint,
@@ -1204,6 +1205,19 @@ test("tracks a local variation followed by a relationship return without claimin
     returnIndices: [0, 2],
     returnAfterVariationIndex: null,
   });
+});
+
+test("selects the exact latest source variation return arc by event id", () => {
+  const source = motifEvents([60, 62, 64, 65], [0, 100, 200, 300]);
+  const firstVariation = compareMotifEcho(source, motifEvents([60, 62, 64, 67], [500, 600, 700, 800]).map((event) => ({ ...event, id: event.id + 4 })))!;
+  const firstReturn = compareMotifEcho(source, motifEvents([60, 62, 64, 65], [900, 1000, 1100, 1200]).map((event) => ({ ...event, id: event.id + 8 })))!;
+  const latestVariation = compareMotifEcho(source, motifEvents([60, 62, 63, 65], [1300, 1400, 1500, 1600]).map((event) => ({ ...event, id: event.id + 12 })))!;
+  const latestReturn = compareMotifEcho(source, motifEvents([67, 69, 71, 72], [1700, 1800, 1900, 2000]).map((event) => ({ ...event, id: event.id + 16 })))!;
+
+  assert.equal(motifReturnArcEventIds(source.map((event) => event.id), [firstVariation]), null);
+  assert.deepEqual(motifReturnArcEventIds(source.map((event) => event.id), [firstVariation, firstReturn]), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(motifReturnArcEventIds(source.map((event) => event.id), [firstVariation, firstReturn, latestVariation, latestReturn]), [1, 2, 3, 4, 13, 14, 15, 16, 17, 18, 19, 20]);
+  assert.equal(motifReturnArcEventIds([1, 2, 2, 4], [firstVariation, firstReturn]), null);
 });
 
 test("retains particular return reports without turning them into an aggregate", () => {

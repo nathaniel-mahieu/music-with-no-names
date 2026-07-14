@@ -47,6 +47,7 @@ import {
   landmarkTranspositionProfile,
   matchScaleFingerprint,
   motifReturnArc,
+  motifReturnArcEventIds,
   nearbyScaleChords,
   nearestMidiForPitchClass,
   noteContext,
@@ -181,7 +182,7 @@ type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif" | "breath";
 type ChordFocusMode = "cause" | "change" | "echo";
-type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo" | "resolution-fork";
+type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo" | "resolution-fork" | "motif-return";
 type IntervalEchoTarget = {
   semitones: number;
   anchorEventId: number;
@@ -2177,11 +2178,13 @@ const MOTIF_RETURN_REPORTS: Array<{ id: MotifReturnReport; label: string; readin
   { id: "felt-return", label: "Yes, a return", reading: "You heard the last statement as a return." },
 ];
 
-function MotifExperienceCheck({ comparison, report, observations, onReport }: {
+function MotifExperienceCheck({ comparison, report, observations, reflectSpecimen, onReport, onReflect }: {
   comparison: MotifEchoComparison;
   report: MotifReturnReport | null;
   observations: MotifReturnObservation[];
+  reflectSpecimen: HudNoteEvent[] | null;
   onReport: (comparison: MotifEchoComparison, report: MotifReturnReport) => void;
+  onReflect: (specimen: HudNoteEvent[]) => void;
 }) {
   const selected = MOTIF_RETURN_REPORTS.find((candidate) => candidate.id === report);
   const relationshipDetail = comparison.kind === "transposed-repeat"
@@ -2208,16 +2211,18 @@ function MotifExperienceCheck({ comparison, report, observations, onReport }: {
       </ol>
       <p>These reports describe a few particular performances. They do not establish your recognition threshold or a general law about transposition.</p>
     </div> : null}
+    {reflectSpecimen ? <button type="button" onClick={() => onReflect(reflectSpecimen)}>Reflect on the whole arc</button> : <p><small>The source aged out of the sixty-second phrase. Start a new arc to reflect on its exact timing.</small></p>}
   </section>;
 }
 
-function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, onReport, onEnd }: {
+function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, onReport, onReflect, onEnd }: {
   events: HudNoteEvent[];
   session: MotifEchoSession | null;
   attemptEvents: HudNoteEvent[];
   onStart: (length: 3 | 4) => void;
   onRetry: () => void;
   onReport: (comparison: MotifEchoComparison, report: MotifReturnReport) => void;
+  onReflect: (specimen: HudNoteEvent[]) => void;
   onEnd: () => void;
 }) {
   const required = session?.sourceEvents.length ?? 0;
@@ -2233,6 +2238,12 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
   const returnObservations = session?.returnObservations ?? [];
   const closingObservation = closingReturn ? returnObservations.find((observation) => observation.targetEventIds.join("-") === closingReturn.targetEventIds.join("-")) : null;
   const closingReport = closingObservation?.report ?? (session?.returnObservations == null ? session?.returnReport ?? null : null);
+  const arcEventIds = session ? motifReturnArcEventIds(session.sourceEvents.map((event) => event.id), comparisons) : null;
+  const liveEventById = new Map(events.map((event) => [event.id, event]));
+  const reflectSpecimen = arcEventIds
+    ? arcEventIds.map((id) => liveEventById.get(id)).filter((event): event is HudNoteEvent => Boolean(event))
+    : null;
+  const exactReflectSpecimen = reflectSpecimen?.length === arcEventIds?.length ? reflectSpecimen : null;
   const sourceMoves = session ? session.sourceEvents.slice(1).map((event, index) => motifSigned(event.note - session.sourceEvents[index].note)).join(" · ") : "";
   return <section className="hud-motif-echo" aria-labelledby="hud-motif-echo-title">
     <div className="hud-subheading"><span>Learner-bounded experiment · silent</span><strong id="hud-motif-echo-title">Choose the shape before the model searches.</strong><small>Freeze exactly three or four recent attacks, then replay that whole statement. No smaller sub-match can replace your chosen boundary.</small></div>
@@ -2250,7 +2261,7 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
       </div>
       {comparisons.length ? <MotifReturnTrail comparisons={comparisons} currentIndex={comparison ? comparisons.length - 1 : null} /> : null}
       {comparison ? <MotifFingerprintFigure id="echo" readingTitle={motifEchoTitle(comparison)} comparison={comparison} sourceLabel="chosen source" targetLabel="your replay" /> : null}
-      {closingReturn ? <MotifExperienceCheck comparison={closingReturn} report={closingReport} observations={returnObservations} onReport={onReport} /> : null}
+      {closingReturn ? <MotifExperienceCheck comparison={closingReturn} report={closingReport} observations={returnObservations} reflectSpecimen={exactReflectSpecimen} onReport={onReport} onReflect={onReflect} /> : null}
       <div className="hud-motif-echo-actions">
         {comparison ? <button type="button" onClick={onRetry}>{arc.status === "return-after-variation" ? "Keep return + continue" : comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat" ? "Keep return + change one property" : "Keep variation + try a return"}</button> : null}
         <button type="button" onClick={onEnd}>Release source</button>
@@ -2259,7 +2270,7 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
   </section>;
 }
 
-function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSession = null, motifEchoAttempt = [], onStartMotifEcho = () => {}, onRetryMotifEcho = () => {}, onReportMotifReturn = () => {}, onEndMotifEcho = () => {} }: {
+function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSession = null, motifEchoAttempt = [], onStartMotifEcho = () => {}, onRetryMotifEcho = () => {}, onReportMotifReturn = () => {}, onReflectMotifReturn = () => {}, onEndMotifEcho = () => {} }: {
   events: HudNoteEvent[];
   articulation: ArticulationEvidence[];
   motifs: MotifTransformation[];
@@ -2269,6 +2280,7 @@ function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSessio
   onStartMotifEcho?: (length: 3 | 4) => void;
   onRetryMotifEcho?: () => void;
   onReportMotifReturn?: (comparison: MotifEchoComparison, report: MotifReturnReport) => void;
+  onReflectMotifReturn?: (specimen: HudNoteEvent[]) => void;
   onEndMotifEcho?: () => void;
 }) {
   const microscopeArticulation = articulation.slice(-7);
@@ -2346,7 +2358,7 @@ function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSessio
           <small>Compare relationship shape separately from starting key and elapsed speed.</small>
         </div> : null}
         {strongest && fingerprint && fingerprintRevealed ? <div id="hud-motif-fingerprint-detail"><MotifFingerprintFigure id="detected" readingTitle={motifTitle(strongest)} comparison={fingerprint} sourceLabel={rangeLabel(strongest.sourceStartIndex, strongest.length)} targetLabel={rangeLabel(strongest.targetStartIndex, strongest.length)} /></div> : null}
-        <MotifEchoPractice events={events} session={motifEchoSession} attemptEvents={motifEchoAttempt} onStart={onStartMotifEcho} onRetry={onRetryMotifEcho} onReport={onReportMotifReturn} onEnd={onEndMotifEcho} />
+        <MotifEchoPractice events={events} session={motifEchoSession} attemptEvents={motifEchoAttempt} onStart={onStartMotifEcho} onRetry={onRetryMotifEcho} onReport={onReportMotifReturn} onReflect={onReflectMotifReturn} onEnd={onEndMotifEcho} />
       </div> : null}
     </div>
   </section>;
@@ -3465,6 +3477,10 @@ function experiencePromptForOrigin(prompt: string, origin: ExperienceOrigin) {
   if (origin === "chord-voicing-echo") return prompt.replace("this phrase", "this source-and-revoicing comparison");
   if (origin === "chord-motion-echo") return prompt.replace("this phrase", "this source-and-replayed chord move");
   if (origin === "resolution-fork") return prompt.replace("this phrase", "this intended landing in context");
+  if (origin === "motif-return") return prompt
+    .replace("this phrase", "this source–variation–return arc")
+    .replace("this relationship path", "this source–variation–return arc")
+    .replace("this particular experience", "this source–variation–return experience");
   return prompt;
 }
 
@@ -3494,8 +3510,8 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
   const questionPrompt = question ? experiencePromptForOrigin(question.prompt, origin) : undefined;
   const ready = captured.length >= 3;
   const boundedComparison = origin !== "phrase";
-  const specimenLabel = origin === "interval-echo" ? "interval source + echo" : origin === "chord-change" ? "chord before + after" : origin === "chord-voicing-echo" ? "chord source + voicing" : origin === "chord-motion-echo" ? "chord move source + replay" : origin === "resolution-fork" ? "resolution source + landing" : "reflection specimen";
-  const specimenState = origin === "interval-echo" || origin === "chord-voicing-echo" || origin === "chord-motion-echo" ? "comparison held" : origin === "chord-change" ? "change held" : origin === "resolution-fork" ? "landing held" : "";
+  const specimenLabel = origin === "interval-echo" ? "interval source + echo" : origin === "chord-change" ? "chord before + after" : origin === "chord-voicing-echo" ? "chord source + voicing" : origin === "chord-motion-echo" ? "chord move source + replay" : origin === "resolution-fork" ? "resolution source + landing" : origin === "motif-return" ? "motif source + variation + return" : "reflection specimen";
+  const specimenState = origin === "interval-echo" || origin === "chord-voicing-echo" || origin === "chord-motion-echo" ? "comparison held" : origin === "chord-change" ? "change held" : origin === "resolution-fork" ? "landing held" : origin === "motif-return" ? "return arc held" : "";
   const repeatedReportCopy = `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} ${repeats.length === 1 ? "shares" : "share"} this relationship signature.`;
   const specimenCopy = origin === "interval-echo"
     ? `The exact source and replay are frozen together. ${repeatedReportCopy}`
@@ -3507,8 +3523,10 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
           ? `The exact two source fields and two replay fields are frozen together. ${repeatedReportCopy}`
           : origin === "resolution-fork"
             ? `The frozen fork source, performed path, and first matching landing are held together. ${repeatedReportCopy}`
+            : origin === "motif-return"
+              ? `The exact source, latest variation, and relationship return are frozen together. ${repeatedReportCopy}`
       : `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature.`;
-  const saveLabel = origin === "phrase" ? "Save this phrase report" : origin === "chord-change" ? "Save this chord-change report" : origin === "chord-voicing-echo" ? "Save this voicing report" : origin === "chord-motion-echo" ? "Save this chord-move report" : origin === "resolution-fork" ? "Save this landing report" : "Save this comparison report";
+  const saveLabel = origin === "phrase" ? "Save this phrase report" : origin === "chord-change" ? "Save this chord-change report" : origin === "chord-voicing-echo" ? "Save this voicing report" : origin === "chord-motion-echo" ? "Save this chord-move report" : origin === "resolution-fork" ? "Save this landing report" : origin === "motif-return" ? "Save this return-arc report" : "Save this comparison report";
   const draftPlaced = draft.settledness != null && draft.energy != null;
   const xFor = (value: number) => 54 + value / 100 * 412;
   const yFor = (value: number) => 252 - value / 100 * 210;
@@ -4565,6 +4583,12 @@ export function PianoLab() {
     holdBoundedExperienceSpecimen("resolution-fork", specimen);
   };
 
+  const beginMotifReturnReflection = (specimen: HudNoteEvent[]) => {
+    const uniqueCount = new Set(specimen.map((event) => event.id)).size;
+    if ((uniqueCount !== 9 && uniqueCount !== 12) || uniqueCount !== specimen.length) return;
+    holdBoundedExperienceSpecimen("motif-return", specimen);
+  };
+
   const freezeChordSourceEvents = (measure: ChordMeasure) => {
     const notes = uniqueSorted(measure.interpretedNotes);
     const attackedNotes = new Set(measure.gesture.attacks.map((event) => event.note));
@@ -4841,7 +4865,7 @@ export function PianoLab() {
     : focusLens === "experience" ? experiencePhrase.length < 3
     ? "Play at least three attacks, then hold the latest phrase for a personal reflection."
     : experienceSaved
-      ? `Your ${experienceOrigin === "phrase" ? "phrase" : experienceOrigin === "chord-change" ? "chord-change" : experienceOrigin === "chord-voicing-echo" ? "chord-voicing" : experienceOrigin === "chord-motion-echo" ? "chord-move" : experienceOrigin === "resolution-fork" ? "resolution-landing" : "interval-comparison"} report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence.`
+      ? `Your ${experienceOrigin === "phrase" ? "phrase" : experienceOrigin === "chord-change" ? "chord-change" : experienceOrigin === "chord-voicing-echo" ? "chord-voicing" : experienceOrigin === "chord-motion-echo" ? "chord-move" : experienceOrigin === "resolution-fork" ? "resolution-landing" : experienceOrigin === "motif-return" ? "motif-return arc" : "interval-comparison"} report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence.`
       : experienceQuestionIndex < CHARACTER_QUESTIONS.length
         ? `Reflection ${experienceQuestionIndex + 1} of 4: ${experiencePromptForOrigin(CHARACTER_QUESTIONS[experienceQuestionIndex].prompt, experienceOrigin)}`
         : "All four personal dimensions are answered. Review them together before saving this observation."
@@ -4985,7 +5009,7 @@ export function PianoLab() {
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} landingEvidence={resolutionLanding} landingEvents={resolutionEvidenceEvents} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onReflectResolution={beginResolutionForkReflection} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
-        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} motifEchoSession={motifEchoSession} motifEchoAttempt={motifEchoAttempt} onStartMotifEcho={beginMotifEcho} onRetryMotifEcho={retryMotifEcho} onReportMotifReturn={reportMotifReturn} onEndMotifEcho={() => setMotifEchoSession(null)} />}
+        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} motifEchoSession={motifEchoSession} motifEchoAttempt={motifEchoAttempt} onStartMotifEcho={beginMotifEcho} onRetryMotifEcho={retryMotifEcho} onReportMotifReturn={reportMotifReturn} onReflectMotifReturn={beginMotifReturnReflection} onEndMotifEcho={() => setMotifEchoSession(null)} />}
       </> : null}
 
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}
