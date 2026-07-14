@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Gap Mutation v1.63**. It provides:
+The current milestone is **Scale Landing Mutation v1.64**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A companion-first learning hierarchy: Start, the live Piano companion, and the learner's Personal Lens stay prominent while specialist pitch, time, listening, recording, and landmark labs live in one grouped disclosure instead of competing as eleven equal destinations.
@@ -30,6 +30,7 @@ The current milestone is **Gap Mutation v1.63**. It provides:
 - Local-only phrase reports that persist across visits, appear in the Personal Lens, join portable JSON export and the two-step deletion flow, and never upload MIDI or infer emotion, familiarity, or liking.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
 - A learner-authored scale-fingerprint builder inside the single Piano HUD. Any first key becomes position zero; upward attacks create an unnamed ordered gap route; only an exact twelve-key span closes the octave at 2:1. Descending, overshooting, or wrong replay moves preserve the valid prefix so one relationship can be repaired. After closure, the learner can transpose the same gaps, rotate which gap comes first, and reveal optional catalog names only after the physical structure is understood.
+- A Change One Landing experiment inside that same performed scale builder. Any completed octave route can become the control for a free replay from any physical key. If exactly one internal landing moves while every other landing, position zero, position twelve, and the landing count remain fixed, the HUD aligns both thirteen-position routes and shows the neighboring gap trade as signed deltas—for example `2–2–1–2–2–2–1 → 2–1–2–2–2–2–1` with `Δ−1` and `Δ+1`. Reproducing the source, adding or removing a landing, or moving several landings receives a specific refusal rather than a scale-name, quality, or emotion claim; the keyboard never supplies a ghost answer.
 - A persistent live phrase ribbon that keeps sixty seconds of attacks, velocity, key release, sounding duration, pedal-extended tails, and silence while the coordinated staff, frequency, chord, and evidence views magnify the latest seven attacks.
 - A learner-declared Live Pulse Mirror inside the Piano Motion focus. Repeat one key four times to establish a physical time unit, then place later attack clusters around pulse lines and inspect onset-spacing ratios. The coordinate is silent, survives reload, and never claims to detect meter, groove, timing accuracy, or musical goodness.
 - Four one-question Motion modes—Pulse, Touch, Voices, and Motif—that keep the same phrase while hiding unrelated diagnostics. Each mode is URL-addressable and tab-persistent.
