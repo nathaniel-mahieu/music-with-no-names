@@ -129,6 +129,17 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Transition invariants across the route"/);
   assert.match(piano, /Transposing the whole route leaves this folded pattern unchanged/);
   assert.match(piano, /register, timing, the assumed sound, tonal interpretation, and your experience remain separate evidence/i);
+  assert.match(piano, /Which underlying route property changes\?/);
+  assert.match(piano, /route A held · now perform B/);
+  assert.match(piano, /function isLandmarkRouteCompareSession/);
+  assert.match(piano, /session\.sourcePathId !== session\.targetPathId/);
+  assert.match(piano, /version: 25[\s\S]*landmarkRouteCompareSession/);
+  assert.match(piano, /Two routes in the same underlying coordinate/);
+  assert.match(piano, /className="hud-landmark-compare-plot"[\s\S]*role="img" aria-label=\{summary\}/);
+  assert.match(piano, /role="table" aria-label="Route structure comparison"/);
+  assert.match(piano, /Dashed capsules mark exact field shapes present in both routes/);
+  assert.match(piano, /It is not a style match/);
+  assert.match(piano, /Timing, articulation, register, actual sound, tonal hearing, emotional response, familiarity, and goodness remain separate evidence/);
   assert.match(personal, /Latest performed landmark:/);
   assert.match(personal, /latestLandmarkCharacterContrast\(phraseObservations\)/);
   assert.match(personal, /What changed when you played this route again\?/);
@@ -192,6 +203,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-landmark-fingerprint-held[\s\S]*stroke: var\(--piano-blue\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-fingerprint-transitions \{ grid-template-columns: 1fr; \}/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-fingerprint-node\.is-changed \{ fill: Highlight/);
+  assert.match(css, /\.hud-landmark-compare-field > rect:first-child[\s\S]*stroke-dasharray: 3 3/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-compare-table > div \{ grid-template-columns: 1fr 1fr; \}/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-compare-field > rect:first-child \{ stroke: Highlight/);
   assert.match(css, /\.lab-nav-primary[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(ratio, /<details className="lab-nav-more"/);
   assert.match(ratio, /aria-label="Live piano phrase available"/);
@@ -320,7 +334,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
   assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
   assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
-  assert.match(piano, /version: 24/);
+  assert.match(piano, /version: 25/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperienceContext\(null\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);

@@ -264,12 +264,15 @@ export function RhythmLab({ onNavigateToPiano }: { onNavigateToPiano?: () => voi
   useEffect(() => stop, [stop]);
 
   useEffect(() => {
-    try {
-      setPhraseSpecimen(parsePianoPhraseSpecimen(window.sessionStorage.getItem(PIANO_SESSION_KEY)) ?? []);
-    } catch {
-      setPhraseSpecimen([]);
-    }
-    setPhraseHydrated(true);
+    const timer = window.setTimeout(() => {
+      try {
+        setPhraseSpecimen(parsePianoPhraseSpecimen(window.sessionStorage.getItem(PIANO_SESSION_KEY)) ?? []);
+      } catch {
+        setPhraseSpecimen([]);
+      }
+      setPhraseHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const toggleStep = (index: number) => {

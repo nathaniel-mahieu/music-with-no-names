@@ -175,12 +175,18 @@ export function pianoPartialInteraction(
   const alignedPairs = pairs
     .filter((pair) => pair.centsApart <= 18)
     .sort((first, second) => first.lowerHz - second.lowerHz)
-    .map(({ normalizedInteraction: _normalizedInteraction, ...pair }) => pair);
+    .map(({ normalizedInteraction, ...pair }) => {
+      void normalizedInteraction;
+      return pair;
+    });
   const interactionPairs = pairs
     .filter((pair) => pair.centsApart > 18 && pair.normalizedInteraction >= 0.035)
     .sort((first, second) => second.contribution - first.contribution)
     .slice(0, 6)
-    .map(({ normalizedInteraction: _normalizedInteraction, ...pair }) => pair);
+    .map(({ normalizedInteraction, ...pair }) => {
+      void normalizedInteraction;
+      return pair;
+    });
   return {
     lowerHz,
     upperHz,

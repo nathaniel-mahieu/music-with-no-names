@@ -23,6 +23,7 @@ import {
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
+  compareLandmarkRouteFingerprints,
   comparePhraseEndingRipple,
   comparePhraseLenses,
   comparePhrasePauseMutation,
@@ -84,6 +85,7 @@ import {
   type ArticulationEvidence,
   type LandmarkPath,
   type LandmarkPathId,
+  type LandmarkRouteComparison,
   type LandmarkRouteFingerprint,
   type MotifTransformation,
   type MotifEchoComparison,
@@ -292,6 +294,11 @@ type LandmarkPerformanceCapture = {
   variant: PhraseCharacterContext["variant"];
   fieldEventIds: number[][];
 };
+type LandmarkRouteCompareSession = {
+  sourcePathId: LandmarkPathId;
+  sourceVariant: LandmarkRouteFingerprint["variant"];
+  targetPathId: LandmarkPathId;
+};
 
 type MidiCallbacks = {
   onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
@@ -300,7 +307,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -319,6 +326,7 @@ type PersistedPianoSession = {
   landmarkTransposeSession?: LandmarkTransposeSession | null;
   landmarkCounterfactualSession?: LandmarkCounterfactualSession | null;
   landmarkPerformanceCapture?: LandmarkPerformanceCapture | null;
+  landmarkRouteCompareSession?: LandmarkRouteCompareSession | null;
   soundModelId?: PianoSoundModelId;
   scaleWalkSession?: ScaleWalkSession | null;
   scaleFingerprintSession?: ScaleFingerprintSession | null;
@@ -623,6 +631,15 @@ function isLandmarkPerformanceCapture(value: unknown): value is LandmarkPerforma
       && field.length <= 8
       && new Set(field).size === field.length
       && field.every((id) => Number.isInteger(id) && id > 0));
+}
+
+function isLandmarkRouteCompareSession(value: unknown): value is LandmarkRouteCompareSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<LandmarkRouteCompareSession>;
+  return LANDMARK_PATHS.some((path) => path.id === session.sourcePathId)
+    && LANDMARK_PATHS.some((path) => path.id === session.targetPathId)
+    && session.sourcePathId !== session.targetPathId
+    && (session.sourceVariant === "original" || session.sourceVariant === "one-key-changed");
 }
 
 function isPhraseCompareSession(value: unknown): value is PhraseCompareSession {
@@ -3245,7 +3262,84 @@ function LandmarkRouteFingerprintView({ fingerprint, showConventions }: {
   </section>;
 }
 
-function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflectionSpecimen, doMidi, scale, soundModelId, showConventions, transposeSession, counterfactualSession, onSelect, onReplay, onTranspose, onCounterfactual, onCounterfactualReport, onRestore, onReflect }: {
+function LandmarkRouteComparisonChoice({ sourcePath, sourceVariant, onChoose }: {
+  sourcePath: LandmarkPath;
+  sourceVariant: LandmarkRouteFingerprint["variant"];
+  onChoose: (pathId: LandmarkPathId, sourceVariant: LandmarkRouteFingerprint["variant"]) => void;
+}) {
+  return <section className="hud-landmark-compare-choice" aria-labelledby="hud-landmark-compare-choice-title">
+    <div><span>next experiment · perform both</span><strong id="hud-landmark-compare-choice-title">Which underlying route property changes?</strong><small>Keep this completed fingerprint as A. Choose B, perform every field, then compare recurrence, carried positions, nearest-key motion, and root travel in the same octave-folded coordinate.</small></div>
+    <div aria-label="Choose a second landmark route">{LANDMARK_PATHS.filter((candidate) => candidate.id !== sourcePath.id).map((candidate) => <button key={candidate.id} type="button" onClick={() => onChoose(candidate.id, sourceVariant)}><span>{candidate.family}</span><strong>{candidate.title}</strong></button>)}</div>
+  </section>;
+}
+
+function LandmarkRouteComparisonView({ comparison, sourcePath, targetPath, showConventions, onChooseNext, onEnd }: {
+  comparison: LandmarkRouteComparison;
+  sourcePath: LandmarkPath;
+  targetPath: LandmarkPath;
+  showConventions: boolean;
+  onChooseNext: (pathId: LandmarkPathId) => void;
+  onEnd: () => void;
+}) {
+  const width = 640;
+  const height = 326;
+  const left = 156;
+  const right = 608;
+  const sharedKeys = new Set(comparison.sharedFieldSets.map((field) => field.join(".")));
+  const profileText = (profile: LandmarkRouteComparison["source"]) => `${profile.repeatedFieldCount} repeated field${profile.repeatedFieldCount === 1 ? "" : "s"}; ${profile.returnsToOpeningField ? "returns to its opening field" : "ends on a different field"}; carried-tone counts ${profile.carriedToneCounts.join(", ") || "none"}; nearest-key motion ${profile.nearestMotionSteps.join(", ") || "none"}; fifths travel ${profile.rootTravelSteps.map((value) => value ?? "unknown").join(", ") || "none"}; through-tones ${profile.throughToneOffsets.join(", ") || "none"}.`;
+  const summary = `Two completed generated routes in one octave-folded coordinate. ${sourcePath.family}: ${profileText(comparison.source)} ${targetPath.family}: ${profileText(comparison.target)} They share ${comparison.sharedFieldSets.length} exact field shape${comparison.sharedFieldSets.length === 1 ? "" : "s"}. This compares authored structure, not performed timing, sound, style membership, emotion, or quality.`;
+  const renderLane = (fingerprint: LandmarkRouteFingerprint, path: LandmarkPath, laneTop: number, laneBottom: number, lane: "source" | "target") => {
+    const xFor = (index: number) => fingerprint.fields.length <= 1 ? (left + right) / 2 : left + index / (fingerprint.fields.length - 1) * (right - left);
+    const yFor = (offset: number) => laneBottom - offset / 11 * (laneBottom - laneTop);
+    return <g className={`hud-landmark-compare-lane is-${lane}`}>
+      <text x="18" y={laneTop + 7} className="hud-landmark-compare-family">{lane === "source" ? "A" : "B"} · {path.family}</text>
+      <text x="18" y={laneTop + 24} className="hud-landmark-compare-title">{path.title}</text>
+      <text x={left - 19} y={laneTop + 3} textAnchor="end" className="hud-landmark-compare-axis">+11</text>
+      <text x={left - 19} y={laneBottom + 3} textAnchor="end" className="hud-landmark-compare-axis">0 · Do</text>
+      <line x1={left - 12} x2={right + 10} y1={laneTop} y2={laneTop} className="hud-landmark-compare-guide" />
+      <line x1={left - 12} x2={right + 10} y1={laneBottom} y2={laneBottom} className="hud-landmark-compare-guide" />
+      {fingerprint.transitions.flatMap((transition) => transition.sharedOffsets.map((offset) => <line key={`${lane}-${transition.fromStepIndex}-${offset}`} x1={xFor(transition.fromStepIndex)} x2={xFor(transition.toStepIndex)} y1={yFor(offset)} y2={yFor(offset)} className="hud-landmark-compare-held" />))}
+      {fingerprint.fields.map((field) => {
+        const shared = sharedKeys.has(field.pitchOffsets.join("."));
+        return <g key={`${lane}-${field.stepIndex}`} className={`hud-landmark-compare-field ${shared ? "is-shared-shape" : ""}`}>
+          {shared ? <rect x={xFor(field.stepIndex) - 12} y={laneTop - 7} width="24" height={laneBottom - laneTop + 14} rx="12"><title>{`Exact field shape shared by both routes: ${field.pitchOffsets.join(", ")}`}</title></rect> : null}
+          <line x1={xFor(field.stepIndex)} x2={xFor(field.stepIndex)} y1={laneTop} y2={laneBottom} />
+          {field.pitchOffsets.map((offset) => offset === field.changedToOffset
+            ? <rect key={offset} x={xFor(field.stepIndex) - 4} y={yFor(offset) - 4} width="8" height="8" className="hud-landmark-compare-node is-changed" transform={`rotate(45 ${xFor(field.stepIndex)} ${yFor(offset)})`}><title>{`Changed position +${offset}`}</title></rect>
+            : offset === field.rootOffset
+              ? <rect key={offset} x={xFor(field.stepIndex) - 4} y={yFor(offset) - 4} width="8" height="8" className="hud-landmark-compare-node is-root"><title>{`Root position +${offset}`}</title></rect>
+              : <circle key={offset} cx={xFor(field.stepIndex)} cy={yFor(offset)} r="4" className="hud-landmark-compare-node"><title>{`Field position +${offset}`}</title></circle>)}
+          <text x={xFor(field.stepIndex)} y={laneBottom + 17} textAnchor="middle" className="hud-landmark-compare-number">{showConventions ? field.conventionalName : field.stepIndex + 1}</text>
+        </g>;
+      })}
+    </g>;
+  };
+  const sourceFingerprint = landmarkRouteFingerprint(sourcePath, comparison.source.variant);
+  const targetFingerprint = landmarkRouteFingerprint(targetPath, comparison.target.variant);
+  const sequence = (values: Array<number | null>) => values.length ? values.map((value) => value ?? "—").join(" · ") : "one field";
+  const recurrence = (profile: LandmarkRouteComparison["source"]) => `${profile.repeatedFieldCount} repeated${profile.returnsToOpeningField ? " · opening returns" : " · different ending"}`;
+  const through = (profile: LandmarkRouteComparison["source"]) => profile.throughToneOffsets.length ? profile.throughToneOffsets.map((offset) => `+${offset}`).join(" · ") : "none through all fields";
+  return <section className="hud-landmark-compare" aria-labelledby="hud-landmark-compare-title">
+    <div className="hud-landmark-fingerprint-heading"><div><span>performed A/B · authored structure</span><strong id="hud-landmark-compare-title">Two routes in the same underlying coordinate</strong></div><small>Dashed capsules mark exact field shapes present in both routes. Squares mark authored roots; blue lines mark carried positions.</small></div>
+    <svg className="hud-landmark-compare-plot" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={summary}>
+      {renderLane(sourceFingerprint, sourcePath, 39, 126, "source")}
+      {renderLane(targetFingerprint, targetPath, 201, 288, "target")}
+    </svg>
+    <p className="hud-landmark-compare-shared"><span>shared exact field shapes</span><strong>{comparison.sharedFieldSets.length ? comparison.sharedFieldSets.map((field) => field.join("·")).join("  /  ") : "none"}</strong><small>A shared shape can occur at a different moment or carry a different role. It is not a style match.</small></p>
+    <div className="hud-landmark-compare-table" role="table" aria-label="Route structure comparison">
+      <div role="row" className="is-heading"><span role="columnheader">property</span><strong role="columnheader">A · {sourcePath.family}</strong><strong role="columnheader">B · {targetPath.family}</strong></div>
+      <div role="row"><span role="rowheader">field recurrence</span><strong role="cell">{recurrence(comparison.source)}</strong><strong role="cell">{recurrence(comparison.target)}</strong></div>
+      <div role="row"><span role="rowheader">one position throughout</span><strong role="cell">{through(comparison.source)}</strong><strong role="cell">{through(comparison.target)}</strong></div>
+      <div role="row"><span role="rowheader">carried positions</span><strong role="cell">{sequence(comparison.source.carriedToneCounts)}</strong><strong role="cell">{sequence(comparison.target.carriedToneCounts)}</strong></div>
+      <div role="row"><span role="rowheader">nearest-key motion</span><strong role="cell">{sequence(comparison.source.nearestMotionSteps)}</strong><strong role="cell">{sequence(comparison.target.nearestMotionSteps)}</strong></div>
+      <div role="row"><span role="rowheader">root travel on fifths</span><strong role="cell">{sequence(comparison.source.rootTravelSteps)}</strong><strong role="cell">{sequence(comparison.target.rootTravelSteps)}</strong></div>
+    </div>
+    <p className="hud-landmark-compare-boundary">Your two completions unlock the comparison; the numbers come from the generated route definitions and one stable reference voicing. Timing, articulation, register, actual sound, tonal hearing, emotional response, familiarity, and goodness remain separate evidence.</p>
+    <div className="hud-landmark-compare-actions"><div><span>keep A · perform another B</span>{LANDMARK_PATHS.filter((candidate) => candidate.id !== sourcePath.id && candidate.id !== targetPath.id).map((candidate) => <button key={candidate.id} type="button" onClick={() => onChooseNext(candidate.id)}>{candidate.family}</button>)}</div><button type="button" onClick={onEnd}>End comparison</button></div>
+  </section>;
+}
+
+function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflectionSpecimen, doMidi, scale, soundModelId, showConventions, transposeSession, counterfactualSession, routeCompareSession, onSelect, onReplay, onTranspose, onCounterfactual, onCounterfactualReport, onRestore, onReflect, onStartRouteComparison, onEndRouteComparison }: {
   path: LandmarkPath;
   pathVoicings: number[][];
   stepIndex: number;
@@ -3257,6 +3351,7 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
   showConventions: boolean;
   transposeSession: LandmarkTransposeSession | null;
   counterfactualSession: LandmarkCounterfactualSession | null;
+  routeCompareSession: LandmarkRouteCompareSession | null;
   onSelect: (id: LandmarkPathId) => void;
   onReplay: () => void;
   onTranspose: () => void;
@@ -3264,6 +3359,8 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
   onCounterfactualReport: (report: LandmarkCounterfactualReport) => void;
   onRestore: () => void;
   onReflect: (specimen: HudNoteEvent[]) => void;
+  onStartRouteComparison: (pathId: LandmarkPathId, sourceVariant: LandmarkRouteFingerprint["variant"]) => void;
+  onEndRouteComparison: () => void;
 }) {
   const complete = stepIndex >= path.steps.length;
   const currentStep = complete ? null : path.steps[stepIndex];
@@ -3283,6 +3380,12 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
     : null;
   const counterfactualProfile = counterfactualActive ? landmarkCounterfactualProfile(path, doMidi) : null;
   const routeFingerprint = landmarkRouteFingerprint(path, counterfactualActive ? "one-key-changed" : "original");
+  const routeComparisonSourcePath = routeCompareSession?.targetPathId === path.id
+    ? LANDMARK_PATHS.find((candidate) => candidate.id === routeCompareSession.sourcePathId) ?? null
+    : null;
+  const routeComparison = complete && routeCompareSession && routeComparisonSourcePath
+    ? compareLandmarkRouteFingerprints(landmarkRouteFingerprint(routeComparisonSourcePath, routeCompareSession.sourceVariant), routeFingerprint)
+    : null;
   const sourcePerception = counterfactualProfile ? sonorityPerceptionModel(counterfactualProfile.sourceNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
   const changedPerception = counterfactualProfile ? sonorityPerceptionModel(counterfactualProfile.targetNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
   const sourceTendency = counterfactualProfile ? tonalTendency(counterfactualProfile.sourceNotes, doMidi, scale) : null;
@@ -3294,12 +3397,16 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
   const targetDescription = currentStep
     ? `Step ${stepIndex + 1} of ${path.steps.length}, ${currentStep.role}. Play ${targetLabels.join(", ")}.`
     : `${path.title} complete after ${path.steps.length} matched fields.`;
+  const listeningQuestion = routeComparisonSourcePath
+    ? `Which structural property makes ${path.family} take a different route from ${routeComparisonSourcePath.family}: recurrence, carried positions, nearest-key motion, or root travel?`
+    : counterfactualActive ? path.counterfactual.question : path.question;
   return <section className="hud-landmark-coach" aria-labelledby="hud-landmark-title">
     <div className="hud-panel-heading"><span>Generated · silent · transposable</span><strong id="hud-landmark-title">Playable landmark paths</strong><small>Choose an archetype, then supply every outlined field yourself. Do stays fixed during one pass; changing center restarts at field one. The HUD advances only after an exact pitch-class match in any octave.</small></div>
     <div className="hud-landmark-selector" aria-label="Choose a landmark path">
-      {LANDMARK_PATHS.map((candidate) => <button key={candidate.id} type="button" aria-pressed={candidate.id === path.id} onClick={() => onSelect(candidate.id)}><span>{candidate.family}</span><strong>{candidate.title}</strong><small>{candidate.steps.length} fields</small></button>)}
+      {LANDMARK_PATHS.map((candidate) => <button key={candidate.id} type="button" disabled={routeComparisonSourcePath?.id === candidate.id} aria-pressed={candidate.id === path.id} onClick={() => onSelect(candidate.id)}><span>{candidate.family}</span><strong>{candidate.title}</strong><small>{routeComparisonSourcePath?.id === candidate.id ? "A · completed" : `${candidate.steps.length} fields`}</small></button>)}
     </div>
-    <div className="hud-landmark-question"><span>one listening question</span><strong>{counterfactualActive ? path.counterfactual.question : path.question}</strong><small>{path.provenance}</small></div>
+    {routeComparisonSourcePath ? <div className="hud-landmark-compare-status" role="status"><span>route A held · now perform B</span><strong>{routeComparisonSourcePath.family} <i aria-hidden="true">→</i> {path.family}</strong><small>The first route stays frozen as a structural fingerprint. B must be completed before the comparison appears; no notes are entered or sounded for you.</small></div> : null}
+    <div className="hud-landmark-question"><span>one listening question</span><strong>{listeningQuestion}</strong><small>{path.provenance}</small></div>
     {transposeProfile ? <div className="hud-landmark-transpose" role="status" aria-label={`Transposition comparison from ${doLabel(transposeProfile.sourceDoPitchClass)} to ${doLabel(transposeProfile.targetDoPitchClass)}`}>
       <div><span>same path, new center</span><strong>{doLabel(transposeProfile.sourceDoPitchClass)} <i aria-hidden="true">→</i> {doLabel(transposeProfile.targetDoPitchClass)}</strong><small>Every target pitch class rotated {transposeProfile.semitoneShift} equal-key step{transposeProfile.semitoneShift === 1 ? "" : "s"} around the octave; compact voicings may move individual keys differently. Begin again at field 1.</small></div>
       <p><span>changed</span><strong>Do and every physical target frequency</strong></p>
@@ -3325,7 +3432,10 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
       {complete ? counterfactualActive ? <div className="hud-landmark-actions"><button type="button" onClick={onReplay}>Replay changed route</button><button type="button" onClick={onRestore}>Restore original route</button></div> : <div className="hud-landmark-actions"><button type="button" onClick={onReplay}>Replay here</button><button type="button" onClick={onCounterfactual}>Change one key</button><button type="button" onClick={onTranspose}>Move to fifths neighbor</button></div> : null}
       {complete ? <div className="hud-landmark-reflection"><div><span>Experience · yours, not inferred</span><strong>How did this whole performed route feel?</strong><small>{reflectionSpecimen ? `Freeze the exact ${reflectionSpecimen.length}-attack pass and answer settledness, energy, familiarity, and liking one at a time.` : "The exact pass is unavailable because an event expired or this completion predates path capture. Replay the route to reflect on its original timing."}</small></div><button type="button" disabled={!reflectionSpecimen} onClick={() => reflectionSpecimen && onReflect(reflectionSpecimen)}>Reflect on performed path</button></div> : null}
     </div>
-    {complete ? <LandmarkRouteFingerprintView fingerprint={routeFingerprint} showConventions={showConventions} /> : null}
+    {complete ? routeComparison && routeComparisonSourcePath
+      ? <LandmarkRouteComparisonView comparison={routeComparison} sourcePath={routeComparisonSourcePath} targetPath={path} showConventions={showConventions} onChooseNext={(pathId) => onSelect(pathId)} onEnd={onEndRouteComparison} />
+      : <><LandmarkRouteFingerprintView fingerprint={routeFingerprint} showConventions={showConventions} /><LandmarkRouteComparisonChoice sourcePath={path} sourceVariant={routeFingerprint.variant} onChoose={onStartRouteComparison} /></>
+      : null}
     {!complete ? <div className="hud-landmark-evidence" aria-label="Current landmark transition evidence">
       <span><small>carried tones</small><strong>{transition ? transition.commonPitchClassCount : "—"}</strong><em>{transition ? "same pitch classes" : "first-field baseline"}</em></span>
       <span><small>nearest voices</small><strong>{transition ? transition.totalVoiceMotion : "—"}</strong><em>{transition ? `key steps total · largest ${transition.largestLeap}` : "motion begins next"}</em></span>
@@ -3708,6 +3818,7 @@ export function PianoLab() {
   const [landmarkTransposeSession, setLandmarkTransposeSession] = useState<LandmarkTransposeSession | null>(null);
   const [landmarkCounterfactualSession, setLandmarkCounterfactualSession] = useState<LandmarkCounterfactualSession | null>(null);
   const [landmarkPerformanceCapture, setLandmarkPerformanceCapture] = useState<LandmarkPerformanceCapture | null>(null);
+  const [landmarkRouteCompareSession, setLandmarkRouteCompareSession] = useState<LandmarkRouteCompareSession | null>(null);
   const [soundModelId, setSoundModelId] = useState<PianoSoundModelId>(DEFAULT_PIANO_SOUND_MODEL_ID);
   const [experiencePhrase, setExperiencePhrase] = useState<HudNoteEvent[]>([]);
   const [experienceOrigin, setExperienceOrigin] = useState<ExperienceOrigin>("phrase");
@@ -3765,7 +3876,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19 || saved.version === 20 || saved.version === 21 || saved.version === 22 || saved.version === 23 || saved.version === 24) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19 || saved.version === 20 || saved.version === 21 || saved.version === 22 || saved.version === 23 || saved.version === 24 || saved.version === 25) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -3822,6 +3933,7 @@ export function PianoLab() {
               && saved.landmarkCounterfactualSession.rootPitchClass < 12
               && (saved.landmarkCounterfactualSession.report === null || saved.landmarkCounterfactualSession.report === "source" || saved.landmarkCounterfactualSession.report === "same" || saved.landmarkCounterfactualSession.report === "changed")) setLandmarkCounterfactualSession(saved.landmarkCounterfactualSession);
             if (isLandmarkPerformanceCapture(saved.landmarkPerformanceCapture)) setLandmarkPerformanceCapture(saved.landmarkPerformanceCapture);
+            if (isLandmarkRouteCompareSession(saved.landmarkRouteCompareSession)) setLandmarkRouteCompareSession(saved.landmarkRouteCompareSession);
             if (isPianoSoundModelId(saved.soundModelId)) setSoundModelId(saved.soundModelId);
             if (saved.scaleWalkSession
               && Number.isInteger(saved.scaleWalkSession.anchorEventId)
@@ -3900,9 +4012,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 24, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, landmarkPerformanceCapture, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 25, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, landmarkPerformanceCapture, landmarkRouteCompareSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkPerformanceCapture, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motifEchoSession, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkPerformanceCapture, landmarkRouteCompareSession, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motifEchoSession, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -4272,6 +4384,7 @@ export function PianoLab() {
     setLandmarkTransposeSession(null);
     setLandmarkCounterfactualSession(null);
     setLandmarkPerformanceCapture(null);
+    setLandmarkRouteCompareSession(null);
     landmarkLastMatchIdRef.current = 0;
     setExperienceOrigin("phrase");
     setExperienceContext(null);
@@ -4870,6 +4983,9 @@ export function PianoLab() {
     setLockedDoMidi(doMidi);
     setFrameMode("locked");
     setLandmarkPathId(id);
+    setLandmarkRouteCompareSession((current) => current
+      ? id === current.sourcePathId ? null : { ...current, targetPathId: id }
+      : null);
     setLandmarkStepIndex(0);
     setLandmarkTransposeSession(null);
     setLandmarkCounterfactualSession(null);
@@ -4879,6 +4995,16 @@ export function PianoLab() {
     setGhostNotes([]);
     setResolutionTarget(null);
     setResolutionForkSet(null);
+  };
+
+  const beginLandmarkRouteComparison = (targetPathId: LandmarkPathId, sourceVariant: LandmarkRouteFingerprint["variant"]) => {
+    const sourcePathId = landmarkPath.id;
+    selectLandmarkPath(targetPathId);
+    setLandmarkRouteCompareSession({ sourcePathId, sourceVariant, targetPathId });
+  };
+
+  const endLandmarkRouteComparison = () => {
+    setLandmarkRouteCompareSession(null);
   };
 
   const replayLandmarkPath = () => {
@@ -5155,7 +5281,7 @@ export function PianoLab() {
           <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         </> : null}
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} landingEvidence={resolutionLanding} landingEvents={resolutionEvidenceEvents} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onReflectResolution={beginResolutionForkReflection} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
-      </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} reflectionSpecimen={landmarkReflectionSpecimen} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} onReflect={beginLandmarkPathReflection} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} context={experienceContext} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
+      </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} reflectionSpecimen={landmarkReflectionSpecimen} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} routeCompareSession={landmarkRouteCompareSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} onReflect={beginLandmarkPathReflection} onStartRouteComparison={beginLandmarkRouteComparison} onEndRouteComparison={endLandmarkRouteComparison} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} context={experienceContext} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} motifEchoSession={motifEchoSession} motifEchoAttempt={motifEchoAttempt} onStartMotifEcho={beginMotifEcho} onRetryMotifEcho={retryMotifEcho} onReportMotifReturn={reportMotifReturn} onReflectMotifReturn={beginMotifReturnReflection} onEndMotifEcho={() => setMotifEchoSession(null)} />}
       </> : null}

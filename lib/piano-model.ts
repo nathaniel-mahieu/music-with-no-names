@@ -653,6 +653,30 @@ export type LandmarkRouteFingerprint = {
   transitions: LandmarkRouteFingerprintTransition[];
 };
 
+export type LandmarkRouteStructureProfile = {
+  pathId: LandmarkPathId;
+  variant: LandmarkRouteFingerprint["variant"];
+  fieldSets: number[][];
+  uniqueFieldCount: number;
+  repeatedFieldCount: number;
+  returnsToOpeningField: boolean;
+  throughToneOffsets: number[];
+  carriedToneCounts: number[];
+  nearestMotionSteps: number[];
+  largestLeapSteps: number[];
+  rootTravelSteps: Array<number | null>;
+};
+
+export type LandmarkRouteComparison = {
+  source: LandmarkRouteStructureProfile;
+  target: LandmarkRouteStructureProfile;
+  sharedFieldSets: number[][];
+  sameFieldSequence: boolean;
+  sameCarriedToneSequence: boolean;
+  sameNearestMotionSequence: boolean;
+  sameRootTravelSequence: boolean;
+};
+
 export type ChordTemplate = {
   id: string;
   name: string;
@@ -3074,6 +3098,55 @@ export function landmarkRouteFingerprint(path: LandmarkPath, variant: LandmarkRo
     };
   });
   return { pathId: path.id, variant, fields, transitions };
+}
+
+/** Reduces a fingerprint to the route properties that remain comparable across centers and registers. */
+export function landmarkRouteStructureProfile(fingerprint: LandmarkRouteFingerprint): LandmarkRouteStructureProfile {
+  const fieldSets = fingerprint.fields.map((field) => [...field.pitchOffsets]);
+  const keys = fieldSets.map((field) => field.join("."));
+  const uniqueFieldCount = new Set(keys).size;
+  const throughToneOffsets = fieldSets.length
+    ? fieldSets.slice(1).reduce((shared, field) => shared.filter((offset) => field.includes(offset)), [...fieldSets[0]])
+    : [];
+  return {
+    pathId: fingerprint.pathId,
+    variant: fingerprint.variant,
+    fieldSets,
+    uniqueFieldCount,
+    repeatedFieldCount: Math.max(0, fieldSets.length - uniqueFieldCount),
+    returnsToOpeningField: fieldSets.length > 1 && keys[0] === keys.at(-1),
+    throughToneOffsets,
+    carriedToneCounts: fingerprint.transitions.map((transition) => transition.sharedOffsets.length),
+    nearestMotionSteps: fingerprint.transitions.map((transition) => transition.totalVoiceMotion),
+    largestLeapSteps: fingerprint.transitions.map((transition) => transition.largestLeap),
+    rootTravelSteps: fingerprint.transitions.map((transition) => transition.rootTravelSteps),
+  };
+}
+
+/**
+ * Compares two generated routes on one octave-folded structural coordinate.
+ * It intentionally has no style, sound, tonal-function, emotion, or quality output.
+ */
+export function compareLandmarkRouteFingerprints(source: LandmarkRouteFingerprint, target: LandmarkRouteFingerprint): LandmarkRouteComparison {
+  const sourceProfile = landmarkRouteStructureProfile(source);
+  const targetProfile = landmarkRouteStructureProfile(target);
+  const targetKeys = new Set(targetProfile.fieldSets.map((field) => field.join(".")));
+  const sharedFieldSets = sourceProfile.fieldSets.filter((field, index, fields) => {
+    const key = field.join(".");
+    return targetKeys.has(key) && fields.findIndex((candidate) => candidate.join(".") === key) === index;
+  });
+  const sameNullableSequence = (first: Array<number | null>, second: Array<number | null>) => first.length === second.length
+    && first.every((value, index) => value === second[index]);
+  return {
+    source: sourceProfile,
+    target: targetProfile,
+    sharedFieldSets,
+    sameFieldSequence: sourceProfile.fieldSets.length === targetProfile.fieldSets.length
+      && sourceProfile.fieldSets.every((field, index) => sameNumberSequence(field, targetProfile.fieldSets[index] ?? [])),
+    sameCarriedToneSequence: sameNumberSequence(sourceProfile.carriedToneCounts, targetProfile.carriedToneCounts),
+    sameNearestMotionSequence: sameNumberSequence(sourceProfile.nearestMotionSteps, targetProfile.nearestMotionSteps),
+    sameRootTravelSequence: sameNullableSequence(sourceProfile.rootTravelSteps, targetProfile.rootTravelSteps),
+  };
 }
 
 function pitchClassSet(notes: number[]) {

@@ -9550,6 +9550,7 @@ footer a {
 .hud-landmark-selector small { color: var(--muted); font-size: .7rem; }
 .hud-landmark-selector button[aria-pressed="true"] span,
 .hud-landmark-selector button[aria-pressed="true"] small { color: color-mix(in srgb, var(--background) 72%, transparent); }
+.hud-landmark-selector button:disabled { cursor: not-allowed; opacity: .48; }
 .hud-landmark-question { display: grid; gap: 5px; margin: 15px 18px; padding: 10px 0 10px 12px; border-left: 2px solid var(--piano-blue); }
 .hud-landmark-question span { color: var(--muted); font-size: .7rem; text-transform: uppercase; }
 .hud-landmark-question strong { font-family: var(--font-display), Georgia, serif; font-size: 1.05rem; font-weight: 400; }
@@ -9626,6 +9627,52 @@ footer a {
 .hud-landmark-fingerprint-transitions strong { font-family: var(--font-mono), monospace; font-size: .68rem; }
 .hud-landmark-fingerprint-transitions span { color: var(--muted); font-size: .64rem; line-height: 1.4; }
 .hud-landmark-fingerprint > p { margin: 0; color: var(--muted); font-size: .67rem; line-height: 1.5; }
+.hud-landmark-compare-status { display: flex; flex-wrap: wrap; gap: 5px 12px; align-items: baseline; margin: 15px 18px 0; padding: 9px 11px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--piano-blue) 5%, transparent); }
+.hud-landmark-compare-status span { color: var(--piano-blue); font-size: .67rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-landmark-compare-status strong { font-family: var(--font-display), Georgia, serif; font-size: .94rem; font-weight: 400; }
+.hud-landmark-compare-status i { color: var(--piano-gold); font-style: normal; }
+.hud-landmark-compare-status small { flex: 1 1 100%; color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.hud-landmark-compare-choice { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; margin: 0 18px 15px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.hud-landmark-compare-choice > div:first-child { display: grid; flex: 1 1 360px; gap: 3px; }
+.hud-landmark-compare-choice > div:first-child span,
+.hud-landmark-compare-choice > div:first-child small { color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.hud-landmark-compare-choice > div:first-child span { color: var(--piano-gold); letter-spacing: .04em; text-transform: uppercase; }
+.hud-landmark-compare-choice > div:first-child strong { font-family: var(--font-display), Georgia, serif; font-size: .94rem; font-weight: 400; }
+.hud-landmark-compare-choice > div:last-child { display: flex; flex: 1 1 320px; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.hud-landmark-compare-choice button { display: grid; min-width: 94px; gap: 2px; padding: 7px 9px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; text-align: left; cursor: pointer; }
+.hud-landmark-compare-choice button span { color: var(--piano-blue); font-size: .64rem; text-transform: uppercase; }
+.hud-landmark-compare-choice button strong { font-size: .68rem; font-weight: 500; }
+.hud-landmark-compare { display: grid; gap: 10px; margin: 0 18px 15px; padding: 13px 0 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-landmark-compare-plot { display: block; width: 100%; height: auto; max-height: 340px; }
+.hud-landmark-compare-guide { stroke: var(--line); stroke-width: 1; }
+.hud-landmark-compare-family { fill: var(--piano-blue); font-family: var(--font-mono), monospace; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+.hud-landmark-compare-title { fill: var(--foreground); font-family: var(--font-display), Georgia, serif; font-size: 12px; }
+.hud-landmark-compare-axis,
+.hud-landmark-compare-number { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 9px; }
+.hud-landmark-compare-held { stroke: var(--piano-blue); stroke-width: 3; opacity: .78; }
+.hud-landmark-compare-field > line { stroke: var(--line-strong); stroke-width: 1; }
+.hud-landmark-compare-field > rect:first-child { fill: none; stroke: var(--piano-gold); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.hud-landmark-compare-node { fill: var(--surface); stroke: var(--foreground); stroke-width: 2; }
+.hud-landmark-compare-node.is-root { fill: var(--piano-blue); stroke: var(--surface); }
+.hud-landmark-compare-node.is-changed { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-landmark-compare-shared { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; padding: 9px 11px; border-left: 2px dashed var(--piano-gold); }
+.hud-landmark-compare-shared span { color: var(--piano-gold); font-size: .65rem; letter-spacing: .04em; text-transform: uppercase; }
+.hud-landmark-compare-shared strong { font-family: var(--font-mono), monospace; font-size: .72rem; font-weight: 500; }
+.hud-landmark-compare-shared small { grid-column: 1 / -1; color: var(--muted); font-size: .65rem; line-height: 1.4; }
+.hud-landmark-compare-table { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-landmark-compare-table > div { display: grid; grid-template-columns: minmax(118px, .7fr) repeat(2, minmax(0, 1fr)); }
+.hud-landmark-compare-table > div + div { border-top: 1px solid var(--line); }
+.hud-landmark-compare-table span,
+.hud-landmark-compare-table strong { min-width: 0; padding: 7px 9px; font-size: .65rem; line-height: 1.4; }
+.hud-landmark-compare-table span { color: var(--muted); font-weight: 400; text-transform: uppercase; }
+.hud-landmark-compare-table strong { border-left: 1px solid var(--line); font-family: var(--font-mono), monospace; font-weight: 500; }
+.hud-landmark-compare-table .is-heading { background: var(--surface-soft); }
+.hud-landmark-compare-table .is-heading strong { font-family: inherit; }
+.hud-landmark-compare-boundary { margin: 0; color: var(--muted); font-size: .67rem; line-height: 1.5; }
+.hud-landmark-compare-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.hud-landmark-compare-actions > div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hud-landmark-compare-actions span { margin-right: 3px; color: var(--muted); font-size: .65rem; text-transform: uppercase; }
+.hud-landmark-compare-actions button { min-height: 32px; padding: 5px 9px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .67rem; cursor: pointer; }
 .hud-landmark-evidence { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 18px 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .hud-landmark-evidence > span { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--line); }
 .hud-landmark-evidence > span:last-child { border-right: 0; }
@@ -10139,6 +10186,16 @@ footer a {
   .hud-landmark-fingerprint-fields small { font-size: .56rem; }
   .hud-landmark-fingerprint-transitions { grid-template-columns: 1fr; }
   .hud-landmark-fingerprint-transitions li + li { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-landmark-compare-choice { align-items: stretch; flex-direction: column; }
+  .hud-landmark-compare-choice > div:last-child { display: grid; flex-basis: auto; grid-template-columns: 1fr; justify-content: stretch; }
+  .hud-landmark-compare-choice button { width: 100%; }
+  .hud-landmark-compare-table > div { grid-template-columns: 1fr 1fr; }
+  .hud-landmark-compare-table > div > span { grid-column: 1 / -1; padding-bottom: 3px; }
+  .hud-landmark-compare-table > div > strong:first-of-type { border-left: 0; }
+  .hud-landmark-compare-table .is-heading > span { display: none; }
+  .hud-landmark-compare-actions { align-items: stretch; flex-direction: column; }
+  .hud-landmark-compare-actions > div { align-items: stretch; flex-direction: column; }
+  .hud-landmark-compare-actions button { width: 100%; }
   .hud-character-axis-label,
   .hud-character-empty { font-size: 19px; }
   .hud-character-choices { grid-template-columns: 1fr 1fr; gap: 1px; }
@@ -10319,6 +10376,20 @@ footer a {
   .hud-landmark-fingerprint-node.is-root { fill: LinkText; stroke: Canvas; }
   .hud-landmark-fingerprint-node.is-changed { fill: Highlight; stroke: HighlightText; }
   .hud-landmark-fingerprint-mutation line { stroke: Highlight; }
+  .hud-landmark-compare-status { border-color: CanvasText; background: Canvas; }
+  .hud-landmark-compare-guide,
+  .hud-landmark-compare-field > line { stroke: CanvasText; }
+  .hud-landmark-compare-family { fill: LinkText; }
+  .hud-landmark-compare-title,
+  .hud-landmark-compare-axis,
+  .hud-landmark-compare-number { fill: CanvasText; }
+  .hud-landmark-compare-held { stroke: LinkText; }
+  .hud-landmark-compare-field > rect:first-child { stroke: Highlight; }
+  .hud-landmark-compare-node { fill: Canvas; stroke: CanvasText; }
+  .hud-landmark-compare-node.is-root { fill: LinkText; stroke: Canvas; }
+  .hud-landmark-compare-node.is-changed { fill: Highlight; stroke: HighlightText; }
+  .hud-landmark-compare-choice button,
+  .hud-landmark-compare-actions button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
   .hud-character-point,
   .hud-character-uncertainty,
   .hud-character-current circle { fill: Canvas; stroke: CanvasText; }

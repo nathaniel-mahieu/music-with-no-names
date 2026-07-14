@@ -13,6 +13,7 @@ import {
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
+  compareLandmarkRouteFingerprints,
   compareMotifEcho,
   compareMotifFingerprints,
   comparePhraseEndingRipple,
@@ -38,6 +39,7 @@ import {
   landmarkCounterfactualProfile,
   landmarkPerformanceEventIds,
   landmarkRouteFingerprint,
+  landmarkRouteStructureProfile,
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
   motifReturnArc,
@@ -748,6 +750,38 @@ test("folds a landmark route into transposition-invariant octave positions", () 
   assert.equal(changed.fields[2].changedToOffset, 1);
   assert.deepEqual(changed.fields.filter((field) => field.changedFromOffset != null).map((field) => field.stepIndex), [2]);
   assert.deepEqual(landmarkRouteFingerprint({ ...path, steps: [] }).transitions, []);
+});
+
+test("compares two completed landmark routes without collapsing structure into a score", () => {
+  const pop = LANDMARK_PATHS.find((item) => item.id === "pop-loop")!;
+  const blues = LANDMARK_PATHS.find((item) => item.id === "blues-turn")!;
+  const pedal = LANDMARK_PATHS.find((item) => item.id === "pedal-field")!;
+  const popProfile = landmarkRouteStructureProfile(landmarkRouteFingerprint(pop));
+  assert.equal(popProfile.uniqueFieldCount, 4);
+  assert.equal(popProfile.repeatedFieldCount, 0);
+  assert.equal(popProfile.returnsToOpeningField, false);
+  assert.deepEqual(popProfile.throughToneOffsets, []);
+  assert.deepEqual(popProfile.carriedToneCounts, [1, 0, 2]);
+
+  const bluesProfile = landmarkRouteStructureProfile(landmarkRouteFingerprint(blues));
+  assert.equal(bluesProfile.uniqueFieldCount, 3);
+  assert.equal(bluesProfile.repeatedFieldCount, 2);
+  assert.equal(bluesProfile.returnsToOpeningField, true);
+
+  const pedalComparison = compareLandmarkRouteFingerprints(landmarkRouteFingerprint(pop), landmarkRouteFingerprint(pedal));
+  assert.deepEqual(pedalComparison.sharedFieldSets, [[0, 4, 7], [0, 5, 9]]);
+  assert.deepEqual(pedalComparison.target.throughToneOffsets, [0]);
+  assert.equal(pedalComparison.target.repeatedFieldCount, 1);
+  assert.equal(pedalComparison.target.returnsToOpeningField, true);
+  assert.equal(pedalComparison.sameFieldSequence, false);
+  assert.equal(pedalComparison.sameCarriedToneSequence, false);
+  assert.equal(pedalComparison.sameNearestMotionSequence, false);
+  assert.equal(pedalComparison.sameRootTravelSequence, false);
+
+  const changedComparison = compareLandmarkRouteFingerprints(landmarkRouteFingerprint(pop), landmarkRouteFingerprint(pop, "one-key-changed"));
+  assert.equal(changedComparison.sharedFieldSets.length, 3);
+  assert.equal(changedComparison.sameFieldSequence, false);
+  assert.deepEqual(landmarkRouteStructureProfile({ ...landmarkRouteFingerprint(pop), fields: [], transitions: [] }).throughToneOffsets, []);
 });
 
 test("waits for enough distinct evidence before stabilizing a scale frame", () => {
