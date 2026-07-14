@@ -137,6 +137,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Reveal theory translations/);
   assert.match(pianoLab, /evaluatePerformedScaleFingerprint/);
   assert.match(pianoLab, /matchScaleFingerprint/);
+  assert.match(pianoLab, /What makes a pitch feel like home/);
+  assert.match(pianoLab, /Open center microscope/);
+  assert.match(pianoLab, /tonalGravityCounterfactual/);
+  assert.match(pianoLab, /Route fit and the other four performed cues stayed numerically identical/);
   assert.match(pianoLab, /Why the fifths circle is first a spiral/);
   assert.match(pianoLab, /what is gained—and changed—when a pure relationship is adjusted/);
   assert.match(pianoLab, /Stack pure 3:2 moves/);

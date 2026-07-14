@@ -42,6 +42,8 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Performed scale fingerprint builder"/);
   assert.match(piano, /aria-label="Choose one scale experiment"/);
   assert.match(piano, /silent performed fingerprint target/);
+  assert.match(piano, /aria-label="Tonal gravity counterfactual microscope"/);
+  assert.match(piano, /aria-label="Counterfactual evidence separation"/);
   assert.match(piano, /role="status" aria-live="polite"/);
   assert.match(piano, /silent guided scale-walk target/);
   assert.match(piano, /aria-labelledby="hud-sonority-title"/);
@@ -83,6 +85,8 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.piano-key\.is-circle-target/);
   assert.match(css, /\.piano-key\.is-scale-walk-target/);
   assert.match(css, /\.piano-key\.is-scale-builder-target/);
+  assert.match(css, /\.hud-gravity-counterfactual-chart > span\.is-target/);
+  assert.match(css, /\.hud-gravity-counterfactual-chart i\.is-before[\s\S]*LinkText/);
   assert.match(css, /\.piano-key\.is-sonority-target/);
   assert.match(css, /\.hud-sonority-question\.has-change[\s\S]*border-left/);
   assert.match(css, /\.hud-pulse-status\.is-ready[\s\S]*border-left/);

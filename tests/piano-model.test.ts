@@ -4,6 +4,7 @@ import {
   CONTROLLED_SONORITY_FIELDS,
   LANDMARK_PATHS,
   PIANO_SCALES,
+  TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
   controlledSonorityChange,
@@ -37,9 +38,11 @@ import {
   scaleFingerprint,
   tonalTendency,
   tonalGravityCandidates,
+  tonalGravityCounterfactual,
   voiceChordNear,
   voiceLandmarkPath,
   voiceLeadingProfile,
+  type TonalGravityCandidate,
 } from "../lib/piano-model.ts";
 
 test("maps equal-tempered MIDI notes to physical frequency", () => {
@@ -439,6 +442,36 @@ test("decomposes performed tonal gravity instead of treating pitch membership as
   assert.ok(candidates[0].components.duration > 0.9);
   assert.ok(candidates[0].score > candidates[1].score);
   assert.deepEqual(tonalGravityCandidates([], 0), []);
+});
+
+test("changes exactly one tonal-gravity cue in a frozen counterfactual", () => {
+  const phrase = [
+    { note: 60, onsetMs: 0, keyReleaseMs: 700, releaseMs: 700, velocity: 96 },
+    { note: 64, onsetMs: 800, keyReleaseMs: 1_000, releaseMs: 1_000, velocity: 80 },
+    { note: 67, onsetMs: 1_100, keyReleaseMs: 1_350, releaseMs: 1_350, velocity: 84 },
+    { note: 60, onsetMs: 1_500, keyReleaseMs: 2_100, releaseMs: 2_100, velocity: 104 },
+  ];
+  const result = tonalGravityCounterfactual(phrase, 4, "ending", 2_100);
+  assert.ok(result);
+  assert.equal(result.targetAfter.components.ending, 1);
+  assert.ok(result.counterfactual.every((candidate) => candidate.components.ending === (candidate.rootPitchClass === 4 ? 1 : 0)));
+  for (const after of result.counterfactual) {
+    const baselineCandidate: TonalGravityCandidate = result.baseline.find((candidate) => candidate.rootPitchClass === after.rootPitchClass)!;
+    assert.equal(after.components.routeFit, baselineCandidate.components.routeFit);
+    assert.equal(after.components.duration, baselineCandidate.components.duration);
+    assert.equal(after.components.recurrence, baselineCandidate.components.recurrence);
+    assert.equal(after.components.accent, baselineCandidate.components.accent);
+    assert.equal(after.components.bass, baselineCandidate.components.bass);
+  }
+  assert.ok(result.counterfactualRank <= result.baselineRank);
+  assert.ok(Math.abs(result.scoreDelta - (1 - result.targetBefore.components.ending) * TONAL_GRAVITY_WEIGHTS.ending) < 1e-12);
+});
+
+test("normalizes the counterfactual target and refuses an empty specimen", () => {
+  const phrase = [{ note: 60, onsetMs: 0, releaseMs: 500 }];
+  assert.equal(tonalGravityCounterfactual(phrase, 16, "duration", 500)?.targetPitchClass, 4);
+  assert.equal(tonalGravityCounterfactual([], 0, "duration"), null);
+  assert.ok(Math.abs(Object.values(TONAL_GRAVITY_WEIGHTS).reduce((sum, weight) => sum + weight, 0) - 1) < 1e-12);
 });
 
 test("offers contrasting unranked resolution forks without entering a note", () => {

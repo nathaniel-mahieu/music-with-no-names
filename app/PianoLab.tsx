@@ -14,6 +14,7 @@ import {
   CONTROLLED_SONORITY_FIELDS,
   LANDMARK_PATHS,
   PIANO_SCALES,
+  TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
   controlledSonorityChange,
@@ -47,6 +48,7 @@ import {
   scaleFrameTimeline,
   scaleSemitones,
   tonalGravityCandidates,
+  tonalGravityCounterfactual,
   tonalTendency,
   voiceChordNear,
   voiceLandmarkPath,
@@ -66,6 +68,8 @@ import {
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type TonalGravityCandidate,
+  type TonalGravityCounterfactual,
+  type TonalGravityCue,
 } from "@/lib/piano-model";
 import { sonorityAffordances, sonorityPerceptionModel } from "@/lib/sonority-model";
 import {
@@ -157,6 +161,13 @@ type ScaleFingerprintSession = {
   expectedSteps: number[] | null;
   revealNames: boolean;
 };
+type GravityCounterfactualSession = {
+  specimen: HudNoteEvent[];
+  targetPitchClass: number;
+  cue: TonalGravityCue;
+  rootPitchClass: number;
+  scaleId: PianoScale["id"];
+};
 type ControlledSonoritySession = {
   recipeId: ControlledSonorityFieldId | "live";
   rootPitchClass: number;
@@ -177,7 +188,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -196,6 +207,7 @@ type PersistedPianoSession = {
   soundModelId?: PianoSoundModelId;
   scaleWalkSession?: ScaleWalkSession | null;
   scaleFingerprintSession?: ScaleFingerprintSession | null;
+  gravityCounterfactualSession?: GravityCounterfactualSession | null;
   controlledSonoritySession?: ControlledSonoritySession | null;
   motionFocusMode?: MotionFocusMode;
   pulseMirrorSession?: PulseMirrorSession | null;
@@ -222,6 +234,13 @@ const MOTION_FOCUS_MODES: Array<{ id: MotionFocusMode; label: string; question: 
   { id: "touch", label: "Touch", question: "How did one touch meet the next?" },
   { id: "voices", label: "Voices", question: "Which strands stayed or moved?" },
   { id: "motif", label: "Motif", question: "What repeated, and what changed?" },
+];
+const GRAVITY_CUE_OPTIONS: Array<{ id: TonalGravityCue; label: string; shortLabel: string; practice: string }> = [
+  { id: "duration", label: "Held longest", shortLabel: "held time", practice: "Replay the same pitch collection and hold this position longer than the others." },
+  { id: "recurrence", label: "Repeated most", shortLabel: "recurrence", practice: "Replay the same collection while returning to this position more often." },
+  { id: "accent", label: "Attacked strongest", shortLabel: "attack", practice: "Replay it and give this position the strongest MIDI attack." },
+  { id: "bass", label: "Placed lowest", shortLabel: "low register", practice: "Replay it with this pitch class below the other positions." },
+  { id: "ending", label: "Phrase ends here", shortLabel: "ending", practice: "Replay the same collection and let this position be the final attack." },
 ];
 
 const CHARACTER_QUESTIONS: Array<{
@@ -306,6 +325,43 @@ function isScaleFingerprintSession(value: unknown): value is ScaleFingerprintSes
     && validSteps(session.expectedSteps)
     && typeof session.revealNames === "boolean"
     && (session.exercise === "build" || (session.sourceSteps != null && session.expectedSteps != null));
+}
+
+function isGravityCounterfactualSession(value: unknown): value is GravityCounterfactualSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<GravityCounterfactualSession>;
+  const cues: TonalGravityCue[] = ["duration", "recurrence", "accent", "bass", "ending"];
+  if (!Array.isArray(session.specimen) || session.specimen.length < 3 || session.specimen.length > 24 || !cues.includes(session.cue as TonalGravityCue)) return false;
+  const validEvents = session.specimen.every((event) => event
+    && Number.isInteger(event.id)
+    && Number.isInteger(event.note) && event.note >= 0 && event.note <= 127
+    && Number.isFinite(event.velocity) && event.velocity >= 0 && event.velocity <= 127
+    && Number.isFinite(event.onsetMs) && event.onsetMs >= 0
+    && (event.keyReleaseMs == null || Number.isFinite(event.keyReleaseMs))
+    && (event.releaseMs == null || Number.isFinite(event.releaseMs))
+    && (event.source === "midi" || event.source === "screen")
+    && isMidiNoteList(event.fieldNotes));
+  if (!validEvents || !Number.isInteger(session.targetPitchClass) || session.targetPitchClass! < 0 || session.targetPitchClass! >= 12) return false;
+  return Number.isInteger(session.rootPitchClass)
+    && session.rootPitchClass! >= 0
+    && session.rootPitchClass! < 12
+    && PIANO_SCALES.some((scale) => scale.id === session.scaleId)
+    && session.specimen.some((event) => pitchClassFromMidi(event.note) === session.targetPitchClass);
+}
+
+function freezeGravitySpecimen(events: HudNoteEvent[], captureAtMs: number) {
+  const selected = events.slice(-24);
+  const origin = selected[0]?.onsetMs ?? 0;
+  return selected.map((event) => ({
+    ...event,
+    onsetMs: Math.max(0, event.onsetMs - origin),
+    keyReleaseMs: Math.max(0, (event.keyReleaseMs ?? Math.max(captureAtMs, event.onsetMs)) - origin),
+    releaseMs: Math.max(0, (event.releaseMs ?? Math.max(captureAtMs, event.onsetMs)) - origin),
+  }));
+}
+
+function frozenSpecimenNow(events: HudNoteEvent[]) {
+  return events.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), 0);
 }
 
 function currentHudTime() {
@@ -960,6 +1016,97 @@ function GuidedScaleWalk({
   </div>;
 }
 
+function TonalGravityCounterfactualField({
+  session,
+  result,
+  availableAttackCount,
+  doMidi,
+  scale,
+  showConventions,
+  onStart,
+  onTarget,
+  onCue,
+  onRecapture,
+  onEnd,
+}: {
+  session: GravityCounterfactualSession | null;
+  result: TonalGravityCounterfactual | null;
+  availableAttackCount: number;
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+  onStart: () => void;
+  onTarget: (pitchClass: number) => void;
+  onCue: (cue: TonalGravityCue) => void;
+  onRecapture: () => void;
+  onEnd: () => void;
+}) {
+  if (!session || !result) {
+    const ready = availableAttackCount >= 3;
+    return <div className="hud-gravity-counterfactual is-inactive">
+      <div className="hud-gravity-counterfactual-intro">
+        <div className="hud-subheading"><span>Change one model cue · no sound</span><strong>What makes a pitch feel like home?</strong><small>Freeze your phrase, give one candidate center the strongest held-time, recurrence, attack, bass, or ending cue, and see how much the model ranking depends on that assumption.</small></div>
+        <button type="button" className="piano-primary-action" disabled={!ready} onClick={onStart}>Open center microscope</button>
+      </div>
+      <p>{ready ? `${availableAttackCount} live attacks are available to freeze.` : `Play at least ${3 - availableAttackCount} more attack${3 - availableAttackCount === 1 ? "" : "s"} first.`} The intervention changes no MIDI event and makes no claim about what you heard.</p>
+    </div>;
+  }
+
+  const observedPitchClasses = [...new Set(session.specimen.map((event) => pitchClassFromMidi(event.note)))];
+  const baselineByPitchClass = new Map(result.baseline.map((candidate) => [candidate.rootPitchClass, candidate]));
+  const afterByPitchClass = new Map(result.counterfactual.map((candidate) => [candidate.rootPitchClass, candidate]));
+  const cueOption = GRAVITY_CUE_OPTIONS.find((option) => option.id === session.cue)!;
+  const targetLabel = pitchClassRoleLabel(session.targetPitchClass, doMidi, scale, showConventions);
+  const cueBefore = result.targetBefore.components[session.cue];
+  const targetCueCopy = cueBefore >= 0.999
+    ? `The ${cueOption.shortLabel} lane for ${targetLabel} was already 100, so it stayed fixed while that lane was set to 0 for the other eleven candidates.`
+    : `The ${cueOption.shortLabel} lane for ${targetLabel} changed from ${Math.round(cueBefore * 100)} to 100. The same lane was set to 0 for the other eleven candidates.`;
+  const rankMoved = result.counterfactualRank - result.baselineRank;
+  const rankCopy = rankMoved < 0 ? `rose ${Math.abs(rankMoved)} place${Math.abs(rankMoved) === 1 ? "" : "s"}` : rankMoved > 0 ? `fell ${rankMoved} place${rankMoved === 1 ? "" : "s"}` : "kept the same rank";
+  const otherCues = GRAVITY_CUE_OPTIONS.filter((option) => option.id !== session.cue);
+  const topBefore = result.baseline.slice(0, 3);
+  const topAfter = result.counterfactual.slice(0, 3);
+  return <div className="hud-gravity-counterfactual is-active" aria-label="Tonal gravity counterfactual microscope">
+    <div className="hud-gravity-counterfactual-topline">
+      <div className="hud-subheading"><span>Frozen phrase · model intervention</span><strong>What makes a pitch feel like home?</strong><small>{session.specimen.length} attacks · {observedPitchClasses.length} pitch classes · no performed event is edited</small></div>
+      <div className="hud-builder-actions"><button type="button" onClick={onRecapture} disabled={availableAttackCount < 3}>Recapture latest phrase</button><button type="button" onClick={onEnd}>End</button></div>
+    </div>
+
+    <div className="hud-gravity-counterfactual-controls">
+      <fieldset><legend>1 · Which sounded position should receive the cue?</legend><div className="hud-gravity-targets">{observedPitchClasses.map((pitchClass) => <button key={pitchClass} type="button" aria-pressed={session.targetPitchClass === pitchClass} onClick={() => onTarget(pitchClass)}>{pitchClassRoleLabel(pitchClass, doMidi, scale, showConventions)}</button>)}</div></fieldset>
+      <fieldset><legend>2 · Change exactly one evidence lane</legend><div className="hud-gravity-cues">{GRAVITY_CUE_OPTIONS.map((option) => <button key={option.id} type="button" aria-pressed={session.cue === option.id} onClick={() => onCue(option.id)}><strong>{option.label}</strong><small>{Math.round(TONAL_GRAVITY_WEIGHTS[option.id] * 100)}% model weight</small></button>)}</div></fieldset>
+    </div>
+
+    <div className="hud-gravity-counterfactual-chart" role="img" aria-label={`${targetLabel} changes from rank ${result.baselineRank + 1} to rank ${result.counterfactualRank + 1} of 12 when the ${cueOption.shortLabel} cue belongs only to it; outline bars are the frozen phrase and filled bars are the intervention`}>
+      {Array.from({ length: 12 }, (_, pitchClass) => {
+        const before = baselineByPitchClass.get(pitchClass)!;
+        const after = afterByPitchClass.get(pitchClass)!;
+        const isTarget = pitchClass === session.targetPitchClass;
+        return <span key={pitchClass} className={isTarget ? "is-target" : ""}><i className="is-before" style={{ "--gravity-height": before.score } as CSSProperties} /><i className="is-after" style={{ "--gravity-height": after.score } as CSSProperties} /><strong>{pitchClassRoleLabel(pitchClass, doMidi, scale, showConventions)}</strong><small>{Math.round(before.score * 100)}→{Math.round(after.score * 100)}</small></span>;
+      })}
+    </div>
+    <div className="hud-gravity-counterfactual-legend"><span><i className="is-before" /> frozen phrase</span><span><i className="is-after" /> one-cue intervention</span><small>bar height = model support for each possible center · not confidence, tension, liking, or quality</small></div>
+
+    <div className="hud-gravity-counterfactual-reading" role="status" aria-live="polite">
+      <span>What changed?</span>
+      <strong>{targetLabel}: rank {result.baselineRank + 1} → {result.counterfactualRank + 1}; {rankCopy}</strong>
+      <small>{targetCueCopy} Route fit and the other four performed cues stayed numerically identical.</small>
+    </div>
+
+    <div className="hud-gravity-counterfactual-evidence" aria-label="Counterfactual evidence separation">
+      <div><span>changed model lane</span><strong>{cueOption.shortLabel} · {Math.round(TONAL_GRAVITY_WEIGHTS[session.cue] * 100)}% weight</strong><small>One complete evidence lane was reassigned; no attack was added, removed, moved, or sounded.</small></div>
+      <div><span>held invariant</span><strong>route fit · {otherCues.map((option) => option.shortLabel).join(" · ")}</strong><small>Every candidate retained these exact component values from the frozen phrase.</small></div>
+      <div><span>try with your hands</span><strong>{cueOption.practice}</strong><small>Then recapture and compare the live evidence. A real replay will naturally change more than one cue.</small></div>
+    </div>
+
+    <div className="hud-gravity-rank-paths">
+      <div><span>frozen top three</span>{topBefore.map((candidate, index) => <p key={candidate.rootPitchClass}><strong>{index + 1} · {pitchClassRoleLabel(candidate.rootPitchClass, doMidi, scale, showConventions)}</strong><small>{Math.round(candidate.score * 100)}</small></p>)}</div>
+      <div><span>after one cue</span>{topAfter.map((candidate, index) => <p key={candidate.rootPitchClass}><strong>{index + 1} · {pitchClassRoleLabel(candidate.rootPitchClass, doMidi, scale, showConventions)}</strong><small>{Math.round(candidate.score * 100)}</small></p>)}</div>
+    </div>
+    <p className="hud-gravity-counterfactual-limit">This isolates sensitivity inside the declared heuristic. It does not synthesize a new phrase, detect a key, simulate a listener, or say which center should feel convincing.</p>
+  </div>;
+}
+
 function ScalePracticeField({
   phraseEvents,
   frame,
@@ -972,6 +1119,8 @@ function ScalePracticeField({
   targetMatched,
   fingerprintSession,
   fingerprintProgress,
+  gravityCounterfactualSession,
+  gravityCounterfactualResult,
   walkSession,
   walkEvents,
   walkProgress,
@@ -985,6 +1134,11 @@ function ScalePracticeField({
   onReplayFingerprint,
   onRevealFingerprint,
   onEndFingerprint,
+  onStartGravityCounterfactual,
+  onTargetGravityCounterfactual,
+  onCueGravityCounterfactual,
+  onRecaptureGravityCounterfactual,
+  onEndGravityCounterfactual,
   onStartWalk,
   onRestartWalk,
   onEndWalk,
@@ -1000,6 +1154,8 @@ function ScalePracticeField({
   targetMatched: boolean;
   fingerprintSession: ScaleFingerprintSession | null;
   fingerprintProgress: PerformedScaleFingerprint | null;
+  gravityCounterfactualSession: GravityCounterfactualSession | null;
+  gravityCounterfactualResult: TonalGravityCounterfactual | null;
   walkSession: ScaleWalkSession | null;
   walkEvents: HudNoteEvent[];
   walkProgress: AscendingScaleWalk | null;
@@ -1013,6 +1169,11 @@ function ScalePracticeField({
   onReplayFingerprint: (steps: number[], exercise: "transpose" | "rotate") => void;
   onRevealFingerprint: () => void;
   onEndFingerprint: () => void;
+  onStartGravityCounterfactual: () => void;
+  onTargetGravityCounterfactual: (pitchClass: number) => void;
+  onCueGravityCounterfactual: (cue: TonalGravityCue) => void;
+  onRecaptureGravityCounterfactual: () => void;
+  onEndGravityCounterfactual: () => void;
   onStartWalk: () => void;
   onRestartWalk: () => void;
   onEndWalk: () => void;
@@ -1031,11 +1192,12 @@ function ScalePracticeField({
   const movementLabel = (movement: number) => movement === 0 ? "repeat" : `${movement > 0 ? "+" : ""}${movement} key step${Math.abs(movement) === 1 ? "" : "s"}`;
   return <section className="hud-scale-practice" aria-labelledby="hud-scale-practice-title">
     <div className="hud-panel-heading"><span>Author · preserve · contextualize</span><strong id="hud-scale-practice-title">Scale relationships with your hands</strong><small>First author an unnamed route. Then preserve it elsewhere or compare it with a selected frame. Tonal center remains a contextual hypothesis, never a goodness score.</small></div>
-    {fingerprintSession ? <PerformedScaleFingerprintBuilder session={fingerprintSession} progress={fingerprintProgress} showConventions={showConventions} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} /> : walkSession ? <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} /> : <div className="hud-scale-experiment-choices" aria-label="Choose one scale experiment">
+    {fingerprintSession ? <PerformedScaleFingerprintBuilder session={fingerprintSession} progress={fingerprintProgress} showConventions={showConventions} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} /> : walkSession ? <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} /> : gravityCounterfactualSession ? <TonalGravityCounterfactualField session={gravityCounterfactualSession} result={gravityCounterfactualResult} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={frame.scale} showConventions={showConventions} onStart={onStartGravityCounterfactual} onTarget={onTargetGravityCounterfactual} onCue={onCueGravityCounterfactual} onRecapture={onRecaptureGravityCounterfactual} onEnd={onEndGravityCounterfactual} /> : <div className="hud-scale-experiment-choices" aria-label="Choose one scale experiment">
       <PerformedScaleFingerprintBuilder session={null} progress={null} showConventions={showConventions} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} />
       <GuidedScaleWalk session={null} events={[]} progress={null} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} />
+      <TonalGravityCounterfactualField session={null} result={null} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={frame.scale} showConventions={showConventions} onStart={onStartGravityCounterfactual} onTarget={onTargetGravityCounterfactual} onCue={onCueGravityCounterfactual} onRecapture={onRecaptureGravityCounterfactual} onEnd={onEndGravityCounterfactual} />
     </div>}
-    {!fingerprintSession && !walkSession ? <div className="hud-scale-learning-grid">
+    {!fingerprintSession && !walkSession && !gravityCounterfactualSession ? <div className="hud-scale-learning-grid">
       <div className="hud-fingerprint-field">
         <div className="hud-subheading"><span>Selected frame · derived shape</span><strong>Read the gaps before the name</strong><small>{new Set(phraseEvents.map((event) => pitchClassFromMidi(event.note))).size} measured pitch classes encountered in phrase memory</small></div>
         <div className="hud-fingerprint" role="img" aria-label={`Cyclic scale gap fingerprint ${fingerprint.steps.join(", ")} equal-key steps`}>
@@ -1843,6 +2005,7 @@ export function PianoLab() {
   const [fingerprintRotation, setFingerprintRotation] = useState(0);
   const [scaleFingerprintSession, setScaleFingerprintSession] = useState<ScaleFingerprintSession | null>(null);
   const [scaleWalkSession, setScaleWalkSession] = useState<ScaleWalkSession | null>(null);
+  const [gravityCounterfactualSession, setGravityCounterfactualSession] = useState<GravityCounterfactualSession | null>(null);
   const [controlledSonoritySession, setControlledSonoritySession] = useState<ControlledSonoritySession | null>(null);
   const [motionFocusMode, setMotionFocusMode] = useState<MotionFocusMode>("pulse");
   const [pulseMirrorSession, setPulseMirrorSession] = useState<PulseMirrorSession | null>(null);
@@ -1878,7 +2041,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -1921,6 +2084,7 @@ export function PianoLab() {
               setScaleWalkSession(saved.scaleWalkSession);
             }
             if (isScaleFingerprintSession(saved.scaleFingerprintSession)) setScaleFingerprintSession(saved.scaleFingerprintSession);
+            if (isGravityCounterfactualSession(saved.gravityCounterfactualSession)) setGravityCounterfactualSession(saved.gravityCounterfactualSession);
             if (isControlledSonoritySession(saved.controlledSonoritySession)) {
               setControlledSonoritySession({
                 ...saved.controlledSonoritySession,
@@ -1939,6 +2103,7 @@ export function PianoLab() {
         setFrameMode("locked");
         setScaleWalkSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setControlledSonoritySession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
+        setGravityCounterfactualSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
       }
       setHydrated(true);
     }, 0);
@@ -1947,9 +2112,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 10, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession };
+    const session: PersistedPianoSession = { version: 11, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -2035,6 +2200,9 @@ export function PianoLab() {
   const performedScaleFingerprint = useMemo<PerformedScaleFingerprint | null>(() => scaleFingerprintSession
     ? evaluatePerformedScaleFingerprint(scaleFingerprintEvents.map((event) => event.note), scaleFingerprintSession.expectedSteps)
     : null, [scaleFingerprintEvents, scaleFingerprintSession]);
+  const gravityCounterfactualResult = useMemo<TonalGravityCounterfactual | null>(() => gravityCounterfactualSession
+    ? tonalGravityCounterfactual(gravityCounterfactualSession.specimen, gravityCounterfactualSession.targetPitchClass, gravityCounterfactualSession.cue, frozenSpecimenNow(gravityCounterfactualSession.specimen))
+    : null, [gravityCounterfactualSession]);
   const scaleWalkScale = PIANO_SCALES.find((candidate) => candidate.id === scaleWalkSession?.scaleId) ?? scale;
   const scaleWalkEvents = useMemo(() => scaleWalkSession ? phraseEvents.filter((event) => event.id > scaleWalkSession.anchorEventId) : [], [phraseEvents, scaleWalkSession]);
   const scaleWalkProgress = useMemo<AscendingScaleWalk | null>(() => scaleWalkSession
@@ -2225,6 +2393,7 @@ export function PianoLab() {
     setFingerprintRotation(0);
     setScaleFingerprintSession(null);
     setScaleWalkSession(null);
+    setGravityCounterfactualSession(null);
     setControlledSonoritySession(null);
     setPulseMirrorSession(null);
     setLatchedNotes(new Map());
@@ -2316,6 +2485,7 @@ export function PianoLab() {
     setFingerprintRotation(0);
     setControlledSonoritySession(null);
     setScaleFingerprintSession(null);
+    setGravityCounterfactualSession(null);
     setLockedScaleId(scale.id);
     setLockedDoMidi(doMidi);
     setFrameMode("locked");
@@ -2333,6 +2503,7 @@ export function PianoLab() {
 
   const beginScaleFingerprint = () => {
     setScaleWalkSession(null);
+    setGravityCounterfactualSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setGhostChord(null);
@@ -2354,12 +2525,46 @@ export function PianoLab() {
     setScaleFingerprintSession((current) => current ? { ...current, revealNames: true } : current);
   };
 
+  const captureGravityCounterfactual = () => {
+    if (phraseEvents.length < 3) return;
+    const specimen = freezeGravitySpecimen(phraseEvents, currentHudTime());
+    const specimenNow = frozenSpecimenNow(specimen);
+    const observed = new Set(specimen.map((event) => pitchClassFromMidi(event.note)));
+    const targetPitchClass = tonalGravityCandidates(specimen, specimenNow, 12)
+      .filter((candidate) => observed.has(candidate.rootPitchClass))
+      .sort((first, second) => first.components.ending - second.components.ending || first.score - second.score || first.rootPitchClass - second.rootPitchClass)[0]?.rootPitchClass
+      ?? pitchClassFromMidi(specimen.at(-1)!.note);
+    setScaleWalkSession(null);
+    setScaleFingerprintSession(null);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    setGhostChord(null);
+    setGhostNotes([]);
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(doMidi);
+    setFrameMode("locked");
+    setGravityCounterfactualSession({ specimen, targetPitchClass, cue: "ending", rootPitchClass: pitchClassFromMidi(doMidi), scaleId: scale.id });
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoDo", String(pitchClassFromMidi(doMidi)));
+    url.searchParams.set("pianoScale", scale.id);
+    window.history.replaceState(null, "", url);
+  };
+
+  const targetGravityCounterfactual = (targetPitchClass: number) => {
+    setGravityCounterfactualSession((current) => current && current.specimen.some((event) => pitchClassFromMidi(event.note) === pitchClassFromMidi(targetPitchClass)) ? { ...current, targetPitchClass: pitchClassFromMidi(targetPitchClass) } : current);
+  };
+
+  const cueGravityCounterfactual = (cue: TonalGravityCue) => {
+    setGravityCounterfactualSession((current) => current ? { ...current, cue } : current);
+  };
+
   const beginControlledSonority = (recipeId: ControlledSonorityFieldId) => {
     const recipe = CONTROLLED_SONORITY_FIELDS.find((field) => field.id === recipeId);
     if (!recipe) return;
     const rootPitchClass = pitchClassFromMidi(doMidi);
     setScaleWalkSession(null);
     setScaleFingerprintSession(null);
+    setGravityCounterfactualSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setGhostChord(null);
@@ -2379,6 +2584,7 @@ export function PianoLab() {
     const rootPitchClass = pitchClassFromMidi(doMidi);
     setScaleWalkSession(null);
     setScaleFingerprintSession(null);
+    setGravityCounterfactualSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setGhostChord(null);
@@ -2455,6 +2661,7 @@ export function PianoLab() {
     if (lens === "paths") {
       setScaleWalkSession(null);
       setScaleFingerprintSession(null);
+      setGravityCounterfactualSession(null);
       setControlledSonoritySession(null);
       setLockedScaleId(scale.id);
       setLockedDoMidi(doMidi);
@@ -2489,6 +2696,7 @@ export function PianoLab() {
   const selectLandmarkPath = (id: LandmarkPathId) => {
     setScaleWalkSession(null);
     setScaleFingerprintSession(null);
+    setGravityCounterfactualSession(null);
     setControlledSonoritySession(null);
     setLockedScaleId(scale.id);
     setLockedDoMidi(doMidi);
@@ -2526,6 +2734,8 @@ export function PianoLab() {
 
   const latestPulsePlacement = pulseMirrorModel?.placements.at(-1) ?? null;
   const latestPulseGap = pulseMirrorModel?.gaps.at(-1) ?? null;
+  const gravityCounterfactualCue = GRAVITY_CUE_OPTIONS.find((option) => option.id === gravityCounterfactualSession?.cue);
+  const gravityCounterfactualTargetLabel = gravityCounterfactualSession ? pitchClassRoleLabel(gravityCounterfactualSession.targetPitchClass, doMidi, scale, showConventions) : "candidate";
 
   const newestInsight = focusLens === "chords" && controlledSonoritySession ? !controlledSonoritySession.baselineNotes
     ? "The starting field is only outlined. Perform every exact key to establish a physical and modeled baseline."
@@ -2545,6 +2755,8 @@ export function PianoLab() {
       : performedScaleFingerprint.lastAttempt?.kind === "try-again"
         ? "The last move did not satisfy the current gap relationship. Valid earlier gaps were preserved so you can repair only that move."
         : `${performedScaleFingerprint.steps.length} gaps authored; ${performedScaleFingerprint.octaveRemaining} equal key steps remain before the frequency doubles.`
+    : focusLens === "scales" && gravityCounterfactualResult && gravityCounterfactualCue
+      ? `${gravityCounterfactualTargetLabel} moves from center rank ${gravityCounterfactualResult.baselineRank + 1} to ${gravityCounterfactualResult.counterfactualRank + 1} when only the ${gravityCounterfactualCue.shortLabel} evidence lane is reassigned. The frozen MIDI phrase and every other model component stay fixed.`
     : focusLens === "scales" && scaleWalkProgress ? scaleWalkProgress.status === "waiting-do"
     ? "The scale frame is fixed. Play Do in any octave to establish a register; the walk will judge relationships, not absolute note names."
     : scaleWalkProgress.status === "complete"
@@ -2681,12 +2893,12 @@ export function PianoLab() {
         <StaffView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
       </div> : focusLens === "scales" ? <div className="piano-focus-grid is-scales">
-        {!scaleFingerprintSession && !scaleWalkSession ? <>
+        {!scaleFingerprintSession && !scaleWalkSession && !gravityCounterfactualSession ? <>
           <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
           <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
           <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         </> : null}
-        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
+        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}

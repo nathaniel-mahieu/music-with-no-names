@@ -191,6 +191,30 @@ export type TonalGravityCandidate = {
   };
 };
 
+export type TonalGravityComponent = keyof TonalGravityCandidate["components"];
+export type TonalGravityCue = Exclude<TonalGravityComponent, "routeFit">;
+
+export const TONAL_GRAVITY_WEIGHTS: Record<TonalGravityComponent, number> = {
+  routeFit: 0.42,
+  duration: 0.17,
+  recurrence: 0.14,
+  accent: 0.09,
+  bass: 0.08,
+  ending: 0.1,
+};
+
+export type TonalGravityCounterfactual = {
+  targetPitchClass: number;
+  cue: TonalGravityCue;
+  baseline: TonalGravityCandidate[];
+  counterfactual: TonalGravityCandidate[];
+  targetBefore: TonalGravityCandidate;
+  targetAfter: TonalGravityCandidate;
+  baselineRank: number;
+  counterfactualRank: number;
+  scoreDelta: number;
+};
+
 export type ResolutionFork = {
   id: "center-return" | "least-motion" | "fifths-neighbor" | "fresh-route" | "alternate-route";
   label: string;
@@ -907,6 +931,11 @@ function performedDuration(event: PerformanceEvidenceEvent, nowMs: number) {
   return clampUnit(Math.log1p((fingerMs + pedalMs * 0.35) / 100) / Math.log1p(25));
 }
 
+function tonalGravityScore(components: TonalGravityCandidate["components"]) {
+  return clampUnit((Object.keys(TONAL_GRAVITY_WEIGHTS) as TonalGravityComponent[])
+    .reduce((score, component) => score + components[component] * TONAL_GRAVITY_WEIGHTS[component], 0));
+}
+
 /**
  * Ranks competing center + route hypotheses from performed evidence. The score is
  * deliberately decomposed: pitch-set compatibility is not allowed to masquerade
@@ -976,18 +1005,48 @@ export function tonalGravityCandidates(
       bass: bassEvidence[rootPitchClass],
       ending: endingEvidence[rootPitchClass],
     };
-    const score = (
-      components.routeFit * 0.42
-      + components.duration * 0.17
-      + components.recurrence * 0.14
-      + components.accent * 0.09
-      + components.bass * 0.08
-      + components.ending * 0.1
-    );
-    candidates.push({ rootPitchClass, scale: bestScale, score: clampUnit(score), components });
+    candidates.push({ rootPitchClass, scale: bestScale, score: tonalGravityScore(components), components });
   }
 
   return candidates.sort((first, second) => second.score - first.score || first.rootPitchClass - second.rootPitchClass).slice(0, limit);
+}
+
+/**
+ * Intervenes on one complete contextual-evidence lane while freezing route fit
+ * and every other performed cue. The chosen candidate alone receives the
+ * strongest value for that lane. This exposes model sensitivity; it does not
+ * simulate a new performance or predict a listener's heard tonal center.
+ */
+export function tonalGravityCounterfactual(
+  events: PerformanceEvidenceEvent[],
+  targetPitchClass: number,
+  cue: TonalGravityCue,
+  nowMs = events.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.onsetMs), 0),
+): TonalGravityCounterfactual | null {
+  const baseline = tonalGravityCandidates(events, nowMs, 12);
+  const supportedCues: TonalGravityCue[] = ["duration", "recurrence", "accent", "bass", "ending"];
+  if (baseline.length !== 12 || !supportedCues.includes(cue)) return null;
+  const target = modulo(Math.round(targetPitchClass), 12);
+  const counterfactual = baseline.map((candidate) => {
+    const components = { ...candidate.components, [cue]: candidate.rootPitchClass === target ? 1 : 0 };
+    return { ...candidate, components, score: tonalGravityScore(components) };
+  }).sort((first, second) => second.score - first.score || first.rootPitchClass - second.rootPitchClass);
+  const baselineRank = baseline.findIndex((candidate) => candidate.rootPitchClass === target);
+  const counterfactualRank = counterfactual.findIndex((candidate) => candidate.rootPitchClass === target);
+  if (baselineRank < 0 || counterfactualRank < 0) return null;
+  const targetBefore = baseline[baselineRank];
+  const targetAfter = counterfactual[counterfactualRank];
+  return {
+    targetPitchClass: target,
+    cue,
+    baseline,
+    counterfactual,
+    targetBefore,
+    targetAfter,
+    baselineRank,
+    counterfactualRank,
+    scoreDelta: targetAfter.score - targetBefore.score,
+  };
 }
 
 export function scaleFingerprint(scale: PianoScale, rotation = 0) {
