@@ -7,6 +7,7 @@ import {
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
+  compareIntervalEcho,
   comparePhraseLenses,
   phraseChangeProfile,
   controlledSonorityChange,
@@ -163,6 +164,23 @@ test("describes keyboard intervals beside nearby physical landmarks", () => {
   assert.equal(octave.equalKeyboardRatio, 2);
   assert.equal(octave.errorCents, 0);
   assert.equal(pairwiseIntervals([60, 64, 67]).length, 3);
+});
+
+test("separates an echoed interval invariant from changed physical coordinates", () => {
+  const octaveHigher = compareIntervalEcho([60, 67], [72, 79]);
+  assert.equal(octaveHigher.matched, true);
+  assert.equal(octaveHigher.directionPreserved, true);
+  assert.equal(octaveHigher.uniformShiftSteps, 12);
+  assert.equal(octaveHigher.centerShiftSteps, 12);
+  assert.ok(Math.abs(octaveHigher.equalKeyboardRatio - 2 ** (7 / 12)) < 1e-12);
+  assert.ok(Math.abs(octaveHigher.attemptFrequencyGapHz / octaveHigher.sourceFrequencyGapHz - 2) < 1e-12);
+
+  const reversed = compareIntervalEcho([60, 67], [79, 72]);
+  assert.equal(reversed.matched, true);
+  assert.equal(reversed.directionPreserved, false);
+  assert.equal(reversed.uniformShiftSteps, null);
+  assert.equal(compareIntervalEcho([60, 67], [72, 78]).matched, false);
+  assert.throws(() => compareIntervalEcho([60, Number.NaN], [72, 79]), RangeError);
 });
 
 test("declares controlled sonority fields as physical starting recipes", () => {

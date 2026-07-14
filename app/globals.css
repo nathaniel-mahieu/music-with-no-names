@@ -7186,6 +7186,25 @@ footer a {
 .hud-echo-feedback.is-match { border-style: solid; border-color: var(--piano-gold); }
 .hud-echo-feedback span { color: var(--muted); font-size: .72rem; }
 .hud-echo-feedback strong { font-size: .78rem; font-weight: 500; }
+.hud-echo-comparison { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.hud-echo-comparison svg { display: block; width: 100%; height: auto; overflow: visible; }
+.hud-echo-span { stroke: var(--piano-blue); stroke-width: 4; stroke-linecap: round; }
+.hud-echo-span.is-attempt { stroke: var(--piano-gold); stroke-dasharray: 7 3; }
+.hud-echo-shift { stroke: var(--line-strong); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.hud-echo-node { stroke-width: 2; }
+.hud-echo-node.is-source { fill: var(--surface-raised); stroke: var(--piano-blue); }
+.hud-echo-node.is-attempt { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-echo-row-label,
+.hud-echo-axis-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 12px; }
+.hud-echo-axis-label.is-end { text-anchor: end; }
+.hud-echo-reading { display: grid; margin-top: 7px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-echo-reading p { display: grid; min-width: 0; gap: 3px; margin: 0; padding: 8px 0; }
+.hud-echo-reading p + p { border-top: 1px solid var(--line); }
+.hud-echo-reading span { color: var(--piano-gold); font-size: .66rem; letter-spacing: .04em; text-transform: uppercase; }
+.hud-echo-reading strong { font-size: .74rem; font-weight: 500; }
+.hud-echo-reading small,
+.hud-echo-limit { color: var(--muted); font-size: .68rem; line-height: 1.45; }
+.hud-echo-limit { margin: 8px 0 0; }
 
 .hud-sonority-field { min-width: 0; padding: 18px; border-bottom: 1px solid var(--line); }
 .hud-sonority-start { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -8313,6 +8332,11 @@ footer a {
   .hud-partial-alignment-mark { stroke: LinkText; }
   .hud-partial-link.is-interaction { stroke: Highlight; }
   .hud-partial-interaction-mark { fill: Highlight; stroke: Canvas; }
+  .hud-echo-span.is-source,
+  .hud-echo-node.is-source { fill: Canvas; stroke: LinkText; }
+  .hud-echo-span.is-attempt { stroke: Highlight; }
+  .hud-echo-node.is-attempt { fill: Highlight; stroke: HighlightText; }
+  .hud-echo-shift { stroke: CanvasText; }
   .hud-staff-plot g.is-focused .hud-note-head,
   .hud-frequency-plot g.is-focused .hud-frequency-dot { fill: Highlight; stroke: HighlightText; }
   .hud-fifth-node,

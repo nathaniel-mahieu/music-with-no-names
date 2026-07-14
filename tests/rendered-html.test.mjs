@@ -129,6 +129,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /no audio analysis/i);
   assert.match(pianoLab, /Live phrase ribbon/);
   assert.match(pianoLab, /Interval Echo/);
+  assert.match(pianoLab, /Same spacing—now inspect what changed around it/);
+  assert.match(pianoLab, /A matched spacing preserves its equal-key ratio/);
+  assert.match(pianoLab, /compareIntervalEcho/);
   assert.match(pianoLab, /Causal chord view/);
   assert.match(pianoLab, /pianoSoundVoice/);
   assert.match(pianoLab, /Start new chord/);

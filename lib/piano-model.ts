@@ -39,6 +39,20 @@ export type RollingNoteEvent = {
   note: number;
 };
 
+export type IntervalEchoComparison = {
+  sourceNotes: [number, number];
+  attemptNotes: [number, number];
+  sourceSemitones: number;
+  attemptSemitones: number;
+  matched: boolean;
+  directionPreserved: boolean;
+  uniformShiftSteps: number | null;
+  centerShiftSteps: number;
+  equalKeyboardRatio: number;
+  sourceFrequencyGapHz: number;
+  attemptFrequencyGapHz: number;
+};
+
 export type TimedNoteAttack = RollingNoteEvent & {
   id: number;
   onsetMs: number;
@@ -575,6 +589,39 @@ export function frequencyFromMidi(note: number, tuningHz = 440) {
     throw new RangeError("MIDI note and tuning must be finite, and tuning must be positive.");
   }
   return tuningHz * 2 ** ((note - 69) / 12);
+}
+
+/**
+ * Separates an interval's equal-key relationship from the absolute physical
+ * coordinates changed by replaying it elsewhere. This compares performed MIDI
+ * positions only; it does not judge intonation, fingering, or listening.
+ */
+export function compareIntervalEcho(sourceNotes: [number, number], attemptNotes: [number, number]): IntervalEchoComparison {
+  const notes = [...sourceNotes, ...attemptNotes];
+  if (notes.some((note) => !Number.isFinite(note))) throw new RangeError("Interval echo notes must be finite.");
+  const normalizedSource = sourceNotes.map(Math.round) as [number, number];
+  const normalizedAttempt = attemptNotes.map(Math.round) as [number, number];
+  const sourceSigned = normalizedSource[1] - normalizedSource[0];
+  const attemptSigned = normalizedAttempt[1] - normalizedAttempt[0];
+  const sourceSemitones = Math.abs(sourceSigned);
+  const attemptSemitones = Math.abs(attemptSigned);
+  const firstShift = normalizedAttempt[0] - normalizedSource[0];
+  const secondShift = normalizedAttempt[1] - normalizedSource[1];
+  const sourceFrequencies = normalizedSource.map((note) => frequencyFromMidi(note));
+  const attemptFrequencies = normalizedAttempt.map((note) => frequencyFromMidi(note));
+  return {
+    sourceNotes: normalizedSource,
+    attemptNotes: normalizedAttempt,
+    sourceSemitones,
+    attemptSemitones,
+    matched: sourceSemitones === attemptSemitones,
+    directionPreserved: Math.sign(sourceSigned) === Math.sign(attemptSigned),
+    uniformShiftSteps: firstShift === secondShift ? firstShift : null,
+    centerShiftSteps: ((normalizedAttempt[0] + normalizedAttempt[1]) - (normalizedSource[0] + normalizedSource[1])) / 2,
+    equalKeyboardRatio: 2 ** (sourceSemitones / 12),
+    sourceFrequencyGapHz: Math.abs(sourceFrequencies[1] - sourceFrequencies[0]),
+    attemptFrequencyGapHz: Math.abs(attemptFrequencies[1] - attemptFrequencies[0]),
+  };
 }
 
 export function scaleSemitones(scale: PianoScale) {
