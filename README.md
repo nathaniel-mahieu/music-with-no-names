@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **One-Pause Counterfactual v1.71**. It provides:
+The current milestone is **Motif Invariance Lens v1.72**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A companion-first learning hierarchy: Start, the live Piano companion, and the learner's Personal Lens stay prominent while specialist pitch, time, listening, recording, and landmark labs live in one grouped disclosure instead of competing as eleven equal destinations.
@@ -42,6 +42,7 @@ The current milestone is **One-Pause Counterfactual v1.71**. It provides:
 - Five one-question Motion modes—Pulse, Touch, Breath, Voices, and Motif—that keep the same phrase while hiding unrelated diagnostics. Each mode is URL-addressable and tab-persistent.
 - A Motion-lens articulation lane that keeps finger contact, pedal extension, sounding overlap, and silence separate, then describes each connection as held, detached, joined, finger-overlapped, pedal-linked, or phrase-ending without inferring notation or judging technique.
 - A phrase-local motif trail that compares non-overlapping three- and four-attack shapes and distinguishes exact repetition, transposition, rhythmic variation, altered endings, and a return after intervening material.
+- A progressive Motif Invariance Lens under that trail. One reveal removes absolute starting pitch and elapsed speed, aligns source and return as signed key-step paths and normalized onset-gap shares, then states exactly what survived and what changed. This makes exact return, transposition, rhythmic variation, and altered ending inspectable without promoting a detector match into intended form, emotion, correctness, or musical quality.
 - One-property-at-a-time motif prompts—repeat, transpose, change the rhythm, alter the ending, and return—derived from the learner’s own live phrase rather than a separate exercise screen.
 - A silent Paths focus with generated pop-loop, blues-cycle, classical-cadence, and pedal-point archetypes. Each path fixes the current movable Do, marks compact ghost-key voicings, advances only after an exact pitch-class match in any octave, and reveals carried tones, nearest-voice motion, fifths travel, modeled crunch/repose, and pull without reproducing a song or entering an answer.
 - A path-transposition experiment that appears after any landmark route is completed. One action moves the whole route to the clockwise fifths neighbor, resets the learner to field one, and explicitly separates changed Do and physical frequencies from invariant field order, roles, root offsets, and internal pitch-class shapes. Compact voicings may move individual keys differently. Choosing another Do directly on the fifths compass applies the same safe reset, so stale progress cannot leak between centers.

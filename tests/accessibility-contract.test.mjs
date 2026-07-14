@@ -84,6 +84,11 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Original versus one-key path comparison across five lenses"/);
   assert.match(piano, /aria-label="Report which landmark path felt more directed"/);
   assert.match(piano, /aria-label="Motion learning question"/);
+  assert.match(piano, /Show what survived/);
+  assert.match(piano, /aria-controls="hud-motif-fingerprint-detail"/);
+  assert.match(piano, /hud-motif-fingerprint-grid" role="img" aria-label=\{summary\}/);
+  assert.match(piano, /Set each statement’s first key to 0/);
+  assert.match(piano, /does not infer intended motif, formal function, emotion, quality, or correctness/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
   assert.match(piano, /aria-labelledby="hud-phrase-breath-title"/);
@@ -157,6 +162,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-phrase-change-reading > button\[aria-pressed="true"\]/);
   assert.match(css, /\.hud-ending-ripple-spoke \.is-attempt i b[\s\S]*border: 1px dashed/);
   assert.match(css, /\.hud-ending-ripple-reading \{ border-left-color: LinkText/);
+  assert.match(css, /\.hud-motif-fingerprint-entry button\[aria-expanded="true"\]/);
+  assert.match(css, /\.hud-motif-time-bar i[\s\S]*flex: var\(--motif-gap-share\)/);
+  assert.match(css, /\.hud-motif-fingerprint-grid \{ grid-template-columns: minmax\(76px/);
   assert.match(css, /\.hud-partial-link\.is-aligned[\s\S]*LinkText/);
   assert.match(css, /\.hud-partial-link\.is-interaction[\s\S]*Highlight/);
   assert.match(css, /\.hud-echo-span\.is-source[\s\S]*LinkText/);

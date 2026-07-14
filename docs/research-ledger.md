@@ -86,6 +86,8 @@ This ledger ties empirical claims to research anchors and marks where the produc
 
 ## Model governance
 
+- **Piano v1.72 extension:** the phrase-local motif detector now exposes the invariants behind its strongest match. Absolute starting pitch is factored into one signed shift, each statement’s pitch content becomes a zero-anchored signed-step path, and onset gaps become proportions of the statement span. The learner can therefore see whether a return kept pitch shape, opening shape, timing proportions, and starting key as separate facts. The display explains a local algorithmic match; it does not infer intended motif, formal function, style membership, emotion, preference, correctness, musical quality, or learning effectiveness.
+
 - Every model has a version, visible inputs, and limitations.
 - Curator placements in the Atlas are labeled as hypotheses.
 - Listener reports remain separate from computed predictions.

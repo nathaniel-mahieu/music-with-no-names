@@ -535,6 +535,24 @@ export type MotifTransformation = {
   confidence: number;
 };
 
+export type MotifFingerprintComparison = {
+  sourceEventIds: number[];
+  targetEventIds: number[];
+  sourceRelativePitchPath: number[];
+  targetRelativePitchPath: number[];
+  sourceIntervalPath: number[];
+  targetIntervalPath: number[];
+  sourceTimingShares: number[];
+  targetTimingShares: number[];
+  timingShareDeltas: number[];
+  startShiftSemitones: number;
+  pitchShapePreserved: boolean;
+  openingShapePreserved: boolean;
+  rhythmWithinDetectorTolerance: boolean;
+  changedIntervalIndices: number[];
+  largestTimingChangeGapIndex: number | null;
+};
+
 export type LandmarkPathId = "pop-loop" | "blues-turn" | "classical-cadence" | "pedal-field";
 
 export type LandmarkPathStep = {
@@ -2404,6 +2422,69 @@ export function detectMotifTransformations(events: MotifNoteEvent[], limit = 3):
     // The ranking score is an internal ordering aid, not part of the public motif evidence.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     .map(({ score: _score, ...candidate }) => candidate);
+}
+
+/**
+ * Exposes the relational fingerprint behind one detected motif match. Absolute
+ * note names and elapsed duration are intentionally removed: signed key steps
+ * show pitch shape, while each onset gap is shown as a share of the statement's
+ * total span. This explains the detector without claiming intention or form.
+ */
+export function compareMotifFingerprints(
+  events: MotifNoteEvent[],
+  motif: MotifTransformation,
+): MotifFingerprintComparison | null {
+  const validEvents = events.every((event) => Number.isInteger(event.id)
+    && Number.isInteger(event.note) && event.note >= 0 && event.note <= 127
+    && Number.isFinite(event.onsetMs));
+  if (!validEvents || new Set(events.map((event) => event.id)).size !== events.length) {
+    throw new RangeError("Motif fingerprints require unique IDs, finite onset times, and MIDI positions from 0 through 127.");
+  }
+  if (!Number.isInteger(motif.sourceStartIndex) || !Number.isInteger(motif.targetStartIndex)
+    || !Number.isInteger(motif.length) || motif.length < 3
+    || motif.sourceStartIndex < 0 || motif.targetStartIndex < motif.sourceStartIndex + motif.length) {
+    throw new RangeError("Motif fingerprints require two valid, non-overlapping statement windows.");
+  }
+  const source = events.slice(motif.sourceStartIndex, motif.sourceStartIndex + motif.length);
+  const target = events.slice(motif.targetStartIndex, motif.targetStartIndex + motif.length);
+  if (source.length !== motif.length || target.length !== motif.length) return null;
+  if (!sameNumberSequence(source.map((event) => event.id), motif.sourceEventIds)
+    || !sameNumberSequence(target.map((event) => event.id), motif.targetEventIds)) {
+    throw new RangeError("Motif fingerprint event IDs must agree with the detected statement windows.");
+  }
+  const forward = (statement: MotifNoteEvent[]) => statement.slice(1).every((event, index) => event.onsetMs > statement[index].onsetMs);
+  if (!forward(source) || !forward(target)) throw new RangeError("Motif fingerprint attacks must move forward in time.");
+
+  const sourceRelativePitchPath = source.map((event) => event.note - source[0].note);
+  const targetRelativePitchPath = target.map((event) => event.note - target[0].note);
+  const intervalPath = (statement: MotifNoteEvent[]) => statement.slice(1).map((event, index) => event.note - statement[index].note);
+  const sourceIntervalPath = intervalPath(source);
+  const targetIntervalPath = intervalPath(target);
+  const sourceTimingShares = normalizedOnsetGaps(source);
+  const targetTimingShares = normalizedOnsetGaps(target);
+  const timingShareDeltas = targetTimingShares.map((share, index) => share - sourceTimingShares[index]);
+  const changedIntervalIndices = sourceIntervalPath.flatMap((step, index) => step === targetIntervalPath[index] ? [] : [index]);
+  const largestTimingChange = timingShareDeltas.reduce<{ index: number; magnitude: number } | null>((largest, delta, index) => {
+    const magnitude = Math.abs(delta);
+    return !largest || magnitude > largest.magnitude ? { index, magnitude } : largest;
+  }, null);
+  return {
+    sourceEventIds: source.map((event) => event.id),
+    targetEventIds: target.map((event) => event.id),
+    sourceRelativePitchPath,
+    targetRelativePitchPath,
+    sourceIntervalPath,
+    targetIntervalPath,
+    sourceTimingShares,
+    targetTimingShares,
+    timingShareDeltas,
+    startShiftSemitones: target[0].note - source[0].note,
+    pitchShapePreserved: changedIntervalIndices.length === 0,
+    openingShapePreserved: sourceIntervalPath.slice(0, -1).every((step, index) => step === targetIntervalPath[index]),
+    rhythmWithinDetectorTolerance: averageDistance(sourceTimingShares, targetTimingShares) <= 0.12,
+    changedIntervalIndices,
+    largestTimingChangeGapIndex: largestTimingChange && largestTimingChange.magnitude > 0 ? largestTimingChange.index : null,
+  };
 }
 
 export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], event: T, limit = 7) {

@@ -31,6 +31,7 @@ import {
   controlledSonorityChange,
   conventionalPitchName,
   detectMotifTransformations,
+  compareMotifFingerprints,
   evaluateAscendingScaleWalk,
   evaluatePerformedScaleFingerprint,
   fifthStepForPitchClass,
@@ -78,6 +79,7 @@ import {
   type LandmarkPath,
   type LandmarkPathId,
   type MotifTransformation,
+  type MotifFingerprintComparison,
   type NearbyChord,
   type PianoScale,
   type ResolutionFork,
@@ -2037,6 +2039,55 @@ function motifPracticePrompt(motif: MotifTransformation | undefined) {
   return "Try next: keep the changed ending once, then return to the first ending.";
 }
 
+function motifSigned(value: number) {
+  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
+}
+
+function MotifFingerprintFigure({ motif, comparison, sourceLabel, targetLabel }: {
+  motif: MotifTransformation;
+  comparison: MotifFingerprintComparison;
+  sourceLabel: string;
+  targetLabel: string;
+}) {
+  const pitchPath = (path: number[]) => path.map(motifSigned).join(" → ");
+  const intervalPath = (path: number[]) => path.map(motifSigned).join(" · ");
+  const timingPath = (shares: number[]) => shares.map((share) => `${Math.round(share * 100)}%`).join(" · ");
+  const kept = [
+    comparison.pitchShapePreserved ? "the signed pitch-step path" : comparison.openingShapePreserved ? "the opening pitch-step path" : null,
+    comparison.rhythmWithinDetectorTolerance ? "the relative timing shape" : null,
+    comparison.startShiftSemitones === 0 ? "the starting key" : null,
+  ].filter(Boolean).join(" and ");
+  const changed = [
+    comparison.startShiftSemitones !== 0 ? `the start moved ${motifSigned(comparison.startShiftSemitones)} keys` : null,
+    !comparison.rhythmWithinDetectorTolerance ? `gap ${comparison.largestTimingChangeGapIndex == null ? "timing" : comparison.largestTimingChangeGapIndex + 1} changed most` : null,
+    comparison.changedIntervalIndices.length ? `move ${comparison.changedIntervalIndices.map((index) => index + 1).join(", ")} changed` : null,
+  ].filter(Boolean).join("; ") || "no detector property changed";
+  const summary = `${sourceLabel} and ${targetLabel}. Relative pitch paths ${pitchPath(comparison.sourceRelativePitchPath)} and ${pitchPath(comparison.targetRelativePitchPath)}. Interval paths ${intervalPath(comparison.sourceIntervalPath)} and ${intervalPath(comparison.targetIntervalPath)}. Timing shares ${timingPath(comparison.sourceTimingShares)} and ${timingPath(comparison.targetTimingShares)}. Kept: ${kept || "no complete fingerprint"}. Changed: ${changed}.`;
+  const timingLane = (shares: number[]) => <span className="hud-motif-time-bar" aria-hidden="true">{shares.map((share, index) => <i key={index} style={{ "--motif-gap-share": share } as CSSProperties}><b>{Math.round(share * 100)}%</b></i>)}</span>;
+  return <div className="hud-motif-fingerprint" aria-labelledby="hud-motif-fingerprint-title">
+    <div className="hud-subheading"><span>Detector made inspectable</span><strong id="hud-motif-fingerprint-title">What survived the return?</strong><small>Set each statement’s first key to 0; turn each onset gap into a share of that statement’s total span.</small></div>
+    <div className="hud-motif-fingerprint-grid" role="img" aria-label={summary}>
+      <span aria-hidden="true" />
+      <strong>{sourceLabel}</strong>
+      <strong>{targetLabel}</strong>
+      <span>relative key path</span>
+      <code>{pitchPath(comparison.sourceRelativePitchPath)}</code>
+      <code>{pitchPath(comparison.targetRelativePitchPath)}</code>
+      <span>signed moves</span>
+      <code>{intervalPath(comparison.sourceIntervalPath)}</code>
+      <code>{intervalPath(comparison.targetIntervalPath)}</code>
+      <span>gap shares</span>
+      <div>{timingLane(comparison.sourceTimingShares)}<small>{timingPath(comparison.sourceTimingShares)}</small></div>
+      <div>{timingLane(comparison.targetTimingShares)}<small>{timingPath(comparison.targetTimingShares)}</small></div>
+    </div>
+    <div className="hud-motif-invariance-reading" role="status" aria-live="polite">
+      <span>invariance before interpretation</span>
+      <strong>Kept: {kept || "no complete fingerprint"}</strong>
+      <small>Changed: {changed}. This local comparison explains why the detector says “{motifTitle(motif)}”; it does not infer intended motif, formal function, emotion, quality, or correctness.</small>
+    </div>
+  </div>;
+}
+
 function PhraseMotionField({ events, articulation, motifs, mode }: {
   events: HudNoteEvent[];
   articulation: ArticulationEvidence[];
@@ -2051,6 +2102,10 @@ function PhraseMotionField({ events, articulation, motifs, mode }: {
   const xFor = (eventIndex: number) => 54 + ((events[eventIndex]?.onsetMs ?? firstOnset) - firstOnset) / phraseSpan * 620;
   const leadingMotifs = motifs.slice(0, 2);
   const strongest = leadingMotifs[0];
+  const strongestKey = strongest ? `${strongest.sourceEventIds.join("-")}:${strongest.targetEventIds.join("-")}` : "none";
+  const [revealedMotifKey, setRevealedMotifKey] = useState<string | null>(null);
+  const fingerprintRevealed = revealedMotifKey === strongestKey;
+  const fingerprint = strongest ? compareMotifFingerprints(events, strongest) : null;
   const rangeLabel = (start: number, length: number) => `P${start + 1}–P${start + length}`;
   const motifDescription = leadingMotifs.length
     ? leadingMotifs.map((motif) => `${rangeLabel(motif.sourceStartIndex, motif.length)} to ${rangeLabel(motif.targetStartIndex, motif.length)}: ${motifTitle(motif)}`).join(". ")
@@ -2109,6 +2164,11 @@ function PhraseMotionField({ events, articulation, motifs, mode }: {
           <strong>{strongest ? motifTitle(strongest) : "repeat → change one property → return"}</strong>
           <small>{strongest ? `${rangeLabel(strongest.sourceStartIndex, strongest.length)} → ${rangeLabel(strongest.targetStartIndex, strongest.length)}. ${motifPracticePrompt(strongest)}` : motifPracticePrompt(undefined)}</small>
         </div>
+        {strongest && fingerprint ? <div className="hud-motif-fingerprint-entry">
+          <button type="button" aria-expanded={fingerprintRevealed} aria-controls="hud-motif-fingerprint-detail" onClick={() => setRevealedMotifKey(fingerprintRevealed ? null : strongestKey)}>{fingerprintRevealed ? "Hide what survived" : "Show what survived"}</button>
+          <small>Compare relationship shape separately from starting key and elapsed speed.</small>
+        </div> : null}
+        {strongest && fingerprint && fingerprintRevealed ? <div id="hud-motif-fingerprint-detail"><MotifFingerprintFigure motif={strongest} comparison={fingerprint} sourceLabel={rangeLabel(strongest.sourceStartIndex, strongest.length)} targetLabel={rangeLabel(strongest.targetStartIndex, strongest.length)} /></div> : null}
       </div> : null}
     </div>
   </section>;

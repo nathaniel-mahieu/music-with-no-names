@@ -9342,6 +9342,26 @@ footer a {
 .hud-motif-readout span,
 .hud-motif-readout small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-motif-readout strong { font-size: .78rem; font-weight: 500; }
+.hud-motif-fingerprint-entry { display: flex; gap: 9px 13px; align-items: center; justify-content: space-between; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line); }
+.hud-motif-fingerprint-entry button { min-height: 34px; padding: 7px 11px; border: 1px solid var(--line-strong); background: var(--surface-raised); color: var(--foreground); font: inherit; font-size: .72rem; cursor: pointer; }
+.hud-motif-fingerprint-entry button[aria-expanded="true"] { border-color: var(--piano-gold); background: var(--surface-soft); }
+.hud-motif-fingerprint-entry small { max-width: 38rem; color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-motif-fingerprint { margin-top: 12px; padding: 13px; border: 1px solid var(--line); background: var(--surface-soft); }
+.hud-motif-fingerprint-grid { display: grid; grid-template-columns: minmax(105px, .55fr) repeat(2, minmax(0, 1fr)); margin-top: 10px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.hud-motif-fingerprint-grid > * { min-width: 0; margin: 0; padding: 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.hud-motif-fingerprint-grid > strong { font-family: var(--font-mono), monospace; font-size: .69rem; font-weight: 500; text-align: center; }
+.hud-motif-fingerprint-grid > span { color: var(--muted); font-size: .66rem; line-height: 1.3; }
+.hud-motif-fingerprint-grid code { color: var(--foreground); font-family: var(--font-mono), monospace; font-size: .72rem; text-align: center; }
+.hud-motif-fingerprint-grid > div { display: grid; gap: 5px; }
+.hud-motif-fingerprint-grid > div small { color: var(--muted); font-family: var(--font-mono), monospace; font-size: .65rem; text-align: center; }
+.hud-motif-time-bar { display: flex; height: 15px; border: 1px solid var(--line-strong); }
+.hud-motif-time-bar i { display: grid; flex: var(--motif-gap-share) 1 0; min-width: 1px; place-items: center; background: color-mix(in srgb, var(--piano-blue) 18%, transparent); border-right: 1px solid var(--line-strong); font-style: normal; }
+.hud-motif-time-bar i:last-child { border-right: 0; }
+.hud-motif-time-bar b { color: var(--foreground); font-family: var(--font-mono), monospace; font-size: .54rem; font-weight: 400; }
+.hud-motif-invariance-reading { display: grid; gap: 3px; margin-top: 10px; padding: 9px 0 9px 11px; border-left: 2px solid var(--piano-blue); }
+.hud-motif-invariance-reading span,
+.hud-motif-invariance-reading small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-motif-invariance-reading strong { font-size: .76rem; font-weight: 500; }
 
 .hud-phrase-breath { min-width: 0; padding: 20px 18px; border-bottom: 1px solid var(--line); }
 .hud-breath-control { display: grid; grid-template-columns: minmax(210px, .7fr) minmax(240px, 1fr); gap: 6px 18px; align-items: center; margin-top: 13px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -9891,6 +9911,13 @@ footer a {
   .hud-motif-empty-label { font-size: 28px; }
   .hud-motif-range-label { font-size: 30px; }
   .hud-motif-tick-label { font-size: 26px; }
+  .hud-motif-fingerprint-entry { align-items: stretch; flex-direction: column; }
+  .hud-motif-fingerprint-entry button { width: 100%; }
+  .hud-motif-fingerprint { padding: 10px; }
+  .hud-motif-fingerprint-grid { grid-template-columns: minmax(76px, .55fr) repeat(2, minmax(0, 1fr)); }
+  .hud-motif-fingerprint-grid > * { padding: 6px 4px; }
+  .hud-motif-fingerprint-grid code { font-size: .61rem; }
+  .hud-motif-time-bar b { display: none; }
   .hud-breath-control { grid-template-columns: 1fr; }
   .hud-breath-control p { grid-column: auto; }
   .hud-breath-gate text,
@@ -10062,6 +10089,11 @@ footer a {
   .hud-chord-band.is-selected { fill: Highlight; stroke: HighlightText; }
   .hud-motif-source,
   .hud-motif-target { fill: Canvas; stroke: CanvasText; }
+  .hud-motif-fingerprint-entry button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
+  .hud-motif-fingerprint-entry button[aria-expanded="true"] { color: HighlightText; border-color: Highlight; background: Highlight; }
+  .hud-motif-fingerprint { border-color: CanvasText; background: Canvas; }
+  .hud-motif-time-bar i { background: Canvas; border-color: CanvasText; }
+  .hud-motif-invariance-reading { border-left-color: LinkText; }
   .hud-landmark-selector button[aria-pressed="true"],
   .hud-landmark-progress li.is-current { border-color: Highlight; background: Highlight; color: HighlightText; }
   .hud-landmark-transpose { border-color: CanvasText; background: Canvas; }

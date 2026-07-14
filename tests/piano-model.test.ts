@@ -13,6 +13,7 @@ import {
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
+  compareMotifFingerprints,
   comparePhraseEndingRipple,
   comparePhrasePauseMutation,
   compareScaleGapMutation,
@@ -1110,6 +1111,39 @@ test("distinguishes rhythmic variation, altered endings, and return after interv
   assert.equal(returned[0].kind, "exact-repeat");
   assert.equal(returned[0].returnAfterInterveningMaterial, true);
   assert.deepEqual(detectMotifTransformations([]), []);
+});
+
+test("makes a motif detector decision inspectable as pitch and timing invariants", () => {
+  const transposedEvents = motifEvents([60, 62, 65, 67, 69, 72], [0, 100, 300, 600, 700, 900]);
+  const transposed = detectMotifTransformations(transposedEvents)[0];
+  const fingerprint = compareMotifFingerprints(transposedEvents, transposed);
+  assert.ok(fingerprint);
+  assert.deepEqual(fingerprint.sourceRelativePitchPath, [0, 2, 5]);
+  assert.deepEqual(fingerprint.targetRelativePitchPath, [0, 2, 5]);
+  assert.deepEqual(fingerprint.sourceIntervalPath, [2, 3]);
+  assert.deepEqual(fingerprint.targetIntervalPath, [2, 3]);
+  assert.deepEqual(fingerprint.sourceTimingShares, [1 / 3, 2 / 3]);
+  assert.deepEqual(fingerprint.targetTimingShares, [1 / 3, 2 / 3]);
+  assert.equal(fingerprint.startShiftSemitones, 7);
+  assert.equal(fingerprint.pitchShapePreserved, true);
+  assert.equal(fingerprint.rhythmWithinDetectorTolerance, true);
+  assert.deepEqual(fingerprint.changedIntervalIndices, []);
+
+  const rhythmicEvents = motifEvents([60, 62, 65, 67, 60, 62, 65, 67], [0, 100, 200, 500, 800, 820, 900, 1300]);
+  const rhythmic = detectMotifTransformations(rhythmicEvents).find((motif) => motif.kind === "rhythmic-variation")!;
+  const rhythmicFingerprint = compareMotifFingerprints(rhythmicEvents, rhythmic);
+  assert.ok(rhythmicFingerprint);
+  assert.equal(rhythmicFingerprint.pitchShapePreserved, true);
+  assert.equal(rhythmicFingerprint.rhythmWithinDetectorTolerance, false);
+  assert.equal(rhythmicFingerprint.largestTimingChangeGapIndex, 2);
+  assert.ok(Math.abs(rhythmicFingerprint.timingShareDeltas[2]) > 0.1);
+});
+
+test("rejects contradictory or chronologically invalid motif fingerprint evidence", () => {
+  const events = motifEvents([60, 62, 64, 60, 62, 64], [0, 100, 200, 500, 600, 700]);
+  const motif = detectMotifTransformations(events)[0];
+  assert.throws(() => compareMotifFingerprints(events, { ...motif, targetEventIds: [4, 5, 99] }), RangeError);
+  assert.throws(() => compareMotifFingerprints(events.map((event) => event.id === 6 ? { ...event, onsetMs: 550 } : event), motif), RangeError);
 });
 
 test("separates exact chord identity, inversion, and incomplete outlines", () => {
