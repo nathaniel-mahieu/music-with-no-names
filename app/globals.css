@@ -8282,6 +8282,16 @@ footer a {
 .hud-ribbon-attack { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 2; }
 .hud-phrase-ribbon g.is-focused .hud-ribbon-attack { fill: var(--piano-gold); stroke-width: 3; }
 
+.hud-chord-question-guide { min-width: 0; padding: 14px clamp(18px, 4vw, 52px); border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+.hud-chord-question-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 11px; border: 1px solid var(--line); }
+.hud-chord-question-options button { display: grid; min-width: 0; gap: 3px; padding: 10px 12px; border: 0; border-right: 1px solid var(--line); color: var(--foreground); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.hud-chord-question-options button:last-child { border-right: 0; }
+.hud-chord-question-options button:hover { background: var(--surface-raised); }
+.hud-chord-question-options button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
+.hud-chord-question-options strong { font-size: .74rem; font-weight: 650; }
+.hud-chord-question-options span { color: var(--muted); font-size: .66rem; line-height: 1.35; }
+.hud-chord-question-options button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
+
 .piano-focus-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8311,7 +8321,31 @@ footer a {
 .hud-echo-panel,
 .hud-cause-panel,
 .hud-voice-coach,
-.hud-chord-change-lenses { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
+.hud-chord-change-lenses,
+.hud-chord-echo { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
+
+.hud-chord-echo-topline { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+.hud-chord-echo-topline .hud-panel-heading { flex: 1 1 560px; }
+.hud-chord-echo-topline > button,
+.hud-chord-echo-arm > button { min-height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .72rem; cursor: pointer; }
+.hud-chord-echo-arm > button:disabled { opacity: .45; cursor: not-allowed; }
+.hud-chord-echo-arm { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-top: 12px; padding: 12px 0 0; border-top: 1px solid var(--line); }
+.hud-chord-echo-arm > div { display: grid; flex: 1 1 460px; gap: 4px; }
+.hud-chord-echo-arm span,
+.hud-chord-echo-arm small,
+.hud-chord-echo-wait span,
+.hud-chord-echo-wait small { color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.hud-chord-echo-arm strong,
+.hud-chord-echo-wait strong { font-size: .76rem; font-weight: 500; }
+.hud-chord-echo-wait { display: grid; gap: 4px; margin-top: 13px; padding: 11px 0 11px 13px; border-left: 3px dashed var(--piano-blue); }
+.hud-chord-echo-figure { display: block; width: 100%; height: auto; margin-top: 10px; overflow: visible; border-top: 1px solid var(--line); }
+.hud-chord-echo-strand { stroke: var(--line-strong); stroke-width: 1.5; }
+.hud-chord-echo-strand.is-up,
+.hud-chord-echo-strand.is-down { stroke: var(--piano-blue); }
+.hud-chord-echo-strand.is-held { stroke-dasharray: 4 3; }
+.hud-chord-echo-node { stroke-width: 2; }
+.hud-chord-echo-node.is-source { fill: var(--surface-raised); stroke: var(--piano-blue); }
+.hud-chord-echo-node.is-attempt { fill: var(--piano-gold); stroke: var(--foreground); }
 
 .hud-echo-current {
   display: grid;
@@ -9243,6 +9277,8 @@ footer a {
 
 .piano-hud-analysis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(280px, .9fr); border-bottom: 1px solid var(--line); }
 .piano-hud-analysis > * + * { border-left: 1px solid var(--line); }
+.piano-hud-analysis.is-chords-focused { grid-template-columns: minmax(0, 1fr); }
+.piano-hud-analysis.is-chords-focused > * { border-left: 0; }
 .hud-chord-result { display: grid; gap: 3px; padding: 10px 0 10px 11px; border-left: 2px solid var(--piano-gold); }
 .hud-chord-result span,
 .hud-chord-result small { color: var(--muted); font-size: .51rem; }
@@ -9413,6 +9449,13 @@ footer a {
   .piano-hud-statebar { grid-template-columns: 1fr; }
   .piano-hud-statebar em { justify-self: start; }
   .hud-interval-tools > summary { align-items: flex-start; flex-direction: column; }
+  .hud-chord-question-options { grid-template-columns: 1fr; }
+  .hud-chord-question-options button { border-right: 0; border-bottom: 1px solid var(--line); }
+  .hud-chord-question-options button:last-child { border-bottom: 0; }
+  .hud-chord-echo-arm { align-items: stretch; flex-direction: column; }
+  .hud-chord-echo-arm > div { flex-basis: auto; }
+  .hud-chord-echo-arm > button,
+  .hud-chord-echo-topline > button { width: 100%; }
   .hud-echo-reading { grid-template-columns: 1fr; }
   .hud-echo-reading p:nth-child(even) { border-left: 0; }
   .hud-echo-reading p:nth-child(n + 2) { border-top: 1px solid var(--line); }
@@ -9573,6 +9616,10 @@ footer a {
   .hud-echo-span.is-attempt { stroke: Highlight; }
   .hud-echo-node.is-attempt { fill: Highlight; stroke: HighlightText; }
   .hud-echo-shift { stroke: CanvasText; }
+  .hud-chord-echo-node.is-source { fill: Canvas; stroke: LinkText; }
+  .hud-chord-echo-node.is-attempt { fill: Highlight; stroke: HighlightText; }
+  .hud-chord-echo-strand { stroke: CanvasText; }
+  .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-last-attack-reading { border-left-color: Highlight; }
   .hud-last-attack-reading.is-attributable { border-left-color: LinkText; }
   .hud-last-lenses article.is-measured { border-top-color: LinkText; }

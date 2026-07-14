@@ -53,6 +53,24 @@ export type IntervalEchoComparison = {
   attemptFrequencyGapHz: number;
 };
 
+export type ChordVoicingEchoComparison = {
+  sourceNotes: number[];
+  attemptNotes: number[];
+  sourcePitchClasses: number[];
+  attemptPitchClasses: number[];
+  relationshipPreserved: boolean;
+  pitchClassIdentityPreserved: boolean;
+  transpositionSteps: number | null;
+  uniformPhysicalShiftSteps: number | null;
+  bassRoleChanged: boolean | null;
+  sourceBassRelativeShape: number[];
+  attemptBassRelativeShape: number[];
+  sourceSpan: number;
+  attemptSpan: number;
+  centerShiftSteps: number;
+  voiceCountChanged: boolean;
+};
+
 export type TimedNoteAttack = RollingNoteEvent & {
   id: number;
   onsetMs: number;
@@ -647,6 +665,73 @@ export function compareIntervalEcho(sourceNotes: [number, number], attemptNotes:
     equalKeyboardRatio: 2 ** (sourceSemitones / 12),
     sourceFrequencyGapHz: Math.abs(sourceFrequencies[1] - sourceFrequencies[0]),
     attemptFrequencyGapHz: Math.abs(attemptFrequencies[1] - attemptFrequencies[0]),
+  };
+}
+
+/**
+ * Compares two performed chord fields without treating one spelling or voicing
+ * as the chord's essence. A relationship match means the interpreted
+ * pitch-class set survived either exactly or under one uniform transposition.
+ * Register, bass role, doubling, span, and hand motion remain separate.
+ */
+export function compareChordVoicingEcho(sourceInput: number[], attemptInput: number[]): ChordVoicingEchoComparison | null {
+  const allNotes = [...sourceInput, ...attemptInput];
+  if (allNotes.some((note) => !Number.isFinite(note) || note < 0 || note > 127)) {
+    throw new RangeError("Chord voicing echo notes must be finite MIDI positions from 0 through 127.");
+  }
+  const normalizeNotes = (notes: number[]) => [...new Set(notes.map(Math.round))].sort((first, second) => first - second);
+  const normalizePitchClasses = (notes: number[]) => [...new Set(notes.map(pitchClassFromMidi))].sort((first, second) => first - second);
+  const sourceNotes = normalizeNotes(sourceInput);
+  const attemptNotes = normalizeNotes(attemptInput);
+  const sourcePitchClasses = normalizePitchClasses(sourceNotes);
+  const attemptPitchClasses = normalizePitchClasses(attemptNotes);
+  if (sourceNotes.length < 2 || attemptNotes.length < 2 || sourcePitchClasses.length < 2 || attemptPitchClasses.length < 2) return null;
+
+  const attemptSet = new Set(attemptPitchClasses);
+  const matchingShifts = sourcePitchClasses.length === attemptPitchClasses.length
+    ? Array.from({ length: 12 }, (_, shift) => shift).filter((shift) => sourcePitchClasses.every((pitchClass) => attemptSet.has(modulo(pitchClass + shift, 12))))
+    : [];
+  const signedShift = (shift: number) => shift > 6 ? shift - 12 : shift;
+  const transpositionSteps = matchingShifts.length
+    ? matchingShifts.map(signedShift).sort((first, second) => Math.abs(first) - Math.abs(second) || first - second)[0]
+    : null;
+  const pitchClassIdentityPreserved = transpositionSteps === 0;
+  const relationshipPreserved = transpositionSteps != null;
+  const sourceBass = sourceNotes[0];
+  const attemptBass = attemptNotes[0];
+  const sourceBassPitchClass = pitchClassFromMidi(sourceBass);
+  const attemptBassPitchClass = pitchClassFromMidi(attemptBass);
+  const bassRoleChanged = transpositionSteps == null
+    ? null
+    : modulo(sourceBassPitchClass + transpositionSteps, 12) !== attemptBassPitchClass;
+  const bassRelativeShape = (pitchClasses: number[], bassPitchClass: number) => pitchClasses
+    .map((pitchClass) => modulo(pitchClass - bassPitchClass, 12))
+    .sort((first, second) => first - second);
+  const physicalShifts = sourceNotes.length === attemptNotes.length
+    ? sourceNotes.map((note, index) => attemptNotes[index] - note)
+    : [];
+  const uniformPhysicalShiftSteps = physicalShifts.length && physicalShifts.every((shift) => shift === physicalShifts[0])
+    ? physicalShifts[0]
+    : null;
+  const center = (notes: number[]) => notes.reduce((sum, note) => sum + note, 0) / notes.length;
+  const span = (notes: number[]) => notes.at(-1)! - notes[0];
+
+  return {
+    sourceNotes,
+    attemptNotes,
+    sourcePitchClasses,
+    attemptPitchClasses,
+    relationshipPreserved,
+    pitchClassIdentityPreserved,
+    transpositionSteps,
+    uniformPhysicalShiftSteps,
+    bassRoleChanged,
+    sourceBassRelativeShape: bassRelativeShape(sourcePitchClasses, sourceBassPitchClass),
+    attemptBassRelativeShape: bassRelativeShape(attemptPitchClasses, attemptBassPitchClass),
+    sourceSpan: span(sourceNotes),
+    attemptSpan: span(attemptNotes),
+    centerShiftSteps: Math.round((center(attemptNotes) - center(sourceNotes)) * 1000) / 1000,
+    voiceCountChanged: sourceNotes.length !== attemptNotes.length,
   };
 }
 

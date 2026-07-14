@@ -7,6 +7,7 @@ import {
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
+  compareChordVoicingEcho,
   compareIntervalEcho,
   comparePhraseLenses,
   phraseChangeProfile,
@@ -184,6 +185,43 @@ test("separates an echoed interval invariant from changed physical coordinates",
   assert.equal(reversed.uniformShiftSteps, null);
   assert.equal(compareIntervalEcho([60, 67], [72, 78]).matched, false);
   assert.throws(() => compareIntervalEcho([60, Number.NaN], [72, 79]), RangeError);
+});
+
+test("separates a chord relationship from voicing, register, bass role, and doubling", () => {
+  const inversion = compareChordVoicingEcho([60, 64, 67], [64, 67, 72]);
+  assert.ok(inversion);
+  assert.equal(inversion.relationshipPreserved, true);
+  assert.equal(inversion.pitchClassIdentityPreserved, true);
+  assert.equal(inversion.transpositionSteps, 0);
+  assert.equal(inversion.bassRoleChanged, true);
+  assert.deepEqual(inversion.sourceBassRelativeShape, [0, 4, 7]);
+  assert.deepEqual(inversion.attemptBassRelativeShape, [0, 3, 8]);
+  assert.equal(inversion.sourceSpan, 7);
+  assert.equal(inversion.attemptSpan, 8);
+  assert.equal(inversion.centerShiftSteps, 4);
+  assert.equal(inversion.uniformPhysicalShiftSteps, null);
+
+  const transposed = compareChordVoicingEcho([60, 64, 67], [62, 66, 69]);
+  assert.ok(transposed);
+  assert.equal(transposed.relationshipPreserved, true);
+  assert.equal(transposed.pitchClassIdentityPreserved, false);
+  assert.equal(transposed.transpositionSteps, 2);
+  assert.equal(transposed.bassRoleChanged, false);
+  assert.equal(transposed.uniformPhysicalShiftSteps, 2);
+
+  const octave = compareChordVoicingEcho([60, 64, 67], [72, 76, 79]);
+  assert.ok(octave);
+  assert.equal(octave.pitchClassIdentityPreserved, true);
+  assert.equal(octave.uniformPhysicalShiftSteps, 12);
+
+  const doubled = compareChordVoicingEcho([60, 64, 67], [60, 64, 67, 72]);
+  assert.ok(doubled);
+  assert.equal(doubled.relationshipPreserved, true);
+  assert.equal(doubled.voiceCountChanged, true);
+
+  assert.equal(compareChordVoicingEcho([60, 64, 67], [60, 63, 67])?.relationshipPreserved, false);
+  assert.equal(compareChordVoicingEcho([60, 72], [62, 74]), null);
+  assert.throws(() => compareChordVoicingEcho([60, 64, 128], [62, 66, 69]), RangeError);
 });
 
 test("declares controlled sonority fields as physical starting recipes", () => {
