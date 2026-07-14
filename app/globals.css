@@ -9403,6 +9403,17 @@ footer a {
 .hud-motif-experience-check > p { display: grid; gap: 3px; margin: 9px 0 0; padding: 9px 0 9px 11px; border-left: 2px solid var(--piano-blue); }
 .hud-motif-experience-check > p strong { font-size: .74rem; font-weight: 500; }
 .hud-motif-experience-check > p small { color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.hud-motif-return-contrast { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.hud-motif-return-contrast ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin: 9px 0 0; padding: 0; list-style: none; }
+.hud-motif-return-contrast li { display: grid; min-width: 0; gap: 3px; padding: 9px; border-top: 2px solid var(--foreground); border-bottom: 1px solid var(--line); }
+.hud-motif-return-contrast li + li { border-left: 1px solid var(--line); }
+.hud-motif-return-contrast li.is-shifted { border-top-color: var(--piano-blue); border-top-style: dashed; }
+.hud-motif-return-contrast li.is-current { background: color-mix(in srgb, var(--piano-blue) 7%, transparent); }
+.hud-motif-return-contrast span,
+.hud-motif-return-contrast small { color: var(--muted); font-size: .66rem; line-height: 1.35; }
+.hud-motif-return-contrast span { text-transform: uppercase; }
+.hud-motif-return-contrast strong { font-size: .72rem; font-weight: 500; line-height: 1.35; }
+.hud-motif-return-contrast > p { margin: 8px 0 0; color: var(--muted); font-size: .68rem; line-height: 1.4; }
 .hud-motif-echo-actions { justify-content: flex-end; margin-top: 10px; }
 
 .hud-phrase-breath { min-width: 0; padding: 20px 18px; border-bottom: 1px solid var(--line); }
@@ -9967,6 +9978,8 @@ footer a {
   .hud-motif-experience-evidence,
   .hud-motif-experience-options { grid-template-columns: 1fr; }
   .hud-motif-experience-evidence > div + div { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-motif-return-contrast ol { grid-template-columns: 1fr; }
+  .hud-motif-return-contrast li + li { border-left: 0; }
   .hud-motif-echo-start > div:last-child,
   .hud-motif-echo-actions { display: grid; grid-template-columns: 1fr; }
   .hud-motif-echo button { width: 100%; }
@@ -10157,6 +10170,8 @@ footer a {
   .hud-motif-return-trail.is-return-after-variation .hud-motif-return-reading { border-left-color: LinkText; }
   .hud-motif-experience-options button[aria-pressed="true"] { color: HighlightText; border-color: Highlight; background: Highlight; }
   .hud-motif-experience-check > p { border-left-color: LinkText; }
+  .hud-motif-return-contrast li.is-shifted { border-top-color: LinkText; }
+  .hud-motif-return-contrast li.is-current { background: Canvas; outline: 2px solid Highlight; outline-offset: -2px; }
   .hud-motif-echo button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
   .hud-landmark-selector button[aria-pressed="true"],
   .hud-landmark-progress li.is-current { border-color: Highlight; background: Highlight; color: HighlightText; }

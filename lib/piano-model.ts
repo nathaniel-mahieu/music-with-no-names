@@ -567,6 +567,15 @@ export type MotifReturnArc = {
   returnAfterVariationIndex: number | null;
 };
 
+export type MotifReturnReport = "not-return" | "uncertain" | "felt-return";
+
+export type MotifReturnObservation = {
+  targetEventIds: number[];
+  relationship: "exact-repeat" | "transposed-repeat";
+  startShiftSemitones: number;
+  report: MotifReturnReport;
+};
+
 export type LandmarkPathId = "pop-loop" | "blues-turn" | "classical-cadence" | "pedal-field";
 
 export type LandmarkPathStep = {
@@ -2593,6 +2602,26 @@ export function motifReturnArc(comparisons: MotifEchoComparison[]): MotifReturnA
     returnIndices,
     returnAfterVariationIndex,
   };
+}
+
+/** Retains a few particular performances without averaging them into a rule. */
+export function upsertMotifReturnObservation(
+  observations: MotifReturnObservation[],
+  comparison: MotifEchoComparison,
+  report: MotifReturnReport,
+  limit = 4,
+) {
+  if ((comparison.kind !== "exact-repeat" && comparison.kind !== "transposed-repeat") || !Number.isInteger(limit) || limit <= 0) return [...observations];
+  const key = comparison.targetEventIds.join("-");
+  const observation: MotifReturnObservation = {
+    targetEventIds: [...comparison.targetEventIds],
+    relationship: comparison.kind,
+    startShiftSemitones: comparison.startShiftSemitones,
+    report,
+  };
+  const existingIndex = observations.findIndex((candidate) => candidate.targetEventIds.join("-") === key);
+  if (existingIndex >= 0) return observations.map((candidate, index) => index === existingIndex ? observation : candidate).slice(-limit);
+  return [...observations, observation].slice(-limit);
 }
 
 export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], event: T, limit = 7) {

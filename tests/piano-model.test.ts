@@ -39,6 +39,7 @@ import {
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
   motifReturnArc,
+  upsertMotifReturnObservation,
   matchesLandmarkStep,
   matchScaleFingerprint,
   nearbyScaleChords,
@@ -1203,6 +1204,23 @@ test("tracks a local variation followed by a relationship return without claimin
     returnIndices: [0, 2],
     returnAfterVariationIndex: null,
   });
+});
+
+test("retains particular return reports without turning them into an aggregate", () => {
+  const source = motifEvents([60, 62, 64, 65], [0, 100, 200, 300]);
+  const exact = compareMotifEcho(source, motifEvents([60, 62, 64, 65], [500, 600, 700, 800]).map((event) => ({ ...event, id: event.id + 4 })))!;
+  const shifted = compareMotifEcho(source, motifEvents([67, 69, 71, 72], [900, 1000, 1100, 1200]).map((event) => ({ ...event, id: event.id + 8 })))!;
+  const variation = compareMotifEcho(source, motifEvents([60, 62, 64, 67], [1300, 1400, 1500, 1600]).map((event) => ({ ...event, id: event.id + 12 })))!;
+
+  const first = upsertMotifReturnObservation([], exact, "felt-return");
+  const revised = upsertMotifReturnObservation(first, exact, "uncertain");
+  const paired = upsertMotifReturnObservation(revised, shifted, "not-return");
+  assert.deepEqual(paired.map((observation) => [observation.relationship, observation.startShiftSemitones, observation.report]), [
+    ["exact-repeat", 0, "uncertain"],
+    ["transposed-repeat", 7, "not-return"],
+  ]);
+  assert.deepEqual(upsertMotifReturnObservation(paired, variation, "felt-return"), paired);
+  assert.equal(upsertMotifReturnObservation(paired, exact, "felt-return", 1).length, 1);
 });
 
 test("separates exact chord identity, inversion, and incomplete outlines", () => {
