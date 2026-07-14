@@ -180,7 +180,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Generated · silent · transposable/);
   assert.match(pianoLab, /Same route completed from two centers/);
   assert.match(pianoLab, /Move to fifths neighbor/);
-  assert.match(pianoLab, /field order, roles, root offsets, and internal interval shapes/);
+  assert.match(pianoLab, /field order, roles, root offsets, and internal pitch-class shapes/);
+  assert.match(pianoLab, /compact voicings may move individual keys differently/);
   assert.match(pianoLab, /landmarkTranspositionProfile/);
   assert.match(pianoLab, /setLandmarkStepIndex\(0\)/);
   assert.match(pianoLab, /silent landmark path target/);

@@ -2134,9 +2134,9 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
     </div>
     <div className="hud-landmark-question"><span>one listening question</span><strong>{path.question}</strong><small>{path.provenance}</small></div>
     {transposeProfile ? <div className="hud-landmark-transpose" role="status" aria-label={`Transposition comparison from ${doLabel(transposeProfile.sourceDoPitchClass)} to ${doLabel(transposeProfile.targetDoPitchClass)}`}>
-      <div><span>same path, new center</span><strong>{doLabel(transposeProfile.sourceDoPitchClass)} <i aria-hidden="true">→</i> {doLabel(transposeProfile.targetDoPitchClass)}</strong><small>Every absolute pitch moved {transposeProfile.semitoneShift} equal-key step{transposeProfile.semitoneShift === 1 ? "" : "s"}; begin again at field 1.</small></div>
+      <div><span>same path, new center</span><strong>{doLabel(transposeProfile.sourceDoPitchClass)} <i aria-hidden="true">→</i> {doLabel(transposeProfile.targetDoPitchClass)}</strong><small>Every target pitch class rotated {transposeProfile.semitoneShift} equal-key step{transposeProfile.semitoneShift === 1 ? "" : "s"} around the octave; compact voicings may move individual keys differently. Begin again at field 1.</small></div>
       <p><span>changed</span><strong>Do and every physical target frequency</strong></p>
-      <p><span>held constant</span><strong>field order, roles, root offsets, and internal interval shapes</strong></p>
+      <p><span>held constant</span><strong>field order, roles, root offsets, and internal pitch-class shapes</strong></p>
       <p><span>listen for</span><strong>Does the route still feel directed when its register and center move?</strong></p>
     </div> : null}
     <ol className="hud-landmark-progress" aria-label={`${path.title} progress`}>
