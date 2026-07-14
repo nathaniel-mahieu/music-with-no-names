@@ -15,6 +15,12 @@ import {
   sonorityAffordances,
   sonorityPerceptionModel,
 } from "@/lib/sonority-model";
+import { liveHarmonyPhraseProfile, type LiveHarmonyField } from "@/lib/live-harmony";
+import {
+  PIANO_SESSION_KEY,
+  parsePianoHarmonySpecimen,
+  type PianoHarmonySpecimen,
+} from "@/lib/piano-session";
 import {
   SYNTH_MASTER_GAIN,
   configureSafetyCompressor,
@@ -169,7 +175,132 @@ function formatFrequency(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
 }
 
-export function HarmonyLab() {
+function signedPoint(value: number) {
+  const rounded = Math.round(value * 100);
+  return `${rounded > 0 ? "+" : ""}${rounded}`;
+}
+
+function liveFieldShape(field: LiveHarmonyField) {
+  return field.offsetsFromBass.join("·");
+}
+
+function liveFieldIntervals(field: LiveHarmonyField) {
+  return field.intervals.map((pair) => `${pair.distance.semitones} keys ≈ ${pair.distance.landmarkLabel}`).join(" · ");
+}
+
+function affordanceAvailability(affordance: { delta: number; direction: string }) {
+  const possibility = affordance.direction.replace(/^may support /, "");
+  if (affordance.delta > 0.01) return `More available in this model: ${possibility}`;
+  if (affordance.delta < -0.01) return `Less available in this model: ${possibility}`;
+  return `Little modeled change in the availability of ${possibility}`;
+}
+
+function LiveHarmonyBridge({
+  specimen,
+  hydrated,
+  onNavigateToPiano,
+}: {
+  specimen: PianoHarmonySpecimen | null;
+  hydrated: boolean;
+  onNavigateToPiano?: () => void;
+}) {
+  const profile = useMemo(() => specimen
+    ? liveHarmonyPhraseProfile(specimen.events, specimen.chordWindowMs, specimen.boundaryCorrections)
+    : null, [specimen]);
+  const transition = profile?.transition ?? null;
+  const previous = profile?.previous ?? null;
+  const current = profile?.current ?? null;
+  const allNotes = previous && current ? [...previous.notes, ...current.notes] : [];
+  const minimumNote = allNotes.length ? Math.min(...allNotes) : 60;
+  const maximumNote = allNotes.length ? Math.max(...allNotes) : 72;
+  const noteSpan = Math.max(12, maximumNote - minimumNote);
+  const noteY = (note: number) => 222 - ((note - minimumNote) / noteSpan) * 176;
+  const mostChangedAffordance = transition
+    ? [...transition.affordanceDelta].sort((first, second) => Math.abs(second.delta) - Math.abs(first.delta))[0]
+    : null;
+  const accessibleSummary = previous && current && transition
+    ? `Previous attacked field shape ${liveFieldShape(previous)}. Current attacked field shape ${liveFieldShape(current)}. Nearest voices moved ${transition.voiceLeading.totalMotion} equal-key ${transition.voiceLeading.totalMotion === 1 ? "step" : "steps"} in total; largest move ${transition.voiceLeading.largestLeap}. Under the fixed harmonic teaching spectrum, roughness changed ${signedPoint(transition.sensoryDelta.roughness)} points and fusion changed ${signedPoint(transition.sensoryDelta.fusion)} points. Listener experience is not inferred.`
+    : "A second compact attacked field is needed before a chord change can be compared.";
+
+  return (
+    <section className="live-harmony-bridge" aria-labelledby="live-harmony-title">
+      <div className="live-harmony-heading">
+        <div>
+          <span className="workspace-label">Live phrase · latest two attacked fields</span>
+          <h3 id="live-harmony-title">What changed when your hands moved to the next harmony?</h3>
+        </div>
+        <p>See the physical voices first, then the assumed auditory change, then what remains yours to hear. No MIDI sound is generated.</p>
+      </div>
+
+      {!hydrated ? (
+        <p className="live-harmony-status" role="status">Reading the retained phrase…</p>
+      ) : previous && current && transition ? (
+        <>
+          <p className="live-harmony-status">{profile!.attackCount} retained attacks → {profile!.gestureCount} compact fields · Piano grouping {profile!.groupingMs} ms ({profile!.groupingMs * 2} ms maximum span)</p>
+          <div className="live-harmony-figure" role="img" aria-label={accessibleSummary}>
+            <svg viewBox="0 0 520 260" aria-hidden="true" focusable="false">
+              <line className="live-harmony-axis" x1="92" y1="28" x2="92" y2="232" />
+              <line className="live-harmony-axis" x1="428" y1="28" x2="428" y2="232" />
+              {transition.voiceLeading.strands.map((strand, index) => {
+                const fromX = strand.from == null ? 260 : 92;
+                const toX = strand.to == null ? 260 : 428;
+                const fromY = noteY(strand.from ?? strand.to ?? minimumNote);
+                const toY = noteY(strand.to ?? strand.from ?? minimumNote);
+                return <line key={`${strand.from ?? "new"}-${strand.to ?? "left"}-${index}`} className={`live-harmony-strand is-${strand.motion}`} x1={fromX} y1={fromY} x2={toX} y2={toY} />;
+              })}
+              {previous.notes.map((note) => <g key={`previous-${note}`}><circle className="live-harmony-note is-previous" cx="92" cy={noteY(note)} r="8" /><text x="76" y={noteY(note) + 4} textAnchor="end">+{note - previous.notes[0]}</text></g>)}
+              {current.notes.map((note) => <g key={`current-${note}`}><rect className="live-harmony-note is-current" x="420" y={noteY(note) - 8} width="16" height="16" /><text x="444" y={noteY(note) + 4}>+{note - current.notes[0]}</text></g>)}
+              <text className="live-harmony-field-label" x="92" y="252" textAnchor="middle">previous · circle</text>
+              <text className="live-harmony-field-label" x="428" y="252" textAnchor="middle">current · square</text>
+            </svg>
+            <div className="live-harmony-relationship">
+              <span>Interval structure above each bass</span>
+              <strong>{liveFieldShape(previous)} <i aria-hidden="true">→</i> {liveFieldShape(current)}</strong>
+              <small>{liveFieldIntervals(previous)}<br />{liveFieldIntervals(current)}</small>
+            </div>
+          </div>
+
+          <div className="live-harmony-affordances" aria-label="Conditional affordance changes under the fixed harmonic teaching model">
+            <div><span>Conditional possibilities · model, not feeling</span><strong>{mostChangedAffordance ? `${mostChangedAffordance.label} changed ${signedPoint(mostChangedAffordance.delta)} points` : "No model change"}</strong></div>
+            {transition.affordanceDelta.map((affordance) => (
+              <div className="live-harmony-affordance" key={affordance.key}>
+                <span>{affordance.label}</span>
+                <i><b className="is-before" style={{ left: `${Math.round(affordance.before * 100)}%` }} /><b className="is-after" style={{ left: `${Math.round(affordance.after * 100)}%` }} /></i>
+                <strong>{signedPoint(affordance.delta)}</strong>
+                <small>{affordanceAvailability(affordance)}</small>
+              </div>
+            ))}
+          </div>
+
+          <div className="live-harmony-lenses" aria-label="Five separate evidence lenses for the chord change">
+            <article><span>Sound</span><em>measured MIDI</em><strong>{previous.notes.length} → {current.notes.length} attacked keys</strong><small>{previous.kind} {previous.spreadMs.toFixed(0)} ms → {current.kind} {current.spreadMs.toFixed(0)} ms. Velocity is not treated as acoustic loudness.</small></article>
+            <article><span>Relationships</span><em>derived from keys</em><strong>{liveFieldShape(previous)} → {liveFieldShape(current)}</strong><small>Equal-key offsets above each field’s bass; register-independent, unlike the physical spectrum.</small></article>
+            <article><span>Motion</span><em>nearest-voice model</em><strong>{transition.voiceLeading.totalMotion} key {transition.voiceLeading.totalMotion === 1 ? "step" : "steps"} total</strong><small>Largest {transition.voiceLeading.largestLeap} {transition.voiceLeading.largestLeap === 1 ? "step" : "steps"}; {transition.voiceLeading.motionClasses.join(" + ") || "held or single-direction motion"}. Not fingering or voice identity.</small></article>
+            <article><span>Auditory</span><em>assumed spectrum</em><strong>friction {signedPoint(transition.sensoryDelta.roughness)} · fusion {signedPoint(transition.sensoryDelta.fusion)}</strong><small>Exact harmonic stack, nine partials, 7 dB/octave. The keyboard and DAW audio were not analyzed.</small></article>
+            <article><span>Experience</span><em>listener only</em><strong>Not inferred</strong><small>{mostChangedAffordance ? `${affordanceAvailability(mostChangedAffordance)}; the model does not say you felt it.` : "The modeled possibilities do not determine your response."} Context, memory, style, purpose, and hearing can change the result.</small></article>
+          </div>
+
+          <div className="live-harmony-boundary">
+            <p><strong>What this comparison omits:</strong> held and pedal-inherited notes are not reconstructed here; these are attacked fields using the Piano timing and boundary corrections. Tonal pull toward Do remains in Piano rather than being folded into this sound-field model.</p>
+            {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Replay or change one field</button> : null}
+          </div>
+        </>
+      ) : (
+        <div className="live-harmony-empty">
+          <div>
+            <strong>{current ? `One field is ready: shape ${liveFieldShape(current)}` : specimen?.events.length ? "No compact multi-pitch field found yet" : "No retained phrase yet"}</strong>
+            <p>{current ? "Play a second compact field so Harmony can compare what moved and what changed." : `In Piano, attack at least two different pitch classes within the ${specimen?.chordWindowMs ?? 160} ms grouping window, then play a second field.`} Held notes are interpreted in Piano; this bridge begins with attacked membership only.</p>
+          </div>
+          {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Build two fields in Piano</button> : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function HarmonyLab({ onNavigateToPiano }: { onNavigateToPiano?: () => void }) {
+  const [liveSpecimen, setLiveSpecimen] = useState<PianoHarmonySpecimen | null>(null);
+  const [liveHydrated, setLiveHydrated] = useState(false);
   const [referenceHz, setReferenceHz] = useState(160);
   const [justRatios, setJustRatios] = useState<number[]>([1, 5 / 4, 3 / 2]);
   const [voiceSettings, setVoiceSettings] = useState<VoiceSetting[]>([
@@ -181,6 +312,17 @@ export function HarmonyLab() {
   const [foldOctaves, setFoldOctaves] = useState(true);
   const [motionStep, setMotionStep] = useState(0);
   const [previousRatios, setPreviousRatios] = useState<number[]>([1, 5 / 4, 3 / 2]);
+  useEffect(() => {
+    const hydrationTimer = window.setTimeout(() => {
+      try {
+        setLiveSpecimen(parsePianoHarmonySpecimen(window.sessionStorage.getItem(PIANO_SESSION_KEY)));
+      } catch {
+        setLiveSpecimen(null);
+      }
+      setLiveHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(hydrationTimer);
+  }, []);
   const ratios = useMemo(
     () =>
       justRatios.map((ratio) => {
@@ -317,14 +459,18 @@ export function HarmonyLab() {
     <section className="advanced-lab harmony-lab" aria-labelledby="harmony-title">
       <div className="lab-intro">
         <div>
-          <p className="section-kicker">Harmony Lab · three to six pitches together</p>
-          <h2 id="harmony-title">Change one voice. Hear the whole harmony shift.</h2>
+          <p className="section-kicker">Harmony Lab · your chord change through five lenses</p>
+          <h2 id="harmony-title">Watch one field become another.</h2>
         </div>
         <p>
-          Every pair of voices creates an interval, while all the overtones combine into one sound. Move a voice and watch both layers change.
+          Start with the latest two compact fields from Piano. Trace what your hands changed, what the assumed sound model changes, and what no model can decide for you.
         </p>
       </div>
 
+      <LiveHarmonyBridge specimen={liveSpecimen} hydrated={liveHydrated} onNavigateToPiano={onNavigateToPiano} />
+
+      <details className="harmony-authoring-disclosure" onToggle={(event) => { if (!event.currentTarget.open && isPlaying) stop(); }}>
+        <summary><strong>Explore the generated harmonic-field instrument</strong><span>optional ratio, tuning, register, spectrum, lattice, audio, and affordance controls</span></summary>
       <div className="lab-workspace">
         <div className="lab-controls">
           <div className="workspace-heading">
@@ -654,6 +800,7 @@ export function HarmonyLab() {
         timbre, tempo, dynamics, lyrics, personal association, and listening purpose can reverse
         or outweigh the static-field tendencies.
       </div>
+      </details>
     </section>
   );
 }

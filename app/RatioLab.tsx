@@ -141,13 +141,13 @@ const LAB_COPY: Record<
     principleBottom: "with timbre, register, and level",
   },
   harmony: {
-    eyebrow: "Build harmony from interacting intervals",
-    title: "Add pitches and hear a harmony emerge.",
+    eyebrow: "Follow your latest chord change",
+    title: "See how one field becomes another.",
     description:
-      "Move one of three to six simultaneous voices. See how its relationships with every other voice change the combined sound.",
-    principleTop: "Several intervals",
-    principleMain: "one combined sound",
-    principleBottom: "every voice changes the whole",
+      "Carry two compact Piano fields into a silent comparison. Trace voice motion, interval structure, assumed auditory change, and conditional felt possibilities without turning them into a verdict.",
+    principleTop: "Hands move",
+    principleMain: "→ field changes",
+    principleBottom: "experience remains yours",
   },
   rhythm: {
     eyebrow: "Find rhythm inside your own phrase",
@@ -759,7 +759,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.53
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.54
         </div>
       </header>
 
@@ -1011,7 +1011,7 @@ export function RatioLab() {
         ) : activeLab === "ear" ? (
           <EarLab />
         ) : activeLab === "harmony" ? (
-          <HarmonyLab />
+          <HarmonyLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "rhythm" ? (
           <RhythmLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "journey" ? (

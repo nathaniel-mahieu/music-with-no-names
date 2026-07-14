@@ -241,7 +241,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(earLab, /humanRatings/);
   assert.match(earLab, /Controlled auditory A\/B experiments/);
   assert.match(earLab, /Fusion hypothesis/);
-  assert.match(harmonyLab, /Change one voice\. Hear the whole harmony shift/);
+  assert.match(harmonyLab, /Watch one field become another/);
+  assert.match(harmonyLab, /What changed when your hands moved to the next harmony/);
+  assert.match(harmonyLab, /Five separate evidence lenses for the chord change/);
+  assert.match(harmonyLab, /Explore the generated harmonic-field instrument/);
   assert.match(harmonyLab, /Shared harmonic basis/);
   assert.match(harmonyLab, /Low-prime coordinates/);
   assert.match(harmonyLab, /Equal-division approximation morph/);
@@ -249,7 +252,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(harmonyLab, /From vibration to felt possibility/);
   assert.match(harmonyLab, /Conditional affordances/);
   assert.match(harmonyLab, /Emotion is not inside a ratio/);
-  assert.match(harmonyLab, /three to six pitches together/);
+  assert.match(harmonyLab, /your chord change through five lenses/);
   assert.match(harmonyLab, /Add source/);
   assert.match(rhythmLab, /See the timing shape before naming the beat/);
   assert.match(rhythmLab, /Anchor resistance/);

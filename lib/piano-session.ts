@@ -25,6 +25,12 @@ export type PianoPhraseSpecimenEvent = {
   releaseMs: number | null;
 };
 
+export type PianoHarmonySpecimen = {
+  events: PianoPhraseSpecimenEvent[];
+  chordWindowMs: 80 | 160 | 320;
+  boundaryCorrections: Record<number, "break" | "join">;
+};
+
 function isSafePhraseEvent(value: unknown) {
   if (!value || typeof value !== "object") return false;
   const event = value as Record<string, unknown>;
@@ -77,4 +83,27 @@ export function parsePianoPhraseSpecimen(serialized: string | null): PianoPhrase
       releaseMs: event.releaseMs == null ? null : Number(event.releaseMs),
     }))
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+}
+
+export function parsePianoHarmonySpecimen(serialized: string | null): PianoHarmonySpecimen | null {
+  const events = parsePianoPhraseSpecimen(serialized);
+  if (!events || !serialized) return null;
+  try {
+    const session = JSON.parse(serialized) as Record<string, unknown>;
+    const chordWindowMs = session.chordWindowMs === 80 || session.chordWindowMs === 320 ? session.chordWindowMs : 160;
+    const eventIds = new Set(events.map((event) => event.id));
+    const source = session.boundaryCorrections && typeof session.boundaryCorrections === "object" && !Array.isArray(session.boundaryCorrections)
+      ? session.boundaryCorrections as Record<string, unknown>
+      : {};
+    const boundaryCorrections: Record<number, "break" | "join"> = {};
+    Object.entries(source).slice(0, 512).forEach(([rawId, correction]) => {
+      const id = Number(rawId);
+      if (Number.isInteger(id) && eventIds.has(id) && (correction === "break" || correction === "join")) {
+        boundaryCorrections[id] = correction;
+      }
+    });
+    return { events, chordWindowMs, boundaryCorrections };
+  } catch {
+    return null;
+  }
 }

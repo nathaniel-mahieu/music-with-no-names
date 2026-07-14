@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parsePianoPhraseSpecimen, parsePianoSessionSummary } from "../lib/piano-session.ts";
+import { parsePianoHarmonySpecimen, parsePianoPhraseSpecimen, parsePianoSessionSummary } from "../lib/piano-session.ts";
 
 const phraseEvent = (id: number, note: number, onsetMs: number) => ({ id, note, onsetMs });
 
@@ -44,4 +44,24 @@ test("extracts a sorted, minimal phrase specimen without exposing session contro
 test("rejects impossible velocity and release data before projection", () => {
   assert.equal(parsePianoPhraseSpecimen(JSON.stringify({ phraseEvents: [{ ...phraseEvent(1, 60, 100), velocity: 180 }] })), null);
   assert.equal(parsePianoPhraseSpecimen(JSON.stringify({ phraseEvents: [{ ...phraseEvent(1, 60, 100), releaseMs: 50 }] })), null);
+});
+
+test("projects only bounded chord grouping settings for cross-lab harmony", () => {
+  const specimen = parsePianoHarmonySpecimen(JSON.stringify({
+    version: 15,
+    chordWindowMs: 320,
+    boundaryCorrections: { 2: "join", 3: "break", 4: "invalid", 999: "join" },
+    phraseEvents: [
+      { id: 1, note: 60, velocity: 90, onsetMs: 0, releaseMs: 400 },
+      { id: 2, note: 64, velocity: 80, onsetMs: 120, releaseMs: 450 },
+      { id: 3, note: 67, velocity: 70, onsetMs: 600, releaseMs: 900 },
+    ],
+  }));
+  assert.ok(specimen);
+  assert.equal(specimen.chordWindowMs, 320);
+  assert.deepEqual(specimen.boundaryCorrections, { 2: "join", 3: "break" });
+  assert.deepEqual(specimen.events.map((event) => event.note), [60, 64, 67]);
+
+  const fallback = parsePianoHarmonySpecimen(JSON.stringify({ chordWindowMs: 999, phraseEvents: specimen.events }));
+  assert.equal(fallback?.chordWindowMs, 160);
 });
