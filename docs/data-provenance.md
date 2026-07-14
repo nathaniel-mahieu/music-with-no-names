@@ -30,6 +30,8 @@ The v1.55 Ear bridge derives one interval from the latest two valid attacks in t
 
 The v1.56 Interval Context Echo uses only two frozen tab-scoped MIDI events and one later two-attack replay. It derives key span, equal-tempered fundamentals, attack gap, direction, release-proven overlap, and the second attack's sounding MIDI field from those local events. Current movable-Do labels are a selected teaching overlay. The chosen teaching spectrum contributes roughness and partial overlap only when both pairs prove simultaneous overlap; no keyboard or DAW audio, listener response, or inferred musical function is added or uploaded.
 
+The v1.57 Interval Experience Handoff copies those exact four local MIDI events into the existing Personal Character Map only after the learner selects `Reflect on source + echo`. The retained live phrase remains unchanged. Timing, key span, velocity, release, field membership, and assumed-spectrum summaries remain measured or modeled evidence; settledness, energy, familiarity, and liking are stored only after explicit listener answers. The resulting report stays in browser-local storage, enters the existing explicit JSON export and two-step deletion flow, and is never uploaded automatically.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
