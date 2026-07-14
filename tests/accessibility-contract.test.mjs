@@ -86,6 +86,14 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Motion learning question"/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
+  assert.match(piano, /aria-labelledby="hud-phrase-breath-title"/);
+  assert.match(piano, /Mark a candidate break after/);
+  assert.match(piano, /Performed pitch path divided only at long onset-group gaps containing release-proven silence/);
+  assert.match(piano, /hud-breath-reading" role="status" aria-live="polite"/);
+  assert.match(piano, /Unknown releases, overlaps, and merely long held notes never become quiet-space boundaries/);
+  assert.match(piano, /does not detect intended phrasing, breath, meter, form, expressiveness, correctness, or musical goodness/);
+  assert.match(piano, /modeled crunch/);
+  assert.match(piano, /MIDI contains no acoustic roughness measurement/);
   assert.match(ear, /aria-labelledby="live-ear-title"/);
   assert.match(ear, /role="img" aria-label=\{summary\}/);
   assert.match(ear, /aria-label="Five separate lenses for this interval and its assumed sounds"/);
@@ -267,6 +275,11 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-sonority-question\.has-change[\s\S]*border-left/);
   assert.match(css, /\.hud-pulse-status\.is-ready[\s\S]*border-left/);
   assert.match(css, /\.hud-pulse-onset[\s\S]*Highlight/);
+  assert.match(css, /\.hud-breath-gate line[\s\S]*stroke-dasharray/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-motion-mode-nav button:last-child \{ grid-column: 1 \/ -1/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-breath-segments \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-breath-gate line \{ stroke: Highlight/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-breath-event circle \{ fill: Canvas; stroke: CanvasText/);
   assert.match(css, /\.hud-walk-route li\.is-current[\s\S]*box-shadow/);
   assert.match(css, /\.piano-key\.is-active,[\s\S]*Highlight/);
   assert.match(css, /\.rhythm-live-axis > span[\s\S]*background: LinkText/);

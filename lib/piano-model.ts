@@ -305,6 +305,7 @@ export type PerformanceEvidenceEvent = RollingNoteEvent & {
   onsetMs: number;
   keyReleaseMs?: number | null;
   releaseMs?: number | null;
+  releaseReason?: "key" | "pedal" | null;
   fieldNotes?: number[];
 };
 
@@ -456,6 +457,39 @@ export type ArticulationEvidence = {
   interOnsetMs: number | null;
   silenceMs: number;
   overlapMs: number;
+};
+
+export type PhraseBreathGap = {
+  beforeEventId: number;
+  afterEventId: number;
+  beforeAttackCount: number;
+  afterAttackCount: number;
+  interOnsetMs: number;
+  onsetMultiple: number;
+  bridge: ChordGestureBridgeEvidence;
+  candidateBreak: boolean;
+};
+
+export type PhraseBreathSegment = {
+  eventIds: number[];
+  startIndex: number;
+  endIndex: number;
+  attackCount: number;
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+  pitchSpan: number;
+  intervalPath: number[];
+};
+
+export type PhraseBreathMap = {
+  attackGroupCount: number;
+  referenceGapMs: number;
+  thresholdMultiple: number;
+  thresholdMs: number;
+  minimumSilenceMs: number;
+  gaps: PhraseBreathGap[];
+  segments: PhraseBreathSegment[];
 };
 
 export type MotifNoteEvent = RollingNoteEvent & {
@@ -2080,6 +2114,113 @@ export function articulationTimeline(events: Array<PerformanceEvidenceEvent & { 
     }
     return { eventIndex, eventId: event.id, kind, fingerMs, pedalMs, soundingMs, interOnsetMs, silenceMs, overlapMs };
   });
+}
+
+function middleValue(values: number[]) {
+  const ordered = [...values].sort((first, second) => first - second);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
+/**
+ * Clusters near-simultaneous attacks, then splits the stream only at unusually
+ * long onset-group gaps that also contain release-proven silence. The result is
+ * an adjustable grouping hypothesis, not a detected phrase boundary or an
+ * evaluation of phrasing.
+ */
+export function phraseBreathMap(
+  events: Array<PerformanceEvidenceEvent & { id: number }>,
+  thresholdMultiple = 1.8,
+): PhraseBreathMap | null {
+  if (!Number.isFinite(thresholdMultiple) || thresholdMultiple < 1.2 || thresholdMultiple > 3) {
+    throw new RangeError("Phrase breath threshold must be between 1.2 and 3 local onset-group gaps.");
+  }
+  if (events.length < 3) return null;
+  if (new Set(events.map((event) => event.id)).size !== events.length || events.some((event) => !Number.isInteger(event.id)
+    || !Number.isFinite(event.note) || event.note < 0 || event.note > 127
+    || !Number.isFinite(event.onsetMs)
+    || (event.keyReleaseMs != null && (!Number.isFinite(event.keyReleaseMs) || event.keyReleaseMs < event.onsetMs))
+    || (event.releaseMs != null && (!Number.isFinite(event.releaseMs) || event.releaseMs < event.onsetMs)))) {
+    throw new RangeError("Phrase breath events require unique IDs, finite MIDI positions, and ordered releases.");
+  }
+  const ordered = [...events].sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  const eventOnsetGaps = ordered.slice(1).map((event, index) => event.onsetMs - ordered[index].onsetMs);
+  if (eventOnsetGaps.some((gap) => !Number.isFinite(gap) || gap < 0)) {
+    throw new RangeError("Phrase breath attacks must move forward in time.");
+  }
+  const groups: Array<{ startIndex: number; endIndex: number; events: typeof ordered }> = [];
+  let groupStartIndex = 0;
+  for (let index = 1; index <= ordered.length; index += 1) {
+    const joinsPrevious = index < ordered.length
+      && ordered[index].onsetMs - ordered[index - 1].onsetMs <= 70
+      && ordered[index].onsetMs - ordered[groupStartIndex].onsetMs <= 140;
+    if (joinsPrevious) continue;
+    groups.push({ startIndex: groupStartIndex, endIndex: index - 1, events: ordered.slice(groupStartIndex, index) });
+    groupStartIndex = index;
+  }
+  if (groups.length < 3) return null;
+  const onsetGaps = groups.slice(1).map((group, index) => group.events[0].onsetMs - groups[index].events[0].onsetMs);
+  const referenceGapMs = middleValue(onsetGaps);
+  const thresholdMs = referenceGapMs * thresholdMultiple;
+  const minimumSilenceMs = Math.max(120, referenceGapMs * 0.25);
+  const gaps: PhraseBreathGap[] = onsetGaps.map((interOnsetMs, index) => {
+    const beforeGroup = groups[index];
+    const afterGroup = groups[index + 1];
+    const before = beforeGroup.events.at(-1)!;
+    const after = afterGroup.events[0];
+    const releases = beforeGroup.events.map((event) => event.releaseMs ?? (event.releaseReason === "key" ? event.keyReleaseMs : null));
+    const finalRelease = releases.some((release) => release == null) ? null : Math.max(...releases as number[]);
+    const pedalExtended = finalRelease != null && beforeGroup.events.some((event, releaseIndex) => releases[releaseIndex] === finalRelease && event.releaseReason === "pedal");
+    const bridge: ChordGestureBridgeEvidence = finalRelease == null
+      ? { kind: "unknown", durationMs: null, pedalExtended: false }
+      : finalRelease > after.onsetMs
+        ? { kind: "overlap", durationMs: finalRelease - after.onsetMs, pedalExtended }
+        : finalRelease === after.onsetMs
+          ? { kind: "touching", durationMs: 0, pedalExtended: false }
+          : { kind: "silence", durationMs: after.onsetMs - finalRelease, pedalExtended: false };
+    return {
+      beforeEventId: before.id,
+      afterEventId: after.id,
+      beforeAttackCount: beforeGroup.events.length,
+      afterAttackCount: afterGroup.events.length,
+      interOnsetMs,
+      onsetMultiple: interOnsetMs / referenceGapMs,
+      bridge,
+      candidateBreak: interOnsetMs >= thresholdMs && bridge.kind === "silence" && bridge.durationMs! >= minimumSilenceMs,
+    };
+  });
+  const segments: PhraseBreathSegment[] = [];
+  let startIndex = 0;
+  for (let gapIndex = 0; gapIndex < gaps.length; gapIndex += 1) {
+    if (!gaps[gapIndex].candidateBreak) continue;
+    const endIndex = groups[gapIndex].endIndex;
+    const segmentEvents = ordered.slice(startIndex, endIndex + 1);
+    segments.push({
+      eventIds: segmentEvents.map((event) => event.id),
+      startIndex,
+      endIndex,
+      attackCount: segmentEvents.length,
+      startMs: segmentEvents[0].onsetMs,
+      endMs: segmentEvents.at(-1)!.onsetMs,
+      durationMs: segmentEvents.at(-1)!.onsetMs - segmentEvents[0].onsetMs,
+      pitchSpan: Math.max(...segmentEvents.map((event) => Math.round(event.note))) - Math.min(...segmentEvents.map((event) => Math.round(event.note))),
+      intervalPath: segmentEvents.slice(1).map((event, index) => Math.round(event.note) - Math.round(segmentEvents[index].note)),
+    });
+    startIndex = groups[gapIndex + 1].startIndex;
+  }
+  const finalEvents = ordered.slice(startIndex);
+  segments.push({
+    eventIds: finalEvents.map((event) => event.id),
+    startIndex,
+    endIndex: ordered.length - 1,
+    attackCount: finalEvents.length,
+    startMs: finalEvents[0].onsetMs,
+    endMs: finalEvents.at(-1)!.onsetMs,
+    durationMs: finalEvents.at(-1)!.onsetMs - finalEvents[0].onsetMs,
+    pitchSpan: Math.max(...finalEvents.map((event) => Math.round(event.note))) - Math.min(...finalEvents.map((event) => Math.round(event.note))),
+    intervalPath: finalEvents.slice(1).map((event, index) => Math.round(event.note) - Math.round(finalEvents[index].note)),
+  });
+  return { attackGroupCount: groups.length, referenceGapMs, thresholdMultiple, thresholdMs, minimumSilenceMs, gaps, segments };
 }
 
 function normalizedOnsetGaps(events: MotifNoteEvent[]) {

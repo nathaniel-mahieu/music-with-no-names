@@ -49,6 +49,7 @@ import {
   pairwiseIntervals,
   parseMidiMessage,
   phraseChangeProfile,
+  phraseBreathMap,
   pitchClassFromMidi,
   pushPhraseEvent,
   pushRollingNoteEvent,
@@ -86,6 +87,7 @@ import {
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type PhraseLensComparison,
+  type PhraseBreathMap,
   type PhraseEndingRipple,
   type PhraseChangeIntention,
   type TonalGravityCandidate,
@@ -167,7 +169,7 @@ type ChordMeasure = {
 };
 type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
-type MotionFocusMode = "pulse" | "touch" | "voices" | "motif";
+type MotionFocusMode = "pulse" | "touch" | "voices" | "motif" | "breath";
 type ChordFocusMode = "cause" | "change" | "echo";
 type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo" | "resolution-fork";
 type IntervalEchoTarget = {
@@ -311,13 +313,14 @@ const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }>
   { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },
   { id: "scales", label: "Scales", description: "See how pitch evidence suggests Do and a scale route." },
   { id: "chords", label: "Chords", description: "Choose one question about a note, a chord change, or a new voicing." },
-  { id: "motion", label: "Motion", description: "Choose one question about pulse, touch, voices, or motif." },
+  { id: "motion", label: "Motion", description: "Choose one question about pulse, touch, breath, voices, or motif." },
   { id: "paths", label: "Paths", description: "Play pop, blues, cadence, and pedal-point archetypes as transferable relationships." },
   { id: "experience", label: "Experience", description: "Report how this phrase felt; keep your response separate from modeled evidence." },
 ];
 const MOTION_FOCUS_MODES: Array<{ id: MotionFocusMode; label: string; question: string }> = [
   { id: "pulse", label: "Pulse", question: "Where did each attack land?" },
   { id: "touch", label: "Touch", question: "How did one touch meet the next?" },
+  { id: "breath", label: "Breath", question: "Where did the phrase leave space?" },
   { id: "voices", label: "Voices", question: "Which strands stayed or moved?" },
   { id: "motif", label: "Motif", question: "What repeated, and what changed?" },
 ];
@@ -2106,6 +2109,89 @@ function PhraseMotionField({ events, articulation, motifs, mode }: {
         </div>
       </div> : null}
     </div>
+  </section>;
+}
+
+function PhraseBreathField({ events, doMidi, scale, showConventions }: {
+  events: HudNoteEvent[];
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+}) {
+  const [thresholdMultiple, setThresholdMultiple] = useState(1.8);
+  const breath = useMemo(() => phraseBreathMap(events, thresholdMultiple), [events, thresholdMultiple]);
+  const ordered = useMemo(() => [...events].sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id), [events]);
+  if (!breath) return <section className="hud-phrase-breath" aria-labelledby="hud-phrase-breath-title">
+    <div className="hud-panel-heading"><span>Measured timing · adjustable grouping hypothesis</span><strong id="hud-phrase-breath-title">Where did the phrase leave space?</strong><small>Three onset groups establish a local gap reference. Attacks within 70 ms share a group so a chord does not masquerade as several beats.</small></div>
+    <p className="hud-empty-copy">Play at least three separate onset groups. Release evidence will distinguish sounding overlap from actual quiet space.</p>
+  </section>;
+  const firstOnset = ordered[0].onsetMs;
+  const lastOnset = ordered.at(-1)!.onsetMs;
+  const spanMs = Math.max(500, lastOnset - firstOnset);
+  const low = Math.min(...ordered.map((event) => event.note)) - 1;
+  const high = Math.max(...ordered.map((event) => event.note)) + 1;
+  const xFor = (event: HudNoteEvent) => 58 + ((event.onsetMs - firstOnset) / spanMs) * 604;
+  const yFor = (event: HudNoteEvent) => 122 - ((event.note - low) / Math.max(1, high - low)) * 76;
+  const candidateGaps = breath.gaps.filter((gap) => gap.candidateBreak);
+  const labelledGapIds = new Set(candidateGaps.slice(-6).map((gap) => `${gap.beforeEventId}-${gap.afterEventId}`));
+  const visibleSegments = breath.segments.slice(-6);
+  const omittedSegments = breath.segments.length - visibleSegments.length;
+  const microscopeOffset = Math.max(0, ordered.length - 7);
+  const role = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
+  const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
+  const intervalPathCopy = (segment: PhraseBreathMap["segments"][number]) => {
+    const displayed = segment.intervalPath.slice(0, 7).map(signed).join(" · ");
+    return segment.intervalPath.length > 7 ? `${displayed} · …` : displayed || "one attack";
+  };
+  const summary = `${ordered.length} attacks form ${breath.attackGroupCount} onset groups with a median local group gap of ${Math.round(breath.referenceGapMs)} milliseconds. At ${breath.thresholdMultiple.toFixed(1)} times that gap, ${candidateGaps.length} release-proven quiet space${candidateGaps.length === 1 ? " is" : "s are"} marked as a candidate break, producing ${breath.segments.length} timing island${breath.segments.length === 1 ? "" : "s"}.`;
+  return <section className="hud-phrase-breath" aria-labelledby="hud-phrase-breath-title">
+    <div className="hud-panel-heading"><span>Measured timing · adjustable grouping hypothesis</span><strong id="hud-phrase-breath-title">Where did the phrase leave space?</strong><small>Move one threshold and watch grouping change while every attack, release, pitch, and velocity stays fixed.</small></div>
+    <div className="hud-breath-control">
+      <label htmlFor="hud-breath-threshold"><span>Mark a candidate break after</span><strong>{thresholdMultiple.toFixed(1)}× the local onset-group gap · {Math.round(breath.thresholdMs)} ms</strong></label>
+      <input id="hud-breath-threshold" type="range" min="1.2" max="3" step="0.2" value={thresholdMultiple} onChange={(event) => setThresholdMultiple(Number(event.currentTarget.value))} />
+      <p>{breath.attackGroupCount} onset groups · local reference = median {Math.round(breath.referenceGapMs)} ms · also requires at least {Math.round(breath.minimumSilenceMs)} ms of release-proven quiet.</p>
+    </div>
+    <svg viewBox="0 0 720 184" role="img" aria-label={summary}>
+      <title>Performed pitch path divided only at long onset-group gaps containing release-proven silence</title>
+      <line x1="58" x2="662" y1="142" y2="142" className="hud-breath-axis" />
+      {breath.segments.map((segment, index) => {
+        const segmentEvents = ordered.slice(segment.startIndex, segment.endIndex + 1);
+        const points = segmentEvents.map((event) => `${xFor(event)},${yFor(event)}`).join(" ");
+        return <g key={segment.eventIds.join("-")} className="hud-breath-island">
+          <line x1={xFor(segmentEvents[0])} x2={xFor(segmentEvents.at(-1)!)} y1="142" y2="142" />
+          <polyline points={points} />
+          {breath.segments.length <= 8 ? <text x={(xFor(segmentEvents[0]) + xFor(segmentEvents.at(-1)!)) / 2} y="163">timing {index + 1}</text> : null}
+        </g>;
+      })}
+      {candidateGaps.map((gap) => {
+        const before = ordered.find((event) => event.id === gap.beforeEventId)!;
+        const after = ordered.find((event) => event.id === gap.afterEventId)!;
+        const x = (xFor(before) + xFor(after)) / 2;
+        return <g key={`${gap.beforeEventId}-${gap.afterEventId}`} className="hud-breath-gate">
+          <line x1={x} x2={x} y1="28" y2="151" />
+          {labelledGapIds.has(`${gap.beforeEventId}-${gap.afterEventId}`) ? <text x={x} y="19">{gap.onsetMultiple.toFixed(1)}× · {Math.round(gap.bridge.durationMs!)} ms quiet</text> : null}
+        </g>;
+      })}
+      {ordered.map((event, index) => <g key={event.id} className="hud-breath-event">
+        <circle cx={xFor(event)} cy={yFor(event)} r="4" />
+        {index >= microscopeOffset ? <text x={xFor(event)} y={Math.max(34, yFor(event) - 10)}>M{index - microscopeOffset + 1}</text> : null}
+        <title>{`Attack ${index + 1}: ${role(event.note)}, ${Math.round(event.onsetMs - firstOnset)} milliseconds after the first attack`}</title>
+      </g>)}
+      <text x="58" y="178" className="hud-breath-time-label">0 s</text><text x="662" y="178" className="hud-breath-time-label is-end">{(spanMs / 1000).toFixed(1)} s</text>
+    </svg>
+    <div className="hud-breath-reading" role="status" aria-live="polite">
+      <span>{candidateGaps.length} candidate break{candidateGaps.length === 1 ? "" : "s"} · {breath.segments.length} timing island{breath.segments.length === 1 ? "" : "s"}</span>
+      <strong>{candidateGaps.length ? "Long timing and proven quiet agree at the marked gates." : "No gap currently satisfies both conditions."}</strong>
+      <small>Changing the slider changes only the grouping hypothesis. Unknown releases, overlaps, and merely long held notes never become quiet-space boundaries.</small>
+    </div>
+    <ol className="hud-breath-segments" aria-label="Candidate timing islands">
+      {omittedSegments ? <li className="is-omitted"><span>…</span><strong>{omittedSegments} earlier islands condensed</strong></li> : null}
+      {visibleSegments.map((segment) => {
+        const ending = ordered[segment.endIndex];
+        return <li key={segment.eventIds.join("-")}><span>island {breath.segments.indexOf(segment) + 1}</span><strong>{segment.attackCount} attack{segment.attackCount === 1 ? "" : "s"} · onset span {compactTiming(segment.durationMs)} · pitch span {segment.pitchSpan} keys</strong><small>step path {intervalPathCopy(segment)} · ends on {role(ending.note)} in the selected frame</small></li>;
+      })}
+    </ol>
+    <p className="hud-breath-guardrail">A gate requires both unusual onset spacing and measured silence after release. This does not detect intended phrasing, breath, meter, form, expressiveness, correctness, or musical goodness.</p>
   </section>;
 }
 
@@ -4458,6 +4544,8 @@ export function PianoLab() {
                   : "The pulse is fixed by your taps. Play a short phrase to place its attack clusters around that coordinate."
       : motionFocusMode === "touch"
         ? articulationEvidence.length ? `The latest touch is ${ARTICULATION_LABELS[articulationEvidence.at(-1)!.kind]}; finger duration, pedal tail, overlap, and silence remain separate measurements.` : "Play two attacks to compare finger contact, pedal extension, overlap, and silence."
+        : motionFocusMode === "breath"
+          ? phraseEvents.length >= 3 ? "The breath map marks only unusually long onset-group gaps that also contain release-proven silence; move its threshold to see which groupings depend on the model." : "Play at least three onset groups to compare local attack spacing with release-proven quiet."
         : motionFocusMode === "voices"
           ? chordMeasures.length >= 2 ? "The voice coach maps nearest keyboard strands; held, rising, falling, added, and released notes are descriptions, not inferred fingering." : "Play two chord gestures to reveal held and moving nearest-key strands."
           : motifTransformations.length ? `${motifTitle(motifTransformations[0])}: repeat, change one property, then return.` : "Play a three- or four-attack shape, leave space, then repeat or transform it."
@@ -4573,7 +4661,7 @@ export function PianoLab() {
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} landingEvidence={resolutionLanding} landingEvents={resolutionEvidenceEvents} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onReflectResolution={beginResolutionForkReflection} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
-        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
+        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
       </> : null}
 
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}
@@ -4588,7 +4676,7 @@ export function PianoLab() {
           <div className="hud-panel-heading"><span>{selectedGesture ? `${selectedGesture.kind} gesture · ${Math.round(selectedGesture.spreadMs)} ms` : fieldIsLive ? "Held now" : events.length ? "Last outlined field" : "Waiting for a field"}</span><strong id="hud-chord-title">Chord membership</strong><small>Attacks always belong. Inherited held or pedal notes begin included; exclude one when it belongs only to the previous harmony.</small></div>
           {leadingChord ? <div className="hud-chord-result"><span>{leadingChord.exact ? "exact pitch-class match" : "possible outline"}</span><strong>{chordLabel(leadingChord, doMidi, showConventions)}</strong><small>{leadingChord.inversion > 0 ? `inversion ${leadingChord.inversion} · ` : ""}{leadingChord.missingPitchClasses.length ? `${leadingChord.missingPitchClasses.length} missing · ` : ""}{leadingChord.extraPitchClasses.length ? `${leadingChord.extraPitchClasses.length} added` : "no added tones"}</small></div> : fieldPitchClassCount > 5 ? <div className="hud-chord-result"><span>scale-like pitch field</span><strong>{fieldPitchClassCount} distinct positions</strong><small>Too many simultaneous positions for a useful chord-template label; inspect the interval texture and scale lens instead.</small></div> : <p className="hud-empty-copy">Hold two or more notes. The HUD will name exact matches separately from incomplete outlines.</p>}
           {selectedChordMeasure ? <div className="hud-chord-metrics" aria-label="Selected chord evidence">
-            <span><small>heard roughness</small><strong>{selectedChordMeasure.crunch == null ? "—" : Math.round(selectedChordMeasure.crunch * 100)}</strong><em>{selectedChordMeasure.crunch == null ? "no field" : evidenceWord(selectedChordMeasure.crunch)}</em></span>
+            <span><small>modeled crunch</small><strong>{selectedChordMeasure.crunch == null ? "—" : Math.round(selectedChordMeasure.crunch * 100)}</strong><em>{selectedChordMeasure.crunch == null ? "no field" : evidenceWord(selectedChordMeasure.crunch)}</em></span>
             <span><small>toward Do</small><strong>{Math.round(selectedChordMeasure.pull * 100)}</strong><em>{evidenceWord(selectedChordMeasure.pull)}</em></span>
             <span><small>repose</small><strong>{Math.round(selectedChordMeasure.arrival * 100)}</strong><em>{evidenceWord(selectedChordMeasure.arrival)}</em></span>
             <span><small>pitch change</small><strong>{selectedChordMeasure.hasPreviousChord ? Math.round(selectedChordMeasure.novelty * 100) : "—"}</strong><em>{selectedChordMeasure.hasPreviousChord ? evidenceWord(selectedChordMeasure.novelty) : "baseline"}</em></span>
@@ -4602,7 +4690,7 @@ export function PianoLab() {
             if (!inherited || !selectedGesture) return <span key={note}><strong>{label}</strong><small>attacked · included</small></span>;
             return <button key={note} type="button" className={`is-inherited ${excluded ? "is-excluded" : ""}`} aria-pressed={!excluded} aria-label={`${excluded ? "Restore" : "Exclude"} inherited ${label} ${excluded ? "to" : "from"} chord interpretation`} onClick={() => toggleInheritedMembership(selectedGesture.id, note)}><strong>{label}</strong><small>{excluded ? "excluded · restore" : "inherited · exclude"}</small></button>;
           })}</div>
-          {selectedGesture?.inheritedNotes.length ? <div className="hud-membership-effect" role="status"><span>{excludedInheritedNotes.length ? `${excludedInheritedNotes.length} inherited ${excludedInheritedNotes.length === 1 ? "note" : "notes"} excluded` : "All sounding notes interpreted"}</span><strong>Reading changes · sound stays</strong><small>Chord identity, toward-Do evidence, the contextual share of repose, pitch change, root travel, and voice strands use interpreted membership. The full sounding field and heard roughness remain unchanged.</small></div> : null}
+          {selectedGesture?.inheritedNotes.length ? <div className="hud-membership-effect" role="status"><span>{excludedInheritedNotes.length ? `${excludedInheritedNotes.length} inherited ${excludedInheritedNotes.length === 1 ? "note" : "notes"} excluded` : "All sounding notes interpreted"}</span><strong>Reading changes · MIDI field stays</strong><small>Chord identity, toward-Do evidence, the contextual share of repose, pitch change, root travel, and voice strands use interpreted membership. The full sounding field and selected-spectrum crunch model remain unchanged; MIDI contains no acoustic roughness measurement.</small></div> : null}
         </section>
 
         {focusLens === "explore" ? <section className="hud-nearby-panel" aria-labelledby="hud-nearby-title">

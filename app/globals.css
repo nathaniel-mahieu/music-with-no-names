@@ -9198,7 +9198,7 @@ footer a {
 .hud-resolution-landing-label { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; }
 
 .hud-motion-guide { min-width: 0; padding: 18px; border-bottom: 1px solid var(--line); }
-.hud-motion-mode-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 13px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-motion-mode-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 13px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .hud-motion-mode-nav button { display: grid; min-width: 0; gap: 4px; padding: 11px 12px; border: 0; border-right: 1px solid var(--line); color: var(--foreground); background: transparent; text-align: left; cursor: pointer; }
 .hud-motion-mode-nav button:last-child { border-right: 0; }
 .hud-motion-mode-nav button:hover { background: var(--surface-soft); }
@@ -9308,6 +9308,44 @@ footer a {
 .hud-motif-readout span,
 .hud-motif-readout small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-motif-readout strong { font-size: .78rem; font-weight: 500; }
+
+.hud-phrase-breath { min-width: 0; padding: 20px 18px; border-bottom: 1px solid var(--line); }
+.hud-breath-control { display: grid; grid-template-columns: minmax(210px, .7fr) minmax(240px, 1fr); gap: 6px 18px; align-items: center; margin-top: 13px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-breath-control label { display: grid; gap: 3px; }
+.hud-breath-control span,
+.hud-breath-control p { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-breath-control strong { font-family: var(--font-mono), monospace; font-size: .76rem; font-weight: 500; }
+.hud-breath-control input { width: 100%; accent-color: var(--piano-gold); }
+.hud-breath-control p { grid-column: 1 / -1; margin: 0; }
+.hud-phrase-breath > svg { display: block; width: 100%; height: auto; margin-top: 10px; overflow: visible; }
+.hud-breath-axis { stroke: var(--line); stroke-width: 1; }
+.hud-breath-island > line { stroke: var(--line-strong); stroke-width: 5; stroke-linecap: round; }
+.hud-breath-island polyline { fill: none; stroke: var(--piano-blue); stroke-width: 1.5; }
+.hud-breath-island text,
+.hud-breath-gate text,
+.hud-breath-event text,
+.hud-breath-time-label { font-family: var(--font-mono), monospace; text-anchor: middle; }
+.hud-breath-island text { fill: var(--muted); font-size: 12px; }
+.hud-breath-gate line { stroke: var(--piano-gold); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.hud-breath-gate text { fill: var(--foreground); font-size: 11px; }
+.hud-breath-event circle { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 1.5; }
+.hud-breath-event text { fill: var(--muted); font-size: 11px; }
+.hud-breath-time-label { fill: var(--muted); font-size: 11px; text-anchor: start; }
+.hud-breath-time-label.is-end { text-anchor: end; }
+.hud-breath-reading { display: grid; gap: 3px; padding: 10px 0 10px 11px; border-left: 2px solid var(--piano-gold); }
+.hud-breath-reading span,
+.hud-breath-reading small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-breath-reading strong { font-size: .76rem; font-weight: 500; }
+.hud-breath-segments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 12px 0 0; padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); list-style: none; }
+.hud-breath-segments li { display: grid; min-width: 0; gap: 3px; padding: 10px; border-right: 1px solid var(--line); }
+.hud-breath-segments li:nth-child(3n) { border-right: 0; }
+.hud-breath-segments li:nth-child(n + 4) { border-top: 1px solid var(--line); }
+.hud-breath-segments li.is-omitted { align-content: center; }
+.hud-breath-segments span,
+.hud-breath-segments small { color: var(--muted); font-size: .68rem; line-height: 1.35; }
+.hud-breath-segments span { text-transform: uppercase; }
+.hud-breath-segments strong { font-size: .72rem; font-weight: 500; line-height: 1.4; }
+.hud-breath-guardrail { margin: 10px 0 0; color: var(--muted); font-size: .69rem; line-height: 1.45; }
 
 .hud-landmark-coach { min-width: 0; border-bottom: 1px solid var(--line); }
 .hud-landmark-coach > .hud-panel-heading { padding: 17px 18px; }
@@ -9705,8 +9743,9 @@ footer a {
   .piano-focus-lenses span { display: none; }
   .piano-focus-lenses button:last-child { grid-column: 1 / -1; }
   .hud-motion-mode-nav { grid-template-columns: 1fr 1fr; }
-  .hud-motion-mode-nav button:nth-child(2) { border-right: 0; }
-  .hud-motion-mode-nav button:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+  .hud-motion-mode-nav button:nth-child(even) { border-right: 0; }
+  .hud-motion-mode-nav button:nth-child(-n + 4) { border-bottom: 1px solid var(--line); }
+  .hud-motion-mode-nav button:last-child { grid-column: 1 / -1; border-right: 0; }
   .hud-pulse-intro button { width: 100%; }
   .hud-pulse-facts { grid-template-columns: 1fr; }
   .hud-pulse-facts > span { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -9805,6 +9844,16 @@ footer a {
   .hud-motif-empty-label { font-size: 28px; }
   .hud-motif-range-label { font-size: 30px; }
   .hud-motif-tick-label { font-size: 26px; }
+  .hud-breath-control { grid-template-columns: 1fr; }
+  .hud-breath-control p { grid-column: auto; }
+  .hud-breath-gate text,
+  .hud-breath-event text,
+  .hud-breath-time-label { font-size: 24px; }
+  .hud-breath-island text { font-size: 26px; }
+  .hud-breath-segments { grid-template-columns: 1fr; }
+  .hud-breath-segments li,
+  .hud-breath-segments li:nth-child(3n) { border-right: 0; }
+  .hud-breath-segments li + li { border-top: 1px solid var(--line); }
   .hud-landmark-selector { grid-template-columns: 1fr 1fr; }
   .hud-landmark-selector button:nth-child(2) { border-right: 0; }
   .hud-landmark-selector button:nth-child(n + 3) { border-top: 1px solid var(--line); }
@@ -9883,6 +9932,14 @@ footer a {
   .hud-resolution-landing-node.is-between circle { fill: Canvas; stroke: GrayText; }
   .hud-resolution-landing-node.is-landing rect { fill: Highlight; stroke: HighlightText; }
   .hud-resolution-landing-label { fill: CanvasText; }
+  .hud-breath-island > line { stroke: CanvasText; }
+  .hud-breath-island polyline { stroke: LinkText; }
+  .hud-breath-gate line { stroke: Highlight; }
+  .hud-breath-gate text,
+  .hud-breath-time-label,
+  .hud-breath-island text,
+  .hud-breath-event text { fill: CanvasText; }
+  .hud-breath-event circle { fill: Canvas; stroke: CanvasText; }
   .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-chord-motion-strand.is-source { stroke: CanvasText; }
   .hud-chord-motion-strand.is-attempt { stroke: LinkText; }

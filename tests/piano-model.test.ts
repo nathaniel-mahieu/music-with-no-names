@@ -41,6 +41,7 @@ import {
   noteContext,
   pairwiseIntervals,
   parseMidiMessage,
+  phraseBreathMap,
   scaleCoverage,
   scaleFrameTimeline,
   scaleSemitones,
@@ -975,6 +976,62 @@ test("separates finger duration, pedal extension, overlap, and silence", () => {
   assert.equal(timeline[2].pedalMs, 500);
   assert.equal(timeline[2].overlapMs, 300);
   assert.equal(articulationTimeline([{ id: 1, note: 60, onsetMs: 0, keyReleaseMs: null, releaseMs: null }], 450)[0].kind, "held");
+});
+
+test("groups timing islands only across long release-proven silence", () => {
+  const events = [
+    { id: 1, note: 60, onsetMs: 0, releaseMs: 150, releaseReason: "key" as const },
+    { id: 2, note: 62, onsetMs: 200, releaseMs: 350, releaseReason: "key" as const },
+    { id: 3, note: 64, onsetMs: 400, releaseMs: 500, releaseReason: "key" as const },
+    { id: 4, note: 67, onsetMs: 900, releaseMs: 1_050, releaseReason: "key" as const },
+    { id: 5, note: 69, onsetMs: 1_100, releaseMs: 1_250, releaseReason: "key" as const },
+    { id: 6, note: 71, onsetMs: 1_300, releaseMs: 1_450, releaseReason: "key" as const },
+  ];
+  const grouped = phraseBreathMap(events, 1.8);
+  assert.ok(grouped);
+  assert.equal(grouped.referenceGapMs, 200);
+  assert.equal(grouped.thresholdMs, 360);
+  assert.equal(grouped.minimumSilenceMs, 120);
+  assert.deepEqual(grouped.gaps.map((gap) => gap.candidateBreak), [false, false, true, false, false]);
+  assert.equal(grouped.gaps[2].onsetMultiple, 2.5);
+  assert.deepEqual(grouped.gaps[2].bridge, { kind: "silence", durationMs: 400, pedalExtended: false });
+  assert.deepEqual(grouped.segments.map((segment) => segment.eventIds), [[1, 2, 3], [4, 5, 6]]);
+  assert.deepEqual(grouped.segments.map((segment) => segment.intervalPath), [[2, 2], [2, 2]]);
+  assert.deepEqual(grouped.segments.map((segment) => segment.pitchSpan), [4, 4]);
+
+  const conservative = phraseBreathMap(events, 3);
+  assert.ok(conservative);
+  assert.equal(conservative.segments.length, 1);
+
+  const unresolved = phraseBreathMap(events.map((event) => event.id === 3 ? { ...event, releaseMs: null, releaseReason: null } : event), 1.8);
+  assert.ok(unresolved);
+  assert.equal(unresolved.gaps[2].bridge.kind, "unknown");
+  assert.equal(unresolved.segments.length, 1);
+
+  const overlapping = phraseBreathMap(events.map((event) => event.id === 3 ? { ...event, releaseMs: 950, releaseReason: "pedal" as const } : event), 1.8);
+  assert.ok(overlapping);
+  assert.deepEqual(overlapping.gaps[2].bridge, { kind: "overlap", durationMs: 50, pedalExtended: true });
+  assert.equal(overlapping.segments.length, 1);
+
+  const clustered = phraseBreathMap([
+    { id: 1, note: 60, onsetMs: 0, releaseMs: 180, fieldNotes: [60] },
+    { id: 2, note: 64, onsetMs: 0, releaseMs: 220, fieldNotes: [60, 64] },
+    { id: 3, note: 67, onsetMs: 45, releaseMs: 240, fieldNotes: [60, 64, 67] },
+    { id: 4, note: 62, onsetMs: 400, releaseMs: 520, fieldNotes: [62] },
+    { id: 5, note: 65, onsetMs: 800, releaseMs: 900, fieldNotes: [65] },
+    { id: 6, note: 69, onsetMs: 1_500, releaseMs: 1_620, fieldNotes: [69] },
+  ], 1.4);
+  assert.ok(clustered);
+  assert.equal(clustered.attackGroupCount, 4);
+  assert.equal(clustered.referenceGapMs, 400);
+  assert.equal(clustered.gaps[0].beforeAttackCount, 3);
+  assert.equal(clustered.gaps[0].afterAttackCount, 1);
+  assert.equal(clustered.gaps[2].candidateBreak, true);
+  assert.deepEqual(clustered.segments.map((segment) => segment.eventIds), [[1, 2, 3, 4, 5], [6]]);
+
+  assert.equal(phraseBreathMap(events.slice(0, 2)), null);
+  assert.throws(() => phraseBreathMap(events, 1.1), RangeError);
+  assert.throws(() => phraseBreathMap(events.map((event) => event.id === 2 ? { ...event, id: 1 } : event)), RangeError);
 });
 
 function motifEvents(notes: number[], onsets: number[]) {

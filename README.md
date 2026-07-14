@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Resolution Landing Lens v1.69**. It provides:
+The current milestone is **Phrase Breath Map v1.70**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A companion-first learning hierarchy: Start, the live Piano companion, and the learner's Personal Lens stay prominent while specialist pitch, time, listening, recording, and landmark labs live in one grouped disclosure instead of competing as eleven equal destinations.
@@ -37,7 +37,8 @@ The current milestone is **Resolution Landing Lens v1.69**. It provides:
 - A progressive Ending Ripple inside a successful one-change phrase experiment. When the learner preserves every earlier relative attack position and changes only the ending, one explicit reveal expands that final position into its signed interval with every earlier attack. Source/new bars, 12-TET multipliers, the final approach, and the invariant count among earlier attacks show why one melodic landing changes many relationships at once. Whole-phrase transposition is normalized away; the performed ending role, full gravity-model reranking, and the learner’s settledness, energy, and liking reports remain separate rather than becoming a cadence or goodness verdict.
 - A persistent live phrase ribbon that keeps sixty seconds of attacks, velocity, key release, sounding duration, pedal-extended tails, and silence while the coordinated staff, frequency, chord, and evidence views magnify the latest seven attacks.
 - A learner-declared Live Pulse Mirror inside the Piano Motion focus. Repeat one key four times to establish a physical time unit, then place later attack clusters around pulse lines and inspect onset-spacing ratios. The coordinate is silent, survives reload, and never claims to detect meter, groove, timing accuracy, or musical goodness.
-- Four one-question Motion modes—Pulse, Touch, Voices, and Motif—that keep the same phrase while hiding unrelated diagnostics. Each mode is URL-addressable and tab-persistent.
+- A Phrase Breath Map inside the Piano Motion focus. Near-simultaneous attacks first share an onset group so a played chord does not masquerade as several beats. The map divides the performed pitch path only where an unusually long group gap also contains release-proven silence, then lets the learner move the local timing threshold and watch candidate timing islands merge or separate while the MIDI phrase stays fixed. Unknown releases, overlaps, and long held notes never manufacture quiet-space boundaries; the map does not infer intended phrasing, breath, meter, form, expression, correctness, or goodness.
+- Five one-question Motion modes—Pulse, Touch, Breath, Voices, and Motif—that keep the same phrase while hiding unrelated diagnostics. Each mode is URL-addressable and tab-persistent.
 - A Motion-lens articulation lane that keeps finger contact, pedal extension, sounding overlap, and silence separate, then describes each connection as held, detached, joined, finger-overlapped, pedal-linked, or phrase-ending without inferring notation or judging technique.
 - A phrase-local motif trail that compares non-overlapping three- and four-attack shapes and distinguishes exact repetition, transposition, rhythmic variation, altered endings, and a return after intervening material.
 - One-property-at-a-time motif prompts—repeat, transpose, change the rhythm, alter the ending, and return—derived from the learner’s own live phrase rather than a separate exercise screen.
