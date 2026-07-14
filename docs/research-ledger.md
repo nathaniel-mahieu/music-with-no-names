@@ -8,7 +8,7 @@ This ledger ties empirical claims to research anchors and marks where the produc
 - **Further auditory-filter evidence:** Glasberg, Moore, Patterson, and Nimmo-Smith measured asymmetric auditory-filter shapes and variation with listener age. DOI: [10.1121/1.391584](https://doi.org/10.1121/1.391584).
 - **Product claim allowed:** Nearby partials can interact differently depending on absolute register and spectral content.
 - **Product claim prohibited:** A roughness output determines dissonance, emotion, or goodness.
-- **Implementation status:** Ear Lab uses a declared Plomp–Levelt/Sethares-style pair interaction and a critical-band-rate energy projection. It is an educational hypothesis, not a calibrated auditory periphery.
+- **Implementation status:** Ear Lab uses a declared Plomp–Levelt/Sethares-style pair interaction and a critical-band-rate energy projection. Its v1.55 phrase-first bridge carries the learner's latest two Piano attacks into four declared spectra while holding MIDI keys, fundamentals, and timing fixed. Release timing gates the claim: only proven overlap receives simultaneous friction, harmonic-fit, or fusion hypotheses; a sequential or release-unknown interval keeps its relationship facts but receives no manufactured spectral-interaction result. The bridge therefore demonstrates model dependence without claiming to measure the keyboard patch, DAW, room, ear, listener experience, or musical goodness. It remains an educational hypothesis, not a calibrated auditory periphery.
 
 ## Temporal attention, pulse, and expectation
 

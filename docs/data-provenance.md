@@ -26,6 +26,8 @@ The v1.53 Journey bridge derives field shape, bass motion, relative onset time, 
 
 The v1.54 Harmony bridge derives attacked chord fields from that same tab-scoped phrase plus the learner's stored chord-timing and break/join corrections. Its auditory deltas are generated from a fixed nine-partial exact-harmonic teaching spectrum rather than keyboard or DAW audio; MIDI velocity is not treated as loudness. It does not add a corpus, upload a phrase, reconstruct pedal-inherited chord membership, infer emotion, or store a listener model.
 
+The v1.55 Ear bridge derives one interval from the latest two valid attacks in that same tab-scoped phrase. Key numbers and event timing supply equal-tempered fundamentals, movement, onset spacing, and release-proven overlap; they do not supply audio or upper partials. Four generated spectra—sine, exact harmonic, mellow-piano proxy, and bright-piano proxy—are compared only after overlap is proven. No phrase or audio is uploaded, no keyboard or DAW spectrum is analyzed, MIDI velocity is not acoustic loudness, and no sensory proxy is stored as a listener response, preference, emotion, or quality label.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
