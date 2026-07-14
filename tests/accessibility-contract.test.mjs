@@ -154,6 +154,14 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /holdBoundedExperienceSpecimen\("chord-motion-echo", specimen\)/);
   assert.match(piano, /prompt\.replace\("this phrase", "this source-and-replayed chord move"\)/);
   assert.match(piano, /sourceBeforeEvents: saved\.chordMotionEchoSession\.sourceBeforeEvents\.map/);
+  assert.match(piano, /aria-label="Choose the replay's movable Do reference frame"/);
+  assert.match(piano, />Does the tonal job travel when the reference frame travels\?</);
+  assert.match(piano, />Keep Do fixed<\/button>/);
+  assert.match(piano, />Move Do \{signed\(comparison\.transpositionSteps!\)\}<\/button>/);
+  assert.match(piano, /This is a display-only context counterfactual and never enters or sounds a note/);
+  assert.match(piano, /replay Do moved \+ same route/);
+  assert.match(piano, /restored the same relative-role path under this model; it did not prove the same heard function/);
+  assert.match(piano, /The display-only Do counterfactual never supplies your report/);
   assert.match(piano, /version: 17/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperiencePhrase\(\[\]\);/);
@@ -166,8 +174,11 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-chord-echo-node\.is-source[\s\S]*LinkText/);
   assert.match(css, /\.hud-chord-motion-node\.is-source\.is-before[\s\S]*CanvasText/);
   assert.match(css, /\.hud-chord-motion-node\.is-attempt\.is-after[\s\S]*HighlightText/);
+  assert.match(css, /\.hud-chord-frame-options button\[aria-pressed="true"\][\s\S]*background: var\(--foreground\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-question-options \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-motion-actions button \{ width: 100%/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-frame-options \{ width: 100%/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-chord-frame-options button\[aria-pressed="true"\][\s\S]*background: Highlight/);
   assert.match(css, /\.hud-last-lenses button:disabled/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-echo-reading \{ grid-template-columns: 1fr/);
   assert.match(css, /\.hud-last-attack-reading\.is-attributable[\s\S]*LinkText/);

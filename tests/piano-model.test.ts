@@ -271,6 +271,21 @@ test("preserves a complete chord move only under one shared transposition", () =
   assert.throws(() => compareChordMotionEcho([60, 64, 67], [60, 65, 128], [62, 66, 69], [62, 67, 71]), RangeError);
 });
 
+test("preserves a chord move's selected-context path only when movable Do follows it", () => {
+  const scale = PIANO_SCALES[0];
+  const sourceFields = [[60, 64, 67], [60, 65, 69]];
+  const replayFields = [[62, 66, 69], [62, 67, 71]];
+  const sourcePath = sourceFields.map((notes) => tonalTendency(notes, 60, scale));
+  const fixedDoReplay = replayFields.map((notes) => tonalTendency(notes, 60, scale));
+  const movedDoReplay = replayFields.map((notes) => tonalTendency(notes, 62, scale));
+  assert.deepEqual(movedDoReplay, sourcePath);
+  assert.notDeepEqual(fixedDoReplay, sourcePath);
+
+  const rolePath = (fields: number[][], doMidi: number) => fields.map((notes) => notes.map((note) => noteContext(note, doMidi, scale).syllable).sort());
+  assert.deepEqual(rolePath(replayFields, 62), rolePath(sourceFields, 60));
+  assert.notDeepEqual(rolePath(replayFields, 60), rolePath(sourceFields, 60));
+});
+
 test("declares controlled sonority fields as physical starting recipes", () => {
   assert.deepEqual(CONTROLLED_SONORITY_FIELDS.map((field) => field.id), ["aligned", "lowered-middle", "held-open", "close-cluster"]);
   assert.ok(CONTROLLED_SONORITY_FIELDS.every((field) => field.offsets.length === 3));

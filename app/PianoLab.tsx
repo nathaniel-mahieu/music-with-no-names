@@ -2342,6 +2342,7 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
   onRetry: () => void;
   onReflect: (events: HudNoteEvent[]) => void;
 }) {
+  const [contextFrameSelection, setContextFrameSelection] = useState({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: false });
   const noteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
   const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(Math.round(value * 10) / 10)}`;
   const sourceBeforeNotes = uniqueSorted(session.sourceBeforeNotes);
@@ -2356,7 +2357,15 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
 
   const attemptBeforeNotes = uniqueSorted(attempt.beforeNotes);
   const attemptAfterNotes = uniqueSorted(attempt.afterNotes);
-  const attemptMoveLabel = `${attemptBeforeNotes.map(noteLabel).join(" · ")} → ${attemptAfterNotes.map(noteLabel).join(" · ")}`;
+  const canMoveContextFrame = comparison.relationshipPreserved && comparison.transpositionSteps != null && comparison.transpositionSteps !== 0;
+  const contextFollowsReplay = canMoveContextFrame
+    && contextFrameSelection.attemptAnchorEventId === session.attemptAnchorEventId
+    && contextFrameSelection.followsReplay;
+  const replayDoMidi = contextFollowsReplay
+    ? nearestMidiForPitchClass(pitchClassFromMidi(doMidi + comparison.transpositionSteps!), doMidi + comparison.transpositionSteps!)
+    : doMidi;
+  const replayNoteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, replayDoMidi, scale);
+  const attemptMoveLabel = `${attemptBeforeNotes.map(replayNoteLabel).join(" · ")} → ${attemptAfterNotes.map(replayNoteLabel).join(" · ")}`;
   const sourceVoice = voiceLeadingProfile(sourceBeforeNotes, sourceAfterNotes);
   const attemptVoice = voiceLeadingProfile(attemptBeforeNotes, attemptAfterNotes);
   const sourceBeforeModel = sonorityPerceptionModel(sourceBeforeNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
@@ -2365,8 +2374,8 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
   const attemptAfterModel = sonorityPerceptionModel(attemptAfterNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
   const sourceBeforeTendency = tonalTendency(sourceBeforeNotes, doMidi, scale);
   const sourceAfterTendency = tonalTendency(sourceAfterNotes, doMidi, scale);
-  const attemptBeforeTendency = tonalTendency(attemptBeforeNotes, doMidi, scale);
-  const attemptAfterTendency = tonalTendency(attemptAfterNotes, doMidi, scale);
+  const attemptBeforeTendency = tonalTendency(attemptBeforeNotes, replayDoMidi, scale);
+  const attemptAfterTendency = tonalTendency(attemptAfterNotes, replayDoMidi, scale);
   const span = (notes: number[]) => notes.at(-1)! - notes[0];
   const relationshipStrong = comparison.relationshipPreserved
     ? comparison.pitchClassIdentityPreserved
@@ -2391,19 +2400,20 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
       <text x="18" y="42" className="hud-echo-row-label">source before</text><text x="18" y="87" className="hud-echo-row-label">source after</text>
       <text x="18" y="142" className="hud-echo-row-label">replay before</text><text x="18" y="187" className="hud-echo-row-label">replay after</text>
       {sourceVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`source-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="38" y2="82" className={`hud-chord-motion-strand is-source is-${strand.motion}`}><title>{`Source voice interpretation: ${noteLabel(strand.from!)} to ${noteLabel(strand.to!)}, ${signed(strand.semitones)} keys`}</title></line>)}
-      {attemptVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`attempt-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="138" y2="182" className={`hud-chord-motion-strand is-attempt is-${strand.motion}`}><title>{`Replay voice interpretation: ${noteLabel(strand.from!)} to ${noteLabel(strand.to!)}, ${signed(strand.semitones)} keys`}</title></line>)}
+      {attemptVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`attempt-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="138" y2="182" className={`hud-chord-motion-strand is-attempt is-${strand.motion}`}><title>{`Replay voice interpretation: ${replayNoteLabel(strand.from!)} to ${replayNoteLabel(strand.to!)}, ${signed(strand.semitones)} keys`}</title></line>)}
       {sourceBeforeNotes.map((note) => <circle key={`sb-${note}`} cx={xFor(note)} cy="38" r="6" className="hud-chord-motion-node is-source is-before"><title>{`Source before: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle>)}
       {sourceAfterNotes.map((note) => <circle key={`sa-${note}`} cx={xFor(note)} cy="82" r="6" className="hud-chord-motion-node is-source is-after"><title>{`Source after: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle>)}
-      {attemptBeforeNotes.map((note) => <rect key={`ab-${note}`} x={xFor(note) - 6} y="132" width="12" height="12" className="hud-chord-motion-node is-attempt is-before"><title>{`Replay before: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
-      {attemptAfterNotes.map((note) => <rect key={`aa-${note}`} x={xFor(note) - 6} y="176" width="12" height="12" className="hud-chord-motion-node is-attempt is-after"><title>{`Replay after: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
+      {attemptBeforeNotes.map((note) => <rect key={`ab-${note}`} x={xFor(note) - 6} y="132" width="12" height="12" className="hud-chord-motion-node is-attempt is-before"><title>{`Replay before: ${replayNoteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
+      {attemptAfterNotes.map((note) => <rect key={`aa-${note}`} x={xFor(note) - 6} y="176" width="12" height="12" className="hud-chord-motion-node is-attempt is-after"><title>{`Replay after: ${replayNoteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
       <line x1="92" x2="640" y1="207" y2="207" className="hud-grid-line" /><text x="92" y="222" className="hud-echo-axis-label">lower keyboard position</text><text x="640" y="222" className="hud-echo-axis-label is-end">higher</text>
     </svg>
+    {canMoveContextFrame ? <div className="hud-chord-frame-test" aria-labelledby="hud-chord-frame-title"><div><span>Second question · movable Do</span><strong id="hud-chord-frame-title">Does the tonal job travel when the reference frame travels?</strong><small>{contextFollowsReplay ? `Replay Do moved ${signed(comparison.transpositionSteps!)} keys with the structural replay. MIDI, frequencies, voicings, and the relationship match did not change.` : `Replay Do remains fixed at the source center. The same structural move therefore occupies new relative roles.`} This is a display-only context counterfactual and never enters or sounds a note.</small></div><div className="hud-chord-frame-options" role="group" aria-label="Choose the replay's movable Do reference frame"><button type="button" aria-pressed={!contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: false })}>Keep Do fixed</button><button type="button" aria-pressed={contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: true })}>Move Do {signed(comparison.transpositionSteps!)}</button></div></div> : null}
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the source and replayed chord move">
       <article className="is-measured"><span>Sound</span><em>measured MIDI + modeled spectrum</em><strong>span {span(sourceBeforeNotes)}→{span(sourceAfterNotes)} vs {span(attemptBeforeNotes)}→{span(attemptAfterNotes)} keys</strong><small>Modeled roughness source {modelScore(sourceBeforeModel.roughness)}→{modelScore(sourceAfterModel.roughness)} · replay {modelScore(attemptBeforeModel.roughness)}→{modelScore(attemptAfterModel.roughness)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. Upper partials and acoustic result are assumed.</small></article>
       <article className="is-measured"><span>Relationships</span><em>interpreted pitch-class transformation</em><strong>{relationshipStrong}</strong><small>Source stayed / entered / left: {comparison.sourceCommonPitchClassCount} / {comparison.sourceEnteredPitchClassCount} / {comparison.sourceLeftPitchClassCount}. Replay: {comparison.attemptCommonPitchClassCount} / {comparison.attemptEnteredPitchClassCount} / {comparison.attemptLeftPitchClassCount}. Matching requires one shared shift across both fields.</small></article>
       <article className="is-measured"><span>Motion</span><em>nearest-key interpretations</em><strong>travel {sourceVoice.totalMotion} vs {attemptVoice.totalMotion} · largest leap {sourceVoice.largestLeap} vs {attemptVoice.largestLeap}</strong><small>Bass source {bassCopy(sourceVoice)} · replay {bassCopy(attemptVoice)}. Revoicing may change every physical strand while the two-field relationship survives; these are not intended voices or fingering.</small></article>
-      <article className="is-modeled"><span>Context</span><em>same selected Do + route</em><strong>toward Do source {modelScore(sourceBeforeTendency.homePull)}→{modelScore(sourceAfterTendency.homePull)} · replay {modelScore(attemptBeforeTendency.homePull)}→{modelScore(attemptAfterTendency.homePull)}</strong><small>Home evidence source {modelScore(sourceBeforeTendency.homeEvidence)}→{modelScore(sourceAfterTendency.homeEvidence)} · replay {modelScore(attemptBeforeTendency.homeEvidence)}→{modelScore(attemptAfterTendency.homeEvidence)}. A transposed relationship can occupy a different tonal context.</small></article>
-      <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did the replay preserve the same sense of direction?</strong><small>A structural match does not prove the same function, tension, resolution, emotion, preference, correctness, or goodness.</small>{comparison.relationshipPreserved ? <button type="button" disabled={reflectionEvents.length < 8} onClick={() => onReflect(reflectionEvents)}>Reflect on source + replayed move</button> : null}</article>
+      <article className="is-modeled"><span>Context</span><em>{contextFollowsReplay ? "replay Do moved + same route" : "same selected Do + route"}</em><strong>toward Do source {modelScore(sourceBeforeTendency.homePull)}→{modelScore(sourceAfterTendency.homePull)} · replay {modelScore(attemptBeforeTendency.homePull)}→{modelScore(attemptAfterTendency.homePull)}</strong><small>Home evidence source {modelScore(sourceBeforeTendency.homeEvidence)}→{modelScore(sourceAfterTendency.homeEvidence)} · replay {modelScore(attemptBeforeTendency.homeEvidence)}→{modelScore(attemptAfterTendency.homeEvidence)}. {contextFollowsReplay ? "Moving the reference frame restored the same relative-role path under this model; it did not prove the same heard function." : "A transposed relationship can occupy a different tonal context while Do stays fixed."}</small></article>
+      <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did the replay preserve the same sense of direction?</strong><small>A structural match does not prove the same function, tension, resolution, emotion, preference, correctness, or goodness. The display-only Do counterfactual never supplies your report.</small>{comparison.relationshipPreserved ? <button type="button" disabled={reflectionEvents.length < 8} onClick={() => onReflect(reflectionEvents)}>Reflect on source + replayed move</button> : null}</article>
     </div>
     <p className="hud-last-attack-limit">The two-field relationship may stay invariant while every physical voice, frequency, spectrum proxy, selected-Do role, and listener response changes.</p>
   </section>;

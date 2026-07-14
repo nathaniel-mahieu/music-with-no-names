@@ -8369,6 +8369,16 @@ footer a {
 .hud-chord-motion-node.is-source.is-after { fill: var(--piano-blue); stroke: var(--foreground); }
 .hud-chord-motion-node.is-attempt.is-before { fill: var(--surface-raised); stroke: var(--foreground); }
 .hud-chord-motion-node.is-attempt.is-after { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-chord-frame-test { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line); }
+.hud-chord-frame-test > div:first-child { display: grid; flex: 1 1 520px; gap: 4px; }
+.hud-chord-frame-test span,
+.hud-chord-frame-test small { color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.hud-chord-frame-test strong { font-size: .76rem; font-weight: 500; }
+.hud-chord-frame-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: min(100%, 260px); border: 1px solid var(--line-strong); }
+.hud-chord-frame-options button { min-height: 36px; padding: 0 10px; border: 0; border-right: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .7rem; cursor: pointer; }
+.hud-chord-frame-options button:last-child { border-right: 0; }
+.hud-chord-frame-options button:hover { background: var(--surface-raised); }
+.hud-chord-frame-options button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
 
 .hud-echo-current {
   display: grid;
@@ -9484,6 +9494,9 @@ footer a {
   .hud-chord-motion-next > button,
   .hud-chord-motion-actions,
   .hud-chord-motion-actions button { width: 100%; }
+  .hud-chord-frame-test { align-items: stretch; flex-direction: column; }
+  .hud-chord-frame-test > div:first-child { flex-basis: auto; }
+  .hud-chord-frame-options { width: 100%; }
   .hud-echo-reading { grid-template-columns: 1fr; }
   .hud-echo-reading p:nth-child(even) { border-left: 0; }
   .hud-echo-reading p:nth-child(n + 2) { border-top: 1px solid var(--line); }
@@ -9654,6 +9667,7 @@ footer a {
   .hud-chord-motion-node.is-attempt.is-before { fill: Canvas; stroke: CanvasText; }
   .hud-chord-motion-node.is-source.is-after { fill: LinkText; stroke: Canvas; }
   .hud-chord-motion-node.is-attempt.is-after { fill: Highlight; stroke: HighlightText; }
+  .hud-chord-frame-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-last-attack-reading { border-left-color: Highlight; }
   .hud-last-attack-reading.is-attributable { border-left-color: LinkText; }
   .hud-last-lenses article.is-measured { border-top-color: LinkText; }
