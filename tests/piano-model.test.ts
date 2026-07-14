@@ -12,6 +12,7 @@ import {
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
+  comparePhraseEndingRipple,
   compareScaleGapMutation,
   compareScaleLandingIntervalRipple,
   comparePhraseLenses,
@@ -817,6 +818,40 @@ test("keeps intended timing and changed-ending controls inspectable without a sc
   assert.equal(endingProfile.controlPreserved, true);
   assert.equal(endingProfile.observations.ending, true);
   assert.ok(endingProfile.otherChangedLenses.includes("context"));
+});
+
+test("traces one changed ending through every relationship it joins", () => {
+  const phraseA = [
+    { note: 60, onsetMs: 0 },
+    { note: 64, onsetMs: 400 },
+    { note: 67, onsetMs: 800 },
+    { note: 65, onsetMs: 1_200 },
+  ];
+  const phraseB = [
+    { note: 62, onsetMs: 0 },
+    { note: 66, onsetMs: 430 },
+    { note: 69, onsetMs: 860 },
+    { note: 69, onsetMs: 1_290 },
+  ];
+  const ripple = comparePhraseEndingRipple(phraseA, phraseB);
+  assert.ok(ripple);
+  assert.deepEqual(ripple.sourcePositions, [0, 4, 7, 5]);
+  assert.deepEqual(ripple.attemptPositions, [0, 4, 7, 7]);
+  assert.equal(ripple.replayTranspositionSteps, 2);
+  assert.equal(ripple.movedSteps, 2);
+  assert.equal(ripple.changedRelationshipCount, 3);
+  assert.equal(ripple.retainedRelationshipCount, 3);
+  assert.equal(ripple.sourceFinalApproachSteps, -2);
+  assert.equal(ripple.attemptFinalApproachSteps, 0);
+  assert.deepEqual(ripple.relationships.map((relationship) => relationship.sourceSignedSteps), [5, 1, -2]);
+  assert.deepEqual(ripple.relationships.map((relationship) => relationship.attemptSignedSteps), [7, 3, 0]);
+  assert.equal(ripple.relationships[0].sourceFrequencyRatio, 2 ** (5 / 12));
+  assert.equal(ripple.relationships[0].attemptFrequencyRatio, 2 ** (7 / 12));
+
+  assert.equal(comparePhraseEndingRipple(phraseA, phraseA), null);
+  assert.equal(comparePhraseEndingRipple(phraseA, phraseB.map((event, index) => index === 1 ? { ...event, note: event.note + 1 } : event)), null);
+  assert.equal(comparePhraseEndingRipple(phraseA, phraseB.slice(0, 3)), null);
+  assert.throws(() => comparePhraseEndingRipple(phraseA, phraseB.map((event, index) => index === 3 ? { ...event, note: Number.NaN } : event)), RangeError);
 });
 
 test("offers contrasting unranked resolution forks without entering a note", () => {

@@ -70,7 +70,11 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /role="img" aria-label=\{comparisonSummary\}/);
   assert.match(piano, /aria-label="Five separate lenses for the selected attack change"/);
   assert.match(piano, /hud-last-attack-reading[\s\S]*role="status" aria-live="polite"/);
-  assert.match(piano, /hud-phrase-change-reading[\s\S]*role="status" aria-live="polite"/);
+  assert.match(piano, /hud-phrase-change-status" role="status" aria-live="polite"/);
+  assert.match(piano, /aria-label="Ending relationship ripple"/);
+  assert.match(piano, /hud-ending-ripple-summary" role="img" aria-label=\{summary\}/);
+  assert.match(piano, /Trace every ending relationship/);
+  assert.match(piano, /hud-ending-ripple-reading" role="status" aria-live="polite"/);
   assert.match(piano, /role="group" aria-label=\{row\.label\}/);
   assert.match(piano, /role="status" aria-live="polite"/);
   assert.match(piano, /silent guided scale-walk target/);
@@ -140,6 +144,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-gravity-counterfactual-chart i\.is-before[\s\S]*LinkText/);
   assert.match(css, /\.hud-phrase-lens-profile > article\.is-invariant[\s\S]*border-left/);
   assert.match(css, /\.hud-phrase-change-reading\.has-target[\s\S]*LinkText/);
+  assert.match(css, /\.hud-phrase-change-reading > button\[aria-pressed="true"\]/);
+  assert.match(css, /\.hud-ending-ripple-spoke \.is-attempt i b[\s\S]*border: 1px dashed/);
+  assert.match(css, /\.hud-ending-ripple-reading \{ border-left-color: LinkText/);
   assert.match(css, /\.hud-partial-link\.is-aligned[\s\S]*LinkText/);
   assert.match(css, /\.hud-partial-link\.is-interaction[\s\S]*Highlight/);
   assert.match(css, /\.hud-echo-span\.is-source[\s\S]*LinkText/);

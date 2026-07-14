@@ -105,6 +105,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /pianoPartialInteraction/);
   assert.match(pianoLab, /comparePianoPartialInteractions/);
   assert.match(pianoLab, /What could this one-key change do to partial interaction\?/);
+  assert.match(pianoLab, /comparePhraseEndingRipple/);
+  assert.match(pianoLab, /one changed ending · every connected relationship/);
   assert.match(pianoLab, /MIDI itself contains no partials or instrument audio/);
   assert.match(pianoLab, /Neither output measures musical goodness/);
   assert.match(pianoLab, /No overall goodness score/);

@@ -22,6 +22,7 @@ import {
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
+  comparePhraseEndingRipple,
   comparePhraseLenses,
   compareScaleGapMutation,
   compareScaleLandingIntervalRipple,
@@ -82,6 +83,7 @@ import {
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type PhraseLensComparison,
+  type PhraseEndingRipple,
   type PhraseChangeIntention,
   type TonalGravityCandidate,
   type TonalGravityCounterfactual,
@@ -2784,6 +2786,42 @@ function phraseMovePath(moves: number[]) {
   return moves.length ? moves.map((move) => signedPhraseValue(move)).join(" · ") : "one attack only";
 }
 
+function PhraseEndingRippleView({ ripple, comparison, doMidi, scale, showConventions }: {
+  ripple: PhraseEndingRipple;
+  comparison: PhraseLensComparison;
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+}) {
+  const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
+  const ratio = (value: number) => `×${value.toFixed(3)}`;
+  const largestDistance = Math.max(1, ...ripple.relationships.flatMap((relationship) => [relationship.sourceDistanceSteps, relationship.attemptDistanceSteps]));
+  const endingALabel = pitchClassRoleLabel(comparison.context.endingPitchClassA, doMidi, scale, showConventions);
+  const endingBLabel = pitchClassRoleLabel(comparison.context.endingPitchClassB, doMidi, scale, showConventions);
+  const centerALabel = pitchClassRoleLabel(comparison.context.leadingCenterA, doMidi, scale, showConventions);
+  const centerBLabel = pitchClassRoleLabel(comparison.context.leadingCenterB, doMidi, scale, showConventions);
+  const summary = `The replay preserved ${ripple.sourcePositions.length - 1} earlier normalized attack positions and moved only the ending from position ${ripple.sourceEndingPosition} to ${ripple.attemptEndingPosition}. ${ripple.changedRelationshipCount} signed intervals touching the ending changed; ${ripple.retainedRelationshipCount} earlier-to-earlier intervals stayed invariant. The final approach changed from ${ripple.sourceFinalApproachSteps} to ${ripple.attemptFinalApproachSteps} equal-key steps.`;
+  const effect = (relationship: PhraseEndingRipple["relationships"][number]) => relationship.distanceDelta === 0
+    ? "same span · direction changed"
+    : `${relationship.distanceDelta < 0 ? "shorter" : "wider"} by ${Math.abs(relationship.distanceDelta)} key step${Math.abs(relationship.distanceDelta) === 1 ? "" : "s"}`;
+  return <div className="hud-ending-ripple" aria-label="Ending relationship ripple">
+    <div className="sr-only hud-ending-ripple-summary" role="img" aria-label={summary} />
+    <div className="hud-ending-ripple-heading"><span>one changed ending · every connected relationship</span><strong>Ending {signed(ripple.sourceEndingPosition)} → {signed(ripple.attemptEndingPosition)}</strong><small>Positions are measured from each phrase’s first attack, so a whole-phrase transposition of {signed(ripple.replayTranspositionSteps)} keys is removed before comparison. Bar length shows interval size relative to this specimen; ratios use 12-TET.</small></div>
+    <div className="hud-ending-ripple-approach"><span>final approach</span><strong>{signed(ripple.sourceFinalApproachSteps)} → {signed(ripple.attemptFinalApproachSteps)} equal-key steps</strong><small>The last melodic move is one spoke. The changed ending also forms a new signed interval with every earlier attack.</small></div>
+    <div className="hud-ending-ripple-spokes">
+      {ripple.relationships.map((relationship) => <div key={relationship.eventIndex} className="hud-ending-ripple-spoke">
+        <strong>attack {relationship.eventIndex + 1}<small>position {signed(relationship.retainedPosition)}</small></strong>
+        <div>
+          <span className="is-source"><small>A</small><i><b style={{ "--ending-width": `${relationship.sourceDistanceSteps / largestDistance * 100}%` } as CSSProperties} /></i><em>{signed(relationship.sourceSignedSteps)} · {ratio(relationship.sourceFrequencyRatio)}</em></span>
+          <span className="is-attempt"><small>B</small><i><b style={{ "--ending-width": `${relationship.attemptDistanceSteps / largestDistance * 100}%` } as CSSProperties} /></i><em>{signed(relationship.attemptSignedSteps)} · {ratio(relationship.attemptFrequencyRatio)}</em></span>
+        </div>
+        <small>{effect(relationship)}</small>
+      </div>)}
+    </div>
+    <div className="hud-ending-ripple-reading" role="status" aria-live="polite"><span>Relational consequence</span><strong>{ripple.changedRelationshipCount} ending spokes changed · {ripple.retainedRelationshipCount} earlier relationships held</strong><small>The performed ending role changed {endingALabel} → {endingBLabel}; the full-phrase gravity model’s leading candidate changed {centerALabel} → {centerBLabel}. That ranking also uses timing, duration, velocity, bass, recurrence, and phrase order, so this view does not claim the ending alone caused the modeled context—or the learner’s experience.</small></div>
+  </div>;
+}
+
 function PhraseCompareField({ session, liveReplayCount, comparison, availableAttackCount, doMidi, scale, showConventions, onStart, onCapture, onReplay, onPromote, onReport, onEnd }: {
   session: PhraseCompareSession | null;
   liveReplayCount: number;
@@ -2799,6 +2837,7 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
   onReport: (dimension: PhraseCompareDimension, report: PhraseCompareReport) => void;
   onEnd: () => void;
 }) {
+  const [endingRippleRevealKey, setEndingRippleRevealKey] = useState<string | null>(null);
   const activeChoice = session ? PHRASE_CHANGE_CHOICES.find((choice) => choice.id === session.intention) ?? null : null;
   if (!session) return <section className="hud-phrase-compare is-entry" aria-labelledby="hud-phrase-compare-entry-title">
     <div className="hud-panel-heading"><span>One phrase · one declared change · five lenses</span><strong id="hud-phrase-compare-entry-title">Choose one thing to change</strong><small>Freeze your phrase with a question already in mind. The replay will show the intended coordinate, the control you tried to preserve, and every other lens that moved.</small></div>
@@ -2852,6 +2891,11 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
     return `${report.toUpperCase()} ${adjective}`;
   };
   const changeProfile = session.intention ? phraseChangeProfile(comparison, session.intention) : null;
+  const endingRipple = session.intention === "ending" && changeProfile?.targetObserved && changeProfile.controlPreserved
+    ? comparePhraseEndingRipple(session.baseline, session.comparison)
+    : null;
+  const endingRippleKey = endingRipple ? `${session.anchorEventId}:${session.comparison.map((event) => event.note).join(",")}` : null;
+  const endingRippleRevealed = endingRippleKey != null && endingRippleRevealKey === endingRippleKey;
   const lensLabel = (lens: "sound" | "relationships" | "motion" | "context") => lens === "context" ? "modeled context" : lens;
   const intendedEvidence = !changeProfile || !activeChoice ? "No declared change was stored with this comparison."
     : session.intention === "transpose" ? `Register center moved ${signedPhraseValue(registerDelta, 1)} keys.`
@@ -2868,7 +2912,8 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
     : "Every measured or modeled lens crossed a display threshold.";
   return <section className="hud-phrase-compare is-complete" aria-labelledby="hud-phrase-compare-title">
     <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>A/B complete · declared intention · no combined score</span><strong id="hud-phrase-compare-title">One change, traced through five lenses</strong><small>A {session.baseline.length} attacks · B {session.comparison.length} attacks · the movable-Do frame stayed fixed while both specimens were compared.</small></div><div className="hud-builder-actions"><button type="button" onClick={onReplay}>Try the same change again</button><button type="button" onClick={onPromote}>Use B as new A</button><button type="button" onClick={onEnd}>Choose another test</button></div></div>
-    {changeProfile && activeChoice ? <div className={`hud-phrase-change-reading ${changeProfile.targetObserved ? "has-target" : "is-unobserved"}`} role="status" aria-live="polite"><span>declared change · {activeChoice.label}</span><strong>{changeProfile.targetObserved ? "The intended coordinate moved" : "The intended coordinate did not move clearly"}</strong><p>{intendedEvidence}</p><small><b>{changeProfile.controlPreserved ? "Control preserved:" : "Control not preserved:"}</b> {activeChoice.control}. {otherLensCopy} {invariantLensCopy}</small></div> : null}
+    {changeProfile && activeChoice ? <div className={`hud-phrase-change-reading ${changeProfile.targetObserved ? "has-target" : "is-unobserved"}`}><div className="sr-only hud-phrase-change-status" role="status" aria-live="polite">{`${activeChoice.label}. ${changeProfile.targetObserved ? "The intended coordinate moved." : "The intended coordinate did not move clearly."} ${intendedEvidence} ${changeProfile.controlPreserved ? "Control preserved" : "Control not preserved"}: ${activeChoice.control}. ${otherLensCopy} ${invariantLensCopy}`}</div><span>declared change · {activeChoice.label}</span><strong>{changeProfile.targetObserved ? "The intended coordinate moved" : "The intended coordinate did not move clearly"}</strong><p>{intendedEvidence}</p><small><b>{changeProfile.controlPreserved ? "Control preserved:" : "Control not preserved:"}</b> {activeChoice.control}. {otherLensCopy} {invariantLensCopy}</small>{endingRipple && endingRippleKey ? <button type="button" aria-pressed={endingRippleRevealed} onClick={() => setEndingRippleRevealKey(endingRippleRevealed ? null : endingRippleKey)}>{endingRippleRevealed ? "Hide ending ripple" : "Trace every ending relationship"}</button> : null}</div> : null}
+    {endingRipple && endingRippleRevealed ? <PhraseEndingRippleView ripple={endingRipple} comparison={comparison} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : null}
     <div className="hud-phrase-lens-profile" role="group" aria-label="Five separate phrase comparison lenses">
       <article className={soundChanged ? "has-change" : "is-invariant"}><header><span>1 · sound</span><em>measured MIDI</em><strong>{soundChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> center {comparison.sound.meanMidiA.toFixed(1)} · span {comparison.sound.pitchSpanA} · attack {Math.round(comparison.sound.meanVelocityA)}</p><i aria-hidden="true">→</i><p><b>B</b> center {comparison.sound.meanMidiB.toFixed(1)} · span {comparison.sound.pitchSpanB} · attack {Math.round(comparison.sound.meanVelocityB)}</p></div><small>Register center {signedPhraseValue(registerDelta, 1)} keys · span {signedPhraseValue(spanDelta)} · mean MIDI attack {signedPhraseValue(velocityDelta)}. This is not acoustic loudness or timbre.</small></article>
       <article className={comparison.relationships.sameIntervalPath ? "is-invariant" : "has-change"}><header><span>2 · relationships</span><em>measured intervals</em><strong>{comparison.relationships.sameIntervalPath ? "invariant" : "changed"}</strong></header><div><p><b>A</b> {phraseMovePath(comparison.relationships.intervalPathA)}</p><i aria-hidden="true">→</i><p><b>B</b> {phraseMovePath(comparison.relationships.intervalPathB)}</p></div><small>{relationshipCopy}</small></article>

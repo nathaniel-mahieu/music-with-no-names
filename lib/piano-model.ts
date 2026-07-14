@@ -370,6 +370,30 @@ export type PhraseChangeProfile = {
   otherChangedLenses: PhraseChangeLens[];
 };
 
+export type PhraseEndingRipple = {
+  sourcePositions: number[];
+  attemptPositions: number[];
+  sourceEndingPosition: number;
+  attemptEndingPosition: number;
+  movedSteps: number;
+  replayTranspositionSteps: number;
+  relationships: Array<{
+    eventIndex: number;
+    retainedPosition: number;
+    sourceSignedSteps: number;
+    attemptSignedSteps: number;
+    sourceDistanceSteps: number;
+    attemptDistanceSteps: number;
+    distanceDelta: number;
+    sourceFrequencyRatio: number;
+    attemptFrequencyRatio: number;
+  }>;
+  changedRelationshipCount: number;
+  retainedRelationshipCount: number;
+  sourceFinalApproachSteps: number;
+  attemptFinalApproachSteps: number;
+};
+
 export type ResolutionFork = {
   id: "center-return" | "least-motion" | "fifths-neighbor" | "fresh-route" | "alternate-route";
   label: string;
@@ -1734,6 +1758,59 @@ export function phraseChangeProfile(
     changedLenses,
     invariantLenses,
     otherChangedLenses: changedLenses.filter((lens) => lens !== primaryLens),
+  };
+}
+
+/**
+ * Normalizes two equal-length phrases to their own first attack, then expands
+ * an exactly one-ending-position intervention into every signed interval that
+ * contains the ending. Earlier-to-earlier intervals are counted as controls.
+ * This says nothing about cadence function, causation, emotion, or quality.
+ */
+export function comparePhraseEndingRipple(
+  phraseA: PerformanceEvidenceEvent[],
+  phraseB: PerformanceEvidenceEvent[],
+): PhraseEndingRipple | null {
+  if (phraseA.length < 3 || phraseA.length !== phraseB.length) return null;
+  const valid = (events: PerformanceEvidenceEvent[]) => events.every((event) => Number.isInteger(event.note) && event.note >= 0 && event.note <= 127);
+  if (!valid(phraseA) || !valid(phraseB)) throw new RangeError("Phrase ending ripple notes must be integer MIDI positions.");
+  const sourcePositions = phraseA.map((event) => event.note - phraseA[0].note);
+  const attemptPositions = phraseB.map((event) => event.note - phraseB[0].note);
+  const endingIndex = sourcePositions.length - 1;
+  if (!sourcePositions.slice(0, endingIndex).every((position, index) => position === attemptPositions[index])) return null;
+  const sourceEndingPosition = sourcePositions[endingIndex];
+  const attemptEndingPosition = attemptPositions[endingIndex];
+  if (sourceEndingPosition === attemptEndingPosition) return null;
+  const relationships = sourcePositions.slice(0, endingIndex).map((retainedPosition, eventIndex) => {
+    const sourceSignedSteps = sourceEndingPosition - retainedPosition;
+    const attemptSignedSteps = attemptEndingPosition - retainedPosition;
+    const sourceDistanceSteps = Math.abs(sourceSignedSteps);
+    const attemptDistanceSteps = Math.abs(attemptSignedSteps);
+    return {
+      eventIndex,
+      retainedPosition,
+      sourceSignedSteps,
+      attemptSignedSteps,
+      sourceDistanceSteps,
+      attemptDistanceSteps,
+      distanceDelta: attemptDistanceSteps - sourceDistanceSteps,
+      sourceFrequencyRatio: 2 ** (sourceDistanceSteps / 12),
+      attemptFrequencyRatio: 2 ** (attemptDistanceSteps / 12),
+    };
+  });
+  const retainedCount = sourcePositions.length - 1;
+  return {
+    sourcePositions,
+    attemptPositions,
+    sourceEndingPosition,
+    attemptEndingPosition,
+    movedSteps: attemptEndingPosition - sourceEndingPosition,
+    replayTranspositionSteps: phraseB[0].note - phraseA[0].note,
+    relationships,
+    changedRelationshipCount: relationships.length,
+    retainedRelationshipCount: retainedCount * (retainedCount - 1) / 2,
+    sourceFinalApproachSteps: sourceEndingPosition - sourcePositions[endingIndex - 1],
+    attemptFinalApproachSteps: attemptEndingPosition - attemptPositions[endingIndex - 1],
   };
 }
 
