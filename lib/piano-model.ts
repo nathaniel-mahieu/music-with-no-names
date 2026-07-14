@@ -2647,6 +2647,24 @@ export function upsertMotifReturnObservation(
   return [...observations, observation].slice(-limit);
 }
 
+/**
+ * Flattens one explicitly completed landmark pass while preserving the first
+ * occurrence of any sustained event shared across adjacent fields.
+ */
+export function landmarkPerformanceEventIds(
+  fieldEventIds: number[][],
+  expectedFieldCount: number,
+): number[] | null {
+  if (!Number.isInteger(expectedFieldCount) || expectedFieldCount <= 0 || fieldEventIds.length !== expectedFieldCount) return null;
+  if (fieldEventIds.some((field) => !Array.isArray(field)
+    || field.length < 1
+    || field.length > 8
+    || new Set(field).size !== field.length
+    || field.some((id) => !Number.isInteger(id) || id <= 0))) return null;
+  const ordered = [...new Set(fieldEventIds.flat())];
+  return ordered.length >= 3 ? ordered : null;
+}
+
 export function pushRollingNoteEvent<T extends RollingNoteEvent>(events: T[], event: T, limit = 7) {
   if (!Number.isInteger(limit) || limit <= 0) return [];
   return [...events, event].slice(-limit);

@@ -36,6 +36,7 @@ import {
   intervalLandmark,
   landmarkStepPitchClasses,
   landmarkCounterfactualProfile,
+  landmarkPerformanceEventIds,
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
   motifReturnArc,
@@ -651,6 +652,13 @@ test("defines transposable, generated landmark paths without song transcriptions
       assert.ok(step.pitchOffsets.every((offset) => Number.isInteger(offset) && offset >= 0 && offset < 12));
     }
   }
+});
+
+test("retains the exact attacks used across one completed landmark pass", () => {
+  assert.deepEqual(landmarkPerformanceEventIds([[1, 2, 3], [3, 4, 5], [5, 6, 7]], 3), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(landmarkPerformanceEventIds([[1, 2, 3]], 3), null);
+  assert.equal(landmarkPerformanceEventIds([[1, 1, 2], [3], [4]], 3), null);
+  assert.equal(landmarkPerformanceEventIds([[1], [1]], 2), null);
 });
 
 test("transposes a landmark as one relationship-preserving path", () => {

@@ -146,6 +146,7 @@ export function PersonalLab() {
   }), [observations]);
   const learnedTerrain = useMemo(() => learnPreferenceTerrain(responseSamples), [responseSamples]);
   const phraseCharacterSummary = useMemo(() => summarizePhraseCharacter(phraseObservations), [phraseObservations]);
+  const latestLandmarkPhrase = useMemo(() => phraseObservations.findLast((observation) => observation.context?.kind === "landmark-path") ?? null, [phraseObservations]);
   const selectedHistory = useMemo(() => observations.filter((observation) => observation.landmarkId === landmarkId).map<ResponseSample>((observation) => ({ position: { tension: selected.tension, surprise: selected.surprise, drive: selected.drive }, liking: observation.ratings.liking, interest: observation.ratings.interest, familiarity: observation.ratings.familiarity, recordedAt: observation.recordedAt })), [landmarkId, observations, selected]);
   const historyTrend = useMemo(() => familiarityResponseTrend(selectedHistory), [selectedHistory]);
   const terrainRanking = useMemo(() => learnedTerrain ? LANDMARKS.map((landmark) => ({ landmark, fit: terrainFit(landmark, learnedTerrain) })).sort((a, b) => b.fit - a.fit).slice(0, 5) : [], [learnedTerrain]);
@@ -220,7 +221,7 @@ export function PersonalLab() {
       </div>
 
       <div className="personal-live-phrase-summary">
-        <div><span>Live Piano phrase reports</span><strong>{phraseCharacterSummary ? `${phraseCharacterSummary.sampleCount} reflection${phraseCharacterSummary.sampleCount === 1 ? "" : "s"} · center ${Math.round(phraseCharacterSummary.center.settledness)} settled / ${Math.round(phraseCharacterSummary.center.energy)} energy` : "No live phrase reflections yet"}</strong><small>{phraseCharacterSummary ? `Uncertainty ±${Math.round(phraseCharacterSummary.uncertainty)} · surprise/familiarity and liking remain separate report dimensions.` : "Use the Piano Experience focus to map your own phrase without asking the model to infer how it felt."}</small></div>
+        <div><span>Live Piano phrase reports</span><strong>{phraseCharacterSummary ? `${phraseCharacterSummary.sampleCount} reflection${phraseCharacterSummary.sampleCount === 1 ? "" : "s"} · center ${Math.round(phraseCharacterSummary.center.settledness)} settled / ${Math.round(phraseCharacterSummary.center.energy)} energy` : "No live phrase reflections yet"}</strong><small>{phraseCharacterSummary ? `${latestLandmarkPhrase?.context ? `Latest performed landmark: ${latestLandmarkPhrase.context.label}. ` : ""}Uncertainty ±${Math.round(phraseCharacterSummary.uncertainty)} · surprise/familiarity and liking remain separate report dimensions.` : "Use the Piano Experience focus to map your own phrase without asking the model to infer how it felt."}</small></div>
         <a href="?lab=piano&pianoLens=experience">Open live phrase map</a>
       </div>
 

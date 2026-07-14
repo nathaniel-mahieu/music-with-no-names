@@ -40,6 +40,13 @@ export type PhraseCharacterEvidence = {
   };
 };
 
+export type PhraseCharacterContext = {
+  kind: "landmark-path";
+  id: string;
+  label: string;
+  variant: "original" | "transposed" | "one-key-changed";
+};
+
 export type PhraseCharacterObservation = {
   id: string;
   recordedAt: string;
@@ -47,6 +54,7 @@ export type PhraseCharacterObservation = {
   ratings: PhraseCharacterRatings;
   evidence: PhraseCharacterEvidence;
   soundModelId?: PianoSoundModelId;
+  context?: PhraseCharacterContext;
 };
 
 export type PhraseCharacterSummary = {
@@ -78,6 +86,15 @@ function validEvidence(value: unknown): value is PhraseCharacterEvidence {
     && Object.values(candidate.modeled).every((item) => typeof item === "number" && Number.isFinite(item));
 }
 
+function validContext(value: unknown): value is PhraseCharacterContext {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<PhraseCharacterContext>;
+  return candidate.kind === "landmark-path"
+    && typeof candidate.id === "string" && candidate.id.length > 0 && candidate.id.length <= 80
+    && typeof candidate.label === "string" && candidate.label.length > 0 && candidate.label.length <= 120
+    && (candidate.variant === "original" || candidate.variant === "transposed" || candidate.variant === "one-key-changed");
+}
+
 export function parsePhraseCharacterObservations(value: string | null): PhraseCharacterObservation[] {
   if (!value) return [];
   try {
@@ -92,7 +109,8 @@ export function parsePhraseCharacterObservations(value: string | null): PhraseCh
         && candidate.phraseSignature.length > 0
         && validRatings(candidate.ratings)
         && validEvidence(candidate.evidence)
-        && (candidate.soundModelId == null || isPianoSoundModelId(candidate.soundModelId));
+        && (candidate.soundModelId == null || isPianoSoundModelId(candidate.soundModelId))
+        && (candidate.context == null || validContext(candidate.context));
     });
   } catch {
     return [];

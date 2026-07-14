@@ -12,7 +12,7 @@ test("every learning lab exposes a named semantic region", async () => {
 });
 
 test("dynamic visuals and status changes expose nonvisual descriptions", async () => {
-  const [ratio, scale, piano, ear, harmony, rhythm, recording, journey, atlas] = await Promise.all([
+  const [ratio, scale, piano, ear, harmony, rhythm, recording, journey, atlas, personal] = await Promise.all([
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
@@ -22,6 +22,7 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
     readFile(new URL("../app/RecordingLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/JourneyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/AtlasLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PersonalLab.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(ratio, /<canvas[^>]+role="img"[^>]+aria-label=/);
   assert.match(scale, /name="scale-degree"/);
@@ -115,6 +116,14 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /origin === "motif-return" \? "motif source \+ variation \+ return"/);
   assert.match(piano, /The exact source, latest variation, and relationship return are frozen together/);
   assert.match(piano, /Save this return-arc report/);
+  assert.match(piano, />Reflect on performed path<\/button>/);
+  assert.match(piano, /How did this whole performed route feel\?/);
+  assert.match(piano, /landmarkPerformanceEventIds\(landmarkPerformanceCapture\.fieldEventIds, landmarkPath\.steps\.length\)/);
+  assert.match(piano, /Every exact attack used to complete this generated path is frozen in its original chronology/);
+  assert.match(piano, /holdBoundedExperienceSpecimen\("landmark-path", specimen/);
+  assert.match(piano, /Save this landmark-path report/);
+  assert.match(piano, /this performed landmark path/);
+  assert.match(personal, /Latest performed landmark:/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
   assert.match(piano, /aria-labelledby="hud-phrase-breath-title"/);
@@ -292,9 +301,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
   assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
   assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
-  assert.match(piano, /version: 23/);
+  assert.match(piano, /version: 24/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
-  assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperiencePhrase\(\[\]\);/);
+  assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperienceContext\(null\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);
   assert.match(piano, /simultaneous partial-interaction comparison would answer the wrong question/);
   assert.match(css, /\.hud-echo-reading[\s\S]*grid-template-columns: repeat\(3/);

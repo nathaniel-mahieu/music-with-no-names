@@ -9506,6 +9506,12 @@ footer a {
 .hud-landmark-target small { max-width: 90ch; color: var(--muted); font-size: .72rem; line-height: 1.45; }
 .hud-landmark-target button { justify-self: start; min-height: 34px; margin-top: 5px; padding: 0 11px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .72rem; cursor: pointer; }
 .hud-landmark-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.hud-landmark-reflection { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.hud-landmark-reflection > div { display: grid; flex: 1 1 420px; gap: 3px; }
+.hud-landmark-reflection > div > span { color: var(--piano-gold); font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-landmark-reflection > div > strong { font-family: var(--font-display), Georgia, serif; font-size: .94rem; font-weight: 400; }
+.hud-landmark-reflection > div > small { color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.hud-landmark-reflection > button:disabled { cursor: not-allowed; opacity: .45; }
 .hud-landmark-evidence { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 18px 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .hud-landmark-evidence > span { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--line); }
 .hud-landmark-evidence > span:last-child { border-right: 0; }
@@ -10010,6 +10016,8 @@ footer a {
   .hud-landmark-counterfactual > div + div { border-top: 1px solid var(--line); border-left: 0; }
   .hud-landmark-reading { grid-template-columns: 1fr; }
   .hud-landmark-reading p + p { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-landmark-reflection { align-items: stretch; flex-direction: column; }
+  .hud-landmark-reflection > button { width: 100%; }
   .hud-character-axis-label,
   .hud-character-empty { font-size: 19px; }
   .hud-character-choices { grid-template-columns: 1fr 1fr; gap: 1px; }
@@ -10178,6 +10186,7 @@ footer a {
   .hud-landmark-transpose { border-color: CanvasText; background: Canvas; }
   .hud-landmark-counterfactual-intro { border-color: Highlight; background: Canvas; }
   .hud-landmark-counterfactual-report button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
+  .hud-landmark-reflection > button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
   .hud-character-point,
   .hud-character-uncertainty,
   .hud-character-current circle { fill: Canvas; stroke: CanvasText; }
