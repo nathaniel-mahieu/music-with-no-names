@@ -1,13 +1,23 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   dimensionProximity,
   experienceProximity,
   type ExperiencePosition,
   type ExperienceWeights,
 } from "@/lib/experience-model";
-import { densityRegion, meanValue } from "@/lib/atlas-model";
+import {
+  densityRegion,
+  livePhraseLandmarkProfile,
+  meanValue,
+  type LivePhraseLandmarkProfile,
+} from "@/lib/atlas-model";
+import {
+  PIANO_SESSION_KEY,
+  parsePianoPhraseSpecimen,
+  type PianoPhraseSpecimenEvent,
+} from "@/lib/piano-session";
 
 type Genre = "generated" | "pop" | "blues" | "classical";
 type CorpusGenre = Exclude<Genre, "generated">;
@@ -356,7 +366,105 @@ function fitPercent(value: number) {
   return Math.round(value * 100);
 }
 
-export function AtlasLab() {
+function formatBridgeValue(value: number | null) {
+  return value == null ? "not enough evidence" : `${Math.round(value)}`;
+}
+
+function LivePhraseBridge({
+  profile,
+  attackCount,
+  hydrated,
+  selected,
+  onNavigateToPiano,
+}: {
+  profile: LivePhraseLandmarkProfile | null;
+  attackCount: number;
+  hydrated: boolean;
+  selected: Landmark;
+  onNavigateToPiano?: () => void;
+}) {
+  const rows = profile ? [
+    {
+      id: "repetition",
+      label: "Repetition",
+      live: profile.repetition,
+      curated: selected.repetition,
+      note: "pitch-class return + repeated two-move shape",
+      curatedNote: "whole-recording teaching hypothesis",
+    },
+    {
+      id: "surprise",
+      label: "Local surprise",
+      live: profile.surprise,
+      curated: selected.surprise,
+      note: profile.surprise == null
+        ? "no repeated transition context yet"
+        : `${profile.surpriseEvidenceCount} locally learned transition${profile.surpriseEvidenceCount === 1 ? "" : "s"}`,
+      curatedNote: "whole-recording predictive-surprise hypothesis",
+    },
+    {
+      id: "activity",
+      label: "Timing activity ↔ embodied drive",
+      live: profile.timingActivity,
+      curated: selected.drive,
+      note: profile.timingActivity == null
+        ? "needs at least two measurable onset gaps"
+        : `${profile.attacksPerSecond?.toFixed(1)} attacks/s · ${Math.round(profile.timingRegularity ?? 0)}% onset regularity`,
+      curatedNote: "embodied-drive hypothesis; a broader construct",
+    },
+  ] : [];
+
+  return (
+    <section className="atlas-live-bridge" aria-labelledby="atlas-live-title">
+      <div className="atlas-live-heading">
+        <div>
+          <p className="section-kicker">Live phrase landmark bridge</p>
+          <h3 id="atlas-live-title">What resembles {selected.title}—and what cannot be inferred?</h3>
+        </div>
+        {profile ? <p>{profile.attackCount} retained attacks · {(profile.elapsedMs / 1000).toFixed(1)} s · MIDI events only</p> : null}
+      </div>
+
+      {!hydrated ? <p className="atlas-live-status">Looking for a retained Piano phrase in this tab…</p> : profile ? (
+        <>
+          <div
+            className="atlas-live-lanes"
+            role="img"
+            aria-label={`Retained live phrase compared with the curatorial profile for ${selected.title}. ${rows.map((row) => `${row.label}: live ${formatBridgeValue(row.live)}, landmark ${Math.round(row.curated)}`).join(". ")}. Equal positions do not establish stylistic similarity.`}
+          >
+            {rows.map((row) => (
+              <article key={row.id} className="atlas-live-lane">
+                <div className="atlas-live-lane-copy">
+                  <strong>{row.label}</strong>
+                  <span><i className="atlas-live-key" aria-hidden="true" /> live {formatBridgeValue(row.live)} · {row.note}</span>
+                  <span><i className="atlas-curator-key" aria-hidden="true" /> landmark {Math.round(row.curated)} · {row.curatedNote}</span>
+                </div>
+                <div className="atlas-live-track" aria-hidden="true">
+                  <span>less</span><span>more</span>
+                  {row.live == null ? null : <i className="atlas-live-marker" style={{ left: `${row.live}%` }} />}
+                  <i className="atlas-curator-marker" style={{ left: `${row.curated}%` }} />
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="atlas-live-boundary">
+            <p><strong>Listen into the overlap; do not call it a match.</strong> The square is measured or piece-locally modelled from your retained MIDI. The circle is a curator hypothesis about a whole recording. Shared horizontal position is a question, not proof of quality, genre, emotion, or stylistic similarity.</p>
+            {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Return to live phrase</button> : null}
+          </div>
+        </>
+      ) : (
+        <div className="atlas-live-empty">
+          <div>
+            <strong>{attackCount > 0 ? `${attackCount} retained attack${attackCount === 1 ? "" : "s"}` : "No retained phrase yet"}</strong>
+            <p>Play at least four attacks in Piano, then return. Nothing is recorded as audio, and this bridge does not detect a song or style.</p>
+          </div>
+          {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Build a phrase in Piano</button> : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function AtlasLab({ onNavigateToPiano }: { onNavigateToPiano?: () => void }) {
   const [selectedId, setSelectedId] = useState("bad-guy");
   const [goalId, setGoalId] = useState("balanced");
   const [preference, setPreference] = useState<ExperiencePosition>(
@@ -366,8 +474,20 @@ export function AtlasLab() {
   const [yAxis, setYAxis] = useState<AtlasDimension>("surprise");
   const [sizeAxis, setSizeAxis] = useState<AtlasDimension>("drive");
   const [layer, setLayer] = useState<AtlasLayer>("whole");
+  const [phraseSpecimen, setPhraseSpecimen] = useState<PianoPhraseSpecimenEvent[] | null>(null);
+  const [phraseHydrated, setPhraseHydrated] = useState(false);
   const selected = LANDMARKS.find((landmark) => landmark.id === selectedId) ?? LANDMARKS[0];
   const weights = useMemo(() => GOALS[goalId]?.weights ?? {}, [goalId]);
+  const liveProfile = useMemo(() => livePhraseLandmarkProfile(phraseSpecimen ?? []), [phraseSpecimen]);
+
+  useEffect(() => {
+    try {
+      setPhraseSpecimen(parsePianoPhraseSpecimen(window.sessionStorage.getItem(PIANO_SESSION_KEY)) ?? []);
+    } catch {
+      setPhraseSpecimen([]);
+    }
+    setPhraseHydrated(true);
+  }, []);
 
   const landmarksWithFit = useMemo(
     () =>
@@ -437,7 +557,11 @@ export function AtlasLab() {
         </p>
       </div>
 
-      <div className="atlas-controls">
+      <LivePhraseBridge profile={liveProfile} attackCount={phraseSpecimen?.length ?? 0} hydrated={phraseHydrated} selected={selected} onNavigateToPiano={onNavigateToPiano} />
+
+      <details className="atlas-controls-disclosure">
+        <summary><strong>Change the listening goal or map</strong><span>optional controls for preference, axes, and interpretation layer</span></summary>
+        <div className="atlas-controls">
         <div className="goal-picker" role="group" aria-label="Listening purpose">
           {Object.entries(GOALS).map(([id, goal]) => (
             <button
@@ -491,7 +615,8 @@ export function AtlasLab() {
           </div>
           <p>Axis positions and layer decompositions are curator hypotheses until a recording is analyzed. Changing the view never changes the underlying landmark trajectory.</p>
         </div>
-      </div>
+        </div>
+      </details>
 
       <div className="atlas-stage">
         <div className="atlas-plot-wrap">

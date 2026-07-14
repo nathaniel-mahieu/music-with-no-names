@@ -759,7 +759,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.50
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.51
         </div>
       </header>
 
@@ -1019,7 +1019,7 @@ export function RatioLab() {
         ) : activeLab === "recording" ? (
           <RecordingLab />
         ) : activeLab === "atlas" ? (
-          <AtlasLab />
+          <AtlasLab onNavigateToPiano={() => selectLab("piano")} />
         ) : (
           <PersonalLab />
         )}
