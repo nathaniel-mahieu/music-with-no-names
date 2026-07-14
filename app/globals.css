@@ -676,6 +676,12 @@ footer a {
 .lab-nav {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
+}
+
+.lab-nav-primary {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--line);
@@ -704,6 +710,140 @@ footer a {
 .lab-nav button.is-selected {
   background: var(--foreground);
   color: var(--background);
+}
+
+.lab-nav-more {
+  position: relative;
+}
+
+.lab-nav-more > summary {
+  min-width: 164px;
+  min-height: 42px;
+  display: grid;
+  align-content: center;
+  padding: 4px 34px 4px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--foreground);
+  background: rgba(17, 20, 28, 0.72);
+  cursor: pointer;
+  list-style: none;
+}
+
+.lab-nav-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.lab-nav-more > summary::after {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  content: "+";
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+
+.lab-nav-more[open] > summary::after {
+  content: "−";
+}
+
+.lab-nav-more > summary span {
+  font-size: .69rem;
+  font-weight: 650;
+  letter-spacing: .04em;
+}
+
+.lab-nav-more > summary small {
+  color: var(--muted);
+  font-size: .58rem;
+  letter-spacing: .04em;
+}
+
+.lab-nav-more > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.lab-nav-groups {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(650px, calc(100vw - 36px));
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--line-strong);
+  background: var(--line);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .34);
+}
+
+.lab-nav-groups > div {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 12px;
+  background: var(--surface-raised);
+}
+
+.lab-nav-groups > div > span {
+  padding: 4px 8px 7px;
+  color: var(--faint);
+  font-size: .57rem;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.lab-nav-groups button {
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.live-phrase-return {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 9px clamp(14px, 2vw, 24px);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.live-phrase-return > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.live-phrase-return span {
+  color: var(--accent);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.live-phrase-return strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .69rem;
+  font-weight: 500;
+}
+
+.live-phrase-return button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: .68rem;
+  font-weight: 650;
 }
 
 .lab-stage {
@@ -2546,9 +2686,7 @@ footer a {
   .lab-nav {
     order: 3;
     width: 100%;
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 4px;
+    justify-content: space-between;
   }
 
   .lab-nav button {
@@ -2583,9 +2721,13 @@ footer a {
     order: 3;
     width: 100%;
     display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .lab-nav-primary {
+    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
-    padding: 4px;
   }
 
   .lab-nav button {
@@ -2594,6 +2736,49 @@ footer a {
     padding: 5px 7px;
     font-size: 0.66rem;
     line-height: 1.15;
+  }
+
+  .lab-nav-more,
+  .lab-nav-more > summary {
+    width: 100%;
+  }
+
+  .lab-nav-more > summary {
+    min-height: 44px;
+  }
+
+  .lab-nav-groups {
+    position: static;
+    width: 100%;
+    grid-template-columns: 1fr;
+    margin-top: 8px;
+    box-shadow: none;
+  }
+
+  .lab-nav-groups > div {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .lab-nav-groups > div > span {
+    grid-column: 1 / -1;
+  }
+
+  .live-phrase-return {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .live-phrase-return > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .live-phrase-return button {
+    width: 100%;
   }
 
   .hero {

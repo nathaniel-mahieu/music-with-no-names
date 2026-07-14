@@ -39,6 +39,7 @@ test("server-renders the guided learning product surface", async () => {
   assert.match(html, /Hearing safety/i);
   assert.match(html, /Good for whom—and for what/i);
   assert.match(html, />Start<\/button>/i);
+  assert.match(html, /More learning labs/i);
   assert.match(html, />Ratio<\/button>/i);
   assert.match(html, />Scale<\/button>/i);
   assert.match(html, />Piano<\/button>/i);

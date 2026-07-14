@@ -4,9 +4,11 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Five-Lens Phrase A/B v1.43**. It provides:
+The current milestone is **Companion-First Navigation v1.44**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
+- A companion-first learning hierarchy: Start, the live Piano companion, and the learner's Personal Lens stay prominent while specialist pitch, time, listening, recording, and landmark labs live in one grouped disclosure instead of competing as eleven equal destinations.
+- A persistent return-to-phrase cue outside Piano whenever the current tab contains live attacks. It reports the phrase size and active learning lens, preserves the movable-Do frame and URL state, and returns to the same silent phrase without turning its measurements into a score.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
 - A three-lane explanation of every reflected phrase: measured MIDI facts, modeled teaching proxies, and listener-reported experience remain visibly separate. Relationship signatures follow intervals and normalized timing rather than absolute pitch or tempo, so transposed and uniformly time-scaled versions can be compared without treating them as identical experiences.
 - Local-only phrase reports that persist across visits, appear in the Personal Lens, join portable JSON export and the two-step deletion flow, and never upload MIDI or infer emotion, familiarity, or liking.

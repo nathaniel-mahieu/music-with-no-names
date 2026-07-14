@@ -93,6 +93,7 @@ import {
   type PhraseCharacterRatings,
 } from "@/lib/personal-response";
 import { livePulseMirror, type LivePulseMirror } from "@/lib/rhythm-model";
+import { PIANO_SESSION_KEY } from "@/lib/piano-session";
 
 type MidiInputLike = {
   id: string;
@@ -232,7 +233,6 @@ const WHITE_NOTES = VISIBLE_NOTES.filter((note) => WHITE_PITCH_CLASSES.has(pitch
 const DEFAULT_SCALE = PIANO_SCALES[0];
 const FIFTHS_ORDER = fifthsCircle();
 const EVENT_X = (slot: number) => 84 + slot * 88;
-const PIANO_SESSION_KEY = "music-with-no-names:piano-session:v2";
 const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }> = [
   { id: "explore", label: "Explore", description: "See the whole phrase across every representation." },
   { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },

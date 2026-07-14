@@ -20,6 +20,11 @@ import {
 } from "@/lib/music-math";
 import { parseRatioShareState, ratioShareSearch } from "@/lib/ratio-share-state";
 import {
+  PIANO_SESSION_KEY,
+  parsePianoSessionSummary,
+  type PianoSessionSummary,
+} from "@/lib/piano-session";
+import {
   SYNTH_MASTER_GAIN,
   configureSafetyCompressor,
   equalPowerMixGains,
@@ -52,6 +57,27 @@ const LABS: { id: LabId; label: string }[] = [
   { id: "atlas", label: "Atlas" },
   { id: "personal", label: "Personal Lens" },
 ];
+
+const PRIMARY_LAB_IDS: LabId[] = ["guide", "piano", "personal"];
+const SUPPORT_LAB_GROUPS: Array<{ label: string; labs: LabId[] }> = [
+  { label: "Pitch relationships", labs: ["ratio", "scale", "harmony"] },
+  { label: "Time and listening", labs: ["ear", "rhythm", "journey"] },
+  { label: "Music as evidence", labs: ["recording", "atlas"] },
+];
+const SUPPORT_LAB_IDS = new Set(SUPPORT_LAB_GROUPS.flatMap((group) => group.labs));
+const PIANO_LENS_LABELS: Record<PianoSessionSummary["focusLens"], string> = {
+  explore: "whole-phrase",
+  intervals: "interval",
+  scales: "scale",
+  chords: "chord",
+  motion: "motion",
+  paths: "landmark-path",
+  experience: "listener-response",
+};
+
+function labById(id: LabId) {
+  return LABS.find((lab) => lab.id === id)!;
+}
 
 function labFromSearch(search: string): LabId | null {
   const requested = new URLSearchParams(search).get("lab");
@@ -419,6 +445,8 @@ function formatHertz(value: number) {
 
 export function RatioLab() {
   const [activeLab, setActiveLab] = useState<LabId>("guide");
+  const [pianoSessionSummary, setPianoSessionSummary] = useState<PianoSessionSummary | null>(null);
+  const moreLabsRef = useRef<HTMLDetailsElement>(null);
   const [referenceHz, setReferenceHz] = useState(220);
   const [ratio, setRatio] = useState(3 / 2);
   const [timbre, setTimbre] = useState<Timbre>("harmonic");
@@ -430,6 +458,14 @@ export function RatioLab() {
   );
   const activeCopy = LAB_COPY[activeLab];
 
+  const refreshPianoSessionSummary = useCallback(() => {
+    try {
+      setPianoSessionSummary(parsePianoSessionSummary(window.sessionStorage.getItem(PIANO_SESSION_KEY)));
+    } catch {
+      setPianoSessionSummary(null);
+    }
+  }, []);
+
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
       const shared = parseRatioShareState(window.location.search);
@@ -439,9 +475,16 @@ export function RatioLab() {
       const linkedLab = labFromSearch(window.location.search);
       if (linkedLab) setActiveLab(linkedLab);
       else if (window.location.search.includes("ratio=")) setActiveLab("ratio");
+      refreshPianoSessionSummary();
     }, 0);
     return () => window.clearTimeout(hydrationTask);
-  }, []);
+  }, [refreshPianoSessionSummary]);
+
+  useEffect(() => {
+    if (activeLab === "piano") return;
+    const refreshTask = window.setTimeout(refreshPianoSessionSummary, 0);
+    return () => window.clearTimeout(refreshTask);
+  }, [activeLab, refreshPianoSessionSummary]);
 
   const shareExperiment = async () => {
     const url = new URL(window.location.href);
@@ -460,6 +503,7 @@ export function RatioLab() {
 
   const selectLab = (lab: LabId) => {
     if (activeLab === "ratio" && isPlaying) stop();
+    if (moreLabsRef.current) moreLabsRef.current.open = false;
     setActiveLab(lab);
     const url = new URL(window.location.href);
     url.searchParams.set("lab", lab);
@@ -688,24 +732,46 @@ export function RatioLab() {
           </span>
           <span>Music With No Names</span>
         </a>
-        <nav className="lab-nav" aria-label="Learning labs">
-          {LABS.map((lab) => (
-            <button
-              key={lab.id}
-              type="button"
-              className={activeLab === lab.id ? "is-selected" : ""}
-              onClick={() => selectLab(lab.id)}
-              aria-pressed={activeLab === lab.id}
-            >
-              {lab.label}
-            </button>
-          ))}
+        <nav className="lab-nav" aria-label="Learning companion">
+          <div className="lab-nav-primary">
+            {PRIMARY_LAB_IDS.map((id) => {
+              const lab = labById(id);
+              return <button key={lab.id} type="button" className={activeLab === lab.id ? "is-selected" : ""} onClick={() => selectLab(lab.id)} aria-pressed={activeLab === lab.id}>{lab.label}</button>;
+            })}
+          </div>
+          <details className="lab-nav-more" ref={moreLabsRef}>
+            <summary>
+              <span>{SUPPORT_LAB_IDS.has(activeLab) ? labById(activeLab).label : "More learning labs"}</span>
+              <small>{SUPPORT_LAB_IDS.has(activeLab) ? "current lens" : "pitch · time · music"}</small>
+            </summary>
+            <div className="lab-nav-groups">
+              {SUPPORT_LAB_GROUPS.map((group) => (
+                <div key={group.label} role="group" aria-label={group.label}>
+                  <span>{group.label}</span>
+                  {group.labs.map((id) => {
+                    const lab = labById(id);
+                    return <button key={lab.id} type="button" className={activeLab === lab.id ? "is-selected" : ""} onClick={() => selectLab(lab.id)} aria-pressed={activeLab === lab.id}>{lab.label}</button>;
+                  })}
+                </div>
+              ))}
+            </div>
+          </details>
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.43
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.44
         </div>
       </header>
+
+      {activeLab !== "piano" && pianoSessionSummary && pianoSessionSummary.attackCount > 0 ? (
+        <aside className="live-phrase-return" aria-label="Live piano phrase available">
+          <div>
+            <span>Your live phrase is still here</span>
+            <strong>{pianoSessionSummary.attackCount} attack{pianoSessionSummary.attackCount === 1 ? "" : "s"} · {PIANO_LENS_LABELS[pianoSessionSummary.focusLens]} lens</strong>
+          </div>
+          <button type="button" onClick={() => selectLab("piano")}>Return to Piano</button>
+        </aside>
+      ) : null}
 
       <section className="hero" id="top">
         <div className="hero-copy">

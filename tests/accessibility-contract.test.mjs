@@ -73,7 +73,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /cloud-blues[\s\S]*border-style: dotted/);
   assert.match(css, /cloud-classical[\s\S]*border-style: double/);
   assert.match(css, /\.atlas-point[\s\S]*width: max\(50px, var\(--point-size\)\)/);
-  assert.match(css, /\.lab-nav[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.lab-nav-primary[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(ratio, /<details className="lab-nav-more"/);
+  assert.match(ratio, /aria-label="Live piano phrase available"/);
   assert.match(ratio, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)/);
   assert.match(ratio, /behavior: prefersReducedMotion \? "auto" : "smooth"/);
   assert.match(ratio, /className="skip-link" href="#lab-stage" onClick=\{skipToActiveLab\}/);
