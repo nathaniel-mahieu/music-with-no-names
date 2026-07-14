@@ -248,10 +248,12 @@ type PulseMirrorSession = {
   anchorEventId: number;
   capturedTapEventIds: number[];
 };
+type MotifReturnReport = "not-return" | "uncertain" | "felt-return";
 type MotifEchoSession = {
   sourceEvents: HudNoteEvent[];
   anchorEventId: number;
   attempts?: HudNoteEvent[][];
+  returnReport?: MotifReturnReport | null;
 };
 type PhraseCompareDimension = "settledness" | "energy" | "liking";
 type PhraseCompareReport = "a" | "same" | "b";
@@ -283,7 +285,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -517,6 +519,7 @@ function isMotifEchoSession(value: unknown): value is MotifEchoSession {
     || session.anchorEventId! < Math.max(...sourceEvents.map((event) => event.id))) return false;
   const attempts = session.attempts ?? [];
   if (!Array.isArray(attempts) || attempts.length > 3 || attempts.some((attempt) => !isFrozenPhraseSpecimen(attempt, 4) || attempt.length !== sourceEvents.length)) return false;
+  if (session.returnReport != null && session.returnReport !== "not-return" && session.returnReport !== "uncertain" && session.returnReport !== "felt-return") return false;
   const ids = [...sourceEvents, ...attempts.flat()].map((event) => event.id);
   const sourceLastId = Math.max(...sourceEvents.map((event) => event.id));
   return new Set(ids).size === ids.length
@@ -2154,12 +2157,41 @@ function MotifReturnTrail({ comparisons, currentIndex }: { comparisons: MotifEch
   </div>;
 }
 
-function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, onEnd }: {
+const MOTIF_RETURN_REPORTS: Array<{ id: MotifReturnReport; label: string; reading: string }> = [
+  { id: "not-return", label: "Not as a return", reading: "You did not hear the last statement as a return." },
+  { id: "uncertain", label: "Not sure", reading: "You were unsure whether the last statement felt like a return." },
+  { id: "felt-return", label: "Yes, a return", reading: "You heard the last statement as a return." },
+];
+
+function MotifExperienceCheck({ comparison, report, onReport }: {
+  comparison: MotifEchoComparison;
+  report: MotifReturnReport | null;
+  onReport: (report: MotifReturnReport) => void;
+}) {
+  const selected = MOTIF_RETURN_REPORTS.find((candidate) => candidate.id === report);
+  const relationshipDetail = comparison.kind === "transposed-repeat"
+    ? `same signed moves and timing shape · starting key shifted ${motifSigned(comparison.startShiftSemitones)}`
+    : "same signed moves, timing shape, and starting key";
+  return <section className="hud-motif-experience-check" aria-labelledby="hud-motif-experience-title">
+    <div className="hud-subheading"><span>Experience · yours, not inferred</span><strong id="hud-motif-experience-title">Did the last statement feel like a return to you?</strong><small>Answer from the experience you just had. Agreement with the relationship detector is not a goal.</small></div>
+    <div className="hud-motif-experience-evidence" aria-label="Modeled relationship and listener report kept separate">
+      <div><span>modeled relationship</span><strong>pitch + timing fingerprint returned</strong><small>{relationshipDetail}</small></div>
+      <div><span>your experience</span><strong>{selected?.label ?? "not reported"}</strong><small>Only your button choice can fill this lane.</small></div>
+    </div>
+    <div className="hud-motif-experience-options" role="group" aria-label="Report whether the last statement felt like a return">
+      {MOTIF_RETURN_REPORTS.map((choice) => <button key={choice.id} type="button" aria-pressed={report === choice.id} onClick={() => onReport(choice.id)}>{choice.label}</button>)}
+    </div>
+    <p role="status" aria-live="polite"><strong>{selected?.reading ?? "No listener report yet."}</strong><small>The model describes a local MIDI relationship. Your report does not turn that relationship into detected form, universal recognition, emotion, correctness, or musical quality.</small></p>
+  </section>;
+}
+
+function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, onReport, onEnd }: {
   events: HudNoteEvent[];
   session: MotifEchoSession | null;
   attemptEvents: HudNoteEvent[];
   onStart: (length: 3 | 4) => void;
   onRetry: () => void;
+  onReport: (report: MotifReturnReport) => void;
   onEnd: () => void;
 }) {
   const required = session?.sourceEvents.length ?? 0;
@@ -2171,6 +2203,7 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
   });
   const comparisons = comparison ? [...keptComparisons, comparison] : keptComparisons;
   const arc = motifReturnArc(comparisons);
+  const closingReturn = arc.returnAfterVariationIndex == null ? null : comparisons[arc.returnAfterVariationIndex] ?? null;
   const sourceMoves = session ? session.sourceEvents.slice(1).map((event, index) => motifSigned(event.note - session.sourceEvents[index].note)).join(" · ") : "";
   return <section className="hud-motif-echo" aria-labelledby="hud-motif-echo-title">
     <div className="hud-subheading"><span>Learner-bounded experiment · silent</span><strong id="hud-motif-echo-title">Choose the shape before the model searches.</strong><small>Freeze exactly three or four recent attacks, then replay that whole statement. No smaller sub-match can replace your chosen boundary.</small></div>
@@ -2188,6 +2221,7 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
       </div>
       {comparisons.length ? <MotifReturnTrail comparisons={comparisons} currentIndex={comparison ? comparisons.length - 1 : null} /> : null}
       {comparison ? <MotifFingerprintFigure id="echo" readingTitle={motifEchoTitle(comparison)} comparison={comparison} sourceLabel="chosen source" targetLabel="your replay" /> : null}
+      {closingReturn ? <MotifExperienceCheck comparison={closingReturn} report={session.returnReport ?? null} onReport={onReport} /> : null}
       <div className="hud-motif-echo-actions">
         {comparison ? <button type="button" onClick={onRetry}>{arc.status === "return-after-variation" ? "Keep return + continue" : comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat" ? "Keep return + change one property" : "Keep variation + try a return"}</button> : null}
         <button type="button" onClick={onEnd}>Release source</button>
@@ -2196,7 +2230,7 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
   </section>;
 }
 
-function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSession = null, motifEchoAttempt = [], onStartMotifEcho = () => {}, onRetryMotifEcho = () => {}, onEndMotifEcho = () => {} }: {
+function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSession = null, motifEchoAttempt = [], onStartMotifEcho = () => {}, onRetryMotifEcho = () => {}, onReportMotifReturn = () => {}, onEndMotifEcho = () => {} }: {
   events: HudNoteEvent[];
   articulation: ArticulationEvidence[];
   motifs: MotifTransformation[];
@@ -2205,6 +2239,7 @@ function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSessio
   motifEchoAttempt?: HudNoteEvent[];
   onStartMotifEcho?: (length: 3 | 4) => void;
   onRetryMotifEcho?: () => void;
+  onReportMotifReturn?: (report: MotifReturnReport) => void;
   onEndMotifEcho?: () => void;
 }) {
   const microscopeArticulation = articulation.slice(-7);
@@ -2282,7 +2317,7 @@ function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSessio
           <small>Compare relationship shape separately from starting key and elapsed speed.</small>
         </div> : null}
         {strongest && fingerprint && fingerprintRevealed ? <div id="hud-motif-fingerprint-detail"><MotifFingerprintFigure id="detected" readingTitle={motifTitle(strongest)} comparison={fingerprint} sourceLabel={rangeLabel(strongest.sourceStartIndex, strongest.length)} targetLabel={rangeLabel(strongest.targetStartIndex, strongest.length)} /></div> : null}
-        <MotifEchoPractice events={events} session={motifEchoSession} attemptEvents={motifEchoAttempt} onStart={onStartMotifEcho} onRetry={onRetryMotifEcho} onEnd={onEndMotifEcho} />
+        <MotifEchoPractice events={events} session={motifEchoSession} attemptEvents={motifEchoAttempt} onStart={onStartMotifEcho} onRetry={onRetryMotifEcho} onReport={onReportMotifReturn} onEnd={onEndMotifEcho} />
       </div> : null}
     </div>
   </section>;
@@ -3597,7 +3632,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19 || saved.version === 20 || saved.version === 21) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19 || saved.version === 20 || saved.version === 21 || saved.version === 22) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -3704,7 +3739,7 @@ export function PianoLab() {
               })),
             });
             if (isPulseMirrorSession(saved.pulseMirrorSession)) setPulseMirrorSession(saved.pulseMirrorSession);
-            if (isMotifEchoSession(saved.motifEchoSession)) setMotifEchoSession({ ...saved.motifEchoSession, attempts: saved.motifEchoSession.attempts ?? [] });
+            if (isMotifEchoSession(saved.motifEchoSession)) setMotifEchoSession({ ...saved.motifEchoSession, attempts: saved.motifEchoSession.attempts ?? [], returnReport: saved.motifEchoSession.returnReport ?? null });
             if (isPhraseCompareSession(saved.phraseCompareSession)) setPhraseCompareSession({ ...saved.phraseCompareSession, intention: saved.phraseCompareSession.intention ?? null });
           }
         }
@@ -3730,7 +3765,7 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 21, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 22, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
   }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motifEchoSession, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
@@ -4610,7 +4645,7 @@ export function PianoLab() {
   const beginMotifEcho = (length: 3 | 4) => {
     if (phraseEvents.length < length) return;
     const sourceEvents = freezePhraseSpecimen(phraseEvents.slice(-length), currentHudTime());
-    setMotifEchoSession({ sourceEvents, anchorEventId: phraseEvents.at(-1)?.id ?? 0, attempts: [] });
+    setMotifEchoSession({ sourceEvents, anchorEventId: phraseEvents.at(-1)?.id ?? 0, attempts: [], returnReport: null });
   };
 
   const retryMotifEcho = () => {
@@ -4618,7 +4653,12 @@ export function PianoLab() {
       ...current,
       attempts: [...(current.attempts ?? []), freezePhraseSpecimen(motifEchoAttempt, currentHudTime())].slice(-3),
       anchorEventId: phraseEvents.at(-1)?.id ?? current.anchorEventId,
+      returnReport: motifEchoComparison?.kind === "exact-repeat" || motifEchoComparison?.kind === "transposed-repeat" ? current.returnReport ?? null : null,
     } : current);
+  };
+
+  const reportMotifReturn = (report: MotifReturnReport) => {
+    setMotifEchoSession((current) => current ? { ...current, returnReport: report } : current);
   };
 
   const selectLandmarkPath = (id: LandmarkPathId) => {
@@ -4912,7 +4952,7 @@ export function PianoLab() {
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} landingEvidence={resolutionLanding} landingEvents={resolutionEvidenceEvents} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onReflectResolution={beginResolutionForkReflection} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
-        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} motifEchoSession={motifEchoSession} motifEchoAttempt={motifEchoAttempt} onStartMotifEcho={beginMotifEcho} onRetryMotifEcho={retryMotifEcho} onEndMotifEcho={() => setMotifEchoSession(null)} />}
+        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} motifEchoSession={motifEchoSession} motifEchoAttempt={motifEchoAttempt} onStartMotifEcho={beginMotifEcho} onRetryMotifEcho={retryMotifEcho} onReportMotifReturn={reportMotifReturn} onEndMotifEcho={() => setMotifEchoSession(null)} />}
       </> : null}
 
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}

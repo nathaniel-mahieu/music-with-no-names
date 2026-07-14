@@ -2585,10 +2585,10 @@ export function compareMotifEcho(
 export function motifReturnArc(comparisons: MotifEchoComparison[]): MotifReturnArc {
   const returnIndices = comparisons.flatMap((comparison, index) => comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat" ? [index] : []);
   const variationIndices = comparisons.flatMap((comparison, index) => comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat" ? [] : [index]);
-  const firstVariation = variationIndices[0] ?? null;
-  const returnAfterVariationIndex = firstVariation == null ? null : returnIndices.find((index) => index > firstVariation) ?? null;
+  const latestVariation = variationIndices.at(-1) ?? null;
+  const returnAfterVariationIndex = latestVariation == null ? null : returnIndices.find((index) => index > latestVariation) ?? null;
   return {
-    status: firstVariation == null ? "waiting-for-variation" : returnAfterVariationIndex == null ? "variation-open" : "return-after-variation",
+    status: latestVariation == null ? "waiting-for-variation" : returnAfterVariationIndex == null ? "variation-open" : "return-after-variation",
     variationIndices,
     returnIndices,
     returnAfterVariationIndex,

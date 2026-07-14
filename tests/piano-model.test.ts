@@ -1197,6 +1197,12 @@ test("tracks a local variation followed by a relationship return without claimin
     returnIndices: [0, 2],
     returnAfterVariationIndex: 2,
   });
+  assert.deepEqual(motifReturnArc([exact, variation, transposedReturn, variation]), {
+    status: "variation-open",
+    variationIndices: [1, 3],
+    returnIndices: [0, 2],
+    returnAfterVariationIndex: null,
+  });
 });
 
 test("separates exact chord identity, inversion, and incomplete outlines", () => {

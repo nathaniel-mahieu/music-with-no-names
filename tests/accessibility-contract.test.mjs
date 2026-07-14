@@ -97,6 +97,11 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Local sequence · source → change → return/);
   assert.match(piano, /The variation is open—try bringing the relationship back/);
   assert.match(piano, /not a detected section, theme, compositional intention, style, listener recognition, or quality judgment/);
+  assert.match(piano, /Did the last statement feel like a return to you\?/);
+  assert.match(piano, /aria-label="Modeled relationship and listener report kept separate"/);
+  assert.match(piano, /aria-label="Report whether the last statement felt like a return"/);
+  assert.match(piano, /Agreement with the relationship detector is not a goal/);
+  assert.match(piano, /Your report does not turn that relationship into detected form, universal recognition, emotion, correctness, or musical quality/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
   assert.match(piano, /aria-labelledby="hud-phrase-breath-title"/);
@@ -178,6 +183,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-motif-return-trail li\.is-variation[\s\S]*border-top-style: dashed/);
   assert.match(css, /\.hud-motif-return-trail li\.is-return[\s\S]*border-top-style: double/);
   assert.match(css, /\.hud-motif-return-trail li\.is-return \{ border-top-color: LinkText/);
+  assert.match(css, /\.hud-motif-experience-options button\[aria-pressed="true"\]/);
+  assert.match(css, /\.hud-motif-experience-options \{ grid-template-columns: 1fr/);
+  assert.match(css, /\.hud-motif-experience-options button\[aria-pressed="true"\][\s\S]*HighlightText/);
   assert.match(css, /\.hud-motif-echo button \{ color: ButtonText/);
   assert.match(css, /\.hud-partial-link\.is-aligned[\s\S]*LinkText/);
   assert.match(css, /\.hud-partial-link\.is-interaction[\s\S]*Highlight/);
@@ -268,7 +276,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
   assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
   assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
-  assert.match(piano, /version: 21/);
+  assert.match(piano, /version: 22/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);

@@ -66,6 +66,8 @@ The v1.73 Learner-Bounded Motif Echo adds one session-local source boundary but 
 
 The v1.74 Motif Return Arc retains at most three completed learner-bounded replays in browser session state. It derives only their chronological rule labels: exact and transposed comparisons count as relationship returns, while timing, ending, and multi-property differences count as variations. The first return after the first variation closes the displayed local arc. No new source, corpus, listener data, audio, learned classifier, score, or perceptual threshold is introduced; older v1.73 sessions migrate with an empty replay history. The trace is not evidence of a section, theme, compositional intention, style, listener recognition, emotion, correctness, quality, or formal function.
 
+The v1.75 Motif Experience Check adds one optional session-local listener report—`not-return`, `uncertain`, or `felt-return`—only after the latest open variation receives a rule-based relationship return. The report comes exclusively from a native button choice; it is never computed from MIDI, stored in a cohort, exported as a personality label, or used to retrain or recalibrate the detector. A newer kept variation clears the previous report and reopens the question. Earlier sessions migrate with no report. Modeled relationship recovery and listener experience may agree or disagree without becoming a recognition rate, form detector, emotion estimate, correctness judgment, or quality score.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
