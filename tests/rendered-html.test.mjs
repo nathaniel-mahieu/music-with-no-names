@@ -101,6 +101,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Connect MIDI/);
   assert.match(pianoLab, /Attack history/);
   assert.match(pianoLab, /Interval texture/);
+  assert.match(pianoLab, /Where partials meet/);
+  assert.match(pianoLab, /pianoPartialInteraction/);
+  assert.match(pianoLab, /MIDI itself contains no partials or instrument audio/);
+  assert.match(pianoLab, /Neither output measures musical goodness/);
   assert.match(pianoLab, /No overall goodness score/);
   assert.match(pianoLab, /near-3:2 relation/);
   assert.match(pianoLab, /Chord grouping/);
@@ -118,6 +122,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Scale lens/);
   assert.match(pianoLab, /Assumed spectrum/);
   assert.match(pianoSoundModel, /Sine · one partial/);
+  assert.match(pianoSoundModel, /alignedPairs/);
+  assert.match(pianoSoundModel, /interactionPairs/);
   assert.match(pianoLab, /Changes:/);
   assert.match(pianoLab, /Stays fixed:/);
   assert.match(pianoLab, /no audio analysis/i);

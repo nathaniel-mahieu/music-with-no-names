@@ -7149,6 +7149,7 @@ footer a {
 .piano-focus-grid > * + * { border-left: 1px solid var(--line); }
 .piano-focus-grid.is-motion { grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); }
 .piano-focus-grid.is-interval-practice { grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr); }
+.piano-focus-grid.is-interval-practice > .hud-partial-microscope { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0; }
 
 .hud-echo-panel,
 .hud-cause-panel,
@@ -7292,6 +7293,7 @@ footer a {
 .hud-circle-panel,
 .hud-scale-panel,
 .hud-texture-panel,
+.hud-partial-microscope,
 .hud-chord-panel,
 .hud-nearby-panel,
 .hud-evidence-panel,
@@ -7305,7 +7307,27 @@ footer a {
 
 .hud-plot svg,
 .hud-texture-panel svg,
+.hud-partial-microscope svg,
 .hud-evidence-panel svg { display: block; width: 100%; height: auto; overflow: visible; }
+.hud-partial-axis { stroke: var(--line-strong); stroke-width: 1; }
+.hud-partial-stem { stroke-width: 2; }
+.hud-partial-stem.is-lower { stroke: var(--piano-gold); }
+.hud-partial-stem.is-upper { stroke: var(--piano-blue); }
+.hud-partial-stem.is-fundamental { stroke-width: 4; }
+.hud-partial-link { fill: none; stroke-width: 1.25; }
+.hud-partial-link.is-aligned { stroke: var(--piano-blue); }
+.hud-partial-link.is-interaction { stroke: var(--piano-coral); stroke-dasharray: 4 3; }
+.hud-partial-alignment-mark { fill: var(--surface-raised); stroke: var(--piano-blue); stroke-width: 1.5; }
+.hud-partial-interaction-mark { fill: var(--piano-coral); stroke: var(--surface-raised); stroke-width: 1; }
+.hud-partial-lane-label { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; }
+.hud-partial-hz-label,
+.hud-partial-axis-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 9px; }
+.hud-partial-readout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.hud-partial-readout p { display: grid; min-width: 0; gap: 3px; margin: 0; padding: 10px 12px; }
+.hud-partial-readout p + p { border-left: 1px solid var(--line); }
+.hud-partial-readout span { color: var(--muted); font-size: .63rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-partial-readout strong { overflow-wrap: anywhere; font-family: var(--font-mono), monospace; font-size: .72rem; font-weight: 500; }
+.hud-partial-readout small { color: var(--muted); font-size: .66rem; line-height: 1.4; }
 .hud-grid-line { stroke: var(--line); stroke-width: 1; }
 .hud-ledger-line { stroke: var(--foreground); stroke-width: 1.25; }
 .hud-clef { fill: var(--foreground); font-family: serif; font-size: 44px; }
@@ -8110,6 +8132,10 @@ footer a {
   .piano-focus-grid.is-interval-practice { grid-template-columns: 1fr; }
   .piano-focus-grid.is-motion > * + *,
   .piano-focus-grid.is-interval-practice > * + * { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-partial-readout { grid-template-columns: 1fr 1fr; }
+  .hud-partial-readout p + p { border-left: 0; }
+  .hud-partial-readout p:nth-child(even) { border-left: 1px solid var(--line); }
+  .hud-partial-readout p:nth-child(n + 3) { border-top: 1px solid var(--line); }
   .piano-chord-learning-grid { grid-template-columns: 1fr; }
   .piano-chord-learning-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
   .hud-sonority-start { grid-template-columns: 1fr 1fr; }
@@ -8185,6 +8211,9 @@ footer a {
   .hud-pulse-reading > div + div { border-top: 1px solid var(--line); border-left: 0; }
   .piano-focus-grid { grid-template-columns: 1fr; }
   .piano-focus-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-partial-readout { grid-template-columns: 1fr; }
+  .hud-partial-readout p:nth-child(even) { border-left: 0; }
+  .hud-partial-readout p + p { border-top: 1px solid var(--line); }
   .hud-cause-deltas { grid-template-columns: 1fr; }
   .hud-cause-deltas > span { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-cause-deltas > span:last-child { border-bottom: 0; }
@@ -8278,6 +8307,12 @@ footer a {
   .hud-note-head,
   .hud-frequency-dot,
   .hud-texture-node { fill: Canvas; stroke: CanvasText; }
+  .hud-partial-axis,
+  .hud-partial-stem { stroke: CanvasText; }
+  .hud-partial-link.is-aligned,
+  .hud-partial-alignment-mark { stroke: LinkText; }
+  .hud-partial-link.is-interaction { stroke: Highlight; }
+  .hud-partial-interaction-mark { fill: Highlight; stroke: Canvas; }
   .hud-staff-plot g.is-focused .hud-note-head,
   .hud-frequency-plot g.is-focused .hud-frequency-dot { fill: Highlight; stroke: HighlightText; }
   .hud-fifth-node,

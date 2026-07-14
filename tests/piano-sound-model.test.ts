@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   PIANO_SOUND_MODELS,
   isPianoSoundModelId,
+  pianoPartialInteraction,
   pianoSoundPartialProfile,
   pianoSoundVoice,
 } from "../lib/piano-sound-model.ts";
@@ -33,4 +34,25 @@ test("changes the assumed spectrum without changing played fundamentals", () => 
   const bright = sonorityPerceptionModel(brightVoices);
   assert.notEqual(Math.round(sine.roughness * 10_000), Math.round(bright.roughness * 10_000));
   assert.notEqual(Math.round(sine.brightness * 10_000), Math.round(bright.brightness * 10_000));
+});
+
+test("exposes aligned partials separately from near interaction zones", () => {
+  const simple = pianoPartialInteraction(200, 300, "harmonic");
+  const offset = pianoPartialInteraction(200, 283, "harmonic");
+  assert.ok(simple.alignedPairs.some((pair) => pair.lowerPartial === 3 && pair.upperPartial === 2));
+  assert.ok(simple.alignedPairs.length > offset.alignedPairs.length);
+  assert.ok(offset.interactionPairs.length > 0);
+  assert.ok(simple.overlap > offset.overlap);
+  assert.ok(simple.lowerPartials.every((partial) => partial.kind === "partial" && partial.source === 0));
+  assert.ok(simple.upperPartials.every((partial) => partial.kind === "partial" && partial.source === 1));
+});
+
+test("keeps a sine assumption to one physical component per note", () => {
+  const sine = pianoPartialInteraction(220, 233, "sine");
+  assert.equal(sine.lowerPartials.length, 1);
+  assert.equal(sine.upperPartials.length, 1);
+  assert.equal(sine.alignedPairs.length, 0);
+  assert.ok(sine.interactionPairs.length <= 1);
+  assert.ok(sine.roughness >= 0 && sine.roughness <= 1);
+  assert.throws(() => pianoPartialInteraction(0, 220, "harmonic"), RangeError);
 });

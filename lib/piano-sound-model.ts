@@ -1,4 +1,11 @@
 import type { SonorityVoice } from "./sonority-model.ts";
+import {
+  aggregateRoughness,
+  harmonicSpectrum,
+  pairRoughness,
+  spectralOverlap,
+  type SpectralComponent,
+} from "./auditory-model.ts";
 
 export type PianoSoundModelId = "sine" | "harmonic" | "mellow-piano" | "bright-piano";
 
@@ -11,6 +18,28 @@ export type PianoSoundModel = {
   rolloffDbPerOctave: number;
   inharmonicity: number;
   noiseAmount: number;
+};
+
+export type PianoPartialPair = {
+  lowerPartial: number;
+  upperPartial: number;
+  lowerHz: number;
+  upperHz: number;
+  separationHz: number;
+  centsApart: number;
+  contribution: number;
+};
+
+export type PianoPartialInteraction = {
+  lowerHz: number;
+  upperHz: number;
+  modelId: PianoSoundModelId;
+  lowerPartials: SpectralComponent[];
+  upperPartials: SpectralComponent[];
+  alignedPairs: PianoPartialPair[];
+  interactionPairs: PianoPartialPair[];
+  overlap: number;
+  roughness: number;
 };
 
 export const PIANO_SOUND_MODELS: readonly PianoSoundModel[] = [
@@ -91,4 +120,67 @@ export function pianoSoundPartialProfile(modelId: PianoSoundModelId) {
       amplitude: 10 ** (-(model.rolloffDbPerOctave * Math.log2(partialIndex)) / 20),
     };
   });
+}
+
+/**
+ * Exposes the partial pairs behind one assumed two-note spectrum. Alignment and
+ * interaction zones are teaching coordinates, not measurements of a keyboard,
+ * DAW patch, room, or listener.
+ */
+export function pianoPartialInteraction(
+  firstHz: number,
+  secondHz: number,
+  modelId: PianoSoundModelId,
+): PianoPartialInteraction {
+  if (!Number.isFinite(firstHz) || firstHz <= 0 || !Number.isFinite(secondHz) || secondHz <= 0) {
+    throw new RangeError("Partial interaction frequencies must be positive.");
+  }
+  const lowerHz = Math.min(firstHz, secondHz);
+  const upperHz = Math.max(firstHz, secondHz);
+  const model = pianoSoundModel(modelId);
+  const options = {
+    partialCount: model.partialCount,
+    rolloffDbPerOctave: model.rolloffDbPerOctave,
+    inharmonicity: model.inharmonicity,
+    noiseAmount: model.noiseAmount,
+  };
+  const lowerPartials = harmonicSpectrum(lowerHz, 0, options).filter((component) => component.kind === "partial");
+  const upperPartials = harmonicSpectrum(upperHz, 1, options).filter((component) => component.kind === "partial");
+  const pairs: Array<PianoPartialPair & { normalizedInteraction: number }> = [];
+  for (const lower of lowerPartials) {
+    for (const upper of upperPartials) {
+      const amplitudeProduct = lower.amplitude * upper.amplitude;
+      const contribution = pairRoughness(lower, upper);
+      pairs.push({
+        lowerPartial: lower.partialIndex!,
+        upperPartial: upper.partialIndex!,
+        lowerHz: lower.frequencyHz,
+        upperHz: upper.frequencyHz,
+        separationHz: Math.abs(lower.frequencyHz - upper.frequencyHz),
+        centsApart: Math.abs(1200 * Math.log2(lower.frequencyHz / upper.frequencyHz)),
+        contribution,
+        normalizedInteraction: amplitudeProduct > 0 ? contribution / amplitudeProduct : 0,
+      });
+    }
+  }
+  const alignedPairs = pairs
+    .filter((pair) => pair.centsApart <= 18)
+    .sort((first, second) => first.lowerHz - second.lowerHz)
+    .map(({ normalizedInteraction: _normalizedInteraction, ...pair }) => pair);
+  const interactionPairs = pairs
+    .filter((pair) => pair.centsApart > 18 && pair.normalizedInteraction >= 0.035)
+    .sort((first, second) => second.contribution - first.contribution)
+    .slice(0, 6)
+    .map(({ normalizedInteraction: _normalizedInteraction, ...pair }) => pair);
+  return {
+    lowerHz,
+    upperHz,
+    modelId,
+    lowerPartials,
+    upperPartials,
+    alignedPairs,
+    interactionPairs,
+    overlap: spectralOverlap(lowerPartials, upperPartials),
+    roughness: aggregateRoughness([...lowerPartials, ...upperPartials]),
+  };
 }

@@ -47,6 +47,8 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-labelledby="hud-phrase-compare-entry-title"/);
   assert.match(piano, /aria-label="Choose one phrase change to investigate"/);
   assert.match(piano, /aria-label="Five separate phrase comparison lenses"/);
+  assert.match(piano, /aria-labelledby="hud-partial-title"/);
+  assert.match(piano, /role="img" aria-label=\{summary\}/);
   assert.match(piano, /hud-phrase-change-reading[\s\S]*role="status" aria-live="polite"/);
   assert.match(piano, /role="group" aria-label=\{row\.label\}/);
   assert.match(piano, /role="status" aria-live="polite"/);
@@ -96,6 +98,8 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-gravity-counterfactual-chart i\.is-before[\s\S]*LinkText/);
   assert.match(css, /\.hud-phrase-lens-profile > article\.is-invariant[\s\S]*border-left/);
   assert.match(css, /\.hud-phrase-change-reading\.has-target[\s\S]*LinkText/);
+  assert.match(css, /\.hud-partial-link\.is-aligned[\s\S]*LinkText/);
+  assert.match(css, /\.hud-partial-link\.is-interaction[\s\S]*Highlight/);
   assert.match(css, /\.hud-phrase-report-rows button\[aria-pressed="true"\][\s\S]*Highlight/);
   assert.match(css, /\.piano-key\.is-sonority-target/);
   assert.match(css, /\.hud-sonority-question\.has-change[\s\S]*border-left/);
