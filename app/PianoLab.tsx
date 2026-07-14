@@ -33,6 +33,7 @@ import {
   interpretedChordNotes,
   intervalLandmark,
   landmarkTransitionProfile,
+  landmarkTranspositionProfile,
   matchesLandmarkStep,
   matchScaleFingerprint,
   nearbyScaleChords,
@@ -198,6 +199,11 @@ type PhraseCompareSession = {
   scaleId: PianoScale["id"];
   reports: Partial<Record<PhraseCompareDimension, PhraseCompareReport>>;
 };
+type LandmarkTransposeSession = {
+  pathId: LandmarkPathId;
+  sourceRootPitchClass: number;
+  targetRootPitchClass: number;
+};
 
 type MidiCallbacks = {
   onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
@@ -206,7 +212,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -222,6 +228,7 @@ type PersistedPianoSession = {
   resolutionForkSet?: ResolutionFork[] | null;
   landmarkPathId?: LandmarkPathId;
   landmarkStepIndex?: number;
+  landmarkTransposeSession?: LandmarkTransposeSession | null;
   soundModelId?: PianoSoundModelId;
   scaleWalkSession?: ScaleWalkSession | null;
   scaleFingerprintSession?: ScaleFingerprintSession | null;
@@ -2092,7 +2099,7 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   </section>;
 }
 
-function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundModelId, showConventions, onSelect, onReplay }: {
+function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundModelId, showConventions, transposeSession, onSelect, onReplay, onTranspose }: {
   path: LandmarkPath;
   stepIndex: number;
   targetNotes: number[];
@@ -2100,8 +2107,10 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
   scale: PianoScale;
   soundModelId: PianoSoundModelId;
   showConventions: boolean;
+  transposeSession: LandmarkTransposeSession | null;
   onSelect: (id: LandmarkPathId) => void;
   onReplay: () => void;
+  onTranspose: () => void;
 }) {
   const complete = stepIndex >= path.steps.length;
   const currentStep = complete ? null : path.steps[stepIndex];
@@ -2109,15 +2118,27 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
   const perception = targetNotes.length >= 2 ? sonorityPerceptionModel(targetNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
   const tendency = targetNotes.length ? tonalTendency(targetNotes, doMidi, scale) : null;
   const targetLabels = targetNotes.map((note) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale));
+  const transposeProfile = transposeSession?.pathId === path.id
+    ? landmarkTranspositionProfile(path, transposeSession.sourceRootPitchClass, transposeSession.targetRootPitchClass)
+    : null;
+  const doLabel = (pitchClass: number) => showConventions
+    ? CONVENTIONAL_PITCH_CLASSES[pitchClass]
+    : `${formatHz(frequencyFromMidi(nearestMidiForPitchClass(pitchClass, 60)))} Do`;
   const targetDescription = currentStep
     ? `Step ${stepIndex + 1} of ${path.steps.length}, ${currentStep.role}. Play ${targetLabels.join(", ")}.`
     : `${path.title} complete after ${path.steps.length} matched fields.`;
   return <section className="hud-landmark-coach" aria-labelledby="hud-landmark-title">
-    <div className="hud-panel-heading"><span>Generated · silent · transposable</span><strong id="hud-landmark-title">Playable landmark paths</strong><small>Choose an archetype, then supply every outlined field yourself. Do stays fixed; the HUD advances only after an exact pitch-class match in any octave.</small></div>
+    <div className="hud-panel-heading"><span>Generated · silent · transposable</span><strong id="hud-landmark-title">Playable landmark paths</strong><small>Choose an archetype, then supply every outlined field yourself. Do stays fixed during one pass; changing center restarts at field one. The HUD advances only after an exact pitch-class match in any octave.</small></div>
     <div className="hud-landmark-selector" aria-label="Choose a landmark path">
       {LANDMARK_PATHS.map((candidate) => <button key={candidate.id} type="button" aria-pressed={candidate.id === path.id} onClick={() => onSelect(candidate.id)}><span>{candidate.family}</span><strong>{candidate.title}</strong><small>{candidate.steps.length} fields</small></button>)}
     </div>
     <div className="hud-landmark-question"><span>one listening question</span><strong>{path.question}</strong><small>{path.provenance}</small></div>
+    {transposeProfile ? <div className="hud-landmark-transpose" role="status" aria-label={`Transposition comparison from ${doLabel(transposeProfile.sourceDoPitchClass)} to ${doLabel(transposeProfile.targetDoPitchClass)}`}>
+      <div><span>same path, new center</span><strong>{doLabel(transposeProfile.sourceDoPitchClass)} <i aria-hidden="true">→</i> {doLabel(transposeProfile.targetDoPitchClass)}</strong><small>Every absolute pitch moved {transposeProfile.semitoneShift} equal-key step{transposeProfile.semitoneShift === 1 ? "" : "s"}; begin again at field 1.</small></div>
+      <p><span>changed</span><strong>Do and every physical target frequency</strong></p>
+      <p><span>held constant</span><strong>field order, roles, root offsets, and internal interval shapes</strong></p>
+      <p><span>listen for</span><strong>Does the route still feel directed when its register and center move?</strong></p>
+    </div> : null}
     <ol className="hud-landmark-progress" aria-label={`${path.title} progress`}>
       {path.steps.map((step, index) => <li key={step.id} className={index < stepIndex ? "is-complete" : index === stepIndex ? "is-current" : ""} aria-current={index === stepIndex ? "step" : undefined}>
         <span>{index < stepIndex ? "✓" : index + 1}</span>
@@ -2127,9 +2148,9 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
     </ol>
     <div className={`hud-landmark-target ${complete ? "is-complete" : ""}`} role="status" aria-label={targetDescription}>
       <span>{complete ? "path complete" : `field ${stepIndex + 1} of ${path.steps.length}`}</span>
-      <strong>{complete ? "Replay it: same relationships, more embodied" : `${currentStep!.role} · ${targetLabels.join(" · ")}`}</strong>
-      <small>{complete ? "The archetype is a reusable relationship path, not a fixed key or a claim about every piece in this style." : `${currentStep!.prompt} Release the prior field, then play the dashed keys together or as one compact roll.`}</small>
-      {complete ? <button type="button" onClick={onReplay}>Replay path</button> : null}
+      <strong>{complete ? transposeProfile ? "Same route completed from two centers" : "Replay it here—or move the whole route" : `${currentStep!.role} · ${targetLabels.join(" · ")}`}</strong>
+      <small>{complete ? transposeProfile ? "The center and frequencies changed; the ordered interval relationships did not. Similarity of your felt experience remains yours to judge." : "The archetype is a reusable relationship path, not a fixed key or a claim about every piece in this style." : `${currentStep!.prompt} Release the prior field, then play the dashed keys together or as one compact roll.`}</small>
+      {complete ? <div className="hud-landmark-actions"><button type="button" onClick={onReplay}>Replay here</button><button type="button" onClick={onTranspose}>Move to fifths neighbor</button></div> : null}
     </div>
     {!complete ? <div className="hud-landmark-evidence" aria-label="Current landmark transition evidence">
       <span><small>carried tones</small><strong>{transition ? transition.commonPitchClassCount : "—"}</strong><em>{transition ? "same pitch classes" : "first-field baseline"}</em></span>
@@ -2374,6 +2395,7 @@ export function PianoLab() {
   const [resolutionForkSet, setResolutionForkSet] = useState<ResolutionFork[] | null>(null);
   const [landmarkPathId, setLandmarkPathId] = useState<LandmarkPathId>("pop-loop");
   const [landmarkStepIndex, setLandmarkStepIndex] = useState(0);
+  const [landmarkTransposeSession, setLandmarkTransposeSession] = useState<LandmarkTransposeSession | null>(null);
   const [soundModelId, setSoundModelId] = useState<PianoSoundModelId>(DEFAULT_PIANO_SOUND_MODEL_ID);
   const [experiencePhrase, setExperiencePhrase] = useState<HudNoteEvent[]>([]);
   const [experienceDraft, setExperienceDraft] = useState<Partial<PhraseCharacterRatings>>({});
@@ -2422,7 +2444,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -2454,6 +2476,14 @@ export function PianoLab() {
             setResolutionForkSet(saved.resolutionForkSet ?? null);
             if (LANDMARK_PATHS.some((path) => path.id === saved.landmarkPathId)) setLandmarkPathId(saved.landmarkPathId!);
             setLandmarkStepIndex(Math.max(0, Math.round(saved.landmarkStepIndex ?? 0)));
+            if (saved.landmarkTransposeSession
+              && LANDMARK_PATHS.some((path) => path.id === saved.landmarkTransposeSession!.pathId)
+              && Number.isInteger(saved.landmarkTransposeSession.sourceRootPitchClass)
+              && saved.landmarkTransposeSession.sourceRootPitchClass >= 0
+              && saved.landmarkTransposeSession.sourceRootPitchClass < 12
+              && Number.isInteger(saved.landmarkTransposeSession.targetRootPitchClass)
+              && saved.landmarkTransposeSession.targetRootPitchClass >= 0
+              && saved.landmarkTransposeSession.targetRootPitchClass < 12) setLandmarkTransposeSession(saved.landmarkTransposeSession);
             if (isPianoSoundModelId(saved.soundModelId)) setSoundModelId(saved.soundModelId);
             if (saved.scaleWalkSession
               && Number.isInteger(saved.scaleWalkSession.anchorEventId)
@@ -2495,9 +2525,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 13, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 14, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -2776,6 +2806,7 @@ export function PianoLab() {
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setLandmarkStepIndex(0);
+    setLandmarkTransposeSession(null);
     landmarkLastMatchIdRef.current = 0;
     setExperiencePhrase([]);
     setExperienceDraft({});
@@ -2832,6 +2863,7 @@ export function PianoLab() {
 
   const chooseDoFromFifths = (rootPitchClass: number) => {
     const pitchClass = pitchClassFromMidi(rootPitchClass);
+    const currentPitchClass = pitchClassFromMidi(doMidi);
     setScaleWalkSession(null);
     setControlledSonoritySession(null);
     setResolutionTarget(null);
@@ -2841,6 +2873,11 @@ export function PianoLab() {
     setLockedScaleId(scale.id);
     setLockedDoMidi(nearestMidiForPitchClass(pitchClass, 60));
     setFrameMode("locked");
+    if (focusLens === "paths" && pitchClass !== currentPitchClass) {
+      setLandmarkTransposeSession({ pathId: landmarkPath.id, sourceRootPitchClass: currentPitchClass, targetRootPitchClass: pitchClass });
+      setLandmarkStepIndex(0);
+      landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
+    }
     const url = new URL(window.location.href);
     url.searchParams.set("pianoDo", String(pitchClass));
     url.searchParams.set("pianoScale", scale.id);
@@ -3165,6 +3202,7 @@ export function PianoLab() {
     setFrameMode("locked");
     setLandmarkPathId(id);
     setLandmarkStepIndex(0);
+    setLandmarkTransposeSession(null);
     landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
     setGhostChord(null);
     setGhostNotes([]);
@@ -3175,6 +3213,25 @@ export function PianoLab() {
   const replayLandmarkPath = () => {
     setLandmarkStepIndex(0);
     landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
+  };
+
+  const transposeLandmarkPath = () => {
+    const sourceRootPitchClass = pitchClassFromMidi(doMidi);
+    const targetRootPitchClass = (sourceRootPitchClass + 7) % 12;
+    setLandmarkTransposeSession({ pathId: landmarkPath.id, sourceRootPitchClass, targetRootPitchClass });
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(nearestMidiForPitchClass(targetRootPitchClass, 60));
+    setFrameMode("locked");
+    setLandmarkStepIndex(0);
+    landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
+    setGhostChord(null);
+    setGhostNotes([]);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoDo", String(targetRootPitchClass));
+    url.searchParams.set("pianoScale", scale.id);
+    window.history.replaceState(null, "", url);
   };
 
   const chooseGhostChord = (chord: NearbyChord) => {
@@ -3375,7 +3432,7 @@ export function PianoLab() {
           <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         </> : null}
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
-      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
+      </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
       </> : null}

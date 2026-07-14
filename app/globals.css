@@ -7933,6 +7933,14 @@ footer a {
 .hud-landmark-question span { color: var(--muted); font-size: .7rem; text-transform: uppercase; }
 .hud-landmark-question strong { font-family: var(--font-display), Georgia, serif; font-size: 1.05rem; font-weight: 400; }
 .hud-landmark-question small { max-width: 92ch; color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.hud-landmark-transpose { display: grid; grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr)); margin: 0 18px 15px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--piano-blue) 5%, transparent); }
+.hud-landmark-transpose > * { display: grid; min-width: 0; gap: 4px; margin: 0; padding: 11px 12px; }
+.hud-landmark-transpose > * + * { border-left: 1px solid var(--line); }
+.hud-landmark-transpose span { color: var(--piano-blue); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-landmark-transpose strong { font-size: .73rem; font-weight: 500; line-height: 1.4; }
+.hud-landmark-transpose > div strong { font-family: var(--font-display), Georgia, serif; font-size: 1.08rem; font-weight: 400; }
+.hud-landmark-transpose i { color: var(--piano-gold); font-style: normal; }
+.hud-landmark-transpose small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-landmark-progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); margin: 0; padding: 0 18px 15px; list-style: none; }
 .hud-landmark-progress li { display: grid; grid-template-columns: auto 1fr; min-width: 0; gap: 2px 8px; align-items: center; padding: 9px 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); }
 .hud-landmark-progress li + li { border-left: 1px solid var(--line); }
@@ -7949,6 +7957,7 @@ footer a {
 .hud-landmark-target strong { font-family: var(--font-display), Georgia, serif; font-size: 1.18rem; font-weight: 400; }
 .hud-landmark-target small { max-width: 90ch; color: var(--muted); font-size: .72rem; line-height: 1.45; }
 .hud-landmark-target button { justify-self: start; min-height: 34px; margin-top: 5px; padding: 0 11px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .72rem; cursor: pointer; }
+.hud-landmark-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .hud-landmark-evidence { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 18px 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .hud-landmark-evidence > span { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--line); }
 .hud-landmark-evidence > span:last-child { border-right: 0; }
@@ -8203,6 +8212,10 @@ footer a {
   .hud-landmark-evidence { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hud-landmark-evidence > span:nth-child(3) { border-right: 0; }
   .hud-landmark-evidence > span:nth-child(n + 4) { border-top: 1px solid var(--line); }
+  .hud-landmark-transpose { grid-template-columns: 1fr 1fr; }
+  .hud-landmark-transpose > * + * { border-left: 0; }
+  .hud-landmark-transpose > *:nth-child(even) { border-left: 1px solid var(--line); }
+  .hud-landmark-transpose > *:nth-child(n + 3) { border-top: 1px solid var(--line); }
   .hud-experience-main { grid-template-columns: 1fr; }
   .hud-character-question { border-top: 1px solid var(--line); border-left: 0; }
   .hud-character-evidence { grid-template-columns: 1fr; }
@@ -8338,6 +8351,9 @@ footer a {
   .hud-landmark-selector button:nth-child(n + 3) { border-top: 1px solid var(--line); }
   .hud-landmark-progress { grid-template-columns: 1fr 1fr; }
   .hud-landmark-progress li:nth-child(odd) { border-left: 0; }
+  .hud-landmark-transpose { grid-template-columns: 1fr; }
+  .hud-landmark-transpose > *:nth-child(even) { border-left: 0; }
+  .hud-landmark-transpose > * + * { border-top: 1px solid var(--line); }
   .hud-landmark-evidence { grid-template-columns: 1fr; }
   .hud-landmark-evidence > span { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-landmark-evidence > span:last-child { border-bottom: 0; }
@@ -8410,6 +8426,7 @@ footer a {
   .hud-motif-target { fill: Canvas; stroke: CanvasText; }
   .hud-landmark-selector button[aria-pressed="true"],
   .hud-landmark-progress li.is-current { border-color: Highlight; background: Highlight; color: HighlightText; }
+  .hud-landmark-transpose { border-color: CanvasText; background: Canvas; }
   .hud-character-point,
   .hud-character-uncertainty,
   .hud-character-current circle { fill: Canvas; stroke: CanvasText; }

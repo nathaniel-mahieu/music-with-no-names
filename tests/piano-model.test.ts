@@ -24,6 +24,7 @@ import {
   inferScaleCandidates,
   intervalLandmark,
   landmarkStepPitchClasses,
+  landmarkTranspositionProfile,
   landmarkTransitionProfile,
   matchesLandmarkStep,
   matchScaleFingerprint,
@@ -399,6 +400,21 @@ test("transposes a landmark as one relationship-preserving path", () => {
   assert.deepEqual(inC, [2, 7, 11]);
   assert.deepEqual(inD, [1, 4, 9]);
   assert.deepEqual(landmarkStepPitchClasses(path, 99, 0), []);
+});
+
+test("makes landmark transposition changes and invariants explicit", () => {
+  const path = LANDMARK_PATHS.find((item) => item.id === "pop-loop")!;
+  const profile = landmarkTranspositionProfile(path, 0, 7);
+  assert.equal(profile.semitoneShift, 7);
+  assert.deepEqual(profile.roles, path.steps.map((step) => step.role));
+  assert.deepEqual(profile.rootOffsets, [0, 7, 9, 5]);
+  assert.deepEqual(profile.pitchOffsets, path.steps.map((step) => step.pitchOffsets));
+  assert.deepEqual(profile.sourcePitchClasses[0], [0, 4, 7]);
+  assert.deepEqual(profile.targetPitchClasses[0], [2, 7, 11]);
+  for (let step = 0; step < path.steps.length; step += 1) {
+    assert.deepEqual(profile.targetPitchClasses[step], profile.sourcePitchClasses[step].map((pitchClass) => (pitchClass + 7) % 12).sort((a, b) => a - b));
+  }
+  assert.deepEqual(landmarkTranspositionProfile(path, -12, 19).targetPitchClasses, profile.targetPitchClasses);
 });
 
 test("matches landmark targets by pitch class while keeping voicing stable", () => {

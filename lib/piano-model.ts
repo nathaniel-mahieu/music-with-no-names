@@ -1740,6 +1740,22 @@ export function matchesLandmarkStep(path: LandmarkPath, stepIndex: number, playe
   return target.length > 0 && target.length === played.length && target.every((pitchClass, index) => pitchClass === played[index]);
 }
 
+export function landmarkTranspositionProfile(path: LandmarkPath, sourceDoPitchClass: number, targetDoPitchClass: number) {
+  const source = modulo(Math.round(sourceDoPitchClass), 12);
+  const target = modulo(Math.round(targetDoPitchClass), 12);
+  const shift = modulo(target - source, 12);
+  return {
+    sourceDoPitchClass: source,
+    targetDoPitchClass: target,
+    semitoneShift: shift,
+    roles: path.steps.map((step) => step.role),
+    rootOffsets: path.steps.map((step) => step.rootOffset),
+    pitchOffsets: path.steps.map((step) => [...step.pitchOffsets]),
+    sourcePitchClasses: path.steps.map((_, index) => landmarkStepPitchClasses(path, index, source)),
+    targetPitchClasses: path.steps.map((_, index) => landmarkStepPitchClasses(path, index, target)),
+  };
+}
+
 /** Produces one stable, compact voicing sequence so ghost keys never shift while a chord is being entered. */
 export function voiceLandmarkPath(path: LandmarkPath, doMidi: number) {
   if (!Number.isFinite(doMidi)) return [];
