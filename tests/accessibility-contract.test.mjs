@@ -12,10 +12,11 @@ test("every learning lab exposes a named semantic region", async () => {
 });
 
 test("dynamic visuals and status changes expose nonvisual descriptions", async () => {
-  const [ratio, scale, piano, harmony, rhythm, recording, journey, atlas] = await Promise.all([
+  const [ratio, scale, piano, ear, harmony, rhythm, recording, journey, atlas] = await Promise.all([
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/EarLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RecordingLab.tsx", import.meta.url), "utf8"),
@@ -66,6 +67,10 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Motion learning question"/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
+  assert.match(ear, /aria-labelledby="live-ear-title"/);
+  assert.match(ear, /role="img" aria-label=\{summary\}/);
+  assert.match(ear, /aria-label="Five separate lenses for this interval and its assumed sounds"/);
+  assert.match(ear, /<details className="ear-authoring-disclosure"/);
   assert.match(harmony, /aria-labelledby="live-harmony-title"/);
   assert.match(harmony, /role="img" aria-label=\{accessibleSummary\}/);
   assert.match(harmony, /aria-label="Five separate evidence lenses for the chord change"/);
@@ -83,11 +88,12 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
 });
 
 test("focus, reduced-motion, and non-color contracts are present", async () => {
-  const [css, ratio, scale, piano, harmony, rhythm, journey] = await Promise.all([
+  const [css, ratio, scale, piano, ear, harmony, rhythm, journey] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/EarLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/HarmonyLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/JourneyLab.tsx", import.meta.url), "utf8"),
@@ -139,6 +145,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.journey-live-thread > li\.is-new[\s\S]*border-color: Highlight/);
   assert.match(css, /\.live-harmony-note\.is-previous[\s\S]*stroke: LinkText/);
   assert.match(css, /\.live-harmony-note\.is-current[\s\S]*fill: Highlight/);
+  assert.match(css, /\.live-ear-roughness circle[\s\S]*stroke: Highlight/);
+  assert.match(css, /\.live-ear-harmonicity rect[\s\S]*stroke: LinkText/);
+  assert.match(css, /\.live-ear-fusion path[\s\S]*fill: Highlight/);
+  assert.doesNotMatch(ear, /tabIndex=\{?[1-9]/);
   assert.doesNotMatch(harmony, /tabIndex=\{?[1-9]/);
   assert.doesNotMatch(journey, /tabIndex=\{?[1-9]/);
 });

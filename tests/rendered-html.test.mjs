@@ -236,7 +236,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /searchParams\.set\("lab", lab\)/);
   assert.match(pianoLab, /tonal pull, arrival evidence/);
   assert.doesNotMatch(pianoLab, /AudioContext|createOscillator|synth\.enable/);
-  assert.match(earLab, /Hear how timbre, register, and level change an interval/);
+  assert.match(earLab, /Keep the relationship\. Change the imagined sound/);
+  assert.match(earLab, /Which conclusions survive when only the assumed sound changes/);
+  assert.match(earLab, /Five separate lenses for this interval and its assumed sounds/);
+  assert.match(earLab, /Explore the generated hearing instrument/);
   assert.match(earLab, /modelPredictions/);
   assert.match(earLab, /humanRatings/);
   assert.match(earLab, /Controlled auditory A\/B experiments/);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   AUDITORY_BAND_CENTERS_HZ,
   aggregateRoughness,
@@ -10,6 +10,8 @@ import {
   spectralOverlap,
 } from "@/lib/auditory-model";
 import { configureSafetyCompressor, equalPowerMixGains, loudnessControlGain } from "@/lib/audio-level";
+import { liveEarIntervalProfile, type LiveEarIntervalProfile } from "@/lib/live-ear";
+import { PIANO_SESSION_KEY, parsePianoPhraseSpecimen, type PianoPhraseSpecimenEvent } from "@/lib/piano-session";
 
 type EarConfig = {
   referenceHz: number;
@@ -72,13 +74,127 @@ function modelScale(value: number) {
   return Math.round(Math.max(0, Math.min(1, value)) * 100);
 }
 
-export function EarLab() {
+const LIVE_EAR_METRICS = [
+  { key: "roughness", label: "Sensory friction", shape: "circle" },
+  { key: "harmonicity", label: "Harmonic fit", shape: "square" },
+  { key: "fusion", label: "Fusion hypothesis", shape: "diamond" },
+] as const;
+
+function signedStepLabel(steps: number) {
+  if (steps === 0) return "same key position";
+  return `${steps > 0 ? "+" : "−"}${Math.abs(steps)} equal-key step${Math.abs(steps) === 1 ? "" : "s"}`;
+}
+
+function strongestModelDifference(profile: LiveEarIntervalProfile) {
+  return LIVE_EAR_METRICS.map((metric) => {
+    const values = profile.modelReadings.map((reading) => reading[metric.key]);
+    return { label: metric.label, spread: Math.max(...values) - Math.min(...values) };
+  }).sort((first, second) => second.spread - first.spread)[0];
+}
+
+function LiveEarBridge({ events, hydrated, onNavigateToPiano }: {
+  events: PianoPhraseSpecimenEvent[] | null;
+  hydrated: boolean;
+  onNavigateToPiano?: () => void;
+}) {
+  const profile = useMemo(() => liveEarIntervalProfile(events ?? []), [events]);
+  const interactionReady = profile?.interactionStatus === "overlap";
+  const strongestDifference = interactionReady ? strongestModelDifference(profile) : null;
+  const summary = interactionReady
+    ? `${profile.steps} equal-key steps and a ${profile.equalFrequencyRatio.toFixed(3)} to one frequency ratio stay fixed. Four assumed sound models produce ${LIVE_EAR_METRICS.map((metric) => `${metric.label.toLowerCase()} values ${profile.modelReadings.map((reading) => modelScale(reading[metric.key])).join(", ")}`).join("; ")}.`
+    : profile
+      ? `${profile.steps} equal-key steps and a ${profile.equalFrequencyRatio.toFixed(3)} to one frequency ratio were measured, but ${profile.interactionStatus === "separate" ? "the first attack ended before the second began" : "release timing is missing"}, so no simultaneous spectral-interaction result is shown.`
+      : "Play two attacks in Piano to compare one interval relationship with its physical realization.";
+
+  return <section className="live-ear-bridge" aria-labelledby="live-ear-title">
+    <div className="live-ear-heading">
+      <div><span>Latest Piano interval · one question</span><h3 id="live-ear-title">Which conclusions survive when only the assumed sound changes?</h3></div>
+      <p>MIDI supplies two fundamentals and timing—not overtones. The relationship can be measured directly; every auditory result below must declare a spectrum.</p>
+    </div>
+
+    {!hydrated ? <p className="live-ear-loading" role="status">Looking for the retained Piano phrase…</p> : profile ? <>
+      <div className="live-ear-invariants" aria-label="Measured interval invariants">
+        <span><small>hand movement</small><strong>{signedStepLabel(profile.signedSteps)}</strong></span>
+        <span><small>frequency relationship</small><strong>{profile.equalFrequencyRatio.toFixed(3)} : 1</strong></span>
+        <span><small>physical realization</small><strong>{profile.lowerHz.toFixed(1)} → {profile.upperHz.toFixed(1)} Hz</strong></span>
+        <span><small>simultaneous evidence</small><strong>{profile.interactionStatus === "overlap" ? `${Math.round(profile.overlapMs ?? 0)} ms overlap` : profile.interactionStatus === "separate" ? "separated in time" : "release unknown"}</strong></span>
+      </div>
+
+      {interactionReady ? <>
+        <div className="live-ear-comparison">
+          <svg viewBox="0 0 780 300" role="img" aria-label={summary}>
+            <title>One performed interval under four assumed spectra</title>
+            <desc>{summary}</desc>
+            {profile.modelReadings.map((reading, index) => {
+              const x = 180 + index * 170;
+              return <g key={reading.id}>
+                <text x={x} y="24" className="live-ear-model-label">{reading.shortLabel}</text>
+                <text x={x} y="42" className="live-ear-partial-label">{reading.partialCount} partial{reading.partialCount === 1 ? "" : "s"}</text>
+              </g>;
+            })}
+            {LIVE_EAR_METRICS.map((metric, row) => {
+              const baseline = 104 + row * 88;
+              const points = profile.modelReadings.map((reading, index) => ({ x: 180 + index * 170, y: baseline - reading[metric.key] * 52, value: modelScale(reading[metric.key]) }));
+              return <g key={metric.key} className={`live-ear-metric live-ear-${metric.key}`}>
+                <text x="8" y={baseline - 18} className="live-ear-metric-label">{metric.label}</text>
+                <line x1="180" x2="690" y1={baseline} y2={baseline} className="live-ear-rail" />
+                <polyline points={points.map((point) => `${point.x},${point.y}`).join(" ")} className="live-ear-profile-line" />
+                {points.map((point, index) => <g key={profile.modelReadings[index].id}>
+                  {metric.shape === "circle" ? <circle cx={point.x} cy={point.y} r="7" /> : metric.shape === "square" ? <rect x={point.x - 7} y={point.y - 7} width="14" height="14" /> : <path d={`M ${point.x} ${point.y - 9} L ${point.x + 9} ${point.y} L ${point.x} ${point.y + 9} L ${point.x - 9} ${point.y} Z`} />}
+                  <text x={point.x} y={point.y - 13} className="live-ear-value">{point.value}</text>
+                </g>)}
+              </g>;
+            })}
+          </svg>
+          <div className="live-ear-model-notes" aria-label="Declared spectrum details">
+            {profile.modelReadings.map((reading) => <article key={reading.id}><span>{reading.shortLabel}</span><strong>{reading.alignedPairCount} aligned · {reading.interactionPairCount} near</strong><small>{reading.description}</small></article>)}
+          </div>
+        </div>
+
+        <div className="live-ear-lenses" role="group" aria-label="Five separate lenses for this interval and its assumed sounds">
+          <article><span>Sound</span><em>measured MIDI</em><strong>{profile.lowerHz.toFixed(1)} + {profile.upperHz.toFixed(1)} Hz</strong><small>{Math.round(profile.overlapMs ?? 0)} ms of overlap is proven by attack and release timing. MIDI attack strength is not acoustic loudness.</small></article>
+          <article><span>Relationships</span><em>measured</em><strong>{profile.steps} steps · {profile.equalFrequencyRatio.toFixed(3)} : 1</strong><small>This equal-key relationship survives every spectrum assumption shown here.</small></article>
+          <article><span>Motion</span><em>measured</em><strong>{signedStepLabel(profile.signedSteps)}</strong><small>The second attack began {Math.round(profile.second.onsetMs - profile.first.onsetMs)} ms later. Changing an assumed spectrum does not change that gesture.</small></article>
+          <article><span>Auditory</span><em>modeled</em><strong>{strongestDifference?.label ?? "Model-dependent"}</strong><small>{strongestDifference ? `Largest displayed model spread: ${Math.round(strongestDifference.spread * 100)} points.` : "The model readings remain separate."} These are teaching proxies, not the connected instrument.</small></article>
+          <article><span>Experience</span><em>listener only</em><strong>Not inferred</strong><small>Friction, fit, and fusion do not determine tension, beauty, liking, or what this interval meant in your phrase.</small></article>
+        </div>
+      </> : <div className="live-ear-timing-boundary" role="status">
+        <div><strong>{profile.interactionStatus === "separate" ? "This was a melodic interval, not a simultaneous field." : "The interval is known; overlap is not."}</strong><p>{profile.interactionStatus === "separate" ? "The first attack ended before the second began. Its distance and contour remain meaningful, but a simultaneous roughness or partial-collision reading would answer the wrong question." : "The first attack has no complete release time. The bridge will not assume that the two spectra overlapped."}</p></div>
+        {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Hold the first key into the second</button> : null}
+      </div>}
+
+      <div className="live-ear-boundary">
+        <p><strong>What changed here:</strong> only the assumed overtone pattern. <strong>What stayed fixed:</strong> MIDI keys, fundamentals, interval, timing, and your actual response. None of the four models measures a keyboard patch, DAW, speaker, room, or ear.</p>
+        {onNavigateToPiano && interactionReady ? <button type="button" onClick={onNavigateToPiano}>Replay with different overlap or register</button> : null}
+      </div>
+    </> : <div className="live-ear-empty">
+      <div><strong>No retained interval yet</strong><p>Play two attacks in Piano. Their physical spacing can be compared immediately; simultaneous auditory evidence appears only when release timing proves that the sounds overlapped.</p></div>
+      {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Play two attacks in Piano</button> : null}
+    </div>}
+  </section>;
+}
+
+export function EarLab({ onNavigateToPiano }: { onNavigateToPiano?: () => void }) {
+  const [phraseEvents, setPhraseEvents] = useState<PianoPhraseSpecimenEvent[] | null>(null);
+  const [phraseHydrated, setPhraseHydrated] = useState(false);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioMessage, setAudioMessage] = useState("Audio is off until you choose to hear this field.");
   const [ratings, setRatings] = useState<Record<RatingKey, number>>({ smoothness: 55, fusion: 55, tension: 45, liking: 55 });
   const [savedCount, setSavedCount] = useState(0);
   const playbackRef = useRef<EarPlayback | null>(null);
+
+  useEffect(() => {
+    const hydrationTimer = window.setTimeout(() => {
+      try {
+        setPhraseEvents(parsePianoPhraseSpecimen(window.sessionStorage.getItem(PIANO_SESSION_KEY)) ?? []);
+      } catch {
+        setPhraseEvents([]);
+      }
+      setPhraseHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(hydrationTimer);
+  }, []);
 
   const spectrumOptions = useMemo(() => ({
     partialCount: config.partialCount,
@@ -211,9 +327,15 @@ export function EarLab() {
   return (
     <section className="advanced-lab ear-lab" aria-labelledby="ear-title">
       <div className="lab-intro ear-intro">
-        <div><p className="section-kicker">Ear Lab · change one part of the sound</p><h2 id="ear-title">Hear how timbre, register, and level change an interval.</h2></div>
-        <p>Try the ready-made comparisons or adjust one control. The model describes the sound; your ratings describe your experience.</p>
+        <div><p className="section-kicker">Ear Lab · your interval under declared assumptions</p><h2 id="ear-title">Keep the relationship. Change the imagined sound.</h2></div>
+        <p>Begin with the latest two Piano attacks. See which facts come from MIDI, which sensory readings depend on an assumed spectrum, and which answers belong only to you.</p>
       </div>
+
+      <LiveEarBridge events={phraseEvents} hydrated={phraseHydrated} onNavigateToPiano={onNavigateToPiano} />
+
+      <details className="ear-authoring-disclosure" onToggle={(event) => { if (!event.currentTarget.open && isPlaying) stop(); }}>
+        <summary><span>Explore the generated hearing instrument</span><small>Optional synthesis, controlled variants, nine sound controls, detailed models, and listener reports</small></summary>
+        <div className="ear-authoring-content">
 
       <div className="ear-experiments" aria-label="Controlled auditory A/B experiments">
         {CONTROLLED_EXPERIMENTS.map((experiment) => <article key={experiment.factor}><span>{experiment.factor}</span><div>{experiment.variants.map((variant) => <button key={variant.label} type="button" onClick={() => chooseExperiment(variant)}><strong>{variant.label}</strong><small>{variant.note}</small></button>)}</div></article>)}
@@ -264,6 +386,8 @@ export function EarLab() {
       </div>
 
       <div className="ear-boundary"><strong>Model boundary</strong><p>The roughness equation is a documented Plomp–Levelt/Sethares-style interaction curve. Harmonicity uses a separate template search. The fusion number is an intentionally simple, inspectable hypothesis; your fusion and liking reports remain independent evidence. None of these establishes musical goodness.</p></div>
+        </div>
+      </details>
     </section>
   );
 }

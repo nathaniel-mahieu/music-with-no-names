@@ -132,13 +132,13 @@ const LAB_COPY: Record<
     principleBottom: "physical evidence is not a quality score",
   },
   ear: {
-    eyebrow: "How sound changes in an ear",
-    title: "The same interval can sound different in a new timbre or register.",
+    eyebrow: "Test what belongs to the interval",
+    title: "Keep the keys. Change the assumed sound.",
     description:
-      "Change overtones, pitch range, noise, level, and attack. Compare the model’s estimates with what you actually hear.",
-    principleTop: "Same interval",
-    principleMain: "different hearing",
-    principleBottom: "with timbre, register, and level",
+      "Carry your latest Piano interval into four declared sound assumptions. Separate invariant spacing and timing from model-dependent friction, harmonic fit, fusion, and your own experience.",
+    principleTop: "Same MIDI interval",
+    principleMain: "≠ same spectrum",
+    principleBottom: "actual hearing remains unmeasured",
   },
   harmony: {
     eyebrow: "Follow your latest chord change",
@@ -759,7 +759,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.54
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.55
         </div>
       </header>
 
@@ -1009,7 +1009,7 @@ export function RatioLab() {
         ) : activeLab === "piano" ? (
           <PianoLab />
         ) : activeLab === "ear" ? (
-          <EarLab />
+          <EarLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "harmony" ? (
           <HarmonyLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "rhythm" ? (
