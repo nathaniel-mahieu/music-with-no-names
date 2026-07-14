@@ -4,14 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import {
   eventsInSelection,
   incrementalPredictionTrace,
+  liveJourneyPhraseProfile,
   localGesturePrediction,
   predictionTraceWithPrior,
   selfSimilarityMatrix,
   transformedRecurrence,
   type EventSelection,
   type MusicalEvent,
+  type LiveJourneyStep,
 } from "@/lib/musical-sequence";
 import { SYNTH_MASTER_GAIN, configureSafetyCompressor } from "@/lib/audio-level";
+import { PIANO_SESSION_KEY, parsePianoPhraseSpecimen, type PianoPhraseSpecimenEvent } from "@/lib/piano-session";
 
 type Lens = "original" | "repeat" | "variation" | "unexpected" | "delay";
 type PredictionModel = "piece" | "synthetic" | "personal";
@@ -91,7 +94,100 @@ function featureValue(key: (typeof FEATURE_LANES)[number]["key"], index: number,
   return clamp(values[key]);
 }
 
-export function JourneyLab() {
+function journeyShapeLabel(step: LiveJourneyStep) {
+  if (step.pitchOffsets.length === 1) return "single";
+  const visible = step.pitchOffsets.slice(0, 5).join("·");
+  return `shape ${visible}${step.pitchOffsets.length > 5 ? ` +${step.pitchOffsets.length - 5}` : ""}`;
+}
+
+function journeyMoveLabel(step: LiveJourneyStep) {
+  if (step.bassMove == null) return "start";
+  if (step.bassMove === 0) return "bass held";
+  return `bass ${step.bassMove > 0 ? "+" : ""}${step.bassMove} keys`;
+}
+
+function journeyExpectationLabel(step: LiveJourneyStep) {
+  if (step.expectationState === "opening") return "opening";
+  if (step.expectationState === "open") return "no precedent";
+  if (step.expectationState === "new") return "new continuation";
+  if (step.alternativeCount <= 1) return "seen continuation";
+  return `one of ${step.alternativeCount}`;
+}
+
+function LivePhraseJourneyBridge({
+  phrase,
+  hydrated,
+  onNavigateToPiano,
+}: {
+  phrase: PianoPhraseSpecimenEvent[];
+  hydrated: boolean;
+  onNavigateToPiano?: () => void;
+}) {
+  const profile = useMemo(() => liveJourneyPhraseProfile(phrase), [phrase]);
+  const visibleSteps = profile?.steps.slice(-8) ?? [];
+  const last = profile?.steps.at(-1) ?? null;
+  const beforeLast = profile && profile.steps.length > 1 ? profile.steps.at(-2)! : null;
+  const lastReading = !last || !beforeLast
+    ? "The phrase needs another onset group before a transition can be read."
+    : last.expectationState === "known"
+      ? `Before group ${last.index + 1}, ${journeyShapeLabel(beforeLast)} · ${journeyMoveLabel(beforeLast)} had ${last.alternativeCount} learned continuation${last.alternativeCount === 1 ? "" : "s"}. This realized path held ${Math.round((last.actualProbability ?? 0) * 100)}% of that phrase-local evidence.`
+      : last.expectationState === "new"
+        ? `Before group ${last.index + 1}, ${journeyShapeLabel(beforeLast)} · ${journeyMoveLabel(beforeLast)} had ${last.alternativeCount} learned continuation${last.alternativeCount === 1 ? "" : "s"}, but this one was absent. The event now becomes one new observation for later in the phrase.`
+        : `Before group ${last.index + 1}, ${journeyShapeLabel(beforeLast)} · ${journeyMoveLabel(beforeLast)} had not yet led anywhere earlier in this phrase. The model stays open rather than inventing an expectation.`;
+  const accessibleTrail = visibleSteps.map((step) => `Group ${step.index + 1}: ${journeyShapeLabel(step)}, ${journeyMoveLabel(step)}, ${step.gapMultiple == null ? "opening" : `${step.gapMultiple.toFixed(2)} local time units`}, ${journeyExpectationLabel(step)}`).join(". ");
+  return (
+    <section className="journey-live-bridge" aria-labelledby="journey-live-title">
+      <div className="journey-live-heading">
+        <div>
+          <span className="workspace-label">Live phrase · piece-local memory</span>
+          <h3 id="journey-live-title">Where did your phrase teach itself what might come next?</h3>
+        </div>
+        <p>Each onset group becomes a field shape, bass move, and relative-time step. Only earlier transitions in this phrase may form an expectation.</p>
+      </div>
+
+      {!hydrated ? (
+        <p className="journey-live-status" role="status">Reading the retained phrase…</p>
+      ) : profile ? (
+        <>
+          <p className="journey-live-status">{profile.attackCount} attacks → {profile.groupCount} onset groups · latest {visibleSteps.length} shown · {profile.learnedStepCount} continuation{profile.learnedStepCount === 1 ? "" : "s"} had earlier evidence</p>
+          <div className="journey-live-figure" role="img" aria-label={`Piece-local expectation trail. ${accessibleTrail}.`}>
+            <ol className="journey-live-thread">
+              {visibleSteps.map((step) => (
+                <li key={step.eventIds.join("-")} className={`is-${step.expectationState} ${step.priorOccurrences > 0 ? "is-return" : ""}`}>
+                  <span>group {step.index + 1}{step.attackCount > 1 ? ` · ${step.attackCount} attacks` : ""}</span>
+                  <strong>{journeyShapeLabel(step)}</strong>
+                  <small>{journeyMoveLabel(step)}</small>
+                  <small>{step.gapMultiple == null ? "time origin" : `${step.gapMultiple.toFixed(2)}× local time`}</small>
+                  <em>{journeyExpectationLabel(step)}</em>
+                  {step.priorOccurrences > 0 ? <b>gesture return · seen {step.priorOccurrences}× before</b> : <b>first appearance</b>}
+                </li>
+              ))}
+            </ol>
+            <div className={`journey-live-last is-${last?.expectationState ?? "open"}`}>
+              <span>What changed at the latest group?</span>
+              <strong>{lastReading}</strong>
+              <small>{profile.nextAlternatives.length ? `After the final gesture, phrase memory contains ${profile.nextAlternatives.length} observed continuation${profile.nextAlternatives.length === 1 ? "" : "s"}. It does not choose one for you.` : "The final gesture has no observed continuation inside this phrase yet."}</small>
+            </div>
+          </div>
+          <div className="journey-live-boundary">
+            <p><strong>Keep the lanes separate:</strong> onset grouping, field shape, bass motion, and relative time are measured from MIDI. Continuation counts are a piece-local model learned only from earlier groups. Your expectation, surprise, sense of form, and musical judgment remain unclaimed.</p>
+            {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Extend or replay this phrase</button> : null}
+          </div>
+        </>
+      ) : (
+        <div className="journey-live-empty">
+          <div>
+            <strong>{phrase.length ? `${phrase.length} retained attack${phrase.length === 1 ? "" : "s"}, but not enough separated events yet` : "No retained phrase yet"}</strong>
+            <p>Play at least four attacks across four onset groups. Notes within 70 ms become one field, so a chord is one event in the journey rather than several false steps.</p>
+          </div>
+          {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Build a phrase in Piano</button> : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function JourneyLab({ onNavigateToPiano }: { onNavigateToPiano?: () => void }) {
   const [selectedSection, setSelectedSection] = useState(SECTIONS[1]);
   const [lens, setLens] = useState<Lens>("original");
   const [annotation, setAnnotation] = useState("surprise");
@@ -107,6 +203,8 @@ export function JourneyLab() {
   const [calibrationGuess, setCalibrationGuess] = useState<CalibrationTransform>("smooth");
   const [calibrationRevealed, setCalibrationRevealed] = useState(false);
   const [hypothesisResponses, setHypothesisResponses] = useState<Record<string, "confirm" | "reject">>({});
+  const [phraseSpecimen, setPhraseSpecimen] = useState<PianoPhraseSpecimenEvent[]>([]);
+  const [phraseHydrated, setPhraseHydrated] = useState(false);
   const playbackRef = useRef<JourneyPlayback | null>(null);
   const selectedEvents = eventsInSelection(EVENTS, selectedSection.selection);
   const predict = useMemo(() => localGesturePrediction(EVENTS), []);
@@ -140,6 +238,15 @@ export function JourneyLab() {
     } catch { /* A malformed local record should not block the lab. */ }
     const timer = window.setTimeout(() => setResponses(saved), 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    try {
+      setPhraseSpecimen(parsePianoPhraseSpecimen(window.sessionStorage.getItem(PIANO_SESSION_KEY)) ?? []);
+    } catch {
+      setPhraseSpecimen([]);
+    }
+    setPhraseHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -256,15 +363,19 @@ export function JourneyLab() {
     <section className="advanced-lab journey-lab" aria-labelledby="journey-title">
       <div className="lab-intro journey-intro">
         <div>
-          <p className="section-kicker">Journey Lab · hear the whole and the moment</p>
-          <h2 id="journey-title">Follow a phrase as it repeats, changes, and returns.</h2>
+          <p className="section-kicker">Journey Lab · memory grows inside the phrase</p>
+          <h2 id="journey-title">See expectation emerge from what your hands repeat.</h2>
         </div>
         <p>
-          This generated phrase sets up a pattern, breaks it, searches, and returns. Select any section to hear how its role depends on the larger path.
+          Begin with your retained Piano phrase. Similar field shapes and movements create piece-local memory; a continuation becomes expected only after the phrase has supplied evidence.
         </p>
       </div>
 
-      <div className="journey-toolbar">
+      <LivePhraseJourneyBridge phrase={phraseSpecimen} hydrated={phraseHydrated} onNavigateToPiano={onNavigateToPiano} />
+
+      <details className="journey-generated-disclosure">
+        <summary><strong>Explore the generated sixteen-second journey</strong><span>optional counterfactuals, self-similarity, prediction models, audio, and listener annotation</span></summary>
+        <div className="journey-toolbar">
         <div className="counterfactual-picker" role="group" aria-label="Counterfactual lens">
           <span>Counterfactual</span>
           {([
@@ -441,6 +552,7 @@ export function JourneyLab() {
         <label><span>Whole-arc satisfaction <output>{arcSatisfaction}</output></span><input type="range" min="0" max="100" aria-label="Whole arc satisfaction" value={arcSatisfaction} onChange={(event) => setArcSatisfaction(Number(event.target.value))} /></label>
         <strong>{arcSatisfaction > localComfort + 20 ? "Dissociation visible: low local comfort, higher form-level satisfaction." : "Your reports do not currently show a strong moment/form dissociation."}</strong>
       </div>
+      </details>
     </section>
   );
 }

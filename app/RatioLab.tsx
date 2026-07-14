@@ -159,13 +159,13 @@ const LAB_COPY: Record<
     principleBottom: "before pulse, meter, or groove labels",
   },
   journey: {
-    eyebrow: "Hear how expectation grows over time",
-    title: "A musical moment means more inside a larger path.",
+    eyebrow: "Find expectation inside your own phrase",
+    title: "Repeat a relationship. Watch memory begin.",
     description:
-      "Follow repetition, variation, surprise, tension, and return across a phrase. Zoom in without losing where the moment sits in the whole.",
-    principleTop: "Moment",
-    principleMain: "→ phrase → form",
-    principleBottom: "memory builds expectation",
+      "Carry the silent Piano phrase into a piece-local expectation trail. See exactly which earlier transition supports a continuation—and where the model has no evidence.",
+    principleTop: "Earlier relationship",
+    principleMain: "→ local memory",
+    principleBottom: "before listener expectation or form",
   },
   recording: {
     eyebrow: "Explore your own recording privately",
@@ -759,7 +759,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.52
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.53
         </div>
       </header>
 
@@ -1015,7 +1015,7 @@ export function RatioLab() {
         ) : activeLab === "rhythm" ? (
           <RhythmLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "journey" ? (
-          <JourneyLab />
+          <JourneyLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "recording" ? (
           <RecordingLab />
         ) : activeLab === "atlas" ? (

@@ -259,7 +259,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(rhythmLab, /What remains when every pitch becomes the same point/);
   assert.match(rhythmLab, /median onset gap · not a detected beat/);
   assert.match(rhythmLab, /Replay these gaps on new keys/);
-  assert.match(journeyLab, /Follow a phrase as it repeats, changes, and returns/);
+  assert.match(journeyLab, /See expectation emerge from what your hands repeat/);
   assert.match(journeyLab, /Acoustic Microscope/);
   assert.match(journeyLab, /Expected alternatives/);
   assert.match(journeyLab, /Self-similarity across events/);
@@ -268,6 +268,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(journeyLab, /Exact repeat/);
   assert.match(journeyLab, /Whole-arc satisfaction/);
   assert.match(journeyLab, /Teach my model/);
+  assert.match(journeyLab, /Where did your phrase teach itself what might come next/);
+  assert.match(journeyLab, /What changed at the latest group/);
+  assert.match(journeyLab, /Extend or replay this phrase/);
   assert.match(journeyLab, /Audible counterfactual A\/B/);
   assert.match(journeyLab, /Blind calibration/);
   assert.match(recordingLab, /Nothing is uploaded/);

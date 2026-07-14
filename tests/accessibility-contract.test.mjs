@@ -71,16 +71,20 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(rhythm, /<details className="rhythm-authoring-disclosure"/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);
+  assert.match(journey, /aria-labelledby="journey-live-title"/);
+  assert.match(journey, /Piece-local expectation trail/);
+  assert.match(journey, /<details className="journey-generated-disclosure"/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);
 });
 
 test("focus, reduced-motion, and non-color contracts are present", async () => {
-  const [css, ratio, scale, piano, rhythm] = await Promise.all([
+  const [css, ratio, scale, piano, rhythm, journey] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RhythmLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/JourneyLab.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(css, /select:focus-visible/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
@@ -125,4 +129,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.piano-key\.is-active,[\s\S]*Highlight/);
   assert.match(css, /\.rhythm-live-axis > span[\s\S]*background: LinkText/);
   assert.doesNotMatch(rhythm, /tabIndex=\{?[1-9]/);
+  assert.match(css, /\.journey-live-thread > li\.is-known[\s\S]*border-color: LinkText/);
+  assert.match(css, /\.journey-live-thread > li\.is-new[\s\S]*border-color: Highlight/);
+  assert.doesNotMatch(journey, /tabIndex=\{?[1-9]/);
 });

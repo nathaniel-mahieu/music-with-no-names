@@ -3970,6 +3970,202 @@ footer a {
   --journey-gold: #e6c66b;
 }
 
+.journey-live-bridge {
+  display: grid;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.journey-live-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.55fr);
+  gap: 32px;
+  align-items: end;
+  padding: clamp(28px, 4vw, 52px) clamp(22px, 5vw, 72px) 24px;
+}
+
+.journey-live-heading h3 {
+  max-width: 28ch;
+  margin: 8px 0 0;
+  font-size: clamp(1.55rem, 3vw, 3rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.journey-live-heading > p,
+.journey-live-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.journey-live-status {
+  padding: 0 clamp(22px, 5vw, 72px) 28px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+}
+
+.journey-live-figure {
+  padding: clamp(26px, 4vw, 48px) clamp(22px, 5vw, 72px);
+  border-top: 1px solid var(--line);
+}
+
+.journey-live-thread {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.journey-live-thread > li {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 172px;
+  padding: 16px 13px;
+  border-top: 2px dashed var(--line-strong);
+  border-right: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.journey-live-thread > li:last-child { border-right: 0; }
+.journey-live-thread > li.is-opening { border-top-style: solid; }
+.journey-live-thread > li.is-known { border-top: 3px solid var(--journey-cyan); }
+.journey-live-thread > li.is-new { border-top: 5px double var(--journey-coral); }
+.journey-live-thread > li.is-return { box-shadow: inset 0 -3px var(--journey-gold); }
+
+.journey-live-thread span,
+.journey-live-last > span {
+  color: var(--faint);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.journey-live-thread strong {
+  margin: 5px 0 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+.journey-live-thread small {
+  color: var(--muted);
+  font-size: 0.59rem;
+  line-height: 1.35;
+}
+
+.journey-live-thread em {
+  margin-top: 6px;
+  color: var(--foreground);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.journey-live-thread b {
+  color: var(--muted);
+  font-size: 0.55rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.journey-live-thread > li.is-return b { color: var(--foreground); }
+
+.journey-live-last {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
+  gap: 8px 28px;
+  padding: 22px;
+  border-left: 3px dashed var(--line-strong);
+  background: var(--surface-soft);
+}
+
+.journey-live-last.is-known { border-left-style: solid; border-left-color: var(--journey-cyan); }
+.journey-live-last.is-new { border-left-style: double; border-left-width: 6px; border-left-color: var(--journey-coral); }
+
+.journey-live-last strong {
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.journey-live-last small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.61rem;
+  line-height: 1.5;
+}
+
+.journey-live-boundary,
+.journey-live-empty {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  align-items: center;
+  padding: 22px clamp(22px, 5vw, 72px);
+  background: var(--surface-soft);
+}
+
+.journey-live-boundary p,
+.journey-live-empty p {
+  max-width: 90ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.journey-live-boundary strong,
+.journey-live-empty strong { color: var(--foreground); }
+.journey-live-empty > div { display: grid; gap: 7px; }
+
+.journey-live-boundary button,
+.journey-live-empty button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--foreground);
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.journey-generated-disclosure {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.journey-generated-disclosure > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px clamp(22px, 5vw, 72px);
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.journey-generated-disclosure > summary strong {
+  margin-right: auto;
+  font-size: 0.78rem;
+}
+
+.journey-generated-disclosure > summary span {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.journey-generated-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
+
 .journey-toolbar,
 .journey-annotation {
   display: flex;
@@ -4742,6 +4938,12 @@ footer a {
     width: 100%;
     max-width: none;
   }
+
+  .journey-live-last {
+    grid-template-columns: 1fr;
+  }
+
+  .journey-live-last small { grid-column: 1; }
 }
 
 @media (max-width: 560px) {
@@ -4753,6 +4955,24 @@ footer a {
     padding-right: 16px;
     padding-left: 16px;
   }
+
+  .journey-live-heading,
+  .journey-live-boundary,
+  .journey-live-empty,
+  .journey-generated-disclosure > summary {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .journey-live-boundary button,
+  .journey-live-empty button { width: 100%; }
+
+  .journey-live-thread {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .journey-live-thread > li:nth-child(2n) { border-right: 0; }
 
   .audible-counterfactuals > div:last-child {
     grid-template-columns: 1fr;
@@ -8957,4 +9177,9 @@ footer a {
   .atlas-curator-key { color: Highlight; }
   .rhythm-live-axis > span { border-color: Canvas; background: LinkText; color: Canvas; box-shadow: 0 0 0 1px LinkText; }
   .rhythm-live-gaps > li.is-repeated { box-shadow: inset 0 3px LinkText; }
+  .journey-live-thread > li.is-known,
+  .journey-live-last.is-known { border-color: LinkText; }
+  .journey-live-thread > li.is-new,
+  .journey-live-last.is-new { border-color: Highlight; }
+  .journey-live-thread > li.is-return { box-shadow: inset 0 -3px CanvasText; }
 }

@@ -13,6 +13,46 @@ export type EventSelection = {
   endSeconds: number;
 };
 
+export type LiveJourneyPhraseEvent = {
+  id: number;
+  note: number;
+  onsetMs: number;
+  velocity?: number;
+  releaseMs?: number | null;
+};
+
+export type LiveJourneyExpectationState = "opening" | "open" | "known" | "new";
+
+export type LiveJourneyStep = {
+  index: number;
+  eventIds: number[];
+  onsetMs: number;
+  relativeOnset: number;
+  attackCount: number;
+  pitchOffsets: number[];
+  bassMove: number | null;
+  gapMs: number | null;
+  gapMultiple: number | null;
+  gestureKey: string;
+  priorOccurrences: number;
+  expectationState: LiveJourneyExpectationState;
+  actualProbability: number | null;
+  alternativeCount: number;
+  alternatives: { gesture: string; probability: number }[];
+};
+
+export type LiveJourneyPhraseProfile = {
+  attackCount: number;
+  groupCount: number;
+  elapsedMs: number;
+  localUnitMs: number;
+  returningGestureCount: number;
+  learnedStepCount: number;
+  newContinuationCount: number;
+  steps: LiveJourneyStep[];
+  nextAlternatives: { gesture: string; probability: number }[];
+};
+
 function assertFiniteNonNegative(value: number, label: string) {
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError(`${label} must be finite and non-negative.`);
@@ -157,4 +197,118 @@ export function predictionTraceWithPrior(events: MusicalEvent[], prior: GestureT
 
 export function incrementalPredictionTrace(events: MusicalEvent[]): PredictionTracePoint[] {
   return predictionTraceWithPrior(events);
+}
+
+function median(values: number[]) {
+  const ordered = [...values].sort((first, second) => first - second);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
+function groupLiveJourneyOnsets<T extends LiveJourneyPhraseEvent>(events: T[], windowMs: number) {
+  const groups: T[][] = [];
+  events.forEach((event) => {
+    const current = groups.at(-1);
+    if (current && event.onsetMs - current[0].onsetMs <= windowMs) current.push(event);
+    else groups.push([event]);
+  });
+  return groups;
+}
+
+/**
+ * Projects a retained MIDI phrase into transposition-invariant field shapes,
+ * bass motion, and phrase-relative timing. Prediction counts are learned only
+ * from earlier grouped events inside this phrase; they do not model a listener.
+ */
+export function liveJourneyPhraseProfile(
+  events: LiveJourneyPhraseEvent[],
+  clusterWindowMs = 70,
+): LiveJourneyPhraseProfile | null {
+  const usable = events
+    .filter((event) => Number.isInteger(event.id)
+      && Number.isInteger(event.note)
+      && event.note >= 0
+      && event.note <= 127
+      && Number.isFinite(event.onsetMs)
+      && event.onsetMs >= 0
+      && (event.velocity == null || (Number.isInteger(event.velocity) && event.velocity >= 0 && event.velocity <= 127))
+      && (event.releaseMs == null || (Number.isFinite(event.releaseMs) && event.releaseMs >= event.onsetMs)))
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  if (usable.length < 4) return null;
+  const groups = groupLiveJourneyOnsets(usable, Math.max(0, clusterWindowMs));
+  if (groups.length < 4) return null;
+
+  const gaps = groups.slice(1).map((group, index) => group[0].onsetMs - groups[index][0].onsetMs);
+  const localUnitMs = median(gaps);
+  const elapsedMs = groups.at(-1)![0].onsetMs - groups[0][0].onsetMs;
+  if (!Number.isFinite(localUnitMs) || localUnitMs <= 0 || elapsedMs <= 0) return null;
+  const firstBass = Math.min(...groups[0].map((event) => event.note));
+  let priorBass: number | null = null;
+  const gestureEvents = groups.map((group, index): MusicalEvent => {
+    const notes = [...new Set(group.map((event) => event.note))].sort((first, second) => first - second);
+    const bass = notes[0];
+    const offsets = notes.map((note) => note - bass);
+    const bassMove = priorBass == null ? null : bass - priorBass;
+    priorBass = bass;
+    const releases = group.map((event) => event.releaseMs).filter((release): release is number => release != null);
+    const durationSeconds = releases.length === group.length
+      ? Math.max(0.05, (Math.max(...releases) - group[0].onsetMs) / 1_000)
+      : 0.1;
+    return {
+      id: `live-${index + 1}`,
+      onsetSeconds: (group[0].onsetMs - groups[0][0].onsetMs) / 1_000,
+      durationSeconds,
+      ratioToReference: 2 ** ((bass - firstBass) / 12),
+      amplitude: group.reduce((sum, event) => sum + (event.velocity ?? 64), 0) / group.length / 127,
+      timbre: "harmonic",
+      gesture: `${offsets.join(".")}|${bassMove == null ? "start" : bassMove}`,
+    };
+  });
+  const trace = incrementalPredictionTrace(gestureEvents);
+  const seenGestures = new Map<string, number>();
+  const steps = groups.map((group, index): LiveJourneyStep => {
+    const notes = [...new Set(group.map((event) => event.note))].sort((first, second) => first - second);
+    const bass = notes[0];
+    const priorNotes = index > 0 ? [...new Set(groups[index - 1].map((event) => event.note))].sort((first, second) => first - second) : [];
+    const gestureKey = gestureEvents[index].gesture;
+    const priorOccurrences = seenGestures.get(gestureKey) ?? 0;
+    seenGestures.set(gestureKey, priorOccurrences + 1);
+    const point = trace[index];
+    const expectationState: LiveJourneyExpectationState = index === 0
+      ? "opening"
+      : point.probability == null
+        ? "open"
+        : point.probability === 0
+          ? "new"
+          : "known";
+    return {
+      index,
+      eventIds: group.map((event) => event.id),
+      onsetMs: group[0].onsetMs,
+      relativeOnset: (group[0].onsetMs - groups[0][0].onsetMs) / elapsedMs,
+      attackCount: group.length,
+      pitchOffsets: notes.map((note) => note - bass),
+      bassMove: index === 0 ? null : bass - priorNotes[0],
+      gapMs: index === 0 ? null : gaps[index - 1],
+      gapMultiple: index === 0 ? null : gaps[index - 1] / localUnitMs,
+      gestureKey,
+      priorOccurrences,
+      expectationState,
+      actualProbability: point.probability,
+      alternativeCount: point.alternatives.length,
+      alternatives: point.alternatives,
+    };
+  });
+  const predictNext = localGesturePrediction(gestureEvents);
+  return {
+    attackCount: usable.length,
+    groupCount: groups.length,
+    elapsedMs,
+    localUnitMs,
+    returningGestureCount: steps.filter((step) => step.priorOccurrences > 0).length,
+    learnedStepCount: steps.filter((step) => step.actualProbability != null).length,
+    newContinuationCount: steps.filter((step) => step.expectationState === "new").length,
+    steps,
+    nextAlternatives: predictNext(gestureEvents.at(-1)!.gesture).map((alternative) => ({ gesture: alternative.nextGesture, probability: alternative.probability })),
+  };
 }
