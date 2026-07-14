@@ -24,6 +24,7 @@ import {
   inferScaleCandidates,
   intervalLandmark,
   landmarkStepPitchClasses,
+  landmarkCounterfactualProfile,
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
   matchesLandmarkStep,
@@ -44,6 +45,7 @@ import {
   tonalGravityCandidates,
   tonalGravityCounterfactual,
   voiceChordNear,
+  voiceLandmarkCounterfactual,
   voiceLandmarkPath,
   voiceLeadingProfile,
   type TonalGravityCandidate,
@@ -415,6 +417,29 @@ test("makes landmark transposition changes and invariants explicit", () => {
     assert.deepEqual(profile.targetPitchClasses[step], profile.sourcePitchClasses[step].map((pitchClass) => (pitchClass + 7) % 12).sort((a, b) => a - b));
   }
   assert.deepEqual(landmarkTranspositionProfile(path, -12, 19).targetPitchClasses, profile.targetPitchClasses);
+});
+
+test("changes exactly one declared key in one landmark field", () => {
+  for (const path of LANDMARK_PATHS) {
+    const source = voiceLandmarkPath(path, 60);
+    const changed = voiceLandmarkCounterfactual(path, 60);
+    const profile = landmarkCounterfactualProfile(path, 60)!;
+    assert.ok(profile);
+    assert.equal(profile.stepIndex, path.counterfactual.stepIndex);
+    assert.equal(profile.sourceNotes.length, profile.targetNotes.length);
+    assert.equal(profile.retainedNotes.length, profile.sourceNotes.length - 1);
+    assert.equal(profile.targetNote - profile.sourceNote, profile.keyShift);
+    assert.notEqual(profile.keyShift, 0);
+    assert.deepEqual(profile.sourceIntervals.length, profile.targetIntervals.length);
+    for (let index = 0; index < source.length; index += 1) {
+      if (index === path.counterfactual.stepIndex) assert.notDeepEqual(changed[index], source[index]);
+      else assert.deepEqual(changed[index], source[index]);
+    }
+    const flattenedSource = source.flat();
+    const flattenedChanged = changed.flat();
+    assert.equal(flattenedSource.filter((note, index) => note !== flattenedChanged[index]).length, 1);
+  }
+  assert.equal(landmarkCounterfactualProfile(LANDMARK_PATHS[0], Number.NaN), null);
 });
 
 test("matches landmark targets by pitch class while keeping voicing stable", () => {

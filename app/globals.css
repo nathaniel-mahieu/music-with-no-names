@@ -7941,6 +7941,11 @@ footer a {
 .hud-landmark-transpose > div strong { font-family: var(--font-display), Georgia, serif; font-size: 1.08rem; font-weight: 400; }
 .hud-landmark-transpose i { color: var(--piano-gold); font-style: normal; }
 .hud-landmark-transpose small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-landmark-counterfactual-intro { display: grid; gap: 4px; margin: 0 18px 15px; padding: 11px 12px 11px 14px; border-left: 3px solid var(--piano-blue); background: color-mix(in srgb, var(--piano-blue) 5%, transparent); }
+.hud-landmark-counterfactual-intro span { color: var(--piano-blue); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-landmark-counterfactual-intro strong { font-family: var(--font-display), Georgia, serif; font-size: 1.08rem; font-weight: 400; }
+.hud-landmark-counterfactual-intro i { color: var(--piano-gold); font-style: normal; }
+.hud-landmark-counterfactual-intro small { max-width: 92ch; color: var(--muted); font-size: .7rem; line-height: 1.45; }
 .hud-landmark-progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); margin: 0; padding: 0 18px 15px; list-style: none; }
 .hud-landmark-progress li { display: grid; grid-template-columns: auto 1fr; min-width: 0; gap: 2px 8px; align-items: center; padding: 9px 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); }
 .hud-landmark-progress li + li { border-left: 1px solid var(--line); }
@@ -7967,6 +7972,15 @@ footer a {
 .hud-landmark-evidence small,
 .hud-landmark-evidence em { color: var(--muted); font-size: .7rem; font-style: normal; line-height: 1.35; }
 .hud-landmark-evidence strong { margin: 3px 0; font-family: var(--font-mono), monospace; font-size: .84rem; }
+.hud-landmark-counterfactual { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 18px 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-landmark-counterfactual > div { display: grid; min-width: 0; gap: 4px; align-content: start; padding: 10px; }
+.hud-landmark-counterfactual > div + div { border-left: 1px solid var(--line); }
+.hud-landmark-counterfactual span { color: var(--piano-blue); font-size: .67rem; letter-spacing: .04em; text-transform: uppercase; }
+.hud-landmark-counterfactual strong { font-size: .74rem; font-weight: 500; line-height: 1.4; }
+.hud-landmark-counterfactual small { color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.hud-landmark-counterfactual-report > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 2px; }
+.hud-landmark-counterfactual-report button { min-height: 32px; padding: 4px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .65rem; cursor: pointer; }
+.hud-landmark-counterfactual-report button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
 .hud-landmark-reading { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
 .hud-landmark-reading p { display: grid; gap: 5px; margin: 0; padding: 13px 18px; }
 .hud-landmark-reading p + p { border-left: 1px solid var(--line); }
@@ -8216,6 +8230,9 @@ footer a {
   .hud-landmark-transpose > * + * { border-left: 0; }
   .hud-landmark-transpose > *:nth-child(even) { border-left: 1px solid var(--line); }
   .hud-landmark-transpose > *:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  .hud-landmark-counterfactual { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hud-landmark-counterfactual > div:nth-child(4) { border-left: 0; }
+  .hud-landmark-counterfactual > div:nth-child(n + 4) { border-top: 1px solid var(--line); }
   .hud-experience-main { grid-template-columns: 1fr; }
   .hud-character-question { border-top: 1px solid var(--line); border-left: 0; }
   .hud-character-evidence { grid-template-columns: 1fr; }
@@ -8357,6 +8374,8 @@ footer a {
   .hud-landmark-evidence { grid-template-columns: 1fr; }
   .hud-landmark-evidence > span { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-landmark-evidence > span:last-child { border-bottom: 0; }
+  .hud-landmark-counterfactual { grid-template-columns: 1fr; }
+  .hud-landmark-counterfactual > div + div { border-top: 1px solid var(--line); border-left: 0; }
   .hud-landmark-reading { grid-template-columns: 1fr; }
   .hud-landmark-reading p + p { border-top: 1px solid var(--line); border-left: 0; }
   .hud-character-axis-label,
@@ -8427,6 +8446,8 @@ footer a {
   .hud-landmark-selector button[aria-pressed="true"],
   .hud-landmark-progress li.is-current { border-color: Highlight; background: Highlight; color: HighlightText; }
   .hud-landmark-transpose { border-color: CanvasText; background: Canvas; }
+  .hud-landmark-counterfactual-intro { border-color: Highlight; background: Canvas; }
+  .hud-landmark-counterfactual-report button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-character-point,
   .hud-character-uncertainty,
   .hud-character-current circle { fill: Canvas; stroke: CanvasText; }

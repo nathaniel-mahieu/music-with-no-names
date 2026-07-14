@@ -333,6 +333,15 @@ export type LandmarkPathStep = {
   prompt: string;
 };
 
+export type LandmarkPathCounterfactual = {
+  stepIndex: number;
+  fromPitchOffset: number;
+  toPitchOffset: number;
+  label: string;
+  question: string;
+  hypothesis: string;
+};
+
 export type LandmarkPath = {
   id: LandmarkPathId;
   family: string;
@@ -341,7 +350,20 @@ export type LandmarkPath = {
   invariant: string;
   characteristic: string;
   provenance: string;
+  counterfactual: LandmarkPathCounterfactual;
   steps: LandmarkPathStep[];
+};
+
+export type LandmarkCounterfactualProfile = {
+  stepIndex: number;
+  sourceNotes: number[];
+  targetNotes: number[];
+  retainedNotes: number[];
+  sourceNote: number;
+  targetNote: number;
+  keyShift: number;
+  sourceIntervals: number[];
+  targetIntervals: number[];
 };
 
 export type LandmarkTransitionProfile = {
@@ -510,6 +532,7 @@ export const LANDMARK_PATHS: LandmarkPath[] = [
     invariant: "The four-position order repeats while the entire path can move to any Do.",
     characteristic: "Short voice moves bind contrasting fields into a circular, forward-moving loop.",
     provenance: "Generated from the widely used I–V–vi–IV harmonic archetype; no song or recording is reproduced.",
+    counterfactual: { stepIndex: 2, fromPitchOffset: 0, toPitchOffset: 1, label: "lift one shadow tone", question: "Does one raised key change the shadow field while the four-field route stays recognizable?", hypothesis: "A one-key lift replaces the field's compact third color while every other target remains fixed." },
     steps: [
       { id: "home", role: "home field", conventionalName: "I", rootOffset: 0, pitchOffsets: [0, 4, 7], prompt: "Establish the center." },
       { id: "fifth", role: "fifth field", conventionalName: "V", rootOffset: 7, pitchOffsets: [2, 7, 11], prompt: "Keep one position while the root moves near a 3:2 relation." },
@@ -525,6 +548,7 @@ export const LANDMARK_PATHS: LandmarkPath[] = [
     invariant: "The lowered-seventh color remains present as the root path leaves and returns to Do.",
     characteristic: "Persistent seventh tension makes arrival porous rather than completely smoothed away.",
     provenance: "Generated from a traditional I7–IV7–I7–V7–I7 blues archetype; no melody or recording is reproduced.",
+    counterfactual: { stepIndex: 4, fromPitchOffset: 10, toPitchOffset: 11, label: "raise the final edge", question: "Does raising the final edge make the last home feel more sealed—or simply differently tense?", hypothesis: "The final lowered-seventh color moves up one key while the earlier blues fields remain unchanged." },
     steps: [
       { id: "home-seven", role: "home with edge", conventionalName: "I7", rootOffset: 0, pitchOffsets: [0, 4, 7, 10], prompt: "Establish home without removing the lowered-seventh edge." },
       { id: "side-seven", role: "side with edge", conventionalName: "IV7", rootOffset: 5, pitchOffsets: [0, 3, 5, 9], prompt: "Move the root to the side field while keeping the seventh color." },
@@ -541,6 +565,7 @@ export const LANDMARK_PATHS: LandmarkPath[] = [
     invariant: "The cadence is a directed relationship pattern and survives transposition to another Do.",
     characteristic: "Shared tones and half-step motion concentrate expectation before the final arrival.",
     provenance: "Generated from the common ii–V7–I cadence archetype; no composition or performance is reproduced.",
+    counterfactual: { stepIndex: 1, fromPitchOffset: 11, toPitchOffset: 10, label: "soften the leading pull", question: "Does lowering one leading position weaken the final pull toward home?", hypothesis: "The preparation and arrival stay exact; one key in the middle field moves down." },
     steps: [
       { id: "prepare", role: "preparation field", conventionalName: "ii", rootOffset: 2, pitchOffsets: [2, 5, 9], prompt: "Begin away from home with a soft preparation." },
       { id: "focus", role: "fifth with pull", conventionalName: "V7", rootOffset: 7, pitchOffsets: [2, 5, 7, 11], prompt: "Keep two positions and sharpen the pull toward Do." },
@@ -555,6 +580,7 @@ export const LANDMARK_PATHS: LandmarkPath[] = [
     invariant: "Do remains present in every field while the upper intervals supply the motion.",
     characteristic: "A fixed bass can make changing upper structures feel connected, suspended, or returning.",
     provenance: "Generated from a common pedal-point technique; no composition or performance is reproduced.",
+    counterfactual: { stepIndex: 2, fromPitchOffset: 2, toPitchOffset: 4, label: "fill the suspended gap", question: "How does widening one upper interval change the sky while pedal Do stays physically fixed?", hypothesis: "The pedal and outer fifth remain; one upper key moves two steps before the unchanged return." },
     steps: [
       { id: "pedal-home", role: "clear home", conventionalName: "I", rootOffset: 0, pitchOffsets: [0, 4, 7], prompt: "Establish Do as the fixed floor." },
       { id: "pedal-side", role: "side over Do", conventionalName: "IV/Do", rootOffset: 5, pitchOffsets: [0, 5, 9], prompt: "Keep Do and replace the upper interval field." },
@@ -1753,6 +1779,55 @@ export function landmarkTranspositionProfile(path: LandmarkPath, sourceDoPitchCl
     pitchOffsets: path.steps.map((step) => [...step.pitchOffsets]),
     sourcePitchClasses: path.steps.map((_, index) => landmarkStepPitchClasses(path, index, source)),
     targetPitchClasses: path.steps.map((_, index) => landmarkStepPitchClasses(path, index, target)),
+  };
+}
+
+function shortestPitchClassMove(fromPitchClass: number, toPitchClass: number) {
+  const ascending = modulo(toPitchClass - fromPitchClass, 12);
+  return ascending > 6 ? ascending - 12 : ascending;
+}
+
+/** Keeps every authored target fixed except one declared MIDI-key move in one field. */
+export function voiceLandmarkCounterfactual(path: LandmarkPath, doMidi: number) {
+  const sourceVoicings = voiceLandmarkPath(path, doMidi);
+  if (!sourceVoicings.length) return [];
+  const { stepIndex, fromPitchOffset, toPitchOffset } = path.counterfactual;
+  if (stepIndex < 0 || stepIndex >= sourceVoicings.length) return sourceVoicings;
+  const doPitchClass = pitchClassFromMidi(doMidi);
+  const sourcePitchClass = modulo(doPitchClass + fromPitchOffset, 12);
+  const targetPitchClass = modulo(doPitchClass + toPitchOffset, 12);
+  const keyShift = shortestPitchClassMove(sourcePitchClass, targetPitchClass);
+  const sourceNoteIndex = sourceVoicings[stepIndex].findIndex((note) => pitchClassFromMidi(note) === sourcePitchClass);
+  if (sourceNoteIndex < 0 || keyShift === 0) return sourceVoicings;
+  return sourceVoicings.map((voicing, index) => index === stepIndex
+    ? voicing.map((note, noteIndex) => noteIndex === sourceNoteIndex ? note + keyShift : note).sort((first, second) => first - second)
+    : [...voicing]);
+}
+
+export function landmarkCounterfactualProfile(path: LandmarkPath, doMidi: number): LandmarkCounterfactualProfile | null {
+  if (!Number.isFinite(doMidi)) return null;
+  const sourceVoicings = voiceLandmarkPath(path, doMidi);
+  const targetVoicings = voiceLandmarkCounterfactual(path, doMidi);
+  const stepIndex = path.counterfactual.stepIndex;
+  const sourceNotes = sourceVoicings[stepIndex];
+  const targetNotes = targetVoicings[stepIndex];
+  if (!sourceNotes?.length || !targetNotes?.length || sourceNotes.length !== targetNotes.length) return null;
+  const sourceOnly = sourceNotes.filter((note) => !targetNotes.includes(note));
+  const targetOnly = targetNotes.filter((note) => !sourceNotes.includes(note));
+  if (sourceOnly.length !== 1 || targetOnly.length !== 1) return null;
+  const sourceNote = sourceOnly[0];
+  const targetNote = targetOnly[0];
+  const retainedNotes = sourceNotes.filter((note) => note !== sourceNote);
+  return {
+    stepIndex,
+    sourceNotes: [...sourceNotes],
+    targetNotes: [...targetNotes],
+    retainedNotes,
+    sourceNote,
+    targetNote,
+    keyShift: targetNote - sourceNote,
+    sourceIntervals: retainedNotes.map((note) => Math.abs(note - sourceNote)).sort((first, second) => first - second),
+    targetIntervals: retainedNotes.map((note) => Math.abs(note - targetNote)).sort((first, second) => first - second),
   };
 }
 

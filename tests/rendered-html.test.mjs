@@ -184,6 +184,12 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /compact voicings may move individual keys differently/);
   assert.match(pianoLab, /landmarkTranspositionProfile/);
   assert.match(pianoLab, /setLandmarkStepIndex\(0\)/);
+  assert.match(pianoLab, /One route completed with exactly one changed key/);
+  assert.match(pianoLab, /Original versus one-key path comparison across five lenses/);
+  assert.match(pianoLab, /Which path felt more directed/);
+  assert.match(pianoLab, /No modeled lane fills this answer/);
+  assert.match(pianoModel, /voiceLandmarkCounterfactual/);
+  assert.match(pianoModel, /Keeps every authored target fixed except one declared MIDI-key move/);
   assert.match(pianoLab, /silent landmark path target/);
   assert.match(pianoLab, /Personal character map/);
   assert.match(pianoLab, /Listener-reported · local · uncertain/);

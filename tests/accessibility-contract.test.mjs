@@ -59,6 +59,8 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-labelledby="hud-sonority-title"/);
   assert.match(piano, /aria-label="Separate conditional affordance changes"/);
   assert.match(piano, /silent controlled sonority reference/);
+  assert.match(piano, /aria-label="Original versus one-key path comparison across five lenses"/);
+  assert.match(piano, /aria-label="Report which landmark path felt more directed"/);
   assert.match(piano, /aria-label="Motion learning question"/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
@@ -108,6 +110,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-last-attack-reading\.is-attributable[\s\S]*LinkText/);
   assert.match(css, /\.hud-last-lenses article\.is-modeled[\s\S]*Highlight/);
   assert.match(css, /\.hud-phrase-report-rows button\[aria-pressed="true"\][\s\S]*Highlight/);
+  assert.match(css, /\.hud-landmark-counterfactual-report button\[aria-pressed="true"\][\s\S]*Highlight/);
   assert.match(css, /\.piano-key\.is-sonority-target/);
   assert.match(css, /\.hud-sonority-question\.has-change[\s\S]*border-left/);
   assert.match(css, /\.hud-pulse-status\.is-ready[\s\S]*border-left/);

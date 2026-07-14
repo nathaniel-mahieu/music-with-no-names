@@ -32,9 +32,8 @@ import {
   identifyChordCandidates,
   interpretedChordNotes,
   intervalLandmark,
-  landmarkTransitionProfile,
+  landmarkCounterfactualProfile,
   landmarkTranspositionProfile,
-  matchesLandmarkStep,
   matchScaleFingerprint,
   nearbyScaleChords,
   nearestMidiForPitchClass,
@@ -55,6 +54,7 @@ import {
   tonalGravityCounterfactual,
   tonalTendency,
   voiceChordNear,
+  voiceLandmarkCounterfactual,
   voiceLandmarkPath,
   voiceLeadingProfile,
   type ChordCandidate,
@@ -204,6 +204,12 @@ type LandmarkTransposeSession = {
   sourceRootPitchClass: number;
   targetRootPitchClass: number;
 };
+type LandmarkCounterfactualReport = "source" | "same" | "changed";
+type LandmarkCounterfactualSession = {
+  pathId: LandmarkPathId;
+  rootPitchClass: number;
+  report: LandmarkCounterfactualReport | null;
+};
 
 type MidiCallbacks = {
   onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
@@ -212,7 +218,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -229,6 +235,7 @@ type PersistedPianoSession = {
   landmarkPathId?: LandmarkPathId;
   landmarkStepIndex?: number;
   landmarkTransposeSession?: LandmarkTransposeSession | null;
+  landmarkCounterfactualSession?: LandmarkCounterfactualSession | null;
   soundModelId?: PianoSoundModelId;
   scaleWalkSession?: ScaleWalkSession | null;
   scaleFingerprintSession?: ScaleFingerprintSession | null;
@@ -2099,8 +2106,9 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   </section>;
 }
 
-function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundModelId, showConventions, transposeSession, onSelect, onReplay, onTranspose }: {
+function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, doMidi, scale, soundModelId, showConventions, transposeSession, counterfactualSession, onSelect, onReplay, onTranspose, onCounterfactual, onCounterfactualReport, onRestore }: {
   path: LandmarkPath;
+  pathVoicings: number[][];
   stepIndex: number;
   targetNotes: number[];
   doMidi: number;
@@ -2108,19 +2116,36 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
   soundModelId: PianoSoundModelId;
   showConventions: boolean;
   transposeSession: LandmarkTransposeSession | null;
+  counterfactualSession: LandmarkCounterfactualSession | null;
   onSelect: (id: LandmarkPathId) => void;
   onReplay: () => void;
   onTranspose: () => void;
+  onCounterfactual: () => void;
+  onCounterfactualReport: (report: LandmarkCounterfactualReport) => void;
+  onRestore: () => void;
 }) {
   const complete = stepIndex >= path.steps.length;
   const currentStep = complete ? null : path.steps[stepIndex];
-  const transition = currentStep ? landmarkTransitionProfile(path, stepIndex, doMidi) : null;
+  const counterfactualActive = counterfactualSession?.pathId === path.id && counterfactualSession.rootPitchClass === pitchClassFromMidi(doMidi);
+  const transition = currentStep && stepIndex > 0 && pathVoicings[stepIndex - 1]?.length && pathVoicings[stepIndex]?.length ? (() => {
+    const priorRoot = pitchClassFromMidi(doMidi + path.steps[stepIndex - 1].rootOffset);
+    const currentRoot = pitchClassFromMidi(doMidi + path.steps[stepIndex].rootOffset);
+    const field = chordTransitionEvidence(pathVoicings[stepIndex - 1], pathVoicings[stepIndex], priorRoot, currentRoot);
+    const voices = voiceLeadingProfile(pathVoicings[stepIndex - 1], pathVoicings[stepIndex]);
+    return { commonPitchClassCount: field.commonPitchClassCount, totalVoiceMotion: voices.totalMotion, largestLeap: voices.largestLeap, rootTravelSteps: field.rootTravelSteps };
+  })() : null;
   const perception = targetNotes.length >= 2 ? sonorityPerceptionModel(targetNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
   const tendency = targetNotes.length ? tonalTendency(targetNotes, doMidi, scale) : null;
   const targetLabels = targetNotes.map((note) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale));
   const transposeProfile = transposeSession?.pathId === path.id
     ? landmarkTranspositionProfile(path, transposeSession.sourceRootPitchClass, transposeSession.targetRootPitchClass)
     : null;
+  const counterfactualProfile = counterfactualActive ? landmarkCounterfactualProfile(path, doMidi) : null;
+  const sourcePerception = counterfactualProfile ? sonorityPerceptionModel(counterfactualProfile.sourceNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
+  const changedPerception = counterfactualProfile ? sonorityPerceptionModel(counterfactualProfile.targetNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
+  const sourceTendency = counterfactualProfile ? tonalTendency(counterfactualProfile.sourceNotes, doMidi, scale) : null;
+  const changedTendency = counterfactualProfile ? tonalTendency(counterfactualProfile.targetNotes, doMidi, scale) : null;
+  const noteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
   const doLabel = (pitchClass: number) => showConventions
     ? CONVENTIONAL_PITCH_CLASSES[pitchClass]
     : `${formatHz(frequencyFromMidi(nearestMidiForPitchClass(pitchClass, 60)))} Do`;
@@ -2132,25 +2157,30 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
     <div className="hud-landmark-selector" aria-label="Choose a landmark path">
       {LANDMARK_PATHS.map((candidate) => <button key={candidate.id} type="button" aria-pressed={candidate.id === path.id} onClick={() => onSelect(candidate.id)}><span>{candidate.family}</span><strong>{candidate.title}</strong><small>{candidate.steps.length} fields</small></button>)}
     </div>
-    <div className="hud-landmark-question"><span>one listening question</span><strong>{path.question}</strong><small>{path.provenance}</small></div>
+    <div className="hud-landmark-question"><span>one listening question</span><strong>{counterfactualActive ? path.counterfactual.question : path.question}</strong><small>{path.provenance}</small></div>
     {transposeProfile ? <div className="hud-landmark-transpose" role="status" aria-label={`Transposition comparison from ${doLabel(transposeProfile.sourceDoPitchClass)} to ${doLabel(transposeProfile.targetDoPitchClass)}`}>
       <div><span>same path, new center</span><strong>{doLabel(transposeProfile.sourceDoPitchClass)} <i aria-hidden="true">→</i> {doLabel(transposeProfile.targetDoPitchClass)}</strong><small>Every target pitch class rotated {transposeProfile.semitoneShift} equal-key step{transposeProfile.semitoneShift === 1 ? "" : "s"} around the octave; compact voicings may move individual keys differently. Begin again at field 1.</small></div>
       <p><span>changed</span><strong>Do and every physical target frequency</strong></p>
       <p><span>held constant</span><strong>field order, roles, root offsets, and internal pitch-class shapes</strong></p>
       <p><span>listen for</span><strong>Does the route still feel directed when its register and center move?</strong></p>
     </div> : null}
+    {counterfactualProfile ? <div className="hud-landmark-counterfactual-intro" role="status" aria-label={`One-key counterfactual at field ${counterfactualProfile.stepIndex + 1}: ${noteLabel(counterfactualProfile.sourceNote)} to ${noteLabel(counterfactualProfile.targetNote)}`}>
+      <span>one-key counterfactual · same Do · no answer played</span>
+      <strong>{path.counterfactual.label}: {noteLabel(counterfactualProfile.sourceNote)} <i aria-hidden="true">→</i> {noteLabel(counterfactualProfile.targetNote)}</strong>
+      <small>{path.counterfactual.hypothesis} Perform every outlined field; only field {counterfactualProfile.stepIndex + 1} differs from your source route.</small>
+    </div> : null}
     <ol className="hud-landmark-progress" aria-label={`${path.title} progress`}>
       {path.steps.map((step, index) => <li key={step.id} className={index < stepIndex ? "is-complete" : index === stepIndex ? "is-current" : ""} aria-current={index === stepIndex ? "step" : undefined}>
         <span>{index < stepIndex ? "✓" : index + 1}</span>
         <strong>{showConventions ? `${step.conventionalName} · ${step.role}` : step.role}</strong>
-        <small>{index < stepIndex ? "matched" : index === stepIndex ? "play now" : "ahead"}</small>
+        <small>{counterfactualActive && index === path.counterfactual.stepIndex ? `${index < stepIndex ? "matched" : index === stepIndex ? "play now" : "ahead"} · one key changed` : index < stepIndex ? "matched" : index === stepIndex ? "play now" : "ahead"}</small>
       </li>)}
     </ol>
     <div className={`hud-landmark-target ${complete ? "is-complete" : ""}`} role="status" aria-label={targetDescription}>
       <span>{complete ? "path complete" : `field ${stepIndex + 1} of ${path.steps.length}`}</span>
-      <strong>{complete ? transposeProfile ? "Same route completed from two centers" : "Replay it here—or move the whole route" : `${currentStep!.role} · ${targetLabels.join(" · ")}`}</strong>
-      <small>{complete ? transposeProfile ? "The center and frequencies changed; the ordered interval relationships did not. Similarity of your felt experience remains yours to judge." : "The archetype is a reusable relationship path, not a fixed key or a claim about every piece in this style." : `${currentStep!.prompt} Release the prior field, then play the dashed keys together or as one compact roll.`}</small>
-      {complete ? <div className="hud-landmark-actions"><button type="button" onClick={onReplay}>Replay here</button><button type="button" onClick={onTranspose}>Move to fifths neighbor</button></div> : null}
+      <strong>{complete ? counterfactualActive ? "One route completed with exactly one changed key" : transposeProfile ? "Same route completed from two centers" : "Replay it here—or change one property" : `${currentStep!.role} · ${targetLabels.join(" · ")}`}</strong>
+      <small>{complete ? counterfactualActive ? "The performed control changed one physical key in one field. Compare the evidence lanes, then report only what you experienced." : transposeProfile ? "The center and frequencies changed; the ordered interval relationships did not. Similarity of your felt experience remains yours to judge." : "The archetype is a reusable relationship path, not a fixed key or a claim about every piece in this style." : `${counterfactualActive && stepIndex === path.counterfactual.stepIndex ? `This is the only altered field: ${noteLabel(counterfactualProfile!.sourceNote)} became ${noteLabel(counterfactualProfile!.targetNote)}. ` : ""}${currentStep!.prompt} Release the prior field, then play the dashed keys together or as one compact roll.`}</small>
+      {complete ? counterfactualActive ? <div className="hud-landmark-actions"><button type="button" onClick={onReplay}>Replay changed route</button><button type="button" onClick={onRestore}>Restore original route</button></div> : <div className="hud-landmark-actions"><button type="button" onClick={onReplay}>Replay here</button><button type="button" onClick={onCounterfactual}>Change one key</button><button type="button" onClick={onTranspose}>Move to fifths neighbor</button></div> : null}
     </div>
     {!complete ? <div className="hud-landmark-evidence" aria-label="Current landmark transition evidence">
       <span><small>carried tones</small><strong>{transition ? transition.commonPitchClassCount : "—"}</strong><em>{transition ? "same pitch classes" : "first-field baseline"}</em></span>
@@ -2158,6 +2188,13 @@ function LandmarkPathCoach({ path, stepIndex, targetNotes, doMidi, scale, soundM
       <span><small>root around fifths</small><strong>{transition?.rootTravelSteps ?? "—"}</strong><em>{transition?.rootTravelSteps == null ? "baseline" : transition.rootTravelSteps === 1 ? "one neighbor" : "circle steps"}</em></span>
       <span><small>modeled field</small><strong>{perception ? `${Math.round(perception.roughness * 100)} / ${Math.round(perception.repose * 100)}` : "—"}</strong><em>crunch / repose proxy</em></span>
       <span><small>toward Do</small><strong>{tendency ? Math.round(tendency.homePull * 100) : "—"}</strong><em>{tendency?.hasHome ? "Do is present" : "Do is absent"}</em></span>
+    </div> : null}
+    {counterfactualProfile && sourcePerception && changedPerception && sourceTendency && changedTendency ? <div className="hud-landmark-counterfactual" aria-label="Original versus one-key path comparison across five lenses">
+      <div><span>physical intervention</span><strong>{noteLabel(counterfactualProfile.sourceNote)} → {noteLabel(counterfactualProfile.targetNote)}</strong><small>{signedPhraseValue(counterfactualProfile.keyShift)} key step at field {counterfactualProfile.stepIndex + 1} · {counterfactualProfile.retainedNotes.length} tones retained</small></div>
+      <div><span>relationships</span><strong>{counterfactualProfile.sourceIntervals.join(" · ")} → {counterfactualProfile.targetIntervals.join(" · ")}</strong><small>key-step distances from changed tone to retained tones</small></div>
+      <div><span>assumed spectrum</span><strong>crunch {signedPhraseValue((changedPerception.roughness - sourcePerception.roughness) * 100)}</strong><small>repose proxy {signedPhraseValue((changedPerception.repose - sourcePerception.repose) * 100)} · model, not heard audio</small></div>
+      <div><span>selected context</span><strong>pull {signedPhraseValue((changedTendency.homePull - sourceTendency.homePull) * 100)}</strong><small>home evidence {signedPhraseValue((changedTendency.homeEvidence - sourceTendency.homeEvidence) * 100)} · selected Do model</small></div>
+      <div className="hud-landmark-counterfactual-report"><span>your experience</span><strong>{complete ? "Which path felt more directed?" : "Complete the changed route first"}</strong>{complete ? <div role="group" aria-label="Report which landmark path felt more directed"><button type="button" aria-pressed={counterfactualSession?.report === "source"} onClick={() => onCounterfactualReport("source")}>Original</button><button type="button" aria-pressed={counterfactualSession?.report === "same"} onClick={() => onCounterfactualReport("same")}>About same</button><button type="button" aria-pressed={counterfactualSession?.report === "changed"} onClick={() => onCounterfactualReport("changed")}>Changed</button></div> : <small>No modeled lane fills this answer.</small>}</div>
     </div> : null}
     <div className="hud-landmark-reading">
       <p><span>what stays invariant</span><strong>{path.invariant}</strong></p>
@@ -2396,6 +2433,7 @@ export function PianoLab() {
   const [landmarkPathId, setLandmarkPathId] = useState<LandmarkPathId>("pop-loop");
   const [landmarkStepIndex, setLandmarkStepIndex] = useState(0);
   const [landmarkTransposeSession, setLandmarkTransposeSession] = useState<LandmarkTransposeSession | null>(null);
+  const [landmarkCounterfactualSession, setLandmarkCounterfactualSession] = useState<LandmarkCounterfactualSession | null>(null);
   const [soundModelId, setSoundModelId] = useState<PianoSoundModelId>(DEFAULT_PIANO_SOUND_MODEL_ID);
   const [experiencePhrase, setExperiencePhrase] = useState<HudNoteEvent[]>([]);
   const [experienceDraft, setExperienceDraft] = useState<Partial<PhraseCharacterRatings>>({});
@@ -2444,7 +2482,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -2484,6 +2522,12 @@ export function PianoLab() {
               && Number.isInteger(saved.landmarkTransposeSession.targetRootPitchClass)
               && saved.landmarkTransposeSession.targetRootPitchClass >= 0
               && saved.landmarkTransposeSession.targetRootPitchClass < 12) setLandmarkTransposeSession(saved.landmarkTransposeSession);
+            if (saved.landmarkCounterfactualSession
+              && LANDMARK_PATHS.some((path) => path.id === saved.landmarkCounterfactualSession!.pathId)
+              && Number.isInteger(saved.landmarkCounterfactualSession.rootPitchClass)
+              && saved.landmarkCounterfactualSession.rootPitchClass >= 0
+              && saved.landmarkCounterfactualSession.rootPitchClass < 12
+              && (saved.landmarkCounterfactualSession.report === null || saved.landmarkCounterfactualSession.report === "source" || saved.landmarkCounterfactualSession.report === "same" || saved.landmarkCounterfactualSession.report === "changed")) setLandmarkCounterfactualSession(saved.landmarkCounterfactualSession);
             if (isPianoSoundModelId(saved.soundModelId)) setSoundModelId(saved.soundModelId);
             if (saved.scaleWalkSession
               && Number.isInteger(saved.scaleWalkSession.anchorEventId)
@@ -2517,6 +2561,7 @@ export function PianoLab() {
         setControlledSonoritySession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setGravityCounterfactualSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setPhraseCompareSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
+        setLandmarkCounterfactualSession((current) => current && current.rootPitchClass === linkedDoValue ? current : null);
       }
       setHydrated(true);
     }, 0);
@@ -2525,9 +2570,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 14, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 15, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -2641,8 +2686,9 @@ export function PianoLab() {
   }, [doMidi, focusLens, frameMode, hydrated, scale.id]);
   const landmarkPath = LANDMARK_PATHS.find((path) => path.id === landmarkPathId) ?? LANDMARK_PATHS[0];
   const effectiveLandmarkStepIndex = Math.min(landmarkStepIndex, landmarkPath.steps.length);
-  const landmarkVoicings = useMemo(() => voiceLandmarkPath(landmarkPath, doMidi), [doMidi, landmarkPath]);
-  const landmarkTargetNotes = landmarkVoicings[effectiveLandmarkStepIndex] ?? [];
+  const landmarkCounterfactualActive = landmarkCounterfactualSession?.pathId === landmarkPath.id && landmarkCounterfactualSession.rootPitchClass === pitchClassFromMidi(doMidi);
+  const landmarkVoicings = useMemo(() => landmarkCounterfactualActive ? voiceLandmarkCounterfactual(landmarkPath, doMidi) : voiceLandmarkPath(landmarkPath, doMidi), [doMidi, landmarkCounterfactualActive, landmarkPath]);
+  const landmarkTargetNotes = useMemo(() => landmarkVoicings[effectiveLandmarkStepIndex] ?? [], [effectiveLandmarkStepIndex, landmarkVoicings]);
   const soundModel = pianoSoundModel(soundModelId);
   const experienceEvidence = useMemo(() => phraseCharacterEvidence(experiencePhrase, doMidi, scale, soundModelId), [doMidi, experiencePhrase, scale, soundModelId]);
   useEffect(() => {
@@ -2732,13 +2778,13 @@ export function PianoLab() {
     if (focusLens !== "paths" || !landmarkTargetNotes.length || !activeNoteNumbers.length) return;
     const latestEventId = phraseEvents.at(-1)?.id ?? 0;
     if (latestEventId <= landmarkLastMatchIdRef.current) return;
-    if (!matchesLandmarkStep(landmarkPath, effectiveLandmarkStepIndex, activeNoteNumbers, pitchClassFromMidi(doMidi))) return;
+    if (!samePitchClasses(activeNoteNumbers, landmarkTargetNotes)) return;
     landmarkLastMatchIdRef.current = latestEventId;
     const timer = window.setTimeout(() => {
       setLandmarkStepIndex((current) => Math.min(landmarkPath.steps.length, current + 1));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeNoteNumbers, doMidi, effectiveLandmarkStepIndex, focusLens, landmarkPath, landmarkTargetNotes.length, phraseEvents]);
+  }, [activeNoteNumbers, focusLens, landmarkPath.steps.length, landmarkTargetNotes, phraseEvents]);
   const lastField = events.at(-1)?.fieldNotes ?? [];
   const fieldNotes = activeNoteNumbers.length ? activeNoteNumbers : lastField;
   const fieldIsLive = activeNoteNumbers.length > 0;
@@ -2807,6 +2853,7 @@ export function PianoLab() {
     setResolutionForkSet(null);
     setLandmarkStepIndex(0);
     setLandmarkTransposeSession(null);
+    setLandmarkCounterfactualSession(null);
     landmarkLastMatchIdRef.current = 0;
     setExperiencePhrase([]);
     setExperienceDraft({});
@@ -2875,6 +2922,7 @@ export function PianoLab() {
     setFrameMode("locked");
     if (focusLens === "paths" && pitchClass !== currentPitchClass) {
       setLandmarkTransposeSession({ pathId: landmarkPath.id, sourceRootPitchClass: currentPitchClass, targetRootPitchClass: pitchClass });
+      setLandmarkCounterfactualSession(null);
       setLandmarkStepIndex(0);
       landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
     }
@@ -3203,6 +3251,7 @@ export function PianoLab() {
     setLandmarkPathId(id);
     setLandmarkStepIndex(0);
     setLandmarkTransposeSession(null);
+    setLandmarkCounterfactualSession(null);
     landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
     setGhostChord(null);
     setGhostNotes([]);
@@ -3212,6 +3261,24 @@ export function PianoLab() {
 
   const replayLandmarkPath = () => {
     setLandmarkStepIndex(0);
+    setLandmarkCounterfactualSession((current) => current ? { ...current, report: null } : current);
+    landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
+  };
+
+  const beginLandmarkCounterfactual = () => {
+    setLandmarkTransposeSession(null);
+    setLandmarkCounterfactualSession({ pathId: landmarkPath.id, rootPitchClass: pitchClassFromMidi(doMidi), report: null });
+    setLandmarkStepIndex(0);
+    landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
+  };
+
+  const reportLandmarkCounterfactual = (report: LandmarkCounterfactualReport) => {
+    setLandmarkCounterfactualSession((current) => current ? { ...current, report } : current);
+  };
+
+  const restoreLandmarkPath = () => {
+    setLandmarkCounterfactualSession(null);
+    setLandmarkStepIndex(0);
     landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
   };
 
@@ -3219,6 +3286,7 @@ export function PianoLab() {
     const sourceRootPitchClass = pitchClassFromMidi(doMidi);
     const targetRootPitchClass = (sourceRootPitchClass + 7) % 12;
     setLandmarkTransposeSession({ pathId: landmarkPath.id, sourceRootPitchClass, targetRootPitchClass });
+    setLandmarkCounterfactualSession(null);
     setLockedScaleId(scale.id);
     setLockedDoMidi(nearestMidiForPitchClass(targetRootPitchClass, 60));
     setFrameMode("locked");
@@ -3432,7 +3500,7 @@ export function PianoLab() {
           <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         </> : null}
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
-      </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
+      </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
       </> : null}
