@@ -15,7 +15,7 @@ This ledger ties empirical claims to research anchors and marks where the produc
 - **Evidence anchor:** Large and Jones modeled attending rhythms that entrain to time-varying event structure and tested predictions in listening experiments. DOI: [10.1037/0033-295X.106.1.119](https://doi.org/10.1037/0033-295X.106.1.119).
 - **Product claim allowed:** Pulse is a listener-facing hypothesis with confidence, not merely a written grid.
 - **Product claim prohibited:** One inferred pulse proves meter or groove.
-- **Implementation status:** Rhythm Lab exposes multiple pulse hypotheses, nested phase, microtiming, syncopation, tempo, and listener tapping. Recording Journey adds autocorrelation candidates, onset phase, a local tempo envelope, and syncopation evidence. These remain educational estimators rather than validated meter or groove models.
+- **Implementation status:** Rhythm Lab exposes multiple pulse hypotheses, nested phase, microtiming, syncopation, tempo, and listener tapping. Its v1.52 phrase-first bridge also removes pitch identity from the learner's retained MIDI phrase, clusters near-simultaneous attacks, and measures onset gaps against the phrase's median gap. Close normalized lengths can be called recurring, but the median is not a detected beat and the nearby simple-ratio label is not inferred notation or intention. Release timestamps support separate overlap and silence descriptions when present. Recording Journey adds autocorrelation candidates, onset phase, a local tempo envelope, and syncopation evidence. These remain educational estimators rather than validated meter or groove models.
 
 ## Scale degree, tonal context, and movable coordinates
 

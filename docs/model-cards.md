@@ -66,11 +66,11 @@ These cards describe educational models used by Music With No Names. A model out
 
 ## Rhythm and pulse models
 
-- **Version:** `mwno-rhythm-2`.
-- **Inputs:** circular onset positions, tempo, microtiming, optional listener taps, and optional live MIDI attacks following an explicitly armed four-tap same-key pulse declaration.
-- **Outputs:** ranked pulse hypotheses, nested phase, transparent syncopation, estimated tap tempo, tap consistency, raw declared-pulse spread, clustered attack phase, and inter-onset gap ratios.
+- **Version:** `mwno-rhythm-3`.
+- **Inputs:** circular onset positions, tempo, microtiming, optional listener taps, optional live MIDI attacks following an explicitly armed four-tap same-key pulse declaration, and a bounded tab-scoped phrase containing attack, velocity, and optional release times.
+- **Outputs:** ranked pulse hypotheses, nested phase, transparent syncopation, estimated tap tempo, tap consistency, raw declared-pulse spread, clustered attack phase, inter-onset gap ratios, and a pitchless phrase profile. The phrase profile clusters attacks within 70 ms, takes the median inter-cluster gap as a local unit, reports each exact multiple and nearest simple ratio landmark, marks recurrence only when normalized gap lengths lie within 0.12 octaves, and distinguishes known overlap, edge connection, silence, and missing release evidence.
 - **Confidence:** pulse confidence is normalized pattern support among the declared candidate divisions.
-- **Limits:** the live mirror uses a fixed pulse, simple phase and gap landmarks, and a declared 70 ms onset-cluster window. It does not establish meter, beat hierarchy, notation, swing, groove, timing accuracy, entrainment, expressive tempo, or bodily response for a listener.
+- **Limits:** the live mirror uses a fixed pulse, simple phase and gap landmarks, and a declared 70 ms onset-cluster window. The pitchless bridge's median unit is not a detected pulse, and a nearest ratio is a coordinate rather than an intended notation value. MIDI velocity is not acoustic loudness. Release evidence depends on the input and cannot recover written articulation or pedaling intention. Neither model establishes meter, beat hierarchy, notation, swing, groove, timing accuracy, entrainment, expressive tempo, bodily response, or musical quality for a listener.
 
 ## Journey prediction models
 

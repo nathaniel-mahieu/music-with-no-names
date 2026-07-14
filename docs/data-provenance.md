@@ -20,6 +20,8 @@ The initial Atlas entries are hand-authored pedagogical landmarks and transforma
 
 The v1.51 live bridge does not add a recording corpus. Its live square is derived only from the current tab's retained MIDI attacks; the selected landmark's circular marks remain the existing curator-authored, whole-recording hypotheses. No phrase, audio, similarity result, or landmark assignment is uploaded or persisted as new Atlas data.
 
+The v1.52 Rhythm bridge derives its pitchless timeline only from that same tab-scoped MIDI phrase. It does not capture audio, fetch timing examples, add the phrase to a dataset, or upload attacks, velocity, or release times. Its ratio landmarks are authored mathematical reference coordinates, not learned genre norms.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
