@@ -123,6 +123,12 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /holdBoundedExperienceSpecimen\("landmark-path", specimen/);
   assert.match(piano, /Save this landmark-path report/);
   assert.match(piano, /this performed landmark path/);
+  assert.match(piano, /relationship fingerprint · Do factored out/);
+  assert.match(piano, /The whole route inside one octave/);
+  assert.match(piano, /className="hud-landmark-fingerprint-plot"[\s\S]*role="img" aria-label=\{summary\}/);
+  assert.match(piano, /aria-label="Transition invariants across the route"/);
+  assert.match(piano, /Transposing the whole route leaves this folded pattern unchanged/);
+  assert.match(piano, /register, timing, the assumed sound, tonal interpretation, and your experience remain separate evidence/i);
   assert.match(personal, /Latest performed landmark:/);
   assert.match(personal, /latestLandmarkCharacterContrast\(phraseObservations\)/);
   assert.match(personal, /What changed when you played this route again\?/);
@@ -182,6 +188,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.personal-landmark-axis > i em[\s\S]*transform: rotate\(45deg\)/);
   assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.personal-landmark-pair \{ grid-template-columns: 1fr; \}/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.personal-landmark-axis > i em \{ border-color: Highlight/);
+  assert.match(css, /\.hud-landmark-fingerprint-node\.is-root[\s\S]*\.hud-landmark-fingerprint-node\.is-changed/);
+  assert.match(css, /\.hud-landmark-fingerprint-held[\s\S]*stroke: var\(--piano-blue\)/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-fingerprint-transitions \{ grid-template-columns: 1fr; \}/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-fingerprint-node\.is-changed \{ fill: Highlight/);
   assert.match(css, /\.lab-nav-primary[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(ratio, /<details className="lab-nav-more"/);
   assert.match(ratio, /aria-label="Live piano phrase available"/);

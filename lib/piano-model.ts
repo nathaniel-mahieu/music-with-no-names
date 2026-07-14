@@ -627,6 +627,32 @@ export type LandmarkTransitionProfile = {
   rootTravelSteps: number | null;
 };
 
+export type LandmarkRouteFingerprintField = {
+  stepIndex: number;
+  role: string;
+  conventionalName: string;
+  rootOffset: number;
+  pitchOffsets: number[];
+  changedFromOffset: number | null;
+  changedToOffset: number | null;
+};
+
+export type LandmarkRouteFingerprintTransition = {
+  fromStepIndex: number;
+  toStepIndex: number;
+  sharedOffsets: number[];
+  totalVoiceMotion: number;
+  largestLeap: number;
+  rootTravelSteps: number | null;
+};
+
+export type LandmarkRouteFingerprint = {
+  pathId: LandmarkPathId;
+  variant: "original" | "one-key-changed";
+  fields: LandmarkRouteFingerprintField[];
+  transitions: LandmarkRouteFingerprintTransition[];
+};
+
 export type ChordTemplate = {
   id: string;
   name: string;
@@ -3009,6 +3035,45 @@ export function landmarkTransitionProfile(path: LandmarkPath, stepIndex: number,
     largestLeap: voices.largestLeap,
     rootTravelSteps: transition.rootTravelSteps,
   };
+}
+
+/**
+ * Folds a generated landmark into movable-Do octave coordinates. Absolute
+ * center and register are deliberately absent, so the same fingerprint
+ * survives transposition while a declared one-key mutation remains visible.
+ */
+export function landmarkRouteFingerprint(path: LandmarkPath, variant: LandmarkRouteFingerprint["variant"] = "original"): LandmarkRouteFingerprint {
+  const fields = path.steps.map<LandmarkRouteFingerprintField>((step, stepIndex) => {
+    const changed = variant === "one-key-changed" && stepIndex === path.counterfactual.stepIndex;
+    const pitchOffsets = [...new Set(step.pitchOffsets.map((offset) => changed && offset === path.counterfactual.fromPitchOffset
+      ? path.counterfactual.toPitchOffset
+      : offset).map((offset) => modulo(Math.round(offset), 12)))].sort((first, second) => first - second);
+    return {
+      stepIndex,
+      role: step.role,
+      conventionalName: step.conventionalName,
+      rootOffset: modulo(Math.round(step.rootOffset), 12),
+      pitchOffsets,
+      changedFromOffset: changed ? modulo(path.counterfactual.fromPitchOffset, 12) : null,
+      changedToOffset: changed ? modulo(path.counterfactual.toPitchOffset, 12) : null,
+    };
+  });
+  const voicings = variant === "one-key-changed" ? voiceLandmarkCounterfactual(path, 60) : voiceLandmarkPath(path, 60);
+  const transitions = fields.slice(1).map<LandmarkRouteFingerprintTransition>((field, index) => {
+    const previous = fields[index];
+    const sharedOffsets = field.pitchOffsets.filter((offset) => previous.pitchOffsets.includes(offset));
+    const voices = voiceLeadingProfile(voicings[index] ?? [], voicings[index + 1] ?? []);
+    const transition = chordTransitionEvidence(voicings[index] ?? [], voicings[index + 1] ?? [], previous.rootOffset, field.rootOffset);
+    return {
+      fromStepIndex: index,
+      toStepIndex: index + 1,
+      sharedOffsets,
+      totalVoiceMotion: voices.totalMotion,
+      largestLeap: voices.largestLeap,
+      rootTravelSteps: transition.rootTravelSteps,
+    };
+  });
+  return { pathId: path.id, variant, fields, transitions };
 }
 
 function pitchClassSet(notes: number[]) {

@@ -37,6 +37,7 @@ import {
   landmarkStepPitchClasses,
   landmarkCounterfactualProfile,
   landmarkPerformanceEventIds,
+  landmarkRouteFingerprint,
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
   motifReturnArc,
@@ -728,6 +729,25 @@ test("explains each landmark transition through shared tones, hand motion, and f
   assert.ok(transition.largestLeap > 0);
   assert.equal(transition.rootTravelSteps, 1);
   assert.equal(landmarkTransitionProfile(path, 0, 60), null);
+});
+
+test("folds a landmark route into transposition-invariant octave positions", () => {
+  const path = LANDMARK_PATHS.find((item) => item.id === "pop-loop")!;
+  const original = landmarkRouteFingerprint(path);
+  assert.equal(original.pathId, "pop-loop");
+  assert.equal(original.variant, "original");
+  assert.deepEqual(original.fields.map((field) => field.pitchOffsets), [[0, 4, 7], [2, 7, 11], [0, 4, 9], [0, 5, 9]]);
+  assert.deepEqual(original.fields.map((field) => field.rootOffset), [0, 7, 9, 5]);
+  assert.deepEqual(original.transitions.map((transition) => transition.sharedOffsets), [[7], [], [0, 9]]);
+  assert.ok(original.transitions.every((transition) => transition.totalVoiceMotion >= 0 && transition.largestLeap >= 0));
+  assert.deepEqual(original.transitions.map((transition) => transition.rootTravelSteps), [1, 2, 4]);
+
+  const changed = landmarkRouteFingerprint(path, "one-key-changed");
+  assert.deepEqual(changed.fields[2].pitchOffsets, [1, 4, 9]);
+  assert.equal(changed.fields[2].changedFromOffset, 0);
+  assert.equal(changed.fields[2].changedToOffset, 1);
+  assert.deepEqual(changed.fields.filter((field) => field.changedFromOffset != null).map((field) => field.stepIndex), [2]);
+  assert.deepEqual(landmarkRouteFingerprint({ ...path, steps: [] }).transitions, []);
 });
 
 test("waits for enough distinct evidence before stabilizing a scale frame", () => {

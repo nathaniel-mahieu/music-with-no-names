@@ -9590,6 +9590,42 @@ footer a {
 .hud-landmark-reflection > div > strong { font-family: var(--font-display), Georgia, serif; font-size: .94rem; font-weight: 400; }
 .hud-landmark-reflection > div > small { color: var(--muted); font-size: .69rem; line-height: 1.45; }
 .hud-landmark-reflection > button:disabled { cursor: not-allowed; opacity: .45; }
+.hud-landmark-fingerprint { display: grid; gap: 10px; margin: 0 18px 15px; padding: 13px 0 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-landmark-fingerprint-heading { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: end; justify-content: space-between; }
+.hud-landmark-fingerprint-heading > div { display: grid; gap: 3px; }
+.hud-landmark-fingerprint-heading span { color: var(--piano-blue); font-size: .67rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-landmark-fingerprint-heading strong { font-family: var(--font-display), Georgia, serif; font-size: 1rem; font-weight: 400; }
+.hud-landmark-fingerprint-heading > small { max-width: 36ch; color: var(--muted); font-size: .68rem; line-height: 1.4; text-align: right; }
+.hud-landmark-fingerprint-plot { display: block; width: 100%; height: auto; max-height: 230px; }
+.hud-landmark-fingerprint-guide line { stroke: var(--line); stroke-width: 1; }
+.hud-landmark-fingerprint-guide text,
+.hud-landmark-fingerprint-root-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 9px; }
+.hud-landmark-fingerprint-field > line { stroke: var(--line-strong); stroke-width: 1; }
+.hud-landmark-fingerprint-tick { fill: var(--line-strong); }
+.hud-landmark-fingerprint-held { stroke: var(--piano-blue); stroke-width: 3; opacity: .78; }
+.hud-landmark-fingerprint-node { fill: var(--surface); stroke: var(--foreground); stroke-width: 2; }
+.hud-landmark-fingerprint-node.is-root { fill: var(--piano-blue); stroke: var(--surface); }
+.hud-landmark-fingerprint-node.is-changed { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-landmark-fingerprint-mutation line { stroke: var(--piano-gold); stroke-width: 2; stroke-dasharray: 3 3; }
+.hud-landmark-fingerprint-mutation circle { fill: var(--surface); stroke: var(--piano-gold); stroke-width: 2; stroke-dasharray: 2 2; }
+.hud-landmark-fingerprint-number { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 600; }
+.hud-landmark-fingerprint-fields { display: grid; grid-template-columns: repeat(var(--landmark-field-count), minmax(0, 1fr)); gap: 8px; }
+.hud-landmark-fingerprint-fields > span { display: grid; min-width: 0; gap: 2px; text-align: center; }
+.hud-landmark-fingerprint-fields small { color: var(--muted); font-size: .63rem; text-transform: uppercase; }
+.hud-landmark-fingerprint-fields strong { font-size: .68rem; font-weight: 600; line-height: 1.35; }
+.hud-landmark-fingerprint-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--muted); font-size: .65rem; }
+.hud-landmark-fingerprint-legend span { display: flex; gap: 6px; align-items: center; }
+.hud-landmark-fingerprint-legend i { display: inline-block; width: 9px; height: 9px; border: 2px solid var(--foreground); border-radius: 50%; background: var(--surface); }
+.hud-landmark-fingerprint-legend i.is-root { border-radius: 0; border-color: var(--piano-blue); background: var(--piano-blue); }
+.hud-landmark-fingerprint-legend i.is-source { border-color: var(--piano-gold); border-style: dashed; }
+.hud-landmark-fingerprint-legend i.is-changed { border-radius: 0; border-color: var(--foreground); background: var(--piano-gold); transform: rotate(45deg); }
+.hud-landmark-fingerprint-legend i.is-held { width: 18px; height: 0; border: 0; border-top: 3px solid var(--piano-blue); border-radius: 0; background: transparent; }
+.hud-landmark-fingerprint-transitions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); list-style: none; }
+.hud-landmark-fingerprint-transitions li { display: grid; min-width: 0; gap: 3px; padding: 8px 9px; }
+.hud-landmark-fingerprint-transitions li + li { border-left: 1px solid var(--line); }
+.hud-landmark-fingerprint-transitions strong { font-family: var(--font-mono), monospace; font-size: .68rem; }
+.hud-landmark-fingerprint-transitions span { color: var(--muted); font-size: .64rem; line-height: 1.4; }
+.hud-landmark-fingerprint > p { margin: 0; color: var(--muted); font-size: .67rem; line-height: 1.5; }
 .hud-landmark-evidence { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 18px 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .hud-landmark-evidence > span { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--line); }
 .hud-landmark-evidence > span:last-child { border-right: 0; }
@@ -10096,6 +10132,13 @@ footer a {
   .hud-landmark-reading p + p { border-top: 1px solid var(--line); border-left: 0; }
   .hud-landmark-reflection { align-items: stretch; flex-direction: column; }
   .hud-landmark-reflection > button { width: 100%; }
+  .hud-landmark-fingerprint-heading { align-items: start; flex-direction: column; }
+  .hud-landmark-fingerprint-heading > small { text-align: left; }
+  .hud-landmark-fingerprint-fields { gap: 3px; }
+  .hud-landmark-fingerprint-fields strong { font-size: .6rem; }
+  .hud-landmark-fingerprint-fields small { font-size: .56rem; }
+  .hud-landmark-fingerprint-transitions { grid-template-columns: 1fr; }
+  .hud-landmark-fingerprint-transitions li + li { border-top: 1px solid var(--line); border-left: 0; }
   .hud-character-axis-label,
   .hud-character-empty { font-size: 19px; }
   .hud-character-choices { grid-template-columns: 1fr 1fr; gap: 1px; }
@@ -10265,6 +10308,17 @@ footer a {
   .hud-landmark-counterfactual-intro { border-color: Highlight; background: Canvas; }
   .hud-landmark-counterfactual-report button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-landmark-reflection > button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
+  .hud-landmark-fingerprint-guide line,
+  .hud-landmark-fingerprint-field > line { stroke: CanvasText; }
+  .hud-landmark-fingerprint-guide text,
+  .hud-landmark-fingerprint-root-label,
+  .hud-landmark-fingerprint-number { fill: CanvasText; }
+  .hud-landmark-fingerprint-held { stroke: LinkText; }
+  .hud-landmark-fingerprint-node,
+  .hud-landmark-fingerprint-mutation circle { fill: Canvas; stroke: CanvasText; }
+  .hud-landmark-fingerprint-node.is-root { fill: LinkText; stroke: Canvas; }
+  .hud-landmark-fingerprint-node.is-changed { fill: Highlight; stroke: HighlightText; }
+  .hud-landmark-fingerprint-mutation line { stroke: Highlight; }
   .hud-character-point,
   .hud-character-uncertainty,
   .hud-character-current circle { fill: Canvas; stroke: CanvasText; }
