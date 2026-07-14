@@ -132,6 +132,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Same spacing—now inspect what changed around it/);
   assert.match(pianoLab, /A matched spacing preserves one relationship—not its melodic or harmonic job/);
   assert.match(pianoLab, /Optional interval network and assumed-partial microscope/);
+  assert.match(pianoLab, /Reflect on source \+ echo/);
+  assert.match(pianoLab, /The exact source and replay are frozen together/);
+  assert.match(pianoLab, /Use whole live phrase/);
+  assert.match(pianoLab, /this source-and-echo comparison/);
   assert.match(pianoLab, /compareIntervalEcho/);
   assert.match(pianoLab, /What did this attack change\?/);
   assert.match(pianoLab, /Exactly one MIDI member entered/);

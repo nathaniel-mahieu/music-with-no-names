@@ -8324,6 +8324,7 @@ footer a {
 .hud-echo-current strong { font-family: var(--font-display), Georgia, serif; font-size: 1.25rem; font-weight: 400; }
 .hud-echo-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .hud-echo-actions button,
+.hud-echo-experience button,
 .hud-boundary-controls button {
   min-height: 34px;
   padding: 0 10px;
@@ -8335,6 +8336,7 @@ footer a {
   font-size: .72rem;
   cursor: pointer;
 }
+.hud-echo-experience button { justify-self: start; margin-top: 5px; }
 
 .hud-echo-actions button:disabled,
 .hud-boundary-controls button:disabled { opacity: .45; cursor: not-allowed; }

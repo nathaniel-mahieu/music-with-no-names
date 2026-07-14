@@ -131,9 +131,14 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-echo-span\.is-attempt[\s\S]*Highlight/);
   assert.match(piano, /aria-label="Interval context lesson"/);
   assert.match(piano, /aria-label="Five separate lenses for the source and echoed interval"/);
+  assert.match(piano, />Reflect on source \+ echo<\/button>/);
+  assert.match(piano, /origin === "interval-echo" \? "interval source \+ echo"/);
+  assert.match(piano, /replace\("this phrase", "this source-and-echo comparison"\)/);
+  assert.match(piano, /"Use whole live phrase"/);
   assert.match(piano, /<details className="hud-interval-tools">/);
   assert.match(piano, /simultaneous partial-interaction comparison would answer the wrong question/);
   assert.match(css, /\.hud-echo-reading[\s\S]*grid-template-columns: repeat\(3/);
+  assert.match(css, /\.hud-echo-experience button \{ justify-self: start/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-echo-reading \{ grid-template-columns: 1fr/);
   assert.match(css, /\.hud-last-attack-reading\.is-attributable[\s\S]*LinkText/);
   assert.match(css, /\.hud-last-lenses article\.is-modeled[\s\S]*Highlight/);

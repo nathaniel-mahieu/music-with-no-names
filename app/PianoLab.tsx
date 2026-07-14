@@ -152,6 +152,7 @@ type ChordMeasure = {
 type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif";
+type ExperienceOrigin = "phrase" | "interval-echo";
 type IntervalEchoTarget = {
   semitones: number;
   anchorEventId: number;
@@ -1863,7 +1864,7 @@ function PulseMirrorField({ session, mirror, expired, doMidi, scale, showConvent
   </section>;
 }
 
-function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConventions, onSetTarget, onClear }: {
+function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConventions, onSetTarget, onClear, onReflect }: {
   events: HudNoteEvent[];
   target: IntervalEchoTarget | null;
   doMidi: number;
@@ -1872,6 +1873,7 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
   showConventions: boolean;
   onSetTarget: (target: IntervalEchoTarget) => void;
   onClear: () => void;
+  onReflect: (events: HudNoteEvent[]) => void;
 }) {
   const latestPair = events.length >= 2 ? [events.at(-2)!, events.at(-1)!] as const : null;
   const latestDistance = latestPair ? Math.abs(latestPair[1].note - latestPair[0].note) : null;
@@ -1948,7 +1950,7 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
           <p><span>Sound · measured + modeled</span><strong>{comparison.sourceFrequencyGapHz.toFixed(1)} → {comparison.attemptFrequencyGapHz.toFixed(1)} Hz · {spectralReading}</strong><small>Release evidence: {interactionLabel(sourceProfile)} → {interactionLabel(attemptProfile)}. {auditoryComparable && sourceReading && attemptReading ? `Assumed partial overlap ${Math.round(sourceReading.overlap * 100)} → ${Math.round(attemptReading.overlap * 100)} under ${model.shortLabel.toLowerCase()}.` : comparison.matched ? "At least one pair was sequential or release-unknown, so a simultaneous partial-interaction comparison would answer the wrong question." : "Spectral evidence waits until the performed relationship matches."} MIDI supplied no upper partials or acoustic loudness.</small></p>
           <p><span>Motion · measured</span><strong>{Math.round(sourceProfile.second.onsetMs - sourceProfile.first.onsetMs)} → {Math.round(attemptProfile.second.onsetMs - attemptProfile.first.onsetMs)} ms attack gap</strong><small>Hand center {signedSteps(comparison.centerShiftSteps)} keys · direction {comparison.directionPreserved ? "preserved" : "reversed"}{comparison.uniformShiftSteps == null ? " · not one uniform shift" : ` · both notes ${signedSteps(comparison.uniformShiftSteps)} keys`}.</small></p>
           <p><span>Context · selected Do</span><strong>{pairLabel(comparison.sourceNotes)} · versus · {pairLabel(comparison.attemptNotes)}</strong><small>{fieldSize(sourceEvents)} → {fieldSize(attemptEvents)} notes sounding at the second attack. These labels use the current movable-Do frame, not a detected function.</small></p>
-          <p><span>Experience · listener only</span><strong>Did the two intervals do the same thing for you?</strong><small>The HUD does not infer similarity, tension, beauty, preference, correctness, or musical quality from the matched span.</small></p>
+          <p className="hud-echo-experience"><span>Experience · listener only</span><strong>Did the two intervals do the same thing for you?</strong><small>The HUD does not infer similarity, tension, beauty, preference, correctness, or musical quality from the matched span.</small>{comparison.matched ? <button type="button" onClick={() => onReflect([...(sourceEvents ?? []), ...(attemptEvents ?? [])].sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id))}>Reflect on source + echo</button> : null}</p>
         </div>
         <p className="hud-echo-limit">A matched spacing preserves one relationship—not its melodic or harmonic job. Register, timing, overlap, surrounding notes, selected tonal frame, assumed spectrum, and your experience can all change around it.</p>
       </div> : null}
@@ -2339,8 +2341,9 @@ function characterChoiceLabel(key: keyof PhraseCharacterRatings, value: number |
   return question.choices[index];
 }
 
-function ExperienceLens({ captured, latestCount, observations, draft, questionIndex, saved, evidence, soundModelLabel, deleteArmed, onCapture, onAnswer, onBack, onSave, onReflectAgain, onArmDelete, onDelete }: {
+function ExperienceLens({ captured, origin, latestCount, observations, draft, questionIndex, saved, evidence, soundModelLabel, deleteArmed, onCapture, onAnswer, onBack, onSave, onReflectAgain, onArmDelete, onDelete }: {
   captured: HudNoteEvent[];
+  origin: ExperienceOrigin;
   latestCount: number;
   observations: PhraseCharacterObservation[];
   draft: Partial<PhraseCharacterRatings>;
@@ -2361,6 +2364,9 @@ function ExperienceLens({ captured, latestCount, observations, draft, questionIn
   const repeats = observations.filter((observation) => observation.phraseSignature === signature);
   const summary = summarizePhraseCharacter(observations);
   const question = CHARACTER_QUESTIONS[questionIndex];
+  const questionPrompt = question && origin === "interval-echo"
+    ? question.prompt.replace("this phrase", "this source-and-echo comparison")
+    : question?.prompt;
   const ready = captured.length >= 3;
   const draftPlaced = draft.settledness != null && draft.energy != null;
   const xFor = (value: number) => 54 + value / 100 * 412;
@@ -2372,8 +2378,8 @@ function ExperienceLens({ captured, latestCount, observations, draft, questionIn
   return <section className="hud-experience-lens" aria-labelledby="hud-experience-title">
     <div className="hud-panel-heading"><span>Listener-reported · local · uncertain</span><strong id="hud-experience-title">Personal character map</strong><small>Describe this experience yourself. The map never derives emotion, liking, or familiarity from MIDI or the assumed sound model.</small></div>
     <div className="hud-experience-toolbar">
-      <div><span>reflection specimen</span><strong>{ready ? `${captured.length} captured attacks` : "No phrase held yet"}</strong><small>{ready ? `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature` : "Play at least three attacks, then hold the latest phrase."}</small></div>
-      <button type="button" disabled={latestCount < 3} onClick={onCapture}>{ready ? "Use latest phrase" : "Hold latest phrase"}</button>
+      <div><span>{origin === "interval-echo" ? "interval source + echo" : "reflection specimen"}</span><strong>{ready ? `${captured.length} captured attacks${origin === "interval-echo" ? " · comparison held" : ""}` : "No phrase held yet"}</strong><small>{ready ? origin === "interval-echo" ? `The exact source and replay are frozen together. ${repeats.length} prior report${repeats.length === 1 ? "" : "s"} ${repeats.length === 1 ? "shares" : "share"} this relationship signature.` : `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature` : "Play at least three attacks, then hold the latest phrase."}</small></div>
+      <button type="button" disabled={latestCount < 3} onClick={onCapture}>{ready ? origin === "interval-echo" ? "Use whole live phrase" : "Use latest phrase" : "Hold latest phrase"}</button>
     </div>
     <div className="hud-experience-main">
       <div className="hud-character-map">
@@ -2397,8 +2403,8 @@ function ExperienceLens({ captured, latestCount, observations, draft, questionIn
       <div className="hud-character-question">
         {!ready ? <div className="hud-character-empty-state"><span>begin with your phrase</span><strong>Play, then hold at least three attacks.</strong><small>The reflection freezes a specimen so later playing cannot rewrite the experience you are rating.</small></div> : saved ? <div className="hud-character-saved" role="status"><span>saved locally</span><strong>This report is one sample, not your identity.</strong><small>Repeat the same relationship later to see whether surprise/familiarity, liking, settledness, or energy changes.</small><button type="button" onClick={onReflectAgain}>Reflect on it again</button></div> : question ? <>
           <ol className="hud-character-question-progress" aria-label="Reflection progress">{CHARACTER_QUESTIONS.map((item, index) => <li key={item.key} className={index < questionIndex ? "is-complete" : index === questionIndex ? "is-current" : ""}><span>{index < questionIndex ? "✓" : index + 1}</span><strong>{item.key === "settledness" ? "settled" : item.key}</strong></li>)}</ol>
-          <div className="hud-character-prompt"><span>question {questionIndex + 1} of 4</span><strong>{question.prompt}</strong><small>{question.low} → {question.high}</small></div>
-          <div className="hud-character-choices" role="group" aria-label={question.prompt}>{CHARACTER_VALUES.map((value, index) => <button key={value} type="button" aria-pressed={draft[question.key] === value} onClick={() => onAnswer(question.key, value)}><span>{index + 1}</span><strong>{question.choices[index]}</strong></button>)}</div>
+          <div className="hud-character-prompt"><span>question {questionIndex + 1} of 4</span><strong>{questionPrompt}</strong><small>{question.low} → {question.high}</small></div>
+          <div className="hud-character-choices" role="group" aria-label={questionPrompt}>{CHARACTER_VALUES.map((value, index) => <button key={value} type="button" aria-pressed={draft[question.key] === value} onClick={() => onAnswer(question.key, value)}><span>{index + 1}</span><strong>{question.choices[index]}</strong></button>)}</div>
           {questionIndex > 0 ? <button type="button" className="hud-character-back" onClick={onBack}>Change previous answer</button> : null}
         </> : <div className="hud-character-review">
           <span>your report · not a model output</span>
@@ -2460,6 +2466,7 @@ export function PianoLab() {
   const [landmarkCounterfactualSession, setLandmarkCounterfactualSession] = useState<LandmarkCounterfactualSession | null>(null);
   const [soundModelId, setSoundModelId] = useState<PianoSoundModelId>(DEFAULT_PIANO_SOUND_MODEL_ID);
   const [experiencePhrase, setExperiencePhrase] = useState<HudNoteEvent[]>([]);
+  const [experienceOrigin, setExperienceOrigin] = useState<ExperienceOrigin>("phrase");
   const [experienceDraft, setExperienceDraft] = useState<Partial<PhraseCharacterRatings>>({});
   const [experienceQuestionIndex, setExperienceQuestionIndex] = useState(0);
   const [experienceSaved, setExperienceSaved] = useState(false);
@@ -3175,6 +3182,7 @@ export function PianoLab() {
   };
 
   const captureExperiencePhrase = () => {
+    setExperienceOrigin("phrase");
     if (phraseEvents.length < 3) {
       setExperiencePhrase([]);
       setExperienceDraft({});
@@ -3249,6 +3257,22 @@ export function PianoLab() {
     url.searchParams.set("pianoLens", lens);
     if (lens === "motion") url.searchParams.set("pianoMotion", motionFocusMode);
     else url.searchParams.delete("pianoMotion");
+    window.history.replaceState(null, "", url);
+  };
+
+  const beginIntervalEchoReflection = (specimen: HudNoteEvent[]) => {
+    if (specimen.length !== 4) return;
+    setPhraseCompareSession(null);
+    setExperienceOrigin("interval-echo");
+    setExperiencePhrase(specimen.map((event) => ({ ...event, fieldNotes: [...event.fieldNotes] })));
+    setExperienceDraft({});
+    setExperienceQuestionIndex(0);
+    setExperienceSaved(false);
+    setCharacterDeleteArmed(false);
+    setFocusLens("experience");
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoLens", "experience");
+    url.searchParams.delete("pianoMotion");
     window.history.replaceState(null, "", url);
   };
 
@@ -3392,7 +3416,7 @@ export function PianoLab() {
     : experienceSaved
       ? "Your phrase report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence."
       : experienceQuestionIndex < CHARACTER_QUESTIONS.length
-        ? `Reflection ${experienceQuestionIndex + 1} of 4: ${CHARACTER_QUESTIONS[experienceQuestionIndex].prompt}`
+        ? `Reflection ${experienceQuestionIndex + 1} of 4: ${experienceOrigin === "interval-echo" ? CHARACTER_QUESTIONS[experienceQuestionIndex].prompt.replace("this phrase", "this source-and-echo comparison") : CHARACTER_QUESTIONS[experienceQuestionIndex].prompt}`
         : "All four personal dimensions are answered. Review them together before saving this observation."
     : focusLens === "paths" ? effectiveLandmarkStepIndex >= landmarkPath.steps.length
     ? `${landmarkPath.family} complete: ${landmarkPath.invariant}`
@@ -3524,7 +3548,7 @@ export function PianoLab() {
           <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         </> : null}
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
-      </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
+      </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
       </> : null}
@@ -3571,7 +3595,7 @@ export function PianoLab() {
       {((focusLens === "explore" && !phraseCompareSession) || focusLens === "chords") ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
 
       {focusLens === "intervals" ? <section className="hud-interval-lesson" aria-label="Interval context lesson">
-        <IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} />
+        <IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} onReflect={beginIntervalEchoReflection} />
         <details className="hud-interval-tools">
           <summary><span>Inspect the sounding field</span><small>Optional interval network and assumed-partial microscope</small></summary>
           <div className="piano-focus-grid is-interval-practice"><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /><PartialInteractionMicroscope notes={soundingAnalysisNotes} focusedNote={focusedEvent?.note ?? null} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} /></div>
