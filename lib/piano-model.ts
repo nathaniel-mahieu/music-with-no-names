@@ -560,6 +560,13 @@ export type MotifEchoComparison = MotifFingerprintComparison & {
   endingDeltaSemitones: number;
 };
 
+export type MotifReturnArc = {
+  status: "waiting-for-variation" | "variation-open" | "return-after-variation";
+  variationIndices: number[];
+  returnIndices: number[];
+  returnAfterVariationIndex: number | null;
+};
+
 export type LandmarkPathId = "pop-loop" | "blues-turn" | "classical-cadence" | "pedal-field";
 
 export type LandmarkPathStep = {
@@ -2567,6 +2574,24 @@ export function compareMotifEcho(
     exactPitchPath,
     rhythmDistance,
     endingDeltaSemitones,
+  };
+}
+
+/**
+ * Summarizes only the order of learner-bounded motif comparisons. A return is
+ * a recovered pitch-and-timing relationship (exact or transposed), not a claim
+ * about formal function, listener recognition, or compositional intention.
+ */
+export function motifReturnArc(comparisons: MotifEchoComparison[]): MotifReturnArc {
+  const returnIndices = comparisons.flatMap((comparison, index) => comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat" ? [index] : []);
+  const variationIndices = comparisons.flatMap((comparison, index) => comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat" ? [] : [index]);
+  const firstVariation = variationIndices[0] ?? null;
+  const returnAfterVariationIndex = firstVariation == null ? null : returnIndices.find((index) => index > firstVariation) ?? null;
+  return {
+    status: firstVariation == null ? "waiting-for-variation" : returnAfterVariationIndex == null ? "variation-open" : "return-after-variation",
+    variationIndices,
+    returnIndices,
+    returnAfterVariationIndex,
   };
 }
 

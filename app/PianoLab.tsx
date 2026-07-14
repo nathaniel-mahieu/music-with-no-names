@@ -46,6 +46,7 @@ import {
   landmarkCounterfactualProfile,
   landmarkTranspositionProfile,
   matchScaleFingerprint,
+  motifReturnArc,
   nearbyScaleChords,
   nearestMidiForPitchClass,
   noteContext,
@@ -250,6 +251,7 @@ type PulseMirrorSession = {
 type MotifEchoSession = {
   sourceEvents: HudNoteEvent[];
   anchorEventId: number;
+  attempts?: HudNoteEvent[][];
 };
 type PhraseCompareDimension = "settledness" | "energy" | "liking";
 type PhraseCompareReport = "a" | "same" | "b";
@@ -281,7 +283,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -508,10 +510,17 @@ function isPulseMirrorSession(value: unknown): value is PulseMirrorSession {
 function isMotifEchoSession(value: unknown): value is MotifEchoSession {
   if (!value || typeof value !== "object") return false;
   const session = value as Partial<MotifEchoSession>;
-  return isFrozenPhraseSpecimen(session.sourceEvents, 4)
-    && (session.sourceEvents.length === 3 || session.sourceEvents.length === 4)
-    && Number.isInteger(session.anchorEventId)
-    && session.anchorEventId! >= Math.max(...session.sourceEvents.map((event) => event.id));
+  const sourceEvents = session.sourceEvents;
+  if (!isFrozenPhraseSpecimen(sourceEvents, 4)
+    || (sourceEvents.length !== 3 && sourceEvents.length !== 4)
+    || !Number.isInteger(session.anchorEventId)
+    || session.anchorEventId! < Math.max(...sourceEvents.map((event) => event.id))) return false;
+  const attempts = session.attempts ?? [];
+  if (!Array.isArray(attempts) || attempts.length > 3 || attempts.some((attempt) => !isFrozenPhraseSpecimen(attempt, 4) || attempt.length !== sourceEvents.length)) return false;
+  const ids = [...sourceEvents, ...attempts.flat()].map((event) => event.id);
+  const sourceLastId = Math.max(...sourceEvents.map((event) => event.id));
+  return new Set(ids).size === ids.length
+    && attempts.flat().every((event) => event.id > sourceLastId && event.id <= session.anchorEventId!);
 }
 
 function isScaleFingerprintSession(value: unknown): value is ScaleFingerprintSession {
@@ -2114,6 +2123,37 @@ function motifEchoTitle(comparison: MotifEchoComparison) {
   return "more than one relationship changed";
 }
 
+function motifTrailLabel(comparison: MotifEchoComparison) {
+  if (comparison.kind === "exact-repeat") return "exact relationship";
+  if (comparison.kind === "transposed-repeat") return `shift ${motifSigned(comparison.startShiftSemitones)}`;
+  if (comparison.kind === "rhythmic-variation") return "timing changed";
+  if (comparison.kind === "altered-ending") return "ending changed";
+  return "several changes";
+}
+
+function MotifReturnTrail({ comparisons, currentIndex }: { comparisons: MotifEchoComparison[]; currentIndex: number | null }) {
+  const arc = motifReturnArc(comparisons);
+  const statusTitle = arc.status === "return-after-variation"
+    ? "The relationship returned after a variation."
+    : arc.status === "variation-open"
+      ? "The variation is open—try bringing the relationship back."
+      : comparisons.length
+        ? "A relationship return is present; change one property next."
+        : "Keep a statement to begin the transformation path.";
+  const summary = `Chosen source followed by ${comparisons.length} statement${comparisons.length === 1 ? "" : "s"}: ${comparisons.map(motifTrailLabel).join(", ") || "none yet"}. ${statusTitle} Returns here mean recovered pitch and timing fingerprints, not inferred musical form.`;
+  return <div className={`hud-motif-return-trail is-${arc.status}`}>
+    <div className="hud-subheading"><span>Local sequence · source → change → return</span><strong>How can changed material become recognizable again?</strong><small>Each kept statement stays in order. A return may come back on the same key or carry the relationship to a new key.</small></div>
+    <ol role="img" aria-label={summary} style={{ "--motif-statement-count": comparisons.length + 1 } as CSSProperties}>
+      <li className="is-source"><span>source</span><strong>chosen relationship</strong></li>
+      {comparisons.map((comparison, index) => {
+        const isReturn = comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat";
+        return <li key={index} className={`${isReturn ? "is-return" : "is-variation"}${currentIndex === index ? " is-current" : ""}`}><span>statement {index + 1}{currentIndex === index ? " · now" : ""}</span><strong>{motifTrailLabel(comparison)}</strong></li>;
+      })}
+    </ol>
+    <div className="hud-motif-return-reading" role="status" aria-live="polite"><strong>{statusTitle}</strong><small>This is a local relationship trace, not a detected section, theme, compositional intention, style, listener recognition, or quality judgment.</small></div>
+  </div>;
+}
+
 function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, onEnd }: {
   events: HudNoteEvent[];
   session: MotifEchoSession | null;
@@ -2125,6 +2165,12 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
   const required = session?.sourceEvents.length ?? 0;
   const completeAttempt = session && attemptEvents.length === required ? attemptEvents : null;
   const comparison = session && completeAttempt ? compareMotifEcho(session.sourceEvents, completeAttempt) : null;
+  const keptComparisons = (session?.attempts ?? []).flatMap((attempt) => {
+    const kept = session ? compareMotifEcho(session.sourceEvents, attempt) : null;
+    return kept ? [kept] : [];
+  });
+  const comparisons = comparison ? [...keptComparisons, comparison] : keptComparisons;
+  const arc = motifReturnArc(comparisons);
   const sourceMoves = session ? session.sourceEvents.slice(1).map((event, index) => motifSigned(event.note - session.sourceEvents[index].note)).join(" · ") : "";
   return <section className="hud-motif-echo" aria-labelledby="hud-motif-echo-title">
     <div className="hud-subheading"><span>Learner-bounded experiment · silent</span><strong id="hud-motif-echo-title">Choose the shape before the model searches.</strong><small>Freeze exactly three or four recent attacks, then replay that whole statement. No smaller sub-match can replace your chosen boundary.</small></div>
@@ -2140,9 +2186,10 @@ function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, o
         <strong>{comparison ? motifEchoTitle(comparison) : `Play ${required - attemptEvents.length} more attack${required - attemptEvents.length === 1 ? "" : "s"}`}</strong>
         <small>{comparison ? "Every chosen attack entered this comparison." : `${attemptEvents.length}/${required} replay attacks captured. Timing begins with your first replay attack.`}</small>
       </div>
+      {comparisons.length ? <MotifReturnTrail comparisons={comparisons} currentIndex={comparison ? comparisons.length - 1 : null} /> : null}
       {comparison ? <MotifFingerprintFigure id="echo" readingTitle={motifEchoTitle(comparison)} comparison={comparison} sourceLabel="chosen source" targetLabel="your replay" /> : null}
       <div className="hud-motif-echo-actions">
-        {comparison ? <button type="button" onClick={onRetry}>Try another return</button> : null}
+        {comparison ? <button type="button" onClick={onRetry}>{arc.status === "return-after-variation" ? "Keep return + continue" : comparison.kind === "exact-repeat" || comparison.kind === "transposed-repeat" ? "Keep return + change one property" : "Keep variation + try a return"}</button> : null}
         <button type="button" onClick={onEnd}>Release source</button>
       </div>
     </>}
@@ -3550,7 +3597,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19 || saved.version === 20) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19 || saved.version === 20 || saved.version === 21) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -3657,7 +3704,7 @@ export function PianoLab() {
               })),
             });
             if (isPulseMirrorSession(saved.pulseMirrorSession)) setPulseMirrorSession(saved.pulseMirrorSession);
-            if (isMotifEchoSession(saved.motifEchoSession)) setMotifEchoSession(saved.motifEchoSession);
+            if (isMotifEchoSession(saved.motifEchoSession)) setMotifEchoSession({ ...saved.motifEchoSession, attempts: saved.motifEchoSession.attempts ?? [] });
             if (isPhraseCompareSession(saved.phraseCompareSession)) setPhraseCompareSession({ ...saved.phraseCompareSession, intention: saved.phraseCompareSession.intention ?? null });
           }
         }
@@ -3683,7 +3730,7 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 20, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 21, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
   }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motifEchoSession, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
@@ -4563,11 +4610,15 @@ export function PianoLab() {
   const beginMotifEcho = (length: 3 | 4) => {
     if (phraseEvents.length < length) return;
     const sourceEvents = freezePhraseSpecimen(phraseEvents.slice(-length), currentHudTime());
-    setMotifEchoSession({ sourceEvents, anchorEventId: phraseEvents.at(-1)?.id ?? 0 });
+    setMotifEchoSession({ sourceEvents, anchorEventId: phraseEvents.at(-1)?.id ?? 0, attempts: [] });
   };
 
   const retryMotifEcho = () => {
-    setMotifEchoSession((current) => current ? { ...current, anchorEventId: phraseEvents.at(-1)?.id ?? current.anchorEventId } : current);
+    setMotifEchoSession((current) => current && motifEchoAttempt.length === current.sourceEvents.length ? {
+      ...current,
+      attempts: [...(current.attempts ?? []), freezePhraseSpecimen(motifEchoAttempt, currentHudTime())].slice(-3),
+      anchorEventId: phraseEvents.at(-1)?.id ?? current.anchorEventId,
+    } : current);
   };
 
   const selectLandmarkPath = (id: LandmarkPathId) => {

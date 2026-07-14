@@ -94,6 +94,9 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Freeze last 3/);
   assert.match(piano, /No smaller sub-match can replace your chosen boundary/);
   assert.match(piano, /Every chosen attack entered this comparison/);
+  assert.match(piano, /Local sequence · source → change → return/);
+  assert.match(piano, /The variation is open—try bringing the relationship back/);
+  assert.match(piano, /not a detected section, theme, compositional intention, style, listener recognition, or quality judgment/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
   assert.match(piano, /aria-labelledby="hud-phrase-breath-title"/);
@@ -171,6 +174,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-motif-time-bar i[\s\S]*flex: var\(--motif-gap-share\)/);
   assert.match(css, /\.hud-motif-fingerprint-grid \{ grid-template-columns: minmax\(76px/);
   assert.match(css, /\.hud-motif-echo-start \{ grid-template-columns: 1fr/);
+  assert.match(css, /\.hud-motif-return-trail ol \{ grid-template-columns: 1fr/);
+  assert.match(css, /\.hud-motif-return-trail li\.is-variation[\s\S]*border-top-style: dashed/);
+  assert.match(css, /\.hud-motif-return-trail li\.is-return[\s\S]*border-top-style: double/);
+  assert.match(css, /\.hud-motif-return-trail li\.is-return \{ border-top-color: LinkText/);
   assert.match(css, /\.hud-motif-echo button \{ color: ButtonText/);
   assert.match(css, /\.hud-partial-link\.is-aligned[\s\S]*LinkText/);
   assert.match(css, /\.hud-partial-link\.is-interaction[\s\S]*Highlight/);
@@ -261,7 +268,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
   assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
   assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
-  assert.match(piano, /version: 20/);
+  assert.match(piano, /version: 21/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);

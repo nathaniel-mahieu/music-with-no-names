@@ -9376,6 +9376,21 @@ footer a {
 .hud-motif-echo-progress span,
 .hud-motif-echo-progress small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-motif-echo-progress strong { font-size: .78rem; font-weight: 500; }
+.hud-motif-return-trail { min-width: 0; margin-top: 12px; padding: 12px; border: 1px solid var(--line); background: var(--surface-soft); }
+.hud-motif-return-trail ol { display: grid; grid-template-columns: repeat(var(--motif-statement-count), minmax(0, 1fr)); margin: 10px 0 0; padding: 0; list-style: none; }
+.hud-motif-return-trail li { position: relative; display: grid; min-width: 0; gap: 3px; padding: 10px; border-top: 2px solid var(--line-strong); border-bottom: 1px solid var(--line); }
+.hud-motif-return-trail li + li { border-left: 1px solid var(--line); }
+.hud-motif-return-trail li:not(:last-child)::after { content: "→"; position: absolute; z-index: 1; top: 50%; right: -8px; width: 16px; color: var(--muted); background: var(--surface-soft); text-align: center; transform: translateY(-50%); }
+.hud-motif-return-trail li.is-source { border-top-color: var(--foreground); }
+.hud-motif-return-trail li.is-variation { border-top-color: var(--piano-gold); border-top-style: dashed; }
+.hud-motif-return-trail li.is-return { border-top-color: var(--piano-blue); border-top-style: double; }
+.hud-motif-return-trail li.is-current { background: color-mix(in srgb, var(--piano-blue) 7%, transparent); }
+.hud-motif-return-trail li span { color: var(--muted); font-size: .66rem; line-height: 1.3; text-transform: uppercase; }
+.hud-motif-return-trail li strong { font-size: .72rem; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.hud-motif-return-reading { display: grid; gap: 3px; margin-top: 9px; padding: 9px 0 9px 11px; border-left: 2px solid var(--piano-gold); }
+.hud-motif-return-trail.is-return-after-variation .hud-motif-return-reading { border-left-color: var(--piano-blue); }
+.hud-motif-return-reading strong { font-size: .76rem; font-weight: 500; }
+.hud-motif-return-reading small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-motif-echo-actions { justify-content: flex-end; margin-top: 10px; }
 
 .hud-phrase-breath { min-width: 0; padding: 20px 18px; border-bottom: 1px solid var(--line); }
@@ -9934,6 +9949,9 @@ footer a {
   .hud-motif-fingerprint-grid code { font-size: .61rem; }
   .hud-motif-time-bar b { display: none; }
   .hud-motif-echo-start { grid-template-columns: 1fr; }
+  .hud-motif-return-trail ol { grid-template-columns: 1fr; }
+  .hud-motif-return-trail li + li { border-top-width: 2px; border-left: 0; }
+  .hud-motif-return-trail li:not(:last-child)::after { top: auto; right: 50%; bottom: -9px; transform: translateX(50%) rotate(90deg); }
   .hud-motif-echo-start > div:last-child,
   .hud-motif-echo-actions { display: grid; grid-template-columns: 1fr; }
   .hud-motif-echo button { width: 100%; }
@@ -10115,6 +10133,13 @@ footer a {
   .hud-motif-invariance-reading { border-left-color: LinkText; }
   .hud-motif-echo-start { border-left-color: LinkText; background: Canvas; }
   .hud-motif-echo-progress { border-left-color: Highlight; }
+  .hud-motif-return-trail { border-color: CanvasText; background: Canvas; }
+  .hud-motif-return-trail li.is-variation { border-top-color: Highlight; }
+  .hud-motif-return-trail li.is-return { border-top-color: LinkText; }
+  .hud-motif-return-trail li.is-current { background: Canvas; outline: 2px solid Highlight; outline-offset: -2px; }
+  .hud-motif-return-trail li:not(:last-child)::after { color: CanvasText; background: Canvas; }
+  .hud-motif-return-reading { border-left-color: Highlight; }
+  .hud-motif-return-trail.is-return-after-variation .hud-motif-return-reading { border-left-color: LinkText; }
   .hud-motif-echo button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
   .hud-landmark-selector button[aria-pressed="true"],
   .hud-landmark-progress li.is-current { border-color: Highlight; background: Highlight; color: HighlightText; }

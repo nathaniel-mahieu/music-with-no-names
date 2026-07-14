@@ -38,6 +38,7 @@ import {
   landmarkCounterfactualProfile,
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
+  motifReturnArc,
   matchesLandmarkStep,
   matchScaleFingerprint,
   nearbyScaleChords,
@@ -1174,6 +1175,28 @@ test("compares the entire learner-bounded motif echo without choosing a smaller 
   assert.ok(multipleResult.changedIntervalIndices.length > 1);
   assert.equal(compareMotifEcho(source.slice(0, 3), altered), null);
   assert.throws(() => compareMotifEcho(source, transposed.map((event, index) => index === 3 ? { ...event, onsetMs: 850 } : event)), RangeError);
+});
+
+test("tracks a local variation followed by a relationship return without claiming form", () => {
+  const source = motifEvents([60, 62, 64, 65], [0, 100, 200, 300]);
+  const exact = compareMotifEcho(source, motifEvents([60, 62, 64, 65], [500, 600, 700, 800]).map((event) => ({ ...event, id: event.id + 4 })))!;
+  const variation = compareMotifEcho(source, motifEvents([60, 62, 64, 67], [900, 1000, 1100, 1200]).map((event) => ({ ...event, id: event.id + 8 })))!;
+  const transposedReturn = compareMotifEcho(source, motifEvents([67, 69, 71, 72], [1300, 1400, 1500, 1600]).map((event) => ({ ...event, id: event.id + 12 })))!;
+
+  assert.deepEqual(motifReturnArc([]), { status: "waiting-for-variation", variationIndices: [], returnIndices: [], returnAfterVariationIndex: null });
+  assert.equal(motifReturnArc([exact]).status, "waiting-for-variation");
+  assert.deepEqual(motifReturnArc([exact, variation]), {
+    status: "variation-open",
+    variationIndices: [1],
+    returnIndices: [0],
+    returnAfterVariationIndex: null,
+  });
+  assert.deepEqual(motifReturnArc([exact, variation, transposedReturn]), {
+    status: "return-after-variation",
+    variationIndices: [1],
+    returnIndices: [0, 2],
+    returnAfterVariationIndex: 2,
+  });
 });
 
 test("separates exact chord identity, inversion, and incomplete outlines", () => {
