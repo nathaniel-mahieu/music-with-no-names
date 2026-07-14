@@ -53,6 +53,7 @@ import {
   pushPhraseEvent,
   pushRollingNoteEvent,
   resolutionForks,
+  resolutionLandingEvidence,
   resolutionDirection,
   scaleCoverage,
   scaleFingerprint,
@@ -78,6 +79,7 @@ import {
   type NearbyChord,
   type PianoScale,
   type ResolutionFork,
+  type ResolutionLandingEvidence,
   type ScaleCandidate,
   type ScaleGapMutationComparison,
   type ScaleLandingIntervalRipple,
@@ -167,7 +169,7 @@ type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif";
 type ChordFocusMode = "cause" | "change" | "echo";
-type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo";
+type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo" | "resolution-fork";
 type IntervalEchoTarget = {
   semitones: number;
   anchorEventId: number;
@@ -176,6 +178,7 @@ type IntervalEchoTarget = {
 };
 type ResolutionTarget = ResolutionFork & {
   anchorEventId: number;
+  sourceEvent?: HudNoteEvent;
   frameRootPitchClass?: number;
   frameScaleId?: PianoScale["id"];
 };
@@ -266,7 +269,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -1468,6 +1471,86 @@ function TonalGravityCounterfactualField({
   </div>;
 }
 
+function ResolutionLandingLens({ phraseEvents, target, evidence, doMidi, showConventions, onReflect }: {
+  phraseEvents: HudNoteEvent[];
+  target: ResolutionTarget;
+  evidence: ResolutionLandingEvidence;
+  doMidi: number;
+  showConventions: boolean;
+  onReflect: (events: HudNoteEvent[]) => void;
+}) {
+  const scale = PIANO_SCALES.find((candidate) => candidate.id === target.frameScaleId) ?? DEFAULT_SCALE;
+  const frameDoMidi = target.frameRootPitchClass == null ? doMidi : nearestMidiForPitchClass(target.frameRootPitchClass, doMidi);
+  const ordered = [...phraseEvents].sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  const sourceIndex = ordered.findIndex((event) => event.id === evidence.sourceEventId);
+  const landingIndex = ordered.findIndex((event) => event.id === evidence.landingEventId);
+  if (sourceIndex < 0 || landingIndex <= sourceIndex) return null;
+  const source = ordered[sourceIndex];
+  const landing = ordered[landingIndex];
+  const finalApproach = ordered.find((event) => event.id === evidence.finalApproachEventId) ?? source;
+  const pathEvents = ordered.slice(sourceIndex, landingIndex + 1);
+  const omittedCount = Math.max(0, pathEvents.length - 12);
+  const displayEvents = omittedCount ? [pathEvents[0], ...pathEvents.slice(-11)] : pathEvents;
+  const sourceHz = frequencyFromMidi(source.note);
+  const landingHz = frequencyFromMidi(landing.note);
+  const relationship = intervalLandmark(Math.abs(evidence.sourceToLandingSteps));
+  const sourceTendency = tonalTendency(uniqueSorted(source.fieldNotes), frameDoMidi, scale);
+  const landingTendency = tonalTendency(uniqueSorted(landing.fieldNotes), frameDoMidi, scale);
+  const signedSteps = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
+  const role = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, frameDoMidi, scale);
+  const bridgeCopy = evidence.bridge.kind === "unknown"
+    ? "final release unknown"
+    : evidence.bridge.kind === "touching"
+      ? "release met the landing attack"
+      : `${Math.round(evidence.bridge.durationMs!)} ms ${evidence.bridge.kind}${evidence.bridge.pedalExtended ? " · pedal-ended" : ""}`;
+  const coreSpecimen = ordered.slice(sourceIndex, landingIndex + 1);
+  const contextCount = coreSpecimen.length <= 10 ? Math.min(2, sourceIndex, 12 - coreSpecimen.length) : 0;
+  const reflectionSpecimen = coreSpecimen.length <= 12 ? ordered.slice(sourceIndex - contextCount, landingIndex + 1) : [];
+  const direct = evidence.interveningAttackCount === 0;
+  const low = Math.min(...displayEvents.map((event) => event.note)) - 1;
+  const high = Math.max(...displayEvents.map((event) => event.note)) + 1;
+  const startMs = source.onsetMs;
+  const durationMs = Math.max(1, landing.onsetMs - startMs);
+  const xFor = (event: HudNoteEvent) => 92 + ((event.onsetMs - startMs) / durationMs) * 548;
+  const yFor = (event: HudNoteEvent) => 126 - ((event.note - low) / Math.max(1, high - low)) * 82;
+  const pathPoints = displayEvents.map((event) => `${xFor(event)},${yFor(event)}`).join(" ");
+  const velocityCopy = evidence.velocityDelta == null
+    ? "attack velocity unavailable"
+    : evidence.velocityDelta === 0
+      ? "same MIDI attack velocity"
+      : `MIDI attack velocity ${signedSteps(evidence.velocityDelta)}`;
+  const landmarkCopy = evidence.sourceToLandingSteps < 0 && relationship.landmarkLabel !== "1:1"
+    ? `the descending reciprocal of the ${relationship.relationship} (${relationship.landmarkLabel})`
+    : `${relationship.relationship} (${relationship.landmarkLabel})`;
+  return <section className="hud-resolution-landing" aria-labelledby="hud-resolution-landing-title">
+    <div className="hud-panel-heading"><span>{direct ? "Direct fork landing" : `Fork landing after ${evidence.interveningAttackCount} intervening attack${evidence.interveningAttackCount === 1 ? "" : "s"}`} · five lenses</span><strong id="hud-resolution-landing-title">What did this intended landing actually do?</strong><small>{target.label} selected one pitch-class destination. The performed path, frame model, and your response remain separate evidence.</small></div>
+    <svg viewBox="0 0 720 162" role="img" aria-label={`${target.label}. ${role(source.note)} to ${role(landing.note)} is ${signedSteps(evidence.sourceToLandingSteps)} equal keys over ${Math.round(evidence.sourceToLandingGapMs)} milliseconds, with ${evidence.interveningAttackCount} intervening attacks. Final approach ${signedSteps(evidence.finalApproachSteps)} keys over ${Math.round(evidence.finalApproachGapMs)} milliseconds; ${bridgeCopy}.`}>
+      <title>Performed pitch path from the frozen fork source to the first matching landing</title>
+      <line x1="92" x2="640" y1="139" y2="139" className="hud-resolution-landing-axis" />
+      <polyline points={pathPoints} className="hud-resolution-landing-path" />
+      {displayEvents.map((event, index) => {
+        const isSource = event.id === source.id;
+        const isLanding = event.id === landing.id;
+        return <g key={event.id} className={`hud-resolution-landing-node ${isSource ? "is-source" : isLanding ? "is-landing" : "is-between"}`}>
+          {isLanding ? <rect x={xFor(event) - 6} y={yFor(event) - 6} width="12" height="12" transform={`rotate(45 ${xFor(event)} ${yFor(event)})`} /> : <circle cx={xFor(event)} cy={yFor(event)} r={isSource ? 6 : 4} />}
+          {(isSource || isLanding) ? <text x={xFor(event)} y={yFor(event) - 13} className="hud-resolution-landing-label">{isSource ? `source · ${role(event.note)}` : `landing · ${role(event.note)}`}</text> : null}
+          <title>{`${isSource ? "Frozen source" : isLanding ? "First matching landing" : `Intervening attack ${index}`}: ${role(event.note)}, ${Math.round(event.onsetMs - startMs)} milliseconds after source`}</title>
+        </g>;
+      })}
+      {omittedCount ? <text x="164" y="154" className="hud-echo-axis-label">{omittedCount} earlier detour attack{omittedCount === 1 ? "" : "s"} condensed</text> : null}
+      <text x="92" y="154" className="hud-echo-axis-label">source · 0 ms</text><text x="640" y="154" className="hud-echo-axis-label is-end">landing · {Math.round(durationMs)} ms</text>
+    </svg>
+    <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the performed resolution landing">
+      <article className="is-measured"><span>Sound</span><em>measured MIDI fundamentals</em><strong>{sourceHz.toFixed(1)} → {landingHz.toFixed(1)} Hz · {velocityCopy}</strong><small>Register and transmitted attack changed physically. MIDI supplied no acoustic loudness, spectrum, room, or heard balance.</small></article>
+      <article className="is-measured"><span>Relationships</span><em>source to intended destination</em><strong>{signedSteps(evidence.sourceToLandingSteps)} keys · ×{evidence.sourceToLandingFrequencyRatio.toFixed(3)}</strong><small>Near {landmarkCopy}. {direct ? "The fork was the next attack, so this is also the final approach." : `${evidence.interveningAttackCount} intervening attack${evidence.interveningAttackCount === 1 ? " means" : "s mean"} the fork intention was not an isolated one-move intervention.`}</small></article>
+      <article className="is-measured"><span>Motion</span><em>performed final approach</em><strong>{signedSteps(evidence.finalApproachSteps)} keys · {Math.round(evidence.finalApproachGapMs)} ms</strong><small>{role(finalApproach.note)} → {role(landing.note)} · {bridgeCopy}. Timing and release evidence do not establish meter, groove, or intended articulation.</small></article>
+      <article className="is-modeled"><span>Context</span><em>selected Do + route model</em><strong>remaining pull {Math.round(sourceTendency.homePull * 100)} → {Math.round(landingTendency.homePull * 100)} · home evidence {Math.round(sourceTendency.homeEvidence * 100)} → {Math.round(landingTendency.homeEvidence * 100)}</strong><small>Pull is modeled distance still left before Do, so zero can mean arrival—not indifference. The destination is {pitchClassRoleLabel(target.pitchClass, frameDoMidi, scale, showConventions)} in the frozen frame. The fork label named an intention, not a detected function or felt resolution.</small></article>
+      <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did this feel like return, continuation, opening, surprise, or something else?</strong><small>{reflectionSpecimen.length >= 3 ? `Hold this ${reflectionSpecimen.length}-attack context and answer settledness, energy, familiarity, and liking separately.` : coreSpecimen.length > 12 ? "The path exceeded the twelve-attack reflection bound; clear and try a shorter fork path." : "At least one earlier context attack is needed for a bounded three-attack reflection."}</small><button type="button" disabled={reflectionSpecimen.length < 3} onClick={() => onReflect(reflectionSpecimen)}>Reflect on this landing</button></article>
+    </div>
+    <p className="hud-last-attack-limit">No lens proves that the fork resolved, caused a feeling, was stylistically correct, or was musically good. The intention, performed path, selected-frame model, and listener report remain inspectably separate.</p>
+  </section>;
+}
+
 function ScalePracticeField({
   phraseEvents,
   frame,
@@ -1479,6 +1562,8 @@ function ScalePracticeField({
   forks,
   target,
   targetMatched,
+  landingEvidence,
+  landingEvents,
   fingerprintSession,
   fingerprintProgress,
   gravityCounterfactualSession,
@@ -1491,6 +1576,7 @@ function ScalePracticeField({
   onRotate,
   onChooseTarget,
   onClearTarget,
+  onReflectResolution,
   onStartFingerprint,
   onRestartFingerprint,
   onReplayFingerprint,
@@ -1515,6 +1601,8 @@ function ScalePracticeField({
   forks: ResolutionFork[];
   target: ResolutionTarget | null;
   targetMatched: boolean;
+  landingEvidence: ResolutionLandingEvidence | null;
+  landingEvents: HudNoteEvent[];
   fingerprintSession: ScaleFingerprintSession | null;
   fingerprintProgress: PerformedScaleFingerprint | null;
   gravityCounterfactualSession: GravityCounterfactualSession | null;
@@ -1527,6 +1615,7 @@ function ScalePracticeField({
   onRotate: () => void;
   onChooseTarget: (fork: ResolutionFork) => void;
   onClearTarget: () => void;
+  onReflectResolution: (events: HudNoteEvent[]) => void;
   onStartFingerprint: () => void;
   onRestartFingerprint: () => void;
   onReplayFingerprint: (steps: number[], exercise: "transpose" | "rotate" | "mutate") => void;
@@ -1541,6 +1630,7 @@ function ScalePracticeField({
   onRestartWalk: () => void;
   onEndWalk: () => void;
 }) {
+  const [landingRevealEventId, setLandingRevealEventId] = useState<number | null>(null);
   const fingerprint = scaleFingerprint(frame.scale, fingerprintRotation);
   const routePositions = scaleSemitones(frame.scale);
   const rotationOffset = routePositions[fingerprint.rotation] ?? 0;
@@ -1553,6 +1643,7 @@ function ScalePracticeField({
   const forkScale = PIANO_SCALES.find((scale) => scale.id === target?.frameScaleId) ?? frame.scale;
   const forkDoMidi = target?.frameRootPitchClass == null ? doMidi : nearestMidiForPitchClass(target.frameRootPitchClass, doMidi);
   const movementLabel = (movement: number) => movement === 0 ? "repeat" : `${movement > 0 ? "+" : ""}${movement} key step${Math.abs(movement) === 1 ? "" : "s"}`;
+  const landingRevealed = landingEvidence != null && landingRevealEventId === landingEvidence.landingEventId;
   return <section className="hud-scale-practice" aria-labelledby="hud-scale-practice-title">
     <div className="hud-panel-heading"><span>Author · preserve · contextualize</span><strong id="hud-scale-practice-title">Scale relationships with your hands</strong><small>First author an unnamed route. Then preserve it elsewhere or compare it with a selected frame. Tonal center remains a contextual hypothesis, never a goodness score.</small></div>
     {fingerprintSession ? <PerformedScaleFingerprintBuilder session={fingerprintSession} progress={fingerprintProgress} showConventions={showConventions} soundModelId={soundModelId} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} /> : walkSession ? <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} /> : gravityCounterfactualSession ? <TonalGravityCounterfactualField session={gravityCounterfactualSession} result={gravityCounterfactualResult} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={frame.scale} showConventions={showConventions} onStart={onStartGravityCounterfactual} onTarget={onTargetGravityCounterfactual} onCue={onCueGravityCounterfactual} onRecapture={onRecaptureGravityCounterfactual} onEnd={onEndGravityCounterfactual} /> : <div className="hud-scale-experiment-choices" aria-label="Choose one scale experiment">
@@ -1599,12 +1690,13 @@ function ScalePracticeField({
       <div className="hud-resolution-field">
         <div className="hud-subheading"><span>Playable experiment · selected Do</span><strong>Resolution forks</strong><small>Choose an intention; the HUD silently outlines a pitch class. Supply the note yourself.</small></div>
         <div className="hud-resolution-options">
-          {forks.map((fork) => <button key={`${fork.id}-${fork.pitchClass}`} type="button" aria-pressed={target?.id === fork.id && target.pitchClass === fork.pitchClass} onClick={() => onChooseTarget(fork)}><span>{fork.label}</span><strong>{pitchClassRoleLabel(fork.pitchClass, forkDoMidi, forkScale, showConventions)} · {movementLabel(fork.movement)}</strong><small>{fork.explanation}</small></button>)}
+          {forks.map((fork) => <button key={`${fork.id}-${fork.pitchClass}`} type="button" disabled={targetMatched} aria-pressed={target?.id === fork.id && target.pitchClass === fork.pitchClass} onClick={() => onChooseTarget(fork)}><span>{fork.label}</span><strong>{pitchClassRoleLabel(fork.pitchClass, forkDoMidi, forkScale, showConventions)} · {movementLabel(fork.movement)}</strong><small>{fork.explanation}</small></button>)}
         </div>
-        {target ? <div className={`hud-resolution-feedback ${targetMatched ? "is-match" : ""}`} role="status"><span>{targetMatched ? "You played the fork" : "Silent target armed"}</span><strong>{pitchClassRoleLabel(target.pitchClass, forkDoMidi, forkScale, showConventions)} · any octave</strong><small>{targetMatched ? "Notice whether it felt like return, continuation, opening, or surprise; the model does not decide that response." : "One pitch class is dashed on the keyboard. No note was entered or sounded."}</small><button type="button" onClick={onClearTarget}>Clear fork</button></div> : null}
+        {target ? <div className={`hud-resolution-feedback ${targetMatched ? "is-match" : ""}`}><p className="sr-only" role="status" aria-live="polite">{targetMatched ? "You played the fork. The first matching attack is fixed." : "Silent resolution target armed."}</p><span>{targetMatched ? "You played the fork" : "Silent target armed"}</span><strong>{pitchClassRoleLabel(target.pitchClass, forkDoMidi, forkScale, showConventions)} · any octave</strong><small>{targetMatched ? "The first matching attack is now fixed. Trace what the intended destination did without letting the model fill your experience." : "One pitch class is dashed on the keyboard. No note was entered or sounded."}</small><div className="hud-resolution-feedback-actions">{targetMatched && landingEvidence ? <button type="button" aria-expanded={landingRevealed} aria-controls="hud-resolution-landing-panel" onClick={() => setLandingRevealEventId(landingRevealed ? null : landingEvidence.landingEventId)}>{landingRevealed ? "Hide landing lenses" : "Trace this landing"}</button> : null}<button type="button" onClick={onClearTarget}>Clear fork</button></div></div> : null}
         {!forks.length ? <p>Play at least one note to reveal contrasting continuation intentions.</p> : null}
       </div>
     </div> : null}
+    {landingRevealed && target && landingEvidence ? <div id="hud-resolution-landing-panel"><ResolutionLandingLens phraseEvents={landingEvents} target={target} evidence={landingEvidence} doMidi={doMidi} showConventions={showConventions} onReflect={onReflectResolution} /></div> : null}
   </section>;
 }
 
@@ -2998,6 +3090,7 @@ function experiencePromptForOrigin(prompt: string, origin: ExperienceOrigin) {
   if (origin === "chord-change") return prompt.replace("this phrase", "this chord change");
   if (origin === "chord-voicing-echo") return prompt.replace("this phrase", "this source-and-revoicing comparison");
   if (origin === "chord-motion-echo") return prompt.replace("this phrase", "this source-and-replayed chord move");
+  if (origin === "resolution-fork") return prompt.replace("this phrase", "this intended landing in context");
   return prompt;
 }
 
@@ -3027,8 +3120,8 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
   const questionPrompt = question ? experiencePromptForOrigin(question.prompt, origin) : undefined;
   const ready = captured.length >= 3;
   const boundedComparison = origin !== "phrase";
-  const specimenLabel = origin === "interval-echo" ? "interval source + echo" : origin === "chord-change" ? "chord before + after" : origin === "chord-voicing-echo" ? "chord source + voicing" : origin === "chord-motion-echo" ? "chord move source + replay" : "reflection specimen";
-  const specimenState = origin === "interval-echo" || origin === "chord-voicing-echo" || origin === "chord-motion-echo" ? "comparison held" : origin === "chord-change" ? "change held" : "";
+  const specimenLabel = origin === "interval-echo" ? "interval source + echo" : origin === "chord-change" ? "chord before + after" : origin === "chord-voicing-echo" ? "chord source + voicing" : origin === "chord-motion-echo" ? "chord move source + replay" : origin === "resolution-fork" ? "resolution source + landing" : "reflection specimen";
+  const specimenState = origin === "interval-echo" || origin === "chord-voicing-echo" || origin === "chord-motion-echo" ? "comparison held" : origin === "chord-change" ? "change held" : origin === "resolution-fork" ? "landing held" : "";
   const repeatedReportCopy = `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} ${repeats.length === 1 ? "shares" : "share"} this relationship signature.`;
   const specimenCopy = origin === "interval-echo"
     ? `The exact source and replay are frozen together. ${repeatedReportCopy}`
@@ -3038,8 +3131,10 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
         ? `The exact source and revoicing gestures are frozen together. ${repeatedReportCopy}`
         : origin === "chord-motion-echo"
           ? `The exact two source fields and two replay fields are frozen together. ${repeatedReportCopy}`
+          : origin === "resolution-fork"
+            ? `The frozen fork source, performed path, and first matching landing are held together. ${repeatedReportCopy}`
       : `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature.`;
-  const saveLabel = origin === "phrase" ? "Save this phrase report" : origin === "chord-change" ? "Save this chord-change report" : origin === "chord-voicing-echo" ? "Save this voicing report" : origin === "chord-motion-echo" ? "Save this chord-move report" : "Save this comparison report";
+  const saveLabel = origin === "phrase" ? "Save this phrase report" : origin === "chord-change" ? "Save this chord-change report" : origin === "chord-voicing-echo" ? "Save this voicing report" : origin === "chord-motion-echo" ? "Save this chord-move report" : origin === "resolution-fork" ? "Save this landing report" : "Save this comparison report";
   const draftPlaced = draft.settledness != null && draft.energy != null;
   const xFor = (value: number) => 54 + value / 100 * 412;
   const yFor = (value: number) => 252 - value / 100 * 210;
@@ -3191,7 +3286,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -3219,7 +3314,17 @@ export function PianoLab() {
             setLockedDoMidi(saved.lockedDoMidi ?? 60);
             setGhostChord(saved.ghostChord ?? null);
             setGhostNotes(saved.ghostNotes ?? []);
-            setResolutionTarget(saved.resolutionTarget ?? null);
+            setResolutionTarget(saved.resolutionTarget ? {
+              ...saved.resolutionTarget,
+              sourceEvent: saved.resolutionTarget.sourceEvent ? {
+                ...saved.resolutionTarget.sourceEvent,
+                onsetMs: saved.resolutionTarget.sourceEvent.onsetMs + shift,
+                keyReleaseMs: saved.resolutionTarget.sourceEvent.keyReleaseMs == null ? null : saved.resolutionTarget.sourceEvent.keyReleaseMs + shift,
+                releaseMs: saved.resolutionTarget.sourceEvent.releaseMs == null ? currentNow - 350 : saved.resolutionTarget.sourceEvent.releaseMs + shift,
+                releaseReason: saved.resolutionTarget.sourceEvent.releaseReason ?? "key",
+                fieldNotes: [...saved.resolutionTarget.sourceEvent.fieldNotes],
+              } : undefined,
+            } : null);
             setResolutionForkSet(saved.resolutionForkSet ?? null);
             if (LANDMARK_PATHS.some((path) => path.id === saved.landmarkPathId)) setLandmarkPathId(saved.landmarkPathId!);
             setLandmarkStepIndex(Math.max(0, Math.round(saved.landmarkStepIndex ?? 0)));
@@ -3313,7 +3418,7 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 18, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 19, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
   }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
@@ -3585,7 +3690,11 @@ export function PianoLab() {
   const nearby = analysisNotes.length ? nearbyScaleChords(analysisNotes, doMidi, scale, 3) : [];
   const ghostAttemptNotes = activeNoteNumbers.length ? activeNoteNumbers : chordMeasures.at(-1)?.interpretedNotes ?? [];
   const ghostMatched = ghostChord ? samePitchClasses(ghostAttemptNotes, ghostChord.pitchClasses) : false;
-  const resolutionMatched = resolutionTarget ? phraseEvents.some((event) => event.id > resolutionTarget.anchorEventId && pitchClassFromMidi(event.note) === resolutionTarget.pitchClass) : false;
+  const resolutionEvidenceEvents = resolutionTarget?.sourceEvent && !phraseEvents.some((event) => event.id === resolutionTarget.sourceEvent!.id)
+    ? [resolutionTarget.sourceEvent, ...phraseEvents]
+    : phraseEvents;
+  const resolutionLanding = resolutionTarget ? resolutionLandingEvidence(resolutionEvidenceEvents, resolutionTarget.anchorEventId, resolutionTarget.pitchClass) : null;
+  const resolutionMatched = resolutionLanding != null;
   const controlledSonorityComparison = controlledSonoritySession?.baselineNotes ? controlledSonorityChange(controlledSonoritySession.baselineNotes, activeNoteNumbers) : null;
   const focusedEvent = events.find((event) => event.id === focusedId) ?? events.at(-1) ?? null;
 
@@ -4067,6 +4176,12 @@ export function PianoLab() {
     holdBoundedExperienceSpecimen("chord-motion-echo", specimen);
   };
 
+  const beginResolutionForkReflection = (specimen: HudNoteEvent[]) => {
+    const uniqueCount = new Set(specimen.map((event) => event.id)).size;
+    if (uniqueCount < 3 || uniqueCount > 12) return;
+    holdBoundedExperienceSpecimen("resolution-fork", specimen);
+  };
+
   const freezeChordSourceEvents = (measure: ChordMeasure) => {
     const notes = uniqueSorted(measure.interpretedNotes);
     const attackedNotes = new Set(measure.gesture.attacks.map((event) => event.note));
@@ -4245,11 +4360,13 @@ export function PianoLab() {
   };
 
   const chooseResolutionTarget = (fork: ResolutionFork) => {
+    const sourceEvent = phraseEvents.at(-1);
+    if (!sourceEvent) return;
     setControlledSonoritySession(null);
     setGhostChord(null);
     setGhostNotes([]);
     setResolutionForkSet(resolutionForkSet ?? nextNoteForks);
-    setResolutionTarget({ ...fork, anchorEventId: phraseEvents.at(-1)?.id ?? 0, frameRootPitchClass: frame.rootPitchClass, frameScaleId: scale.id });
+    setResolutionTarget({ ...fork, anchorEventId: sourceEvent.id, sourceEvent: { ...sourceEvent, fieldNotes: [...sourceEvent.fieldNotes] }, frameRootPitchClass: frame.rootPitchClass, frameScaleId: scale.id });
   };
 
   const latestPulsePlacement = pulseMirrorModel?.placements.at(-1) ?? null;
@@ -4318,7 +4435,7 @@ export function PianoLab() {
     : focusLens === "experience" ? experiencePhrase.length < 3
     ? "Play at least three attacks, then hold the latest phrase for a personal reflection."
     : experienceSaved
-      ? `Your ${experienceOrigin === "phrase" ? "phrase" : experienceOrigin === "chord-change" ? "chord-change" : experienceOrigin === "chord-voicing-echo" ? "chord-voicing" : experienceOrigin === "chord-motion-echo" ? "chord-move" : "interval-comparison"} report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence.`
+      ? `Your ${experienceOrigin === "phrase" ? "phrase" : experienceOrigin === "chord-change" ? "chord-change" : experienceOrigin === "chord-voicing-echo" ? "chord-voicing" : experienceOrigin === "chord-motion-echo" ? "chord-move" : experienceOrigin === "resolution-fork" ? "resolution-landing" : "interval-comparison"} report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence.`
       : experienceQuestionIndex < CHARACTER_QUESTIONS.length
         ? `Reflection ${experienceQuestionIndex + 1} of 4: ${experiencePromptForOrigin(CHARACTER_QUESTIONS[experienceQuestionIndex].prompt, experienceOrigin)}`
         : "All four personal dimensions are answered. Review them together before saving this observation."
@@ -4453,7 +4570,7 @@ export function PianoLab() {
           <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
           <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         </> : null}
-        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
+        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} landingEvidence={resolutionLanding} landingEvents={resolutionEvidenceEvents} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onReflectResolution={beginResolutionForkReflection} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}

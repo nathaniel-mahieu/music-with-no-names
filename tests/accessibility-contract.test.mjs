@@ -207,6 +207,19 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /replay Do moved \+ same route/);
   assert.match(piano, /restored the same relative-role path under this model; it did not prove the same heard function/);
   assert.match(piano, /The display-only Do counterfactual never supplies your report/);
+  assert.match(piano, />What did this intended landing actually do\?</);
+  assert.match(piano, /"Trace this landing"/);
+  assert.match(piano, /aria-expanded=\{landingRevealed\}/);
+  assert.match(piano, /aria-controls="hud-resolution-landing-panel"/);
+  assert.match(piano, /<p className="sr-only" role="status" aria-live="polite">\{targetMatched/);
+  assert.match(piano, /aria-label="Five separate lenses for the performed resolution landing"/);
+  assert.match(piano, /The fork label named an intention, not a detected function or felt resolution/);
+  assert.match(piano, /No lens proves that the fork resolved, caused a feeling, was stylistically correct, or was musically good/);
+  assert.match(piano, /Pull is modeled distance still left before Do, so zero can mean arrival—not indifference/);
+  assert.match(piano, /sourceEvent: \{ \.\.\.sourceEvent, fieldNotes: \[\.\.\.sourceEvent\.fieldNotes\] \}/);
+  assert.match(piano, /!phraseEvents\.some\(\(event\) => event\.id === resolutionTarget\.sourceEvent!/);
+  assert.match(piano, /holdBoundedExperienceSpecimen\("resolution-fork", specimen\)/);
+  assert.match(piano, /prompt\.replace\("this phrase", "this intended landing in context"\)/);
   assert.match(piano, />Did the hands make the same time-shape\?</);
   assert.match(piano, /"Compare gesture timing"/);
   assert.match(piano, /aria-expanded=\{gestureTimingRevealed\}/);
@@ -215,7 +228,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
   assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
   assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
-  assert.match(piano, /version: 18/);
+  assert.match(piano, /version: 19/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);
@@ -232,6 +245,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-chord-fold-segment\.is-changed \{ stroke: Highlight/);
   assert.match(css, /\.hud-chord-motion-node\.is-source\.is-before[\s\S]*CanvasText/);
   assert.match(css, /\.hud-chord-motion-node\.is-attempt\.is-after[\s\S]*HighlightText/);
+  assert.match(css, /\.hud-resolution-landing-node\.is-landing rect[\s\S]*var\(--piano-gold\)/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-resolution-feedback-actions button \{ width: 100%/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-resolution-landing-node\.is-landing rect \{ fill: Highlight/);
   assert.match(css, /\.hud-chord-gesture-test > button\[aria-expanded="true"\]/);
   assert.match(css, /\.hud-chord-gesture-hold\.is-pedal[\s\S]*stroke-dasharray/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-gesture-test > button \{ width: 100%/);

@@ -9170,6 +9170,7 @@ footer a {
 .hud-resolution-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .hud-resolution-options button { display: grid; min-width: 0; gap: 3px; padding: 9px; border: 1px solid var(--line); color: var(--foreground); background: transparent; text-align: left; cursor: pointer; }
 .hud-resolution-options button:hover { background: var(--surface-soft); }
+.hud-resolution-options button:disabled { opacity: .58; cursor: not-allowed; }
 .hud-resolution-options button[aria-pressed="true"] { color: var(--background); border-color: var(--foreground); background: var(--foreground); }
 .hud-resolution-options span,
 .hud-resolution-options small { color: var(--muted); font-size: .69rem; line-height: 1.35; }
@@ -9182,7 +9183,19 @@ footer a {
 .hud-resolution-feedback small,
 .hud-resolution-field > p { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-resolution-feedback strong { font-family: var(--font-mono), monospace; font-size: .78rem; }
-.hud-resolution-feedback button { width: fit-content; margin-top: 5px; }
+.hud-resolution-feedback-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.hud-resolution-feedback-actions button { width: fit-content; }
+.hud-resolution-feedback-actions button[aria-expanded="true"] { color: var(--background); background: var(--foreground); }
+.hud-resolution-landing { min-width: 0; padding: 17px 18px; border-top: 1px solid var(--line); }
+.hud-resolution-landing > svg { display: block; width: 100%; height: auto; margin-top: 8px; overflow: visible; }
+.hud-resolution-landing-axis { stroke: var(--line); stroke-width: 1; }
+.hud-resolution-landing-path { fill: none; stroke: var(--line-strong); stroke-width: 2; }
+.hud-resolution-landing-node circle,
+.hud-resolution-landing-node rect { stroke-width: 2; }
+.hud-resolution-landing-node.is-source circle { fill: var(--surface-raised); stroke: var(--piano-blue); }
+.hud-resolution-landing-node.is-between circle { fill: var(--surface-raised); stroke: var(--muted); }
+.hud-resolution-landing-node.is-landing rect { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-resolution-landing-label { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; }
 
 .hud-motion-guide { min-width: 0; padding: 18px; border-bottom: 1px solid var(--line); }
 .hud-motion-mode-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 13px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -9783,6 +9796,8 @@ footer a {
   .hud-fifths-equation > span:not(:first-child) { border-top: 1px solid var(--line); }
   .hud-resolution-field { grid-column: auto; }
   .hud-resolution-options { grid-template-columns: 1fr; }
+  .hud-resolution-feedback-actions,
+  .hud-resolution-feedback-actions button { width: 100%; }
   .hud-articulation-lane strong { font-size: .64rem; }
   .hud-articulation-lane small { display: none; }
   .hud-articulation-lane { min-height: 72px; }
@@ -9861,6 +9876,13 @@ footer a {
   .hud-scale-spectrum-aligned { fill: LinkText; stroke: Canvas; }
   .hud-scale-spectrum-interaction { fill: Highlight; stroke: CanvasText; }
   .hud-scale-spectrum-reading { border-left-color: LinkText; }
+  .hud-resolution-feedback-actions button[aria-expanded="true"] { color: HighlightText; background: Highlight; }
+  .hud-resolution-landing-axis { stroke: GrayText; }
+  .hud-resolution-landing-path { stroke: CanvasText; }
+  .hud-resolution-landing-node.is-source circle { fill: Canvas; stroke: LinkText; }
+  .hud-resolution-landing-node.is-between circle { fill: Canvas; stroke: GrayText; }
+  .hud-resolution-landing-node.is-landing rect { fill: Highlight; stroke: HighlightText; }
+  .hud-resolution-landing-label { fill: CanvasText; }
   .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-chord-motion-strand.is-source { stroke: CanvasText; }
   .hud-chord-motion-strand.is-attempt { stroke: LinkText; }

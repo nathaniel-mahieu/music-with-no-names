@@ -47,6 +47,7 @@ import {
   pushPhraseEvent,
   pushRollingNoteEvent,
   resolutionForks,
+  resolutionLandingEvidence,
   resolutionDirection,
   scaleFingerprint,
   tonalTendency,
@@ -920,6 +921,44 @@ test("offers contrasting unranked resolution forks without entering a note", () 
   assert.equal(new Set(forks.map((fork) => fork.pitchClass)).size, forks.length);
   assert.ok(forks.some((fork) => fork.id === "fifths-neighbor" && fork.pitchClass === 7));
   assert.deepEqual(resolutionForks([], 0, PIANO_SCALES[0]), []);
+});
+
+test("separates a resolution intention from the performed landing and any detour", () => {
+  const direct = resolutionLandingEvidence([
+    { id: 1, note: 60, onsetMs: 0, velocity: 70, keyReleaseMs: 440, releaseMs: 440, releaseReason: "key" },
+    { id: 2, note: 67, onsetMs: 500, velocity: 90, keyReleaseMs: 800, releaseMs: 800, releaseReason: "key" },
+  ], 1, 7);
+  assert.ok(direct);
+  assert.equal(direct.sourceEventId, 1);
+  assert.equal(direct.landingEventId, 2);
+  assert.equal(direct.finalApproachEventId, 1);
+  assert.equal(direct.interveningAttackCount, 0);
+  assert.equal(direct.sourceToLandingSteps, 7);
+  assert.equal(direct.finalApproachSteps, 7);
+  assert.equal(direct.sourceToLandingFrequencyRatio, 2 ** (7 / 12));
+  assert.equal(direct.sourceToLandingGapMs, 500);
+  assert.equal(direct.finalApproachGapMs, 500);
+  assert.equal(direct.velocityDelta, 20);
+  assert.deepEqual(direct.bridge, { kind: "silence", durationMs: 60, pedalExtended: false });
+
+  const detour = resolutionLandingEvidence([
+    { id: 10, note: 64, onsetMs: 1_000, velocity: 80, releaseMs: 1_300, releaseReason: "key" },
+    { id: 11, note: 65, onsetMs: 1_400, velocity: 75, releaseMs: 1_780, releaseReason: "pedal" },
+    { id: 12, note: 62, onsetMs: 1_700, velocity: 60, releaseMs: 1_900, releaseReason: "key" },
+  ], 10, 2);
+  assert.ok(detour);
+  assert.equal(detour.interveningAttackCount, 1);
+  assert.equal(detour.sourceToLandingSteps, -2);
+  assert.equal(detour.finalApproachSteps, -3);
+  assert.equal(detour.sourceToLandingGapMs, 700);
+  assert.equal(detour.finalApproachGapMs, 300);
+  assert.deepEqual(detour.bridge, { kind: "overlap", durationMs: 80, pedalExtended: true });
+
+  assert.equal(resolutionLandingEvidence([{ id: 1, note: 60, onsetMs: 0 }], 1, 7), null);
+  assert.equal(resolutionLandingEvidence([{ id: 1, note: 60, onsetMs: 0 }], 2, 7), null);
+  assert.throws(() => resolutionLandingEvidence([{ id: 1, note: 128, onsetMs: 0 }], 1, 7), RangeError);
+  assert.throws(() => resolutionLandingEvidence([{ id: 1, note: 60, onsetMs: 0, releaseMs: -1 }], 1, 7), RangeError);
+  assert.throws(() => resolutionLandingEvidence([{ id: 1, note: 60, onsetMs: 0 }], 1, 12), RangeError);
 });
 
 test("separates finger duration, pedal extension, overlap, and silence", () => {

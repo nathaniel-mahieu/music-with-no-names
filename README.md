@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Chord Gesture Echo v1.68**. It provides:
+The current milestone is **Resolution Landing Lens v1.69**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A companion-first learning hierarchy: Start, the live Piano companion, and the learner's Personal Lens stay prominent while specialist pitch, time, listening, recording, and landmark labs live in one grouped disclosure instead of competing as eleven equal destinations.
@@ -51,6 +51,7 @@ The current milestone is **Chord Gesture Echo v1.68**. It provides:
 - A frozen-phrase center microscope that lets the learner reassign exactly one contextual evidence lane—held time, recurrence, attack, low-register placement, or ending—to one sounded position. Paired before/after center rankings reveal model sensitivity while route fit, the other four cue lanes, every MIDI event, and the learner's actual experience remain explicitly fixed or unclaimed.
 - A whole-phrase A/B experiment inside the existing Piano Explore lens. Freeze the latest three-to-twelve attacks around one declared change, replay the phrase, and inspect five separate lanes: measured register/touch/span, signed interval relationships, normalized timing and sounding overlap, modeled competing-center context, and the learner's own settledness/energy/liking comparison. Transposition and proportional timing can remain visibly invariant while absolute keys, duration, or context move; no lane is collapsed into similarity or goodness.
 - Silent resolution forks for center return, minimum hand motion, the near-3:2 fifths neighbor, and a less-recent route tone. The learner chooses an intention, plays the outlined pitch class, and reflects on the result; the control never enters or sounds an answer.
+- A progressive Resolution Landing Lens after a played fork. It freezes the exact source attack and first matching destination, traces the physical pitch-and-time path, distinguishes a direct next attack from any intervening detour, and separates the original intended span from the actual final approach. Five Sound, Relationships, Motion, Context, and listener-only Experience lenses keep MIDI frequency and velocity, equal-key ratio, release-proven overlap or silence, selected-Do tendency, and a local personal report independent. Once a landing is fixed, stale fork buttons are disabled until the learner clears the trial; the fork label remains an intention rather than a detected function, felt resolution, or goodness verdict.
 - Phrase-level scale inference that uses the full sixty-second memory so the seven-attack microscope cannot forget an earlier Do and spuriously reframe the same phrase.
 - Local Web MIDI input with permission-aware device selection, note-on/off, velocity, duration, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and the seven-event phrase remains only in the current browser tab.
 - Interval Context Echo practice that asks the learner to reproduce a spacing from a different starting key, then contrasts its melodic or simultaneous role without playing an answer.

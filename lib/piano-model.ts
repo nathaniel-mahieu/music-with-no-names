@@ -430,6 +430,20 @@ export type ResolutionFork = {
   explanation: string;
 };
 
+export type ResolutionLandingEvidence = {
+  sourceEventId: number;
+  landingEventId: number;
+  finalApproachEventId: number;
+  interveningAttackCount: number;
+  sourceToLandingSteps: number;
+  finalApproachSteps: number;
+  sourceToLandingFrequencyRatio: number;
+  sourceToLandingGapMs: number;
+  finalApproachGapMs: number;
+  velocityDelta: number | null;
+  bridge: ChordGestureBridgeEvidence;
+};
+
 export type ArticulationKind = "held" | "phrase-end" | "detached" | "connected" | "finger-overlap" | "pedal-joined";
 
 export type ArticulationEvidence = {
@@ -1977,6 +1991,65 @@ export function resolutionForks(events: RollingNoteEvent[], rootPitchClass: numb
     if (forks.length < limit) add("alternate-route", "Try another route tone", pitchClass, "Offers another in-route continuation when two intentions point to the same key.");
   });
   return forks.slice(0, limit);
+}
+
+/**
+ * Finds the first performed landing that fulfills one armed resolution fork.
+ * The original source attack stays fixed even when the performer takes a
+ * detour, so the result can distinguish the intended span from the actual
+ * final approach instead of silently treating every match as one direct move.
+ */
+export function resolutionLandingEvidence(
+  events: Array<PerformanceEvidenceEvent & { id: number; releaseReason?: "key" | "pedal" | null }>,
+  sourceEventId: number,
+  targetPitchClass: number,
+): ResolutionLandingEvidence | null {
+  if (!Number.isInteger(sourceEventId) || sourceEventId < 0 || !Number.isInteger(targetPitchClass) || targetPitchClass < 0 || targetPitchClass > 11) {
+    throw new RangeError("Resolution landing requires a valid source event and pitch class from 0 through 11.");
+  }
+  if (new Set(events.map((event) => event.id)).size !== events.length || events.some((event) => !Number.isInteger(event.id)
+    || !Number.isFinite(event.note) || event.note < 0 || event.note > 127
+    || !Number.isFinite(event.onsetMs)
+    || (event.velocity != null && (!Number.isFinite(event.velocity) || event.velocity < 0 || event.velocity > 127))
+    || (event.keyReleaseMs != null && (!Number.isFinite(event.keyReleaseMs) || event.keyReleaseMs < event.onsetMs))
+    || (event.releaseMs != null && (!Number.isFinite(event.releaseMs) || event.releaseMs < event.onsetMs)))) {
+    throw new RangeError("Resolution landing events require unique IDs, finite MIDI positions, ordered times, and bounded velocities.");
+  }
+  const ordered = [...events].sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  const sourceIndex = ordered.findIndex((event) => event.id === sourceEventId);
+  if (sourceIndex < 0) return null;
+  const landingIndex = ordered.findIndex((event, index) => index > sourceIndex
+    && event.id > sourceEventId
+    && pitchClassFromMidi(event.note) === targetPitchClass);
+  if (landingIndex < 0) return null;
+  const source = ordered[sourceIndex];
+  const landing = ordered[landingIndex];
+  const finalApproach = ordered[landingIndex - 1];
+  if (landing.onsetMs <= source.onsetMs || landing.onsetMs <= finalApproach.onsetMs) {
+    throw new RangeError("Resolution landing attacks must move forward in time.");
+  }
+  const finalRelease = finalApproach.releaseMs ?? (finalApproach.releaseReason === "key" ? finalApproach.keyReleaseMs : null);
+  const bridge: ChordGestureBridgeEvidence = finalRelease == null
+    ? { kind: "unknown", durationMs: null, pedalExtended: false }
+    : finalRelease > landing.onsetMs
+      ? { kind: "overlap", durationMs: finalRelease - landing.onsetMs, pedalExtended: finalApproach.releaseReason === "pedal" }
+      : finalRelease === landing.onsetMs
+        ? { kind: "touching", durationMs: 0, pedalExtended: false }
+        : { kind: "silence", durationMs: landing.onsetMs - finalRelease, pedalExtended: false };
+  const sourceToLandingSteps = Math.round(landing.note) - Math.round(source.note);
+  return {
+    sourceEventId: source.id,
+    landingEventId: landing.id,
+    finalApproachEventId: finalApproach.id,
+    interveningAttackCount: landingIndex - sourceIndex - 1,
+    sourceToLandingSteps,
+    finalApproachSteps: Math.round(landing.note) - Math.round(finalApproach.note),
+    sourceToLandingFrequencyRatio: 2 ** (sourceToLandingSteps / 12),
+    sourceToLandingGapMs: landing.onsetMs - source.onsetMs,
+    finalApproachGapMs: landing.onsetMs - finalApproach.onsetMs,
+    velocityDelta: source.velocity == null || landing.velocity == null ? null : landing.velocity - source.velocity,
+    bridge,
+  };
 }
 
 /**
