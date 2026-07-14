@@ -8932,8 +8932,9 @@ footer a {
 .hud-scale-ripple-heading > strong { font-family: var(--font-mono), monospace; font-size: 1rem; font-weight: 500; }
 .hud-scale-ripple-heading > small { max-width: 94ch; color: var(--muted); font-size: .68rem; line-height: 1.45; }
 .hud-scale-ripple-spokes { display: grid; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.hud-scale-ripple-spoke { display: grid; grid-template-columns: 42px minmax(0, 1fr); min-width: 0; gap: 5px 9px; align-items: center; padding: 7px 0; }
+.hud-scale-ripple-spoke { display: grid; width: 100%; grid-template-columns: 42px minmax(0, 1fr); min-width: 0; gap: 5px 9px; align-items: center; padding: 7px 0; border: 0; color: var(--foreground); background: transparent; font: inherit; text-align: left; cursor: pointer; }
 .hud-scale-ripple-spoke + .hud-scale-ripple-spoke { border-top: 1px solid var(--line); }
+.hud-scale-ripple-spoke[aria-pressed="true"] { box-shadow: inset 3px 0 var(--piano-gold); background: var(--surface-raised); }
 .hud-scale-ripple-spoke > strong { grid-row: 1 / span 2; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .62rem; font-weight: 500; }
 .hud-scale-ripple-spoke > div { display: grid; min-width: 0; gap: 3px; }
 .hud-scale-ripple-spoke > div > span { display: grid; grid-template-columns: 38px minmax(0, 1fr) 76px; min-width: 0; gap: 6px; align-items: center; }
@@ -8947,6 +8948,34 @@ footer a {
 .hud-scale-ripple-reading > span { color: var(--piano-gold); font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; }
 .hud-scale-ripple-reading > strong { font-size: .8rem; font-weight: 500; }
 .hud-scale-ripple-reading > small { color: var(--muted); font-size: .68rem; line-height: 1.45; }
+.hud-scale-spectrum-prompt { margin: 0; padding: 10px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.hud-scale-spectrum { display: grid; gap: 11px; padding-top: 12px; border-top: 1px solid var(--line); }
+.hud-scale-spectrum-heading { display: grid; gap: 4px; }
+.hud-scale-spectrum-heading > span { color: var(--piano-gold); font-size: .65rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-scale-spectrum-heading > strong { font-family: var(--font-display), Georgia, serif; font-size: 1rem; font-weight: 400; }
+.hud-scale-spectrum-heading > small { max-width: 94ch; color: var(--muted); font-size: .68rem; line-height: 1.45; }
+.hud-scale-spectrum-strips { display: grid; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-scale-spectrum-strips > div { display: grid; grid-template-columns: 112px minmax(0, 1fr) 196px; min-width: 0; align-items: center; gap: 8px; padding: 7px 0; }
+.hud-scale-spectrum-strips > div + div { border-top: 1px solid var(--line); }
+.hud-scale-spectrum-strips > div > div:first-child { display: grid; gap: 3px; }
+.hud-scale-spectrum-strips > div > div:first-child strong { font-family: var(--font-mono), monospace; font-size: .66rem; font-weight: 500; }
+.hud-scale-spectrum-strips > div > div:first-child small { color: var(--muted); font-size: .58rem; }
+.hud-scale-spectrum-strips svg { display: block; width: 100%; min-width: 0; }
+.hud-scale-spectrum-axis { stroke: var(--line-strong); stroke-width: 1; }
+.hud-scale-spectrum-partial { stroke-width: 2; }
+.hud-scale-spectrum-partial.is-lower { stroke: var(--piano-blue); }
+.hud-scale-spectrum-partial.is-upper { stroke: var(--piano-gold); stroke-dasharray: 3 2; }
+.hud-scale-spectrum-aligned { fill: var(--piano-blue); stroke: var(--background); stroke-width: 1; }
+.hud-scale-spectrum-interaction { fill: var(--piano-gold); stroke: var(--foreground); stroke-width: .8; }
+.hud-scale-spectrum-axis-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 10px; }
+.hud-scale-spectrum-evidence { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); min-width: 0; }
+.hud-scale-spectrum-evidence > span { display: grid; min-width: 0; gap: 2px; padding: 3px 5px; border-left: 1px solid var(--line); text-align: center; }
+.hud-scale-spectrum-evidence small { color: var(--muted); font-size: .53rem; }
+.hud-scale-spectrum-evidence strong { font-family: var(--font-mono), monospace; font-size: .68rem; font-weight: 500; }
+.hud-scale-spectrum-reading { display: grid; gap: 4px; padding: 11px 0 11px 13px; border-left: 3px solid var(--piano-blue); }
+.hud-scale-spectrum-reading > span { color: var(--piano-gold); font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-scale-spectrum-reading > strong { font-family: var(--font-mono), monospace; font-size: .72rem; font-weight: 500; }
+.hud-scale-spectrum-reading > small { color: var(--muted); font-size: .68rem; line-height: 1.45; }
 .hud-builder-translations { display: grid; gap: 7px; margin-top: 12px; padding: 11px 0 0 12px; border-left: 2px solid var(--piano-gold); }
 .hud-builder-translations > span { color: var(--piano-gold); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; }
 .hud-builder-translations p { display: grid; gap: 3px; margin: 0; }
@@ -9669,6 +9698,9 @@ footer a {
   .hud-scale-mutation-view button + button { border-top: 1px solid var(--line); border-left: 0; }
   .hud-scale-ripple-spoke { grid-template-columns: 34px minmax(0, 1fr); gap-inline: 6px; }
   .hud-scale-ripple-spoke > div > span { grid-template-columns: 32px minmax(0, 1fr) 70px; gap: 4px; }
+  .hud-scale-spectrum-strips > div { grid-template-columns: 1fr; gap: 2px; padding: 8px 0; }
+  .hud-scale-spectrum-strips svg { min-height: 72px; }
+  .hud-scale-spectrum-evidence > span:first-child { border-left: 0; }
   .hud-gravity-counterfactual-intro > button { width: 100%; }
   .hud-gravity-counterfactual-chart { gap: 2px; padding-inline: 8px; }
   .hud-gravity-counterfactual-chart strong { font-size: .59rem; }
@@ -9761,7 +9793,14 @@ footer a {
   .hud-scale-ripple-spoke i { border-bottom-color: CanvasText; }
   .hud-scale-ripple-spoke i b { background: LinkText; }
   .hud-scale-ripple-spoke .is-attempt i b { border-color: Highlight; background: Canvas; }
+  .hud-scale-ripple-spoke[aria-pressed="true"] { box-shadow: inset 3px 0 Highlight; background: Canvas; }
   .hud-scale-ripple-reading { border-left-color: LinkText; }
+  .hud-scale-spectrum-axis { stroke: CanvasText; }
+  .hud-scale-spectrum-partial.is-lower { stroke: LinkText; }
+  .hud-scale-spectrum-partial.is-upper { stroke: Highlight; }
+  .hud-scale-spectrum-aligned { fill: LinkText; stroke: Canvas; }
+  .hud-scale-spectrum-interaction { fill: Highlight; stroke: CanvasText; }
+  .hud-scale-spectrum-reading { border-left-color: LinkText; }
   .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .hud-chord-motion-strand.is-source { stroke: CanvasText; }
   .hud-chord-motion-strand.is-attempt { stroke: LinkText; }

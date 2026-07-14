@@ -51,6 +51,10 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /hud-scale-ripple-summary" role="img" aria-label=\{summary\}/);
   assert.match(piano, /Global consequence/);
   assert.match(piano, /hud-scale-ripple-reading" role="status" aria-live="polite"/);
+  assert.match(piano, /aria-label="Assumed spectral consequence of one changed interval"/);
+  assert.match(piano, /hud-scale-spectrum-summary" role="img" aria-label=\{summary\}/);
+  assert.match(piano, /hud-scale-spectrum-reading" role="status" aria-live="polite"/);
+  assert.match(piano, /MIDI contains no instrument spectrum/);
   assert.match(piano, /hud-scale-mutation-reading[\s\S]*role="status" aria-live="polite"/);
   assert.match(piano, /`Δ\$\{signed\(delta\)\}`/);
   assert.match(piano, /More than one landing moved, so no single-position explanation is justified/);
@@ -149,6 +153,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-scale-ripple-spoke \.is-attempt i b[\s\S]*border: 1px dashed/);
   assert.match(css, /\.hud-scale-ripple-spoke \.is-attempt i b[\s\S]*border-color: Highlight/);
   assert.match(css, /\.hud-scale-ripple-reading \{ border-left-color: LinkText/);
+  assert.match(css, /\.hud-scale-ripple-spoke\[aria-pressed="true"\]/);
+  assert.match(css, /\.hud-scale-spectrum-partial\.is-upper[\s\S]*stroke-dasharray/);
+  assert.match(css, /\.hud-scale-spectrum-interaction[\s\S]*fill: var\(--piano-gold\)/);
+  assert.match(css, /\.hud-scale-spectrum-reading \{ border-left-color: LinkText/);
   assert.match(piano, /aria-label="Interval context lesson"/);
   assert.match(piano, /aria-label="Five separate lenses for the source and echoed interval"/);
   assert.match(piano, />Reflect on source \+ echo<\/button>/);

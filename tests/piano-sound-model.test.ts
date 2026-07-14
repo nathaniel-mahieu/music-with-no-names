@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   PIANO_SOUND_MODELS,
+  comparePianoPartialInteractions,
   isPianoSoundModelId,
   pianoPartialInteraction,
   pianoSoundPartialProfile,
@@ -55,4 +56,18 @@ test("keeps a sine assumption to one physical component per note", () => {
   assert.ok(sine.interactionPairs.length <= 1);
   assert.ok(sine.roughness >= 0 && sine.roughness <= 1);
   assert.throws(() => pianoPartialInteraction(0, 220, "harmonic"), RangeError);
+});
+
+test("compares one interval change without turning the deltas into one score", () => {
+  const changed = comparePianoPartialInteractions([220, 330], [220, 311.12698], "harmonic");
+  assert.equal(changed.source.alignedPairs.some((pair) => pair.lowerPartial === 3 && pair.upperPartial === 2), true);
+  assert.ok(changed.alignedPairDelta < 0);
+  assert.notEqual(changed.roughnessDelta, 0);
+  assert.notEqual(changed.overlapDelta, 0);
+
+  const control = comparePianoPartialInteractions([220, 330], [220, 330], "bright-piano");
+  assert.equal(control.alignedPairDelta, 0);
+  assert.equal(control.interactionPairDelta, 0);
+  assert.equal(control.overlapDelta, 0);
+  assert.equal(control.roughnessDelta, 0);
 });

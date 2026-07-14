@@ -91,6 +91,7 @@ import { sonorityAffordances, sonorityPerceptionModel } from "@/lib/sonority-mod
 import {
   DEFAULT_PIANO_SOUND_MODEL_ID,
   PIANO_SOUND_MODELS,
+  comparePianoPartialInteractions,
   isPianoSoundModelId,
   pianoPartialInteraction,
   pianoSoundModel,
@@ -186,6 +187,7 @@ type ScaleFingerprintSession = {
   sourceSteps: number[] | null;
   expectedSteps: number[] | null;
   revealNames: boolean;
+  sourceBaseMidi?: number | null;
 };
 type GravityCounterfactualSession = {
   specimen: HudNoteEvent[];
@@ -487,6 +489,7 @@ function isScaleFingerprintSession(value: unknown): value is ScaleFingerprintSes
     && validSteps(session.sourceSteps)
     && validSteps(session.expectedSteps)
     && typeof session.revealNames === "boolean"
+    && (session.sourceBaseMidi == null || (Number.isInteger(session.sourceBaseMidi) && session.sourceBaseMidi! >= 0 && session.sourceBaseMidi! <= 115))
     && (session.exercise === "build"
       || (session.exercise === "mutate" && session.sourceSteps != null && session.expectedSteps == null)
       || (session.sourceSteps != null && session.expectedSteps != null));
@@ -1058,27 +1061,80 @@ function fifthsCoordinateLabel(offset: number) {
   return `${signed > 0 ? "+" : ""}${signed} repeated-fifth move${Math.abs(signed) === 1 ? "" : "s"} from Do`;
 }
 
-function ScaleLandingIntervalRippleView({ ripple }: { ripple: ScaleLandingIntervalRipple }) {
+function ScaleLandingSpectralConsequence({
+  ripple,
+  retainedPosition,
+  sourceBaseMidi,
+  soundModelId,
+}: {
+  ripple: ScaleLandingIntervalRipple;
+  retainedPosition: number;
+  sourceBaseMidi: number;
+  soundModelId: PianoSoundModelId;
+}) {
+  const relationship = ripple.relationships.find((item) => item.retainedPosition === retainedPosition)!;
+  const sourceNotes = [sourceBaseMidi + ripple.sourcePosition, sourceBaseMidi + retainedPosition].sort((first, second) => first - second) as [number, number];
+  const attemptNotes = [sourceBaseMidi + ripple.attemptPosition, sourceBaseMidi + retainedPosition].sort((first, second) => first - second) as [number, number];
+  const sourceFrequencies = sourceNotes.map((note) => frequencyFromMidi(note)) as [number, number];
+  const attemptFrequencies = attemptNotes.map((note) => frequencyFromMidi(note)) as [number, number];
+  const comparison = comparePianoPartialInteractions(sourceFrequencies, attemptFrequencies, soundModelId);
+  const model = pianoSoundModel(soundModelId);
+  const allPartials = [comparison.source, comparison.attempt].flatMap((interaction) => [...interaction.lowerPartials, ...interaction.upperPartials]);
+  const minimumHz = Math.min(...allPartials.map((partial) => partial.frequencyHz)) * 0.94;
+  const maximumHz = Math.max(...allPartials.map((partial) => partial.frequencyHz)) * 1.06;
+  const xFor = (frequencyHz: number) => 92 + (Math.log2(frequencyHz / minimumHz) / Math.log2(maximumHz / minimumHz)) * 594;
+  const signed = (value: number, digits = 0) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(digits)}`;
+  const states = [
+    { id: "source", label: "source", distance: relationship.sourceDistanceSteps, interaction: comparison.source },
+    { id: "attempt", label: "new", distance: relationship.attemptDistanceSteps, interaction: comparison.attempt },
+  ] as const;
+  const summary = `At the original route register, the source ${relationship.sourceDistanceSteps}-step interval has ${comparison.source.alignedPairs.length} aligned partial pairs, ${comparison.source.interactionPairs.length} displayed interaction-zone pairs, roughness proxy ${Math.round(comparison.source.roughness * 100)}, and overlap ${Math.round(comparison.source.overlap * 100)}. The new ${relationship.attemptDistanceSteps}-step interval has ${comparison.attempt.alignedPairs.length} aligned pairs, ${comparison.attempt.interactionPairs.length} interaction-zone pairs, roughness ${Math.round(comparison.attempt.roughness * 100)}, and overlap ${Math.round(comparison.attempt.overlap * 100)} under the ${model.shortLabel} assumed spectrum.`;
+  return <div className="hud-scale-spectrum" aria-label="Assumed spectral consequence of one changed interval">
+    <div className="hud-scale-spectrum-heading"><span>selected spoke · fixed source register</span><strong>What could this one-key change do to partial interaction?</strong><small>Both rows reuse the original route’s physical starting key. The actual replay register is ignored so only this interval change remains. MIDI contains no instrument spectrum; every partial below comes from the selected {model.shortLabel.toLowerCase()} teaching model.</small></div>
+    <div className="sr-only hud-scale-spectrum-summary" role="img" aria-label={summary} />
+    <div className="hud-scale-spectrum-strips">
+      {states.map((state) => <div key={state.id} className={`is-${state.id}`}>
+        <div><strong>{state.label} · {state.distance} steps</strong><small>{state.interaction.lowerHz.toFixed(1)} → {state.interaction.upperHz.toFixed(1)} Hz</small></div>
+        <svg viewBox="0 0 720 86" role="img" aria-label={`${state.label} ${state.distance}-step interval partial strip: ${state.interaction.alignedPairs.length} aligned pairs and ${state.interaction.interactionPairs.length} displayed interaction-zone pairs`}>
+          <title>{`${state.label} assumed partial strip at the fixed source register`}</title>
+          <line x1="92" x2="686" y1="43" y2="43" className="hud-scale-spectrum-axis" />
+          {state.interaction.alignedPairs.slice(0, 8).map((pair) => <circle key={`a-${pair.lowerPartial}-${pair.upperPartial}`} cx={(xFor(pair.lowerHz) + xFor(pair.upperHz)) / 2} cy="43" r="3" className="hud-scale-spectrum-aligned"><title>{`Aligned partials ${pair.lowerPartial} and ${pair.upperPartial}, ${pair.centsApart.toFixed(1)} cents apart`}</title></circle>)}
+          {state.interaction.interactionPairs.slice(0, 6).map((pair) => <rect key={`i-${pair.lowerPartial}-${pair.upperPartial}`} x={(xFor(pair.lowerHz) + xFor(pair.upperHz)) / 2 - 2.5} y="40.5" width="5" height="5" className="hud-scale-spectrum-interaction" transform={`rotate(45 ${(xFor(pair.lowerHz) + xFor(pair.upperHz)) / 2} 43)`}><title>{`Interaction-zone partials ${pair.lowerPartial} and ${pair.upperPartial}, ${pair.separationHz.toFixed(1)} hertz apart`}</title></rect>)}
+          {state.interaction.lowerPartials.map((partial) => <line key={`l-${partial.partialIndex}`} x1={xFor(partial.frequencyHz)} x2={xFor(partial.frequencyHz)} y1="41" y2={41 - 7 - partial.amplitude * 22} className="hud-scale-spectrum-partial is-lower"><title>{`Lower tone partial ${partial.partialIndex}, ${partial.frequencyHz.toFixed(1)} hertz`}</title></line>)}
+          {state.interaction.upperPartials.map((partial) => <line key={`u-${partial.partialIndex}`} x1={xFor(partial.frequencyHz)} x2={xFor(partial.frequencyHz)} y1="45" y2={45 + 7 + partial.amplitude * 22} className="hud-scale-spectrum-partial is-upper"><title>{`Upper tone partial ${partial.partialIndex}, ${partial.frequencyHz.toFixed(1)} hertz`}</title></line>)}
+          <text x="92" y="81" className="hud-scale-spectrum-axis-label">frequency →</text><circle cx="505" cy="77" r="3" className="hud-scale-spectrum-aligned" /><text x="513" y="81" className="hud-scale-spectrum-axis-label">aligned</text><rect x="579" y="74.5" width="5" height="5" className="hud-scale-spectrum-interaction" transform="rotate(45 581.5 77)" /><text x="589" y="81" className="hud-scale-spectrum-axis-label">interaction zone</text>
+        </svg>
+        <div className="hud-scale-spectrum-evidence"><span><small>aligned</small><strong>{state.interaction.alignedPairs.length}</strong></span><span><small>zones</small><strong>{state.interaction.interactionPairs.length}</strong></span><span><small>roughness</small><strong>{Math.round(state.interaction.roughness * 100)}</strong></span><span><small>overlap</small><strong>{Math.round(state.interaction.overlap * 100)}</strong></span></div>
+      </div>)}
+    </div>
+    <div className="hud-scale-spectrum-reading" role="status" aria-live="polite"><span>Modeled change · separate outputs</span><strong>aligned {signed(comparison.alignedPairDelta)} · zones {signed(comparison.interactionPairDelta)} · roughness {signed(comparison.roughnessDelta * 100)} · overlap {signed(comparison.overlapDelta * 100)}</strong><small>A dot marks partials within the declared 18-cent alignment window; a diamond marks one of the strongest non-aligned interaction zones. Counts and proxies can move in different directions. They describe this assumed spectrum at this register—not consonance, tonal function, emotion, preference, or musical quality.</small></div>
+  </div>;
+}
+
+function ScaleLandingIntervalRippleView({ ripple, sourceBaseMidi, soundModelId }: { ripple: ScaleLandingIntervalRipple; sourceBaseMidi: number | null; soundModelId: PianoSoundModelId }) {
+  const [selectedRetainedPosition, setSelectedRetainedPosition] = useState<number | null>(null);
   const ratio = (value: number) => `×${value.toFixed(3)}`;
   const summary = `Landing ${ripple.sourcePosition} moved to ${ripple.attemptPosition}. ${ripple.changedRelationshipCount} normalized equal-key intervals touching that landing changed by one step; ${ripple.retainedRelationshipCount} intervals between retained landings kept their distance and ratio.`;
+  const selectedRelationship = ripple.relationships.find((relationship) => relationship.retainedPosition === selectedRetainedPosition) ?? null;
   return <div className="hud-scale-ripple">
     <div className="sr-only hud-scale-ripple-summary" role="img" aria-label={summary} />
     <div className="hud-scale-ripple-heading"><span>one moved landing · every connected interval</span><strong>{ripple.sourcePosition} → {ripple.attemptPosition}</strong><small>Each equal-key step multiplies an ascending frequency interval by 2<sup>1/12</sup>. Bar length shows normalized key distance; the ratio is the corresponding 12-TET frequency multiplier.</small></div>
     <div className="hud-scale-ripple-spokes">
-      {ripple.relationships.map((relationship) => <div key={relationship.retainedPosition} className="hud-scale-ripple-spoke">
+      {ripple.relationships.map((relationship) => <button type="button" key={relationship.retainedPosition} className="hud-scale-ripple-spoke" aria-pressed={selectedRetainedPosition === relationship.retainedPosition} aria-label={`Inspect retained position ${relationship.retainedPosition}: source distance ${relationship.sourceDistanceSteps} steps, new distance ${relationship.attemptDistanceSteps} steps, ${relationship.distanceDelta < 0 ? "shorter" : "wider"} by one step`} onClick={() => setSelectedRetainedPosition(relationship.retainedPosition)}>
         <strong>to {relationship.retainedPosition}</strong>
         <div>
           <span className="is-source"><small>source</small><i><b style={{ "--ripple-width": `${relationship.sourceDistanceSteps / 12 * 100}%` } as CSSProperties} /></i><em>{relationship.sourceDistanceSteps} · {ratio(relationship.sourceFrequencyRatio)}</em></span>
           <span className="is-attempt"><small>new</small><i><b style={{ "--ripple-width": `${relationship.attemptDistanceSteps / 12 * 100}%` } as CSSProperties} /></i><em>{relationship.attemptDistanceSteps} · {ratio(relationship.attemptFrequencyRatio)}</em></span>
         </div>
         <small>{relationship.distanceDelta < 0 ? "shorter" : "wider"} by one key step</small>
-      </div>)}
+      </button>)}
     </div>
     <div className="hud-scale-ripple-reading" role="status" aria-live="polite"><span>Global consequence</span><strong>{ripple.changedRelationshipCount} changed spokes · {ripple.retainedRelationshipCount} held relationships</strong><small>Only intervals touching the moved landing changed. Every retained-to-retained interval kept its equal-key distance and 12-TET ratio; absolute frequencies may differ if the replay started elsewhere. This is not a consonance, function, emotion, or quality judgment.</small></div>
+    {!selectedRelationship ? <p className="hud-scale-spectrum-prompt">Choose one changed spoke to compare its source and new partial pattern under the declared sound model.</p> : sourceBaseMidi == null ? <p className="hud-scale-spectrum-prompt">The original route register is unavailable in this restored exercise. Restart the scale experiment to inspect a register-controlled spectrum.</p> : <ScaleLandingSpectralConsequence ripple={ripple} retainedPosition={selectedRelationship.retainedPosition} sourceBaseMidi={sourceBaseMidi} soundModelId={soundModelId} />}
   </div>;
 }
 
-function ScaleGapMutationResult({ comparison }: { comparison: ScaleGapMutationComparison }) {
+function ScaleGapMutationResult({ comparison, sourceBaseMidi, soundModelId }: { comparison: ScaleGapMutationComparison; sourceBaseMidi: number | null; soundModelId: PianoSoundModelId }) {
   const [view, setView] = useState<"gaps" | "intervals">("gaps");
   const ripple = comparison.kind === "one-position" ? compareScaleLandingIntervalRipple(comparison.sourceSteps, comparison.attemptSteps) : null;
   const activeView = ripple ? view : "gaps";
@@ -1125,7 +1181,7 @@ function ScaleGapMutationResult({ comparison }: { comparison: ScaleGapMutationCo
         return <span key={index} className={delta !== 0 ? "is-changed" : ""}><small>gap {index + 1}</small><strong>{gap}{delta === 0 ? "" : `→${comparison.attemptSteps[index]}`}</strong><em>{delta === 0 ? "held" : `Δ${signed(delta)}`}</em></span>;
       })}
     </div> : null}
-    <div className="hud-scale-mutation-reading" role="status" aria-live="polite"><span>{comparison.kind === "one-position" ? "One cause isolated" : "Compare the control"}</span><strong>{headline}</strong><small>{detail} Both gap lists still sum to 12, so frequency still doubles at the final landing.</small></div></> : ripple ? <ScaleLandingIntervalRippleView ripple={ripple} /> : null}
+    <div className="hud-scale-mutation-reading" role="status" aria-live="polite"><span>{comparison.kind === "one-position" ? "One cause isolated" : "Compare the control"}</span><strong>{headline}</strong><small>{detail} Both gap lists still sum to 12, so frequency still doubles at the final landing.</small></div></> : ripple ? <ScaleLandingIntervalRippleView key={`${ripple.sourcePosition}-${ripple.attemptPosition}`} ripple={ripple} sourceBaseMidi={sourceBaseMidi} soundModelId={soundModelId} /> : null}
   </section>;
 }
 
@@ -1133,6 +1189,7 @@ function PerformedScaleFingerprintBuilder({
   session,
   progress,
   showConventions,
+  soundModelId,
   onStart,
   onRestart,
   onReplay,
@@ -1142,6 +1199,7 @@ function PerformedScaleFingerprintBuilder({
   session: ScaleFingerprintSession | null;
   progress: PerformedScaleFingerprint | null;
   showConventions: boolean;
+  soundModelId: PianoSoundModelId;
   onStart: () => void;
   onRestart: () => void;
   onReplay: (steps: number[], exercise: "transpose" | "rotate" | "mutate") => void;
@@ -1201,7 +1259,7 @@ function PerformedScaleFingerprintBuilder({
     </div>
     <div className="hud-builder-feedback" role="status" aria-live="polite"><span>{progress.status === "complete" ? mutating ? "Control result" : "Invariant ready" : wrongAttempt ? "Repair one relationship" : "Current question"}</span><strong>{cue}</strong><small>{feedback}</small></div>
     {progress.status === "complete" ? <div className="hud-builder-complete">
-      {mutationComparison ? <ScaleGapMutationResult comparison={mutationComparison} /> : <><div className="hud-builder-actions">
+      {mutationComparison ? <ScaleGapMutationResult comparison={mutationComparison} sourceBaseMidi={session.sourceBaseMidi ?? null} soundModelId={soundModelId} /> : <><div className="hud-builder-actions">
         <button type="button" className="piano-primary-action" onClick={() => onReplay(sourceSteps, "transpose")}>Test the same gaps elsewhere</button>
         <button type="button" onClick={() => onReplay(rotatedSteps, "rotate")}>Rotate which gap comes first</button>
         <button type="button" onClick={() => onReplay(progress.steps, "mutate")}>Change one landing</button>
@@ -1403,6 +1461,7 @@ function ScalePracticeField({
   frame,
   doMidi,
   showConventions,
+  soundModelId,
   gravity,
   fingerprintRotation,
   forks,
@@ -1438,6 +1497,7 @@ function ScalePracticeField({
   frame: ScaleCandidate;
   doMidi: number;
   showConventions: boolean;
+  soundModelId: PianoSoundModelId;
   gravity: TonalGravityCandidate[];
   fingerprintRotation: number;
   forks: ResolutionFork[];
@@ -1483,8 +1543,8 @@ function ScalePracticeField({
   const movementLabel = (movement: number) => movement === 0 ? "repeat" : `${movement > 0 ? "+" : ""}${movement} key step${Math.abs(movement) === 1 ? "" : "s"}`;
   return <section className="hud-scale-practice" aria-labelledby="hud-scale-practice-title">
     <div className="hud-panel-heading"><span>Author · preserve · contextualize</span><strong id="hud-scale-practice-title">Scale relationships with your hands</strong><small>First author an unnamed route. Then preserve it elsewhere or compare it with a selected frame. Tonal center remains a contextual hypothesis, never a goodness score.</small></div>
-    {fingerprintSession ? <PerformedScaleFingerprintBuilder session={fingerprintSession} progress={fingerprintProgress} showConventions={showConventions} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} /> : walkSession ? <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} /> : gravityCounterfactualSession ? <TonalGravityCounterfactualField session={gravityCounterfactualSession} result={gravityCounterfactualResult} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={frame.scale} showConventions={showConventions} onStart={onStartGravityCounterfactual} onTarget={onTargetGravityCounterfactual} onCue={onCueGravityCounterfactual} onRecapture={onRecaptureGravityCounterfactual} onEnd={onEndGravityCounterfactual} /> : <div className="hud-scale-experiment-choices" aria-label="Choose one scale experiment">
-      <PerformedScaleFingerprintBuilder session={null} progress={null} showConventions={showConventions} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} />
+    {fingerprintSession ? <PerformedScaleFingerprintBuilder session={fingerprintSession} progress={fingerprintProgress} showConventions={showConventions} soundModelId={soundModelId} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} /> : walkSession ? <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} /> : gravityCounterfactualSession ? <TonalGravityCounterfactualField session={gravityCounterfactualSession} result={gravityCounterfactualResult} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={frame.scale} showConventions={showConventions} onStart={onStartGravityCounterfactual} onTarget={onTargetGravityCounterfactual} onCue={onCueGravityCounterfactual} onRecapture={onRecaptureGravityCounterfactual} onEnd={onEndGravityCounterfactual} /> : <div className="hud-scale-experiment-choices" aria-label="Choose one scale experiment">
+      <PerformedScaleFingerprintBuilder session={null} progress={null} showConventions={showConventions} soundModelId={soundModelId} onStart={onStartFingerprint} onRestart={onRestartFingerprint} onReplay={onReplayFingerprint} onReveal={onRevealFingerprint} onEnd={onEndFingerprint} />
       <GuidedScaleWalk session={null} events={[]} progress={null} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} />
       <TonalGravityCounterfactualField session={null} result={null} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={frame.scale} showConventions={showConventions} onStart={onStartGravityCounterfactual} onTarget={onTargetGravityCounterfactual} onCue={onCueGravityCounterfactual} onRecapture={onRecaptureGravityCounterfactual} onEnd={onEndGravityCounterfactual} />
     </div>}
@@ -3683,7 +3743,7 @@ export function PianoLab() {
     setResolutionForkSet(null);
     setGhostChord(null);
     setGhostNotes([]);
-    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise: "build", sourceSteps: null, expectedSteps: null, revealNames: false });
+    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise: "build", sourceSteps: null, expectedSteps: null, revealNames: false, sourceBaseMidi: null });
   };
 
   const restartScaleFingerprint = () => {
@@ -3692,8 +3752,11 @@ export function PianoLab() {
 
   const replayScaleFingerprint = (steps: number[], exercise: "transpose" | "rotate" | "mutate") => {
     const sourceSteps = exercise === "mutate" ? steps : scaleFingerprintSession?.sourceSteps ?? performedScaleFingerprint?.steps ?? steps;
+    const sourceBaseMidi = exercise === "mutate"
+      ? performedScaleFingerprint?.baseMidi ?? scaleFingerprintSession?.sourceBaseMidi ?? null
+      : scaleFingerprintSession?.sourceBaseMidi ?? performedScaleFingerprint?.baseMidi ?? null;
     setScaleWalkSession(null);
-    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise, sourceSteps: [...sourceSteps], expectedSteps: exercise === "mutate" ? null : [...steps], revealNames: false });
+    setScaleFingerprintSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, exercise, sourceSteps: [...sourceSteps], expectedSteps: exercise === "mutate" ? null : [...steps], revealNames: false, sourceBaseMidi });
   };
 
   const revealScaleFingerprint = () => {
@@ -4273,7 +4336,7 @@ export function PianoLab() {
           <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
           <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         </> : null}
-        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
+        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
         {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}

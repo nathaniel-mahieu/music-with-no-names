@@ -42,6 +42,15 @@ export type PianoPartialInteraction = {
   roughness: number;
 };
 
+export type PianoPartialInteractionComparison = {
+  source: PianoPartialInteraction;
+  attempt: PianoPartialInteraction;
+  alignedPairDelta: number;
+  interactionPairDelta: number;
+  overlapDelta: number;
+  roughnessDelta: number;
+};
+
 export const PIANO_SOUND_MODELS: readonly PianoSoundModel[] = [
   {
     id: "sine",
@@ -182,5 +191,26 @@ export function pianoPartialInteraction(
     interactionPairs,
     overlap: spectralOverlap(lowerPartials, upperPartials),
     roughness: aggregateRoughness([...lowerPartials, ...upperPartials]),
+  };
+}
+
+/**
+ * Compares two two-frequency counterfactuals under one declared spectrum.
+ * Deltas describe this model only; they are not consonance or preference scores.
+ */
+export function comparePianoPartialInteractions(
+  sourceFrequenciesHz: readonly [number, number],
+  attemptFrequenciesHz: readonly [number, number],
+  modelId: PianoSoundModelId,
+): PianoPartialInteractionComparison {
+  const source = pianoPartialInteraction(sourceFrequenciesHz[0], sourceFrequenciesHz[1], modelId);
+  const attempt = pianoPartialInteraction(attemptFrequenciesHz[0], attemptFrequenciesHz[1], modelId);
+  return {
+    source,
+    attempt,
+    alignedPairDelta: attempt.alignedPairs.length - source.alignedPairs.length,
+    interactionPairDelta: attempt.interactionPairs.length - source.interactionPairs.length,
+    overlapDelta: attempt.overlap - source.overlap,
+    roughnessDelta: attempt.roughness - source.roughness,
   };
 }
