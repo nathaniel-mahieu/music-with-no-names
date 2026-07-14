@@ -47,6 +47,7 @@ import {
   landmarkCounterfactualProfile,
   landmarkPerformanceEventIds,
   landmarkRouteFingerprint,
+  landmarkTransitionChange,
   landmarkTranspositionProfile,
   matchScaleFingerprint,
   motifReturnArc,
@@ -87,6 +88,7 @@ import {
   type LandmarkPathId,
   type LandmarkRouteComparison,
   type LandmarkRouteFingerprint,
+  type LandmarkTransitionChange,
   type MotifTransformation,
   type MotifEchoComparison,
   type MotifFingerprintComparison,
@@ -3218,9 +3220,11 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   </section>;
 }
 
-function LandmarkRouteFingerprintView({ fingerprint, showConventions }: {
+function LandmarkRouteFingerprintView({ fingerprint, showConventions, selectedTransitionIndex, onSelectTransition }: {
   fingerprint: LandmarkRouteFingerprint;
   showConventions: boolean;
+  selectedTransitionIndex: number | null;
+  onSelectTransition: (toStepIndex: number) => void;
 }) {
   const width = 640;
   const height = 214;
@@ -3255,10 +3259,59 @@ function LandmarkRouteFingerprintView({ fingerprint, showConventions }: {
       {fingerprint.fields.map((field) => <span key={field.stepIndex}><small>field {field.stepIndex + 1}</small><strong>{showConventions ? `${field.conventionalName} · ${field.role}` : field.role}</strong></span>)}
     </div>
     <div className="hud-landmark-fingerprint-legend" aria-hidden="true"><span><i className="is-tone" />field position</span><span><i className="is-root" />root position</span>{fingerprint.variant === "one-key-changed" ? <><span><i className="is-source" />original position</span><span><i className="is-changed" />changed position</span></> : null}<span><i className="is-held" />carried unchanged</span></div>
-    <ol className="hud-landmark-fingerprint-transitions" aria-label="Transition invariants across the route">
-      {fingerprint.transitions.map((transition) => <li key={transition.toStepIndex}><strong>{transition.fromStepIndex + 1} → {transition.toStepIndex + 1}</strong><span>{transition.sharedOffsets.length} carried · {transition.totalVoiceMotion} nearest-key steps · largest {transition.largestLeap} · fifths {transition.rootTravelSteps ?? "—"}</span></li>)}
+    <ol className="hud-landmark-fingerprint-transitions" aria-label="Select one transition to inspect what changed">
+      {fingerprint.transitions.map((transition) => <li key={transition.toStepIndex}><button type="button" aria-pressed={selectedTransitionIndex === transition.toStepIndex} onClick={() => onSelectTransition(transition.toStepIndex)}><strong>{transition.fromStepIndex + 1} → {transition.toStepIndex + 1}</strong><span>{transition.sharedOffsets.length} carried · {transition.totalVoiceMotion} nearest-key steps · largest {transition.largestLeap} · fifths {transition.rootTravelSteps ?? "—"}</span><small>{selectedTransitionIndex === transition.toStepIndex ? "close change lens" : "inspect this move"}</small></button></li>)}
     </ol>
     <p>Transposing the whole route leaves this folded pattern unchanged. Register, timing, the assumed sound, tonal interpretation, and your experience remain separate evidence.</p>
+  </section>;
+}
+
+function LandmarkTransitionChangeView({ change, doMidi, scale, soundModelId, showConventions }: {
+  change: LandmarkTransitionChange;
+  doMidi: number;
+  scale: PianoScale;
+  soundModelId: PianoSoundModelId;
+  showConventions: boolean;
+}) {
+  const beforePerception = sonorityPerceptionModel(change.beforeNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
+  const afterPerception = sonorityPerceptionModel(change.afterNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
+  const beforeTendency = tonalTendency(change.beforeNotes, doMidi, scale);
+  const afterTendency = tonalTendency(change.afterNotes, doMidi, scale);
+  const allNotes = [...change.beforeNotes, ...change.afterNotes];
+  const low = Math.min(...allNotes) - 1;
+  const high = Math.max(...allNotes) + 1;
+  const xFor = (note: number) => 132 + (note - low) / Math.max(1, high - low) * 474;
+  const noteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
+  const offsetList = (offsets: number[]) => offsets.length ? offsets.map((offset) => `+${offset}`).join(" · ") : "none";
+  const beforeRole = showConventions ? `${change.fromField.conventionalName} · ${change.fromField.role}` : change.fromField.role;
+  const afterRole = showConventions ? `${change.toField.conventionalName} · ${change.toField.role}` : change.toField.role;
+  const beforeSpan = Math.max(...change.beforeNotes) - Math.min(...change.beforeNotes);
+  const afterSpan = Math.max(...change.afterNotes) - Math.min(...change.afterNotes);
+  const summary = `Selected generated route move from ${beforeRole} to ${afterRole}. Folded positions held ${offsetList(change.stayedOffsets)}, entered ${offsetList(change.enteredOffsets)}, and left ${offsetList(change.leftOffsets)}. The stable reference voicing moves ${change.voiceLeading.totalMotion} nearest-key steps in total, with largest leap ${change.voiceLeading.largestLeap}. Under the selected ${pianoSoundModel(soundModelId).shortLabel} teaching spectrum, modeled crunch changes ${signedPhraseValue((afterPerception.roughness - beforePerception.roughness) * 100)} and spectral repose changes ${signedPhraseValue((afterPerception.repose - beforePerception.repose) * 100)}. In the selected Do context, pull changes ${signedPhraseValue((afterTendency.homePull - beforeTendency.homePull) * 100)} and home evidence changes ${signedPhraseValue((afterTendency.homeEvidence - beforeTendency.homeEvidence) * 100)}. Listener experience is unclaimed.`;
+  return <section className="hud-landmark-change" aria-labelledby="hud-landmark-change-title">
+    <div className="hud-landmark-fingerprint-heading"><div><span>one move · five lenses</span><strong id="hud-landmark-change-title">What did field {change.toField.stepIndex + 1} change?</strong></div><small>{beforeRole} → {afterRole}</small></div>
+    <svg className="hud-landmark-change-plot" viewBox="0 0 640 190" role="img" aria-label={summary}>
+      <text x="18" y="51" className="hud-landmark-change-row">before · {change.fromField.stepIndex + 1}</text>
+      <text x="18" y="126" className="hud-landmark-change-row">after · {change.toField.stepIndex + 1}</text>
+      <line x1="132" x2="606" y1="156" y2="156" className="hud-landmark-change-axis" />
+      {change.voiceLeading.strands.map((strand, index) => {
+        if (strand.from != null && strand.to != null) return <line key={`strand-${index}`} x1={xFor(strand.from)} x2={xFor(strand.to)} y1="48" y2="123" className={`hud-landmark-change-strand is-${strand.motion}`}><title>{`${noteLabel(strand.from)} to ${noteLabel(strand.to)}: ${signedPhraseValue(strand.semitones)} keys, ${strand.motion}`}</title></line>;
+        if (strand.from != null) return <line key={`strand-${index}`} x1={xFor(strand.from)} x2={xFor(strand.from)} y1="48" y2="86" className="hud-landmark-change-strand is-released"><title>{`${noteLabel(strand.from)} leaves the compact reference voicing`}</title></line>;
+        if (strand.to != null) return <line key={`strand-${index}`} x1={xFor(strand.to)} x2={xFor(strand.to)} y1="86" y2="123" className="hud-landmark-change-strand is-added"><title>{`${noteLabel(strand.to)} enters the compact reference voicing`}</title></line>;
+        return null;
+      })}
+      {change.beforeNotes.map((note) => <circle key={`before-${note}`} cx={xFor(note)} cy="48" r="6" className="hud-landmark-change-node is-before"><title>{`Before: ${noteLabel(note)}, ${formatHz(frequencyFromMidi(note))}`}</title></circle>)}
+      {change.afterNotes.map((note) => <rect key={`after-${note}`} x={xFor(note) - 6} y="117" width="12" height="12" className="hud-landmark-change-node is-after"><title>{`After: ${noteLabel(note)}, ${formatHz(frequencyFromMidi(note))}`}</title></rect>)}
+      <text x="132" y="174" className="hud-landmark-change-axis-label">lower reference key</text><text x="606" y="174" textAnchor="end" className="hud-landmark-change-axis-label">higher</text>
+    </svg>
+    <ol className="hud-landmark-change-lenses" aria-label="Five evidence lenses for the selected route transition">
+      <li><span>Sound · authored + modeled</span><strong>span {beforeSpan} → {afterSpan} keys</strong><small>{pianoSoundModel(soundModelId).shortLabel} proxy: crunch {signedPhraseValue((afterPerception.roughness - beforePerception.roughness) * 100)} · repose {signedPhraseValue((afterPerception.repose - beforePerception.repose) * 100)}</small></li>
+      <li><span>Relationships · authored</span><strong>{change.stayedOffsets.length} stayed · {change.enteredOffsets.length} entered · {change.leftOffsets.length} left</strong><small>held {offsetList(change.stayedOffsets)} · in {offsetList(change.enteredOffsets)} · out {offsetList(change.leftOffsets)}</small></li>
+      <li><span>Motion · derived</span><strong>{change.voiceLeading.totalMotion} steps total · largest {change.voiceLeading.largestLeap}</strong><small>{change.voiceLeading.motionClasses.join(" · ") || "no moving-motion class"} · bass {signedPhraseValue(change.voiceLeading.bassMotion)}</small></li>
+      <li><span>Context · modeled</span><strong>toward Do {signedPhraseValue((afterTendency.homePull - beforeTendency.homePull) * 100)}</strong><small>home evidence {signedPhraseValue((afterTendency.homeEvidence - beforeTendency.homeEvidence) * 100)} · root travel {change.rootTravelSteps ?? "—"} fifths steps</small></li>
+      <li><span>Experience · yours</span><strong>Did this move feel more settled, less settled, or simply different?</strong><small>Unclaimed until you report it; no other lane supplies this answer.</small></li>
+    </ol>
+    <p>This is one generated target-to-target move, not reconstructed performance audio. The plot uses a stable compact reference voicing; timing, velocity, releases, pedal, balance, actual instrument spectrum, fingering, intention, emotion, and musical goodness remain outside it.</p>
   </section>;
 }
 
@@ -3362,6 +3415,7 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
   onStartRouteComparison: (pathId: LandmarkPathId, sourceVariant: LandmarkRouteFingerprint["variant"]) => void;
   onEndRouteComparison: () => void;
 }) {
+  const [transitionSelection, setTransitionSelection] = useState<{ fingerprintKey: string; toStepIndex: number } | null>(null);
   const complete = stepIndex >= path.steps.length;
   const currentStep = complete ? null : path.steps[stepIndex];
   const counterfactualActive = counterfactualSession?.pathId === path.id && counterfactualSession.rootPitchClass === pitchClassFromMidi(doMidi);
@@ -3380,6 +3434,9 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
     : null;
   const counterfactualProfile = counterfactualActive ? landmarkCounterfactualProfile(path, doMidi) : null;
   const routeFingerprint = landmarkRouteFingerprint(path, counterfactualActive ? "one-key-changed" : "original");
+  const fingerprintKey = `${routeFingerprint.pathId}:${routeFingerprint.variant}:${pitchClassFromMidi(doMidi)}`;
+  const selectedTransitionIndex = transitionSelection?.fingerprintKey === fingerprintKey ? transitionSelection.toStepIndex : null;
+  const selectedTransitionChange = selectedTransitionIndex == null ? null : landmarkTransitionChange(path, selectedTransitionIndex, doMidi, routeFingerprint.variant);
   const routeComparisonSourcePath = routeCompareSession?.targetPathId === path.id
     ? LANDMARK_PATHS.find((candidate) => candidate.id === routeCompareSession.sourcePathId) ?? null
     : null;
@@ -3434,7 +3491,7 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
     </div>
     {complete ? routeComparison && routeComparisonSourcePath
       ? <LandmarkRouteComparisonView comparison={routeComparison} sourcePath={routeComparisonSourcePath} targetPath={path} showConventions={showConventions} onChooseNext={(pathId) => onSelect(pathId)} onEnd={onEndRouteComparison} />
-      : <><LandmarkRouteFingerprintView fingerprint={routeFingerprint} showConventions={showConventions} /><LandmarkRouteComparisonChoice sourcePath={path} sourceVariant={routeFingerprint.variant} onChoose={onStartRouteComparison} /></>
+      : <><LandmarkRouteFingerprintView fingerprint={routeFingerprint} showConventions={showConventions} selectedTransitionIndex={selectedTransitionIndex} onSelectTransition={(toStepIndex) => setTransitionSelection((current) => current?.fingerprintKey === fingerprintKey && current.toStepIndex === toStepIndex ? null : { fingerprintKey, toStepIndex })} />{selectedTransitionChange ? <LandmarkTransitionChangeView change={selectedTransitionChange} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} /> : null}<LandmarkRouteComparisonChoice sourcePath={path} sourceVariant={routeFingerprint.variant} onChoose={onStartRouteComparison} /></>
       : null}
     {!complete ? <div className="hud-landmark-evidence" aria-label="Current landmark transition evidence">
       <span><small>carried tones</small><strong>{transition ? transition.commonPitchClassCount : "—"}</strong><em>{transition ? "same pitch classes" : "first-field baseline"}</em></span>

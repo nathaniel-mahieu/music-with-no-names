@@ -677,6 +677,20 @@ export type LandmarkRouteComparison = {
   sameRootTravelSequence: boolean;
 };
 
+export type LandmarkTransitionChange = {
+  pathId: LandmarkPathId;
+  variant: LandmarkRouteFingerprint["variant"];
+  fromField: LandmarkRouteFingerprintField;
+  toField: LandmarkRouteFingerprintField;
+  stayedOffsets: number[];
+  enteredOffsets: number[];
+  leftOffsets: number[];
+  beforeNotes: number[];
+  afterNotes: number[];
+  voiceLeading: VoiceLeadingProfile;
+  rootTravelSteps: number | null;
+};
+
 export type ChordTemplate = {
   id: string;
   name: string;
@@ -3098,6 +3112,34 @@ export function landmarkRouteFingerprint(path: LandmarkPath, variant: LandmarkRo
     };
   });
   return { pathId: path.id, variant, fields, transitions };
+}
+
+/**
+ * Isolates one adjacent authored route move. Folded membership changes remain
+ * separate from the register-dependent compact voicing used for hand motion.
+ */
+export function landmarkTransitionChange(path: LandmarkPath, toStepIndex: number, doMidi: number, variant: LandmarkRouteFingerprint["variant"] = "original"): LandmarkTransitionChange | null {
+  if (!Number.isInteger(toStepIndex) || toStepIndex <= 0 || toStepIndex >= path.steps.length || !Number.isFinite(doMidi)) return null;
+  const fingerprint = landmarkRouteFingerprint(path, variant);
+  const fromField = fingerprint.fields[toStepIndex - 1];
+  const toField = fingerprint.fields[toStepIndex];
+  const voicings = variant === "one-key-changed" ? voiceLandmarkCounterfactual(path, doMidi) : voiceLandmarkPath(path, doMidi);
+  const beforeNotes = voicings[toStepIndex - 1];
+  const afterNotes = voicings[toStepIndex];
+  if (!fromField || !toField || !beforeNotes?.length || !afterNotes?.length) return null;
+  return {
+    pathId: path.id,
+    variant,
+    fromField,
+    toField,
+    stayedOffsets: fromField.pitchOffsets.filter((offset) => toField.pitchOffsets.includes(offset)),
+    enteredOffsets: toField.pitchOffsets.filter((offset) => !fromField.pitchOffsets.includes(offset)),
+    leftOffsets: fromField.pitchOffsets.filter((offset) => !toField.pitchOffsets.includes(offset)),
+    beforeNotes: [...beforeNotes],
+    afterNotes: [...afterNotes],
+    voiceLeading: voiceLeadingProfile(beforeNotes, afterNotes),
+    rootTravelSteps: fingerprint.transitions[toStepIndex - 1]?.rootTravelSteps ?? null,
+  };
 }
 
 /** Reduces a fingerprint to the route properties that remain comparable across centers and registers. */

@@ -9622,11 +9622,35 @@ footer a {
 .hud-landmark-fingerprint-legend i.is-changed { border-radius: 0; border-color: var(--foreground); background: var(--piano-gold); transform: rotate(45deg); }
 .hud-landmark-fingerprint-legend i.is-held { width: 18px; height: 0; border: 0; border-top: 3px solid var(--piano-blue); border-radius: 0; background: transparent; }
 .hud-landmark-fingerprint-transitions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); list-style: none; }
-.hud-landmark-fingerprint-transitions li { display: grid; min-width: 0; gap: 3px; padding: 8px 9px; }
+.hud-landmark-fingerprint-transitions li { min-width: 0; }
 .hud-landmark-fingerprint-transitions li + li { border-left: 1px solid var(--line); }
+.hud-landmark-fingerprint-transitions button { display: grid; width: 100%; min-height: 56px; gap: 3px; padding: 8px 9px; border: 0; color: var(--foreground); background: transparent; text-align: left; cursor: pointer; }
+.hud-landmark-fingerprint-transitions button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
 .hud-landmark-fingerprint-transitions strong { font-family: var(--font-mono), monospace; font-size: .68rem; }
 .hud-landmark-fingerprint-transitions span { color: var(--muted); font-size: .64rem; line-height: 1.4; }
+.hud-landmark-fingerprint-transitions small { color: var(--piano-blue); font-size: .61rem; text-transform: uppercase; }
+.hud-landmark-fingerprint-transitions button[aria-pressed="true"] span,
+.hud-landmark-fingerprint-transitions button[aria-pressed="true"] small { color: color-mix(in srgb, var(--background) 72%, transparent); }
 .hud-landmark-fingerprint > p { margin: 0; color: var(--muted); font-size: .67rem; line-height: 1.5; }
+.hud-landmark-change { display: grid; gap: 10px; margin: 0 18px 15px; padding: 13px 0 12px; border-bottom: 1px solid var(--line); }
+.hud-landmark-change-plot { display: block; width: 100%; height: auto; max-height: 206px; }
+.hud-landmark-change-row { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 10px; }
+.hud-landmark-change-axis { stroke: var(--line-strong); stroke-width: 1; }
+.hud-landmark-change-axis-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 9px; }
+.hud-landmark-change-strand { stroke: var(--piano-blue); stroke-width: 2; }
+.hud-landmark-change-strand.is-held { stroke-width: 4; }
+.hud-landmark-change-strand.is-added { stroke: var(--piano-gold); stroke-dasharray: 3 3; }
+.hud-landmark-change-strand.is-released { stroke: var(--muted); stroke-dasharray: 3 3; }
+.hud-landmark-change-node { stroke: var(--foreground); stroke-width: 2; }
+.hud-landmark-change-node.is-before { fill: var(--surface); }
+.hud-landmark-change-node.is-after { fill: var(--piano-blue); stroke: var(--surface); }
+.hud-landmark-change-lenses { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); list-style: none; }
+.hud-landmark-change-lenses li { display: grid; min-width: 0; gap: 4px; align-content: start; padding: 9px 10px; }
+.hud-landmark-change-lenses li + li { border-left: 1px solid var(--line); }
+.hud-landmark-change-lenses span { color: var(--piano-blue); font-size: .63rem; letter-spacing: .04em; text-transform: uppercase; }
+.hud-landmark-change-lenses strong { font-size: .7rem; font-weight: 500; line-height: 1.4; }
+.hud-landmark-change-lenses small { color: var(--muted); font-size: .64rem; line-height: 1.42; }
+.hud-landmark-change > p { margin: 0; color: var(--muted); font-size: .67rem; line-height: 1.5; }
 .hud-landmark-compare-status { display: flex; flex-wrap: wrap; gap: 5px 12px; align-items: baseline; margin: 15px 18px 0; padding: 9px 11px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--piano-blue) 5%, transparent); }
 .hud-landmark-compare-status span { color: var(--piano-blue); font-size: .67rem; letter-spacing: .05em; text-transform: uppercase; }
 .hud-landmark-compare-status strong { font-family: var(--font-display), Georgia, serif; font-size: .94rem; font-weight: 400; }
@@ -10186,6 +10210,8 @@ footer a {
   .hud-landmark-fingerprint-fields small { font-size: .56rem; }
   .hud-landmark-fingerprint-transitions { grid-template-columns: 1fr; }
   .hud-landmark-fingerprint-transitions li + li { border-top: 1px solid var(--line); border-left: 0; }
+  .hud-landmark-change-lenses { grid-template-columns: 1fr; }
+  .hud-landmark-change-lenses li + li { border-top: 1px solid var(--line); border-left: 0; }
   .hud-landmark-compare-choice { align-items: stretch; flex-direction: column; }
   .hud-landmark-compare-choice > div:last-child { display: grid; flex-basis: auto; grid-template-columns: 1fr; justify-content: stretch; }
   .hud-landmark-compare-choice button { width: 100%; }
@@ -10376,6 +10402,15 @@ footer a {
   .hud-landmark-fingerprint-node.is-root { fill: LinkText; stroke: Canvas; }
   .hud-landmark-fingerprint-node.is-changed { fill: Highlight; stroke: HighlightText; }
   .hud-landmark-fingerprint-mutation line { stroke: Highlight; }
+  .hud-landmark-fingerprint-transitions button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
+  .hud-landmark-change-axis { stroke: CanvasText; }
+  .hud-landmark-change-row,
+  .hud-landmark-change-axis-label { fill: CanvasText; }
+  .hud-landmark-change-strand { stroke: LinkText; }
+  .hud-landmark-change-strand.is-added { stroke: Highlight; }
+  .hud-landmark-change-strand.is-released { stroke: GrayText; }
+  .hud-landmark-change-node.is-before { fill: Canvas; stroke: CanvasText; }
+  .hud-landmark-change-node.is-after { fill: LinkText; stroke: Canvas; }
   .hud-landmark-compare-status { border-color: CanvasText; background: Canvas; }
   .hud-landmark-compare-guide,
   .hud-landmark-compare-field > line { stroke: CanvasText; }

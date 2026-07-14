@@ -126,7 +126,15 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /relationship fingerprint · Do factored out/);
   assert.match(piano, /The whole route inside one octave/);
   assert.match(piano, /className="hud-landmark-fingerprint-plot"[\s\S]*role="img" aria-label=\{summary\}/);
-  assert.match(piano, /aria-label="Transition invariants across the route"/);
+  assert.match(piano, /aria-label="Select one transition to inspect what changed"/);
+  assert.match(piano, /aria-pressed=\{selectedTransitionIndex === transition\.toStepIndex\}/);
+  assert.match(piano, /What did field \{change\.toField\.stepIndex \+ 1\} change\?/);
+  assert.match(piano, /className="hud-landmark-change-plot"[\s\S]*role="img" aria-label=\{summary\}/);
+  assert.match(piano, /aria-label="Five evidence lenses for the selected route transition"/);
+  assert.match(piano, /Sound · authored \+ modeled/);
+  assert.match(piano, /Experience · yours/);
+  assert.match(piano, /no other lane supplies this answer/);
+  assert.match(piano, /timing, velocity, releases, pedal, balance, actual instrument spectrum, fingering, intention, emotion, and musical goodness remain outside it/i);
   assert.match(piano, /Transposing the whole route leaves this folded pattern unchanged/);
   assert.match(piano, /register, timing, the assumed sound, tonal interpretation, and your experience remain separate evidence/i);
   assert.match(piano, /Which underlying route property changes\?/);
@@ -203,6 +211,9 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-landmark-fingerprint-held[\s\S]*stroke: var\(--piano-blue\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-fingerprint-transitions \{ grid-template-columns: 1fr; \}/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-fingerprint-node\.is-changed \{ fill: Highlight/);
+  assert.match(css, /\.hud-landmark-change-lenses[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-change-lenses \{ grid-template-columns: 1fr; \}/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-change-node\.is-after \{ fill: LinkText/);
   assert.match(css, /\.hud-landmark-compare-field > rect:first-child[\s\S]*stroke-dasharray: 3 3/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-compare-table > div \{ grid-template-columns: 1fr 1fr; \}/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-compare-field > rect:first-child \{ stroke: Highlight/);

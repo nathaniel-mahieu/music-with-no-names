@@ -42,6 +42,7 @@ import {
   landmarkRouteStructureProfile,
   landmarkTranspositionProfile,
   landmarkTransitionProfile,
+  landmarkTransitionChange,
   motifReturnArc,
   motifReturnArcEventIds,
   upsertMotifReturnObservation,
@@ -782,6 +783,29 @@ test("compares two completed landmark routes without collapsing structure into a
   assert.equal(changedComparison.sharedFieldSets.length, 3);
   assert.equal(changedComparison.sameFieldSequence, false);
   assert.deepEqual(landmarkRouteStructureProfile({ ...landmarkRouteFingerprint(pop), fields: [], transitions: [] }).throughToneOffsets, []);
+});
+
+test("isolates one landmark move across membership and reference hand motion", () => {
+  const pop = LANDMARK_PATHS.find((item) => item.id === "pop-loop")!;
+  const firstMove = landmarkTransitionChange(pop, 1, 60)!;
+  assert.equal(firstMove.pathId, "pop-loop");
+  assert.equal(firstMove.variant, "original");
+  assert.deepEqual(firstMove.stayedOffsets, [7]);
+  assert.deepEqual(firstMove.enteredOffsets, [2, 11]);
+  assert.deepEqual(firstMove.leftOffsets, [0, 4]);
+  assert.deepEqual(firstMove.beforeNotes, [60, 64, 67]);
+  assert.deepEqual(firstMove.afterNotes, [59, 62, 67]);
+  assert.equal(firstMove.voiceLeading.totalMotion, 3);
+  assert.equal(firstMove.voiceLeading.largestLeap, 2);
+  assert.equal(firstMove.rootTravelSteps, 1);
+
+  const changedMove = landmarkTransitionChange(pop, 2, 60, "one-key-changed")!;
+  assert.equal(changedMove.toField.changedFromOffset, 0);
+  assert.equal(changedMove.toField.changedToOffset, 1);
+  assert.deepEqual(changedMove.toField.pitchOffsets, [1, 4, 9]);
+  assert.equal(landmarkTransitionChange(pop, 0, 60), null);
+  assert.equal(landmarkTransitionChange(pop, 4, 60), null);
+  assert.equal(landmarkTransitionChange(pop, 1, Number.NaN), null);
 });
 
 test("waits for enough distinct evidence before stabilizing a scale frame", () => {
