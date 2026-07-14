@@ -136,6 +136,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /The exact source and replay are frozen together/);
   assert.match(pianoLab, /Use whole live phrase/);
   assert.match(pianoLab, /this source-and-echo comparison/);
+  assert.match(pianoLab, /What changed between these chords\?/);
+  assert.match(pianoLab, /Reflect on chord change/);
+  assert.match(pianoLab, /The exact two grouped gestures are frozen together/);
+  assert.match(pianoLab, /Save this chord-change report/);
   assert.match(pianoLab, /compareIntervalEcho/);
   assert.match(pianoLab, /What did this attack change\?/);
   assert.match(pianoLab, /Exactly one MIDI member entered/);

@@ -8310,7 +8310,8 @@ footer a {
 
 .hud-echo-panel,
 .hud-cause-panel,
-.hud-voice-coach { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
+.hud-voice-coach,
+.hud-chord-change-lenses { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
 
 .hud-echo-current {
   display: grid;
@@ -9322,6 +9323,7 @@ footer a {
 .hud-last-lenses small { color: var(--muted); font-size: .65rem; line-height: 1.45; }
 .hud-last-lenses button { justify-self: start; min-height: 32px; margin-top: 2px; padding: 0 9px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .65rem; cursor: pointer; }
 .hud-last-lenses button:hover { background: var(--surface-raised); }
+.hud-last-lenses button:disabled { cursor: not-allowed; opacity: .45; }
 .hud-last-attack-limit { margin: 9px 0 0; color: var(--muted); font-size: .65rem; line-height: 1.45; }
 
 .piano-hud-insight { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 18px; align-items: baseline; padding: 18px clamp(20px, 4vw, 52px) 22px; background: var(--surface-soft); }

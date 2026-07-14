@@ -135,10 +135,18 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /origin === "interval-echo" \? "interval source \+ echo"/);
   assert.match(piano, /replace\("this phrase", "this source-and-echo comparison"\)/);
   assert.match(piano, /"Use whole live phrase"/);
+  assert.match(piano, /aria-label="Five separate lenses for the selected chord change"/);
+  assert.match(piano, />Reflect on chord change<\/button>/);
+  assert.match(piano, /holdBoundedExperienceSpecimen\("chord-change", specimen\)/);
+  assert.match(piano, /prompt\.replace\("this phrase", "this chord change"\)/);
+  assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
+  assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);
   assert.match(piano, /simultaneous partial-interaction comparison would answer the wrong question/);
   assert.match(css, /\.hud-echo-reading[\s\S]*grid-template-columns: repeat\(3/);
   assert.match(css, /\.hud-echo-experience button \{ justify-self: start/);
+  assert.match(css, /\.hud-chord-change-lenses \{ min-width: 0/);
+  assert.match(css, /\.hud-last-lenses button:disabled/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-echo-reading \{ grid-template-columns: 1fr/);
   assert.match(css, /\.hud-last-attack-reading\.is-attributable[\s\S]*LinkText/);
   assert.match(css, /\.hud-last-lenses article\.is-modeled[\s\S]*Highlight/);

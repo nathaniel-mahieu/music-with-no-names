@@ -152,7 +152,7 @@ type ChordMeasure = {
 type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif";
-type ExperienceOrigin = "phrase" | "interval-echo";
+type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change";
 type IntervalEchoTarget = {
   semitones: number;
   anchorEventId: number;
@@ -2086,6 +2086,58 @@ function ChordCausePanel({ measures, selectedId, doMidi, showConventions }: {
   </section>;
 }
 
+function ChordChangeLenses({ measures, selectedId, doMidi, scale, soundModelId, showConventions, onReflect }: {
+  measures: ChordMeasure[];
+  selectedId: string | null;
+  doMidi: number;
+  scale: PianoScale;
+  soundModelId: PianoSoundModelId;
+  showConventions: boolean;
+  onReflect: (events: HudNoteEvent[]) => void;
+}) {
+  const selectedIndex = measures.findIndex((measure) => measure.gesture.id === selectedId);
+  const index = selectedIndex >= 0 ? selectedIndex : measures.length - 1;
+  const current = measures[index] ?? measures.at(-1) ?? null;
+  const previous = current ? measures[index - 1] ?? null : null;
+  if (!current || !previous) return <section className="hud-chord-change-lenses" aria-labelledby="hud-chord-change-title">
+    <div className="hud-panel-heading"><span>Two grouped gestures · five lenses</span><strong id="hud-chord-change-title">What changed between these chords?</strong><small>Play two chord gestures. One comparison will connect sounding coordinates, relationships, motion, context, and your own experience.</small></div>
+    <p className="hud-empty-copy">The second grouped gesture creates the before-and-after question.</p>
+  </section>;
+
+  const previousNotes = uniqueSorted(previous.interpretedNotes);
+  const currentNotes = uniqueSorted(current.interpretedNotes);
+  const previousSet = new Set(previousNotes.map(pitchClassFromMidi));
+  const currentSet = new Set(currentNotes.map(pitchClassFromMidi));
+  const pitchClassLabel = (pitchClass: number) => showConventions
+    ? CONVENTIONAL_PITCH_CLASSES[pitchClass]
+    : CHROMATIC_SOLFEGE[pitchClassFromMidi(pitchClass - pitchClassFromMidi(doMidi))];
+  const noteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
+  const entered = [...currentSet].filter((pitchClass) => !previousSet.has(pitchClass)).map(pitchClassLabel);
+  const left = [...previousSet].filter((pitchClass) => !currentSet.has(pitchClass)).map(pitchClassLabel);
+  const stayed = [...currentSet].filter((pitchClass) => previousSet.has(pitchClass)).map(pitchClassLabel);
+  const voice = voiceLeadingProfile(previousNotes, currentNotes);
+  const delta = (currentValue: number | null, previousValue: number | null) => currentValue == null || previousValue == null ? null : Math.round((currentValue - previousValue) * 100);
+  const signed = (value: number | null) => value == null ? "—" : `${value > 0 ? "+" : ""}${value}`;
+  const previousSpan = previousNotes.length ? Math.max(...previousNotes) - Math.min(...previousNotes) : 0;
+  const currentSpan = currentNotes.length ? Math.max(...currentNotes) - Math.min(...currentNotes) : 0;
+  const bassMotion = voice.bassMotion === 0 ? "bass held" : `bass ${voice.bassMotion > 0 ? "up" : "down"} ${Math.abs(voice.bassMotion)}`;
+  const specimen = [...previous.gesture.attacks, ...current.gesture.attacks]
+    .filter((event, eventIndex, all) => all.findIndex((candidate) => candidate.id === event.id) === eventIndex)
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  const readyToReflect = specimen.length >= 3;
+  return <section className="hud-chord-change-lenses" aria-labelledby="hud-chord-change-title">
+    <div className="hud-panel-heading"><span>Selected before + after · five lenses</span><strong id="hud-chord-change-title">What changed between these chords?</strong><small>{previousNotes.map(noteLabel).join(" · ")} → {currentNotes.map(noteLabel).join(" · ")} · the grouped MIDI interpretation can be corrected above</small></div>
+    <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the selected chord change">
+      <article className="is-measured"><span>Sound</span><em>measured MIDI + modeled spectrum</em><strong>{previous.audibleNotes.length}→{current.audibleNotes.length} sounding · span {previousSpan}→{currentSpan} keys</strong><small>Modeled roughness {signed(delta(current.crunch, previous.crunch))} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. MIDI supplied attacks and fundamentals, not acoustic loudness or the instrument spectrum.</small></article>
+      <article className="is-measured"><span>Relationships</span><em>interpreted MIDI membership</em><strong>{entered.length ? `entered ${entered.join(" · ")}` : "entered none"} · {left.length ? `left ${left.join(" · ")}` : "left none"}</strong><small>{stayed.length ? `${stayed.join(" · ")} stayed in both readings.` : "No pitch-class position stayed."} Membership is not correctness or harmonic function.</small></article>
+      <article className="is-measured"><span>Motion</span><em>nearest-key interpretation</em><strong>{voice.motionClasses.join(" + ") || "held / repeated"} · largest leap {voice.largestLeap}</strong><small>{bassMotion} · total nearest-key travel {voice.totalMotion}. These strands describe one parsimonious mapping, not intended voices or fingering.</small></article>
+      <article className="is-modeled"><span>Context</span><em>selected Do + teaching model</em><strong>toward Do {Math.round(previous.pull * 100)}→{Math.round(current.pull * 100)} · repose {Math.round(previous.arrival * 100)}→{Math.round(current.arrival * 100)}</strong><small>{current.rootTravelSteps == null ? "Root travel is unavailable under the current chord readings." : `${current.rootTravelSteps} fifths step${current.rootTravelSteps === 1 ? "" : "s"} between exact interpreted roots.`} These are contextual coordinates, not felt resolution.</small></article>
+      <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did this change feel like opening, arrival, motion, or something else?</strong><small>{readyToReflect ? "The HUD will freeze these exact two grouped gestures and ask for your report without filling it from the other lenses." : "At least three attacks across the two gestures are needed for a bounded reflection."}</small><button type="button" disabled={!readyToReflect} onClick={() => onReflect(specimen)}>Reflect on chord change</button></article>
+    </div>
+    <p className="hud-last-attack-limit">No lens is averaged into similarity, emotionality, correctness, listenability, or musical goodness.</p>
+  </section>;
+}
+
 function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConventions }: {
   measures: ChordMeasure[];
   selectedId: string | null;
@@ -2341,6 +2393,12 @@ function characterChoiceLabel(key: keyof PhraseCharacterRatings, value: number |
   return question.choices[index];
 }
 
+function experiencePromptForOrigin(prompt: string, origin: ExperienceOrigin) {
+  if (origin === "interval-echo") return prompt.replace("this phrase", "this source-and-echo comparison");
+  if (origin === "chord-change") return prompt.replace("this phrase", "this chord change");
+  return prompt;
+}
+
 function ExperienceLens({ captured, origin, latestCount, observations, draft, questionIndex, saved, evidence, soundModelLabel, deleteArmed, onCapture, onAnswer, onBack, onSave, onReflectAgain, onArmDelete, onDelete }: {
   captured: HudNoteEvent[];
   origin: ExperienceOrigin;
@@ -2364,22 +2422,30 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
   const repeats = observations.filter((observation) => observation.phraseSignature === signature);
   const summary = summarizePhraseCharacter(observations);
   const question = CHARACTER_QUESTIONS[questionIndex];
-  const questionPrompt = question && origin === "interval-echo"
-    ? question.prompt.replace("this phrase", "this source-and-echo comparison")
-    : question?.prompt;
+  const questionPrompt = question ? experiencePromptForOrigin(question.prompt, origin) : undefined;
   const ready = captured.length >= 3;
+  const boundedComparison = origin !== "phrase";
+  const specimenLabel = origin === "interval-echo" ? "interval source + echo" : origin === "chord-change" ? "chord before + after" : "reflection specimen";
+  const specimenState = origin === "interval-echo" ? "comparison held" : origin === "chord-change" ? "change held" : "";
+  const repeatedReportCopy = `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} ${repeats.length === 1 ? "shares" : "share"} this relationship signature.`;
+  const specimenCopy = origin === "interval-echo"
+    ? `The exact source and replay are frozen together. ${repeatedReportCopy}`
+    : origin === "chord-change"
+      ? `The exact two grouped gestures are frozen together. ${repeatedReportCopy}`
+      : `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature.`;
+  const saveLabel = origin === "phrase" ? "Save this phrase report" : origin === "chord-change" ? "Save this chord-change report" : "Save this comparison report";
   const draftPlaced = draft.settledness != null && draft.energy != null;
   const xFor = (value: number) => 54 + value / 100 * 412;
   const yFor = (value: number) => 252 - value / 100 * 210;
   const mapDescription = observations.length
-    ? `${observations.length} saved personal phrase reports; center settledness ${Math.round(summary!.center.settledness)}, energy ${Math.round(summary!.center.energy)}, uncertainty plus or minus ${Math.round(summary!.uncertainty)}.`
+    ? `${observations.length} saved personal phrase report${observations.length === 1 ? "" : "s"}; center settledness ${Math.round(summary!.center.settledness)}, energy ${Math.round(summary!.center.energy)}, uncertainty plus or minus ${Math.round(summary!.uncertainty)}.`
     : "No saved personal phrase reports yet. The first two answers will place the current experience.";
   const reportedValues = CHARACTER_QUESTIONS.map((item) => `${item.low} ${draft[item.key] == null ? "—" : draft[item.key]} ${item.high}`).join("; ");
   return <section className="hud-experience-lens" aria-labelledby="hud-experience-title">
     <div className="hud-panel-heading"><span>Listener-reported · local · uncertain</span><strong id="hud-experience-title">Personal character map</strong><small>Describe this experience yourself. The map never derives emotion, liking, or familiarity from MIDI or the assumed sound model.</small></div>
     <div className="hud-experience-toolbar">
-      <div><span>{origin === "interval-echo" ? "interval source + echo" : "reflection specimen"}</span><strong>{ready ? `${captured.length} captured attacks${origin === "interval-echo" ? " · comparison held" : ""}` : "No phrase held yet"}</strong><small>{ready ? origin === "interval-echo" ? `The exact source and replay are frozen together. ${repeats.length} prior report${repeats.length === 1 ? "" : "s"} ${repeats.length === 1 ? "shares" : "share"} this relationship signature.` : `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature` : "Play at least three attacks, then hold the latest phrase."}</small></div>
-      <button type="button" disabled={latestCount < 3} onClick={onCapture}>{ready ? origin === "interval-echo" ? "Use whole live phrase" : "Use latest phrase" : "Hold latest phrase"}</button>
+      <div><span>{specimenLabel}</span><strong>{ready ? `${captured.length} captured attacks${specimenState ? ` · ${specimenState}` : ""}` : "No phrase held yet"}</strong><small>{ready ? specimenCopy : "Play at least three attacks, then hold the latest phrase."}</small></div>
+      <button type="button" disabled={latestCount < 3} onClick={onCapture}>{ready ? boundedComparison ? "Use whole live phrase" : "Use latest phrase" : "Hold latest phrase"}</button>
     </div>
     <div className="hud-experience-main">
       <div className="hud-character-map">
@@ -2410,7 +2476,7 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
           <span>your report · not a model output</span>
           <strong>Save this four-part experience?</strong>
           <div>{CHARACTER_QUESTIONS.map((item) => <p key={item.key}><span>{item.key === "settledness" ? "settled" : item.key}</span><strong>{characterChoiceLabel(item.key, draft[item.key])}</strong><small>{draft[item.key]}</small></p>)}</div>
-          <button type="button" onClick={onSave}>Save this phrase report</button>
+          <button type="button" onClick={onSave}>{saveLabel}</button>
           <button type="button" className="hud-character-back" onClick={onBack}>Change last answer</button>
         </div>}
       </div>
@@ -2886,6 +2952,7 @@ export function PianoLab() {
     setLandmarkTransposeSession(null);
     setLandmarkCounterfactualSession(null);
     landmarkLastMatchIdRef.current = 0;
+    setExperienceOrigin("phrase");
     setExperiencePhrase([]);
     setExperienceDraft({});
     setExperienceQuestionIndex(0);
@@ -3251,7 +3318,7 @@ export function PianoLab() {
       setResolutionForkSet(null);
       landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
     }
-    if (lens === "experience") captureExperiencePhrase();
+    if (lens === "experience" && (experienceOrigin === "phrase" || experiencePhrase.length < 3)) captureExperiencePhrase();
     setFocusLens(lens);
     const url = new URL(window.location.href);
     url.searchParams.set("pianoLens", lens);
@@ -3260,11 +3327,12 @@ export function PianoLab() {
     window.history.replaceState(null, "", url);
   };
 
-  const beginIntervalEchoReflection = (specimen: HudNoteEvent[]) => {
-    if (specimen.length !== 4) return;
+  const holdBoundedExperienceSpecimen = (origin: Exclude<ExperienceOrigin, "phrase">, specimen: HudNoteEvent[]) => {
+    const uniqueSpecimen = [...new Map(specimen.map((event) => [event.id, event])).values()]
+      .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
     setPhraseCompareSession(null);
-    setExperienceOrigin("interval-echo");
-    setExperiencePhrase(specimen.map((event) => ({ ...event, fieldNotes: [...event.fieldNotes] })));
+    setExperienceOrigin(origin);
+    setExperiencePhrase(uniqueSpecimen.map((event) => ({ ...event, fieldNotes: [...event.fieldNotes] })));
     setExperienceDraft({});
     setExperienceQuestionIndex(0);
     setExperienceSaved(false);
@@ -3274,6 +3342,16 @@ export function PianoLab() {
     url.searchParams.set("pianoLens", "experience");
     url.searchParams.delete("pianoMotion");
     window.history.replaceState(null, "", url);
+  };
+
+  const beginIntervalEchoReflection = (specimen: HudNoteEvent[]) => {
+    if (specimen.length !== 4) return;
+    holdBoundedExperienceSpecimen("interval-echo", specimen);
+  };
+
+  const beginChordChangeReflection = (specimen: HudNoteEvent[]) => {
+    if (new Set(specimen.map((event) => event.id)).size < 3) return;
+    holdBoundedExperienceSpecimen("chord-change", specimen);
   };
 
   const selectMotionMode = (mode: MotionFocusMode) => {
@@ -3414,9 +3492,9 @@ export function PianoLab() {
     : focusLens === "experience" ? experiencePhrase.length < 3
     ? "Play at least three attacks, then hold the latest phrase for a personal reflection."
     : experienceSaved
-      ? "Your phrase report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence."
+      ? `Your ${experienceOrigin === "phrase" ? "phrase" : experienceOrigin === "chord-change" ? "chord-change" : "interval-comparison"} report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence.`
       : experienceQuestionIndex < CHARACTER_QUESTIONS.length
-        ? `Reflection ${experienceQuestionIndex + 1} of 4: ${experienceOrigin === "interval-echo" ? CHARACTER_QUESTIONS[experienceQuestionIndex].prompt.replace("this phrase", "this source-and-echo comparison") : CHARACTER_QUESTIONS[experienceQuestionIndex].prompt}`
+        ? `Reflection ${experienceQuestionIndex + 1} of 4: ${experiencePromptForOrigin(CHARACTER_QUESTIONS[experienceQuestionIndex].prompt, experienceOrigin)}`
         : "All four personal dimensions are answered. Review them together before saving this observation."
     : focusLens === "paths" ? effectiveLandmarkStepIndex >= landmarkPath.steps.length
     ? `${landmarkPath.family} complete: ${landmarkPath.invariant}`
@@ -3592,7 +3670,8 @@ export function PianoLab() {
         <RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} />
       </div> : null}
 
-      {((focusLens === "explore" && !phraseCompareSession) || focusLens === "chords") ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
+      {focusLens === "explore" && !phraseCompareSession ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
+      {focusLens === "chords" ? <ChordChangeLenses measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onReflect={beginChordChangeReflection} /> : null}
 
       {focusLens === "intervals" ? <section className="hud-interval-lesson" aria-label="Interval context lesson">
         <IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} onReflect={beginIntervalEchoReflection} />
