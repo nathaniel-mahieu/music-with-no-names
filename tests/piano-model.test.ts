@@ -62,6 +62,7 @@ import {
   resolutionLandingEvidence,
   resolutionDirection,
   scaleFingerprint,
+  sharedCycleCandidates,
   tonalTendency,
   tonalGravityCandidates,
   tonalGravityCounterfactual,
@@ -76,6 +77,39 @@ test("maps equal-tempered MIDI notes to physical frequency", () => {
   assert.equal(frequencyFromMidi(69), 440);
   assert.ok(Math.abs(frequencyFromMidi(60) - 261.625565) < 0.00001);
   assert.ok(Math.abs(frequencyFromMidi(72) / frequencyFromMidi(60) - 2) < 1e-12);
+});
+
+test("offers transparent shared-cycle tradeoffs for live equal-tempered fundamentals", () => {
+  const brightTriad = sharedCycleCandidates([60, 64, 67]);
+  assert.equal(brightTriad.length, 1);
+  assert.deepEqual(brightTriad[0].harmonics, [4, 5, 6]);
+  assert.ok(Math.abs(brightTriad[0].fundamentalHz - 65.55) < 0.02);
+  assert.ok(brightTriad[0].maximumErrorCents < 10);
+  assert.ok(brightTriad[0].periodMs > 15 && brightTriad[0].periodMs < 15.3);
+
+  const transposed = sharedCycleCandidates([67, 71, 74]);
+  assert.deepEqual(transposed[0].harmonics, brightTriad[0].harmonics);
+  assert.ok(Math.abs(transposed[0].rmsErrorCents - brightTriad[0].rmsErrorCents) < 1e-9);
+  assert.ok(Math.abs(transposed[0].fundamentalHz / brightTriad[0].fundamentalHz - 2 ** (7 / 12)) < 1e-9);
+
+  const shadowTriad = sharedCycleCandidates([60, 63, 67]);
+  assert.deepEqual(shadowTriad.map((candidate) => candidate.harmonics), [[6, 7, 9], [10, 12, 15]]);
+  assert.ok(shadowTriad[0].maximumHarmonic < shadowTriad[1].maximumHarmonic);
+  assert.ok(shadowTriad[0].rmsErrorCents > shadowTriad[1].rmsErrorCents);
+
+  const closePair = sharedCycleCandidates([60, 61]);
+  assert.deepEqual(closePair.map((candidate) => candidate.harmonics), [[10, 11], [13, 14], [15, 16]]);
+  assert.ok(closePair[0].rmsErrorCents > closePair.at(-1)!.rmsErrorCents);
+});
+
+test("refuses unsupported shared-cycle inputs instead of manufacturing a global fit", () => {
+  assert.deepEqual(sharedCycleCandidates([]), []);
+  assert.deepEqual(sharedCycleCandidates([60, 60]), []);
+  assert.deepEqual(sharedCycleCandidates([48, 50, 52, 53, 55, 57, 59]), []);
+  assert.deepEqual(sharedCycleCandidates([60, 67], 16, 0), []);
+  assert.throws(() => sharedCycleCandidates([60, Number.NaN]), RangeError);
+  assert.throws(() => sharedCycleCandidates([60, 67], 1), RangeError);
+  assert.throws(() => sharedCycleCandidates([60, 67], 16, -1), RangeError);
 });
 
 test("builds each scale as an octave-closing route", () => {

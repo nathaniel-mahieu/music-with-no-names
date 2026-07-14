@@ -8699,6 +8699,53 @@ footer a {
 .hud-partial-readout span { color: var(--muted); font-size: .63rem; letter-spacing: .05em; text-transform: uppercase; }
 .hud-partial-readout strong { overflow-wrap: anywhere; font-family: var(--font-mono), monospace; font-size: .72rem; font-weight: 500; }
 .hud-partial-readout small { color: var(--muted); font-size: .66rem; line-height: 1.4; }
+.hud-shared-cycle { min-width: 0; padding: 17px clamp(18px, 4vw, 52px); border-top: 1px solid var(--line); }
+.hud-shared-cycle-prompt,
+.hud-shared-cycle-topline { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+.hud-shared-cycle-prompt > div,
+.hud-shared-cycle-topline > div { display: grid; flex: 1 1 560px; gap: 4px; }
+.hud-shared-cycle-prompt span,
+.hud-shared-cycle-topline span,
+.hud-shared-cycle-summary span { color: var(--piano-gold); font-size: .66rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.hud-shared-cycle-prompt strong,
+.hud-shared-cycle-topline strong { font-family: var(--font-display), Georgia, serif; font-size: 1rem; font-weight: 400; }
+.hud-shared-cycle-prompt small,
+.hud-shared-cycle-topline small,
+.hud-shared-cycle-summary small { color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.hud-shared-cycle-prompt button,
+.hud-shared-cycle-topline button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .7rem; cursor: pointer; }
+.hud-shared-cycle-prompt button:disabled { color: var(--muted); cursor: not-allowed; }
+.hud-shared-cycle.is-collapsed > p { margin: 10px 0 0; color: var(--muted); font-size: .68rem; }
+.hud-shared-cycle-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 14px; border: 1px solid var(--line); }
+.hud-shared-cycle-choices button { display: grid; min-width: 0; gap: 3px; padding: 9px 11px; border: 0; border-right: 1px solid var(--line); color: var(--foreground); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.hud-shared-cycle-choices button:last-child { border-right: 0; }
+.hud-shared-cycle-choices button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
+.hud-shared-cycle-choices span,
+.hud-shared-cycle-choices small { color: var(--muted); font-size: .62rem; }
+.hud-shared-cycle-choices button[aria-pressed="true"] span,
+.hud-shared-cycle-choices button[aria-pressed="true"] small { color: color-mix(in srgb, var(--background) 72%, transparent); }
+.hud-shared-cycle-choices strong { font-family: var(--font-mono), monospace; font-size: .76rem; font-weight: 500; }
+.hud-shared-cycle-summary { display: grid; gap: 3px; margin-top: 13px; padding: 10px 12px; border-left: 3px solid var(--piano-blue); background: color-mix(in srgb, var(--piano-blue) 5%, transparent); }
+.hud-shared-cycle-summary strong { font-family: var(--font-mono), monospace; font-size: .78rem; font-weight: 500; }
+.hud-shared-cycle svg { display: block; width: 100%; height: auto; margin-top: 8px; overflow: visible; }
+.hud-shared-cycle-boundary { stroke: var(--line-strong); stroke-width: 1.5; }
+.hud-shared-cycle-boundary.is-end { stroke: var(--piano-gold); stroke-dasharray: 4 3; }
+.hud-shared-cycle-midline { stroke: var(--line); stroke-width: 1; }
+.hud-shared-cycle-voice path { fill: none; stroke: var(--piano-blue); stroke-width: 1.5; }
+.hud-shared-cycle-voice circle { fill: var(--surface-raised); stroke: var(--piano-gold); stroke-width: 2; }
+.hud-shared-cycle-note,
+.hud-shared-cycle-hz,
+.hud-shared-cycle-error,
+.hud-shared-cycle-axis-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 9px; }
+.hud-shared-cycle-note { fill: var(--foreground); font-size: 10px; font-weight: 700; }
+.hud-shared-cycle-error,
+.hud-shared-cycle-axis-label.is-end { text-anchor: end; }
+.hud-shared-cycle-reading { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-shared-cycle-reading > div { display: grid; gap: 4px; padding: 10px 12px; }
+.hud-shared-cycle-reading > div + div { border-left: 1px solid var(--line); }
+.hud-shared-cycle-reading span { color: var(--muted); font-size: .62rem; letter-spacing: .05em; text-transform: uppercase; }
+.hud-shared-cycle-reading strong { font-size: .7rem; font-weight: 500; line-height: 1.45; }
+.hud-shared-cycle-limit { margin: 10px 0 0; color: var(--muted); font-size: .67rem; line-height: 1.5; }
 .hud-grid-line { stroke: var(--line); stroke-width: 1; }
 .hud-ledger-line { stroke: var(--foreground); stroke-width: 1.25; }
 .hud-clef { fill: var(--foreground); font-family: serif; font-size: 44px; }
@@ -9988,6 +10035,17 @@ footer a {
   .piano-hud-statebar { grid-template-columns: 1fr; }
   .piano-hud-statebar em { justify-self: start; }
   .hud-interval-tools > summary { align-items: flex-start; flex-direction: column; }
+  .hud-shared-cycle-prompt,
+  .hud-shared-cycle-topline { align-items: stretch; flex-direction: column; }
+  .hud-shared-cycle-prompt > div,
+  .hud-shared-cycle-topline > div { flex-basis: auto; }
+  .hud-shared-cycle-prompt button,
+  .hud-shared-cycle-topline button { width: 100%; }
+  .hud-shared-cycle-choices,
+  .hud-shared-cycle-reading { grid-template-columns: 1fr; }
+  .hud-shared-cycle-choices button { border-right: 0; border-bottom: 1px solid var(--line); }
+  .hud-shared-cycle-choices button:last-child { border-bottom: 0; }
+  .hud-shared-cycle-reading > div + div { border-top: 1px solid var(--line); border-left: 0; }
   .hud-chord-question-options { grid-template-columns: 1fr; }
   .hud-chord-question-options button { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-chord-question-options button:last-child { border-bottom: 0; }
@@ -10362,6 +10420,13 @@ footer a {
   .hud-field-notes button.is-excluded { border-color: GrayText; color: GrayText; }
   .hud-texture-node.is-excluded,
   .hud-texture-exclusion { stroke: GrayText; }
+  .hud-shared-cycle-summary { border-left-color: LinkText; background: Canvas; }
+  .hud-shared-cycle-choices button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
+  .hud-shared-cycle-boundary { stroke: CanvasText; }
+  .hud-shared-cycle-boundary.is-end { stroke: Highlight; }
+  .hud-shared-cycle-midline { stroke: GrayText; }
+  .hud-shared-cycle-voice path { stroke: LinkText; }
+  .hud-shared-cycle-voice circle { fill: Canvas; stroke: Highlight; }
   .hud-chord-band { fill: Canvas; stroke: CanvasText; }
   .hud-chord-band.is-selected { fill: Highlight; stroke: HighlightText; }
   .hud-motif-source,

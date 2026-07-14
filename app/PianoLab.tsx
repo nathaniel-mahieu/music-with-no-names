@@ -69,6 +69,7 @@ import {
   scaleFingerprint,
   scaleFrameTimeline,
   scaleSemitones,
+  sharedCycleCandidates,
   tonalGravityCandidates,
   tonalGravityCounterfactual,
   tonalTendency,
@@ -101,6 +102,7 @@ import {
   type ScaleCandidate,
   type ScaleGapMutationComparison,
   type ScaleLandingIntervalRipple,
+  type SharedCycleCandidate,
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type PhraseLensComparison,
@@ -1901,6 +1903,68 @@ function PartialInteractionMicroscope({ notes, focusedNote, doMidi, scale, sound
       <p><span>strongest interaction zone</span><strong>{interactionCopy}</strong><small>{strongestInteraction ? strongestInteraction.separationHz < 30 ? `If present as steady components, this pair would create about ${strongestInteraction.separationHz.toFixed(1)} amplitude beats per second.` : "Separation and level both affect the roughness proxy." : "No pair crosses the displayed interaction-link threshold."}</small></p>
       <p><span>separate model outputs</span><strong>roughness {Math.round(interaction.roughness * 100)}/100 · overlap {Math.round(interaction.overlap * 100)}/100</strong><small>Roughness sums every cross-partial contribution, including weak unlinked pairs. Neither output measures musical goodness, your instrument, or your experience.</small></p>
     </div>
+  </section>;
+}
+
+function SharedCycleLens({ notes, doMidi, scale, showConventions }: {
+  notes: number[];
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+}) {
+  const unique = uniqueSorted(notes);
+  const specimenKey = unique.join("-");
+  const candidates = sharedCycleCandidates(unique);
+  const [selection, setSelection] = useState({ specimenKey, revealed: false, index: 0 });
+  const current = selection.specimenKey === specimenKey ? selection : { specimenKey, revealed: false, index: 0 };
+  const candidate = candidates[Math.min(current.index, Math.max(0, candidates.length - 1))] ?? null;
+  const label = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
+  const signedCents = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}¢`;
+  const fitLabel = (item: SharedCycleCandidate) => item.maximumErrorCents < 10 ? "close compact fit" : item.maximumErrorCents < 24 ? "visible approximation" : "loose compact fit";
+  const setRevealed = (revealed: boolean) => setSelection({ specimenKey, revealed, index: 0 });
+
+  if (!current.revealed) return <section className="hud-shared-cycle is-collapsed" aria-labelledby="hud-shared-cycle-title">
+    <div className="hud-shared-cycle-prompt"><div><span>Global physical question · fundamentals only</span><strong id="hud-shared-cycle-title">Could these pitches nearly repeat inside one longer cycle?</strong><small>Pairwise intervals describe every edge. This optional view asks a different question: can one short integer template approximately contain the whole field?</small></div><button type="button" disabled={unique.length < 2 || unique.length > 6} aria-expanded="false" onClick={() => setRevealed(true)}>Find shared cycles</button></div>
+    {unique.length > 6 ? <p>Choose a field with two to six distinct physical keys; the lens will not compress a larger pitch field into one global template.</p> : null}
+  </section>;
+
+  if (!candidate) return <section className="hud-shared-cycle is-open" aria-labelledby="hud-shared-cycle-title">
+    <div className="hud-shared-cycle-topline"><div><span>Global physical question · fundamentals only</span><strong id="hud-shared-cycle-title">No compact shared-cycle candidate</strong><small>No integer template through harmonic 16 keeps every equal-tempered fundamental within 35 cents. Pairwise relationships still remain available above.</small></div><button type="button" aria-expanded="true" onClick={() => setRevealed(false)}>Hide</button></div>
+    <p className="hud-shared-cycle-limit">This refusal is not evidence that the field is dissonant, nonmusical, unpleasant, or without tonal meaning.</p>
+  </section>;
+
+  const plotWidth = 560;
+  const xStart = 116;
+  const rowGap = 38;
+  const firstRow = 58;
+  const plotHeight = firstRow + candidate.voices.length * rowGap + 38;
+  const wavePath = (voice: SharedCycleCandidate["voices"][number], rowIndex: number) => {
+    const rowY = firstRow + rowIndex * rowGap;
+    return Array.from({ length: 121 }, (_, index) => {
+      const progress = index / 120;
+      const x = xStart + progress * plotWidth;
+      const y = rowY - Math.sin(progress * voice.actualCycles * Math.PI * 2) * 9;
+      return `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(" ");
+  };
+  const summary = `Shared-cycle candidate ${candidate.harmonics.join(":")} at ${candidate.fundamentalHz.toFixed(2)} hertz, one candidate period ${candidate.periodMs.toFixed(2)} milliseconds. ${candidate.voices.map((voice) => `${label(voice.note)} at ${voice.frequencyHz.toFixed(1)} hertz maps near harmonic ${voice.harmonic} with ${signedCents(voice.errorCents)} mismatch`).join(". ")}. Phases are reset together only for this visual comparison.`;
+  return <section className="hud-shared-cycle is-open" aria-labelledby="hud-shared-cycle-title">
+    <div className="hud-shared-cycle-topline"><div><span>Candidate shared periodicity · measured fundamentals</span><strong id="hud-shared-cycle-title">One long cycle, several near-integer repetitions</strong><small>The base is fitted to the MIDI-key frequencies. Every wave begins together only as a display choice; no performance phase or instrument spectrum was measured.</small></div><button type="button" aria-expanded="true" onClick={() => setRevealed(false)}>Hide</button></div>
+    {candidates.length > 1 ? <div className="hud-shared-cycle-choices" role="group" aria-label="Shared-cycle complexity and mismatch tradeoffs">{candidates.map((item, index) => <button key={item.harmonics.join(":")} type="button" aria-pressed={current.index === index} onClick={() => setSelection({ specimenKey, revealed: true, index })}><span>{index === 0 ? "shorter template" : index === candidates.length - 1 ? "closer template" : "middle tradeoff"}</span><strong>{item.harmonics.join(":")}</strong><small>largest mismatch {item.maximumErrorCents.toFixed(1)}¢</small></button>)}</div> : null}
+    <div className="hud-shared-cycle-summary"><span>{fitLabel(candidate)}</span><strong>{candidate.harmonics.join(" : ")} near harmonics of {candidate.fundamentalHz.toFixed(2)} Hz</strong><small>candidate period {candidate.periodMs.toFixed(2)} ms · RMS mismatch {candidate.rmsErrorCents.toFixed(1)}¢ · largest {candidate.maximumErrorCents.toFixed(1)}¢</small></div>
+    <svg viewBox={`0 0 720 ${plotHeight}`} role="img" aria-label={summary}>
+      <title>Performed equal-tempered fundamentals drawn across one fitted shared-cycle period</title>
+      <line x1={xStart} x2={xStart} y1="32" y2={plotHeight - 26} className="hud-shared-cycle-boundary" />
+      <line x1={xStart + plotWidth} x2={xStart + plotWidth} y1="32" y2={plotHeight - 26} className="hud-shared-cycle-boundary is-end" />
+      <text x={xStart} y="20" className="hud-shared-cycle-axis-label">phase reset · 0 ms</text><text x={xStart + plotWidth} y="20" className="hud-shared-cycle-axis-label is-end">candidate return · {candidate.periodMs.toFixed(2)} ms</text>
+      {candidate.voices.map((voice, index) => {
+        const rowY = firstRow + index * rowGap;
+        const endY = rowY - Math.sin(voice.actualCycles * Math.PI * 2) * 9;
+        return <g key={voice.note} className="hud-shared-cycle-voice"><line x1={xStart} x2={xStart + plotWidth} y1={rowY} y2={rowY} className="hud-shared-cycle-midline" /><path d={wavePath(voice, index)} /><circle cx={xStart + plotWidth} cy={endY} r="4" /><text x="8" y={rowY - 2} className="hud-shared-cycle-note">{label(voice.note)}</text><text x="8" y={rowY + 11} className="hud-shared-cycle-hz">{voice.frequencyHz.toFixed(1)} Hz</text><text x={xStart + plotWidth - 8} y={rowY - 12} className="hud-shared-cycle-error">h{voice.harmonic} · {signedCents(voice.errorCents)}</text><title>{`${label(voice.note)}: ${voice.actualCycles.toFixed(3)} actual cycles, near harmonic ${voice.harmonic}, ${signedCents(voice.errorCents)} mismatch`}</title></g>;
+      })}
+    </svg>
+    <div className="hud-shared-cycle-reading"><div><span>What the picture says</span><strong>Smaller endpoint drift means the performed fundamentals nearly close together under this candidate period.</strong></div><div><span>What it does not say</span><strong>Not a detected root, chord name, tonal function, acoustic fusion, consonance, emotion, or goodness.</strong></div></div>
+    <p className="hud-shared-cycle-limit">Changing register or equal-tempered spacing can change the shortest template. Actual audibility also depends on spectrum, duration, phase, level, room, hearing, context, and the listener.</p>
   </section>;
 }
 
@@ -5390,6 +5454,7 @@ export function PianoLab() {
 
       {focusLens === "intervals" ? <section className="hud-interval-lesson" aria-label="Interval context lesson">
         <IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} onReflect={beginIntervalEchoReflection} />
+        <SharedCycleLens notes={soundingAnalysisNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} />
         <details className="hud-interval-tools">
           <summary><span>Inspect the sounding field</span><small>Optional interval network and assumed-partial microscope</small></summary>
           <div className="piano-focus-grid is-interval-practice"><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /><PartialInteractionMicroscope notes={soundingAnalysisNotes} focusedNote={focusedEvent?.note ?? null} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} /></div>

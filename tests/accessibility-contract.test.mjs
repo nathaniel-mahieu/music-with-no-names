@@ -349,9 +349,17 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperienceContext\(null\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);
+  assert.match(piano, /Could these pitches nearly repeat inside one longer cycle\?/);
+  assert.match(piano, />Find shared cycles<\/button>/);
+  assert.match(piano, /role="img" aria-label=\{summary\}/);
+  assert.match(piano, /Phases are reset together only for this visual comparison/);
+  assert.match(piano, /Not a detected root, chord name, tonal function, acoustic fusion, consonance, emotion, or goodness/);
   assert.match(piano, /simultaneous partial-interaction comparison would answer the wrong question/);
   assert.match(css, /\.hud-echo-reading[\s\S]*grid-template-columns: repeat\(3/);
   assert.match(css, /\.hud-echo-experience button \{ justify-self: start/);
+  assert.match(css, /\.hud-shared-cycle-choices button\[aria-pressed="true"\]/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-shared-cycle-reading \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-shared-cycle-voice path \{ stroke: LinkText/);
   assert.match(css, /\.hud-chord-change-lenses,[\s\S]*\.hud-chord-echo,[\s\S]*\.hud-chord-motion-echo \{ min-width: 0/);
   assert.match(css, /\.hud-chord-question-options button\[aria-pressed="true"\]/);
   assert.match(css, /\.hud-chord-echo-node\.is-source[\s\S]*LinkText/);

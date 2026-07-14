@@ -1,4 +1,4 @@
-import { centsFromRatio } from "./music-math.ts";
+import { centsFromRatio, greatestCommonDivisor } from "./music-math.ts";
 
 export type PianoScale = {
   id: "bright-seven" | "shadow-seven" | "open-five" | "blues-six";
@@ -51,6 +51,25 @@ export type IntervalEchoComparison = {
   equalKeyboardRatio: number;
   sourceFrequencyGapHz: number;
   attemptFrequencyGapHz: number;
+};
+
+export type SharedCycleVoice = {
+  note: number;
+  frequencyHz: number;
+  harmonic: number;
+  errorCents: number;
+  actualCycles: number;
+  endPhaseTurns: number;
+};
+
+export type SharedCycleCandidate = {
+  fundamentalHz: number;
+  periodMs: number;
+  harmonics: number[];
+  maximumHarmonic: number;
+  rmsErrorCents: number;
+  maximumErrorCents: number;
+  voices: SharedCycleVoice[];
 };
 
 export type ChordVoicingEchoComparison = {
@@ -933,6 +952,90 @@ export function frequencyFromMidi(note: number, tuningHz = 440) {
     throw new RangeError("MIDI note and tuning must be finite, and tuning must be positive.");
   }
   return tuningHz * 2 ** ((note - 69) / 12);
+}
+
+/**
+ * Finds a small Pareto set of shared-cycle hypotheses for two to six performed
+ * equal-tempered fundamentals. Each candidate trades a shorter integer
+ * harmonic template against lower cents mismatch. It does not inspect upper
+ * partials, phase, chord identity, tonal function, or a listener response.
+ */
+export function sharedCycleCandidates(notesInput: number[], maximumHarmonic = 16, limit = 3): SharedCycleCandidate[] {
+  if (notesInput.some((note) => !Number.isFinite(note) || note < 0 || note > 127)) {
+    throw new RangeError("Shared-cycle notes must be finite MIDI positions from 0 through 127.");
+  }
+  if (!Number.isInteger(maximumHarmonic) || maximumHarmonic < 2 || maximumHarmonic > 64) {
+    throw new RangeError("The maximum shared-cycle harmonic must be an integer from 2 through 64.");
+  }
+  if (!Number.isInteger(limit) || limit < 0) throw new RangeError("The shared-cycle candidate limit must be a non-negative integer.");
+  if (limit === 0) return [];
+
+  const notes = [...new Set(notesInput.map(Math.round))].sort((first, second) => first - second);
+  if (notes.length < 2 || notes.length > 6) return [];
+  const frequencies = notes.map((note) => frequencyFromMidi(note));
+  const byTemplate = new Map<string, SharedCycleCandidate>();
+
+  for (const frequency of frequencies) {
+    for (let seedHarmonic = 1; seedHarmonic <= maximumHarmonic; seedHarmonic += 1) {
+      let fundamentalHz = frequency / seedHarmonic;
+      let harmonics = frequencies.map((voiceFrequency) => Math.max(1, Math.min(maximumHarmonic, Math.round(voiceFrequency / fundamentalHz))));
+
+      // Refit the base in log-frequency space, then reassign the nearest
+      // harmonic. Four passes are sufficient for this deliberately tiny grid.
+      for (let iteration = 0; iteration < 4; iteration += 1) {
+        fundamentalHz = Math.exp(frequencies.reduce((sum, voiceFrequency, index) => sum + Math.log(voiceFrequency / harmonics[index]), 0) / frequencies.length);
+        harmonics = frequencies.map((voiceFrequency) => Math.max(1, Math.min(maximumHarmonic, Math.round(voiceFrequency / fundamentalHz))));
+      }
+
+      const divisor = harmonics.reduce((current, harmonic) => greatestCommonDivisor(current, harmonic), harmonics[0]);
+      if (divisor > 1) {
+        harmonics = harmonics.map((harmonic) => harmonic / divisor);
+        fundamentalHz *= divisor;
+      }
+      if (Math.max(...harmonics) > maximumHarmonic) continue;
+
+      const voices = notes.map<SharedCycleVoice>((note, index) => {
+        const frequencyHz = frequencies[index];
+        const harmonic = harmonics[index];
+        const actualCycles = frequencyHz / fundamentalHz;
+        return {
+          note,
+          frequencyHz,
+          harmonic,
+          errorCents: centsFromRatio(frequencyHz / (fundamentalHz * harmonic)),
+          actualCycles,
+          endPhaseTurns: actualCycles - harmonic,
+        };
+      });
+      const rmsErrorCents = Math.sqrt(voices.reduce((sum, voice) => sum + voice.errorCents ** 2, 0) / voices.length);
+      const maximumErrorCents = Math.max(...voices.map((voice) => Math.abs(voice.errorCents)));
+      if (maximumErrorCents > 35) continue;
+      const candidate: SharedCycleCandidate = {
+        fundamentalHz,
+        periodMs: 1000 / fundamentalHz,
+        harmonics: [...harmonics],
+        maximumHarmonic: Math.max(...harmonics),
+        rmsErrorCents,
+        maximumErrorCents,
+        voices,
+      };
+      const key = harmonics.join(":");
+      const prior = byTemplate.get(key);
+      if (!prior || candidate.rmsErrorCents < prior.rmsErrorCents) byTemplate.set(key, candidate);
+    }
+  }
+
+  const candidates = [...byTemplate.values()];
+  const frontier = candidates
+    .filter((candidate) => !candidates.some((other) => other !== candidate
+      && other.maximumHarmonic <= candidate.maximumHarmonic
+      && other.rmsErrorCents <= candidate.rmsErrorCents
+      && (other.maximumHarmonic < candidate.maximumHarmonic || other.rmsErrorCents < candidate.rmsErrorCents)))
+    .sort((first, second) => first.maximumHarmonic - second.maximumHarmonic || first.rmsErrorCents - second.rmsErrorCents);
+
+  if (frontier.length <= limit) return frontier;
+  const indexes = Array.from({ length: limit }, (_, index) => Math.round(index * (frontier.length - 1) / Math.max(1, limit - 1)));
+  return indexes.filter((value, index) => indexes.indexOf(value) === index).map((index) => frontier[index]);
 }
 
 /**
