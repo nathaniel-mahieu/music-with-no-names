@@ -14,6 +14,7 @@ import {
   compareChordVoicingEcho,
   compareIntervalEcho,
   comparePhraseEndingRipple,
+  comparePhrasePauseMutation,
   compareScaleGapMutation,
   compareScaleLandingIntervalRipple,
   comparePhraseLenses,
@@ -878,6 +879,52 @@ test("keeps intended timing and changed-ending controls inspectable without a sc
   assert.equal(endingProfile.controlPreserved, true);
   assert.equal(endingProfile.observations.ending, true);
   assert.ok(endingProfile.otherChangedLenses.includes("context"));
+});
+
+test("isolates one changed pause while keeping release evidence separate", () => {
+  const source = [
+    { note: 60, onsetMs: 0, releaseMs: 180, releaseReason: "key" as const },
+    { note: 62, onsetMs: 300, releaseMs: 480, releaseReason: "key" as const },
+    { note: 64, onsetMs: 600, releaseMs: 780, releaseReason: "key" as const },
+    { note: 67, onsetMs: 900, releaseMs: 1_080, releaseReason: "key" as const },
+    { note: 65, onsetMs: 1_200, releaseMs: 1_380, releaseReason: "key" as const },
+  ];
+  const attempt = [
+    { note: 60, onsetMs: 2_000, releaseMs: 2_180, releaseReason: "key" as const },
+    { note: 62, onsetMs: 2_320, releaseMs: 2_500, releaseReason: "key" as const },
+    { note: 64, onsetMs: 2_630, releaseMs: 2_810, releaseReason: "key" as const },
+    { note: 67, onsetMs: 3_330, releaseMs: 3_510, releaseReason: "key" as const },
+    { note: 65, onsetMs: 3_640, releaseMs: 3_820, releaseReason: "key" as const },
+  ];
+  const mutation = comparePhrasePauseMutation(source, attempt);
+  assert.ok(mutation);
+  assert.equal(mutation.kind, "one-gap");
+  assert.equal(mutation.pitchPathPreserved, true);
+  assert.equal(mutation.changedGapIndex, 2);
+  assert.deepEqual(mutation.changedGapIndices, [2]);
+  assert.equal(mutation.controlGapCount, 3);
+  assert.deepEqual(mutation.gaps.map((gap) => gap.changed), [false, false, true, false]);
+  assert.deepEqual(mutation.gaps[2].sourceBridge, { kind: "silence", durationMs: 120, pedalExtended: false });
+  assert.deepEqual(mutation.gaps[2].attemptBridge, { kind: "silence", durationMs: 520, pedalExtended: false });
+  assert.equal(mutation.gaps[2].deltaMs, 400);
+
+  const unresolved = comparePhrasePauseMutation(source.map((event, index) => index === 2 ? { ...event, releaseReason: null } : event), attempt);
+  assert.ok(unresolved);
+  assert.equal(unresolved.gaps[2].sourceBridge.kind, "unknown");
+
+  const subtle = comparePhrasePauseMutation(source, source.map((event, index) => ({ ...event, onsetMs: event.onsetMs + index * 20, releaseMs: event.releaseMs + index * 20 })));
+  assert.ok(subtle);
+  assert.equal(subtle.kind, "same");
+
+  const scaled = comparePhrasePauseMutation(source, source.map((event) => ({ ...event, onsetMs: event.onsetMs * 1.5, releaseMs: event.releaseMs * 1.5 })));
+  assert.ok(scaled);
+  assert.equal(scaled.kind, "multiple-gaps");
+
+  const changedPitch = comparePhrasePauseMutation(source, attempt.map((event, index) => index === 3 ? { ...event, note: 66 } : event));
+  assert.ok(changedPitch);
+  assert.equal(changedPitch.kind, "different-pitches");
+  assert.equal(comparePhrasePauseMutation(source.slice(0, 2), attempt), null);
+  assert.throws(() => comparePhrasePauseMutation(source, attempt.map((event, index) => index === 1 ? { ...event, onsetMs: 2_000 } : event)), RangeError);
 });
 
 test("traces one changed ending through every relationship it joins", () => {

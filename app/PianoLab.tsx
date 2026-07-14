@@ -25,6 +25,7 @@ import {
   compareIntervalEcho,
   comparePhraseEndingRipple,
   comparePhraseLenses,
+  comparePhrasePauseMutation,
   compareScaleGapMutation,
   compareScaleLandingIntervalRipple,
   controlledSonorityChange,
@@ -87,6 +88,7 @@ import {
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type PhraseLensComparison,
+  type PhrasePauseMutation,
   type PhraseBreathMap,
   type PhraseEndingRipple,
   type PhraseChangeIntention,
@@ -337,7 +339,7 @@ const PHRASE_CHANGE_CHOICES: Array<{
   control: string;
 }> = [
   { id: "transpose", label: "Move the whole phrase", question: "Can the relationship survive a new register?", instruction: "Replay every pitch by the same number of keys.", control: "the signed interval path" },
-  { id: "timing", label: "Change the timing", question: "What changes when the pitch path keeps different time?", instruction: "Keep the same pitches; change the overall pace or spacing pattern.", control: "the absolute pitch path" },
+  { id: "timing", label: "Change the timing", question: "What changes when the pitch path keeps different time?", instruction: "Keep the same pitches. Change one pause for the pause microscope, or reshape the broader timing path.", control: "the absolute pitch path" },
   { id: "touch", label: "Change the touch", question: "What changes when the same keys receive a different attack?", instruction: "Keep the same pitches; use a different MIDI attack strength.", control: "the absolute pitch path" },
   { id: "articulation", label: "Change the connections", question: "What changes when notes overlap or separate differently?", instruction: "Keep the same pitches; change finger hold, silence, overlap, or pedal connection.", control: "the absolute pitch path" },
   { id: "interval", label: "Change one interval", question: "How far does one changed spacing travel through the phrase?", instruction: "Keep the attack count; alter exactly one signed move.", control: "one and only one changed signed interval" },
@@ -2112,11 +2114,12 @@ function PhraseMotionField({ events, articulation, motifs, mode }: {
   </section>;
 }
 
-function PhraseBreathField({ events, doMidi, scale, showConventions }: {
+function PhraseBreathField({ events, doMidi, scale, showConventions, onComparePause }: {
   events: HudNoteEvent[];
   doMidi: number;
   scale: PianoScale;
   showConventions: boolean;
+  onComparePause: () => void;
 }) {
   const [thresholdMultiple, setThresholdMultiple] = useState(1.8);
   const breath = useMemo(() => phraseBreathMap(events, thresholdMultiple), [events, thresholdMultiple]);
@@ -2191,6 +2194,7 @@ function PhraseBreathField({ events, doMidi, scale, showConventions }: {
         return <li key={segment.eventIds.join("-")}><span>island {breath.segments.indexOf(segment) + 1}</span><strong>{segment.attackCount} attack{segment.attackCount === 1 ? "" : "s"} · onset span {compactTiming(segment.durationMs)} · pitch span {segment.pitchSpan} keys</strong><small>step path {intervalPathCopy(segment)} · ends on {role(ending.note)} in the selected frame</small></li>;
       })}
     </ol>
+    <div className="hud-breath-next"><div><span>Next experiment · hold the keys fixed</span><strong>Can one changed pause reshape the phrase?</strong><small>Freeze this performance, replay the same absolute keys, and make one onset gap clearly shorter or longer.</small></div><button type="button" onClick={onComparePause}>Compare one pause</button></div>
     <p className="hud-breath-guardrail">A gate requires both unusual onset spacing and measured silence after release. This does not detect intended phrasing, breath, meter, form, expressiveness, correctness, or musical goodness.</p>
   </section>;
 }
@@ -3061,6 +3065,44 @@ function PhraseEndingRippleView({ ripple, comparison, doMidi, scale, showConvent
   </div>;
 }
 
+function PhrasePauseMutationView({ mutation }: { mutation: PhrasePauseMutation }) {
+  if (mutation.kind !== "one-gap" || mutation.changedGapIndex == null) return null;
+  const changed = mutation.gaps[mutation.changedGapIndex];
+  const sourcePositions = mutation.gaps.reduce<number[]>((positions, gap) => [...positions, positions.at(-1)! + gap.sourceMs], [0]);
+  const attemptPositions = mutation.gaps.reduce<number[]>((positions, gap) => [...positions, positions.at(-1)! + gap.attemptMs], [0]);
+  const maximumMs = Math.max(500, mutation.sourcePhraseMs, mutation.attemptPhraseMs);
+  const xFor = (value: number) => 78 + (value / maximumMs) * 584;
+  const bridgeCopy = (bridge: PhrasePauseMutation["gaps"][number]["sourceBridge"]) => bridge.kind === "unknown"
+    ? "release unresolved"
+    : bridge.kind === "touching"
+      ? "release meets the next attack"
+      : `${Math.round(bridge.durationMs ?? 0)} ms ${bridge.kind === "silence" ? "measured silence" : `${bridge.pedalExtended ? "pedal-ended " : ""}sounding overlap`}`;
+  const deltaCopy = `${changed.deltaMs > 0 ? "+" : changed.deltaMs < 0 ? "−" : ""}${Math.abs(Math.round(changed.deltaMs))} ms`;
+  const summary = `The absolute ${mutation.attackCountA}-attack pitch path stayed fixed. Only onset gap ${changed.gapIndex + 1}, between attacks ${changed.gapIndex + 1} and ${changed.gapIndex + 2}, moved beyond its ${Math.round(changed.toleranceMs)} millisecond performance tolerance: ${Math.round(changed.sourceMs)} milliseconds in phrase A and ${Math.round(changed.attemptMs)} milliseconds in phrase B. ${mutation.controlGapCount} other gaps stayed within their local tolerances.`;
+  return <div className="hud-pause-mutation" aria-label="One-pause timing comparison">
+    <div className="hud-pause-heading"><span>same keys · one changed onset gap</span><strong>Pause {changed.gapIndex + 1}: {Math.round(changed.sourceMs)} → {Math.round(changed.attemptMs)} ms</strong><small>The shared millisecond axis preserves the actual displacement of every later attack. A is solid and circular; B is dashed and square.</small></div>
+    <svg viewBox="0 0 720 174" role="img" aria-label={summary}>
+      <title>Two performances of the same pitch path with one onset gap changed</title>
+      <text x="34" y="58" className="hud-pause-row-label">A</text><text x="34" y="118" className="hud-pause-row-label">B</text>
+      {mutation.gaps.map((gap, index) => <g key={`gap-${index}`} className={`hud-pause-link ${gap.changed ? "is-changed" : "is-control"}`}>
+        <line x1={xFor(sourcePositions[index])} x2={xFor(sourcePositions[index + 1])} y1="54" y2="54" className="is-source" />
+        <line x1={xFor(attemptPositions[index])} x2={xFor(attemptPositions[index + 1])} y1="114" y2="114" className="is-attempt" />
+      </g>)}
+      {sourcePositions.map((position, index) => <g key={`a-${index}`} className="hud-pause-node is-source"><circle cx={xFor(position)} cy="54" r="5" /><text x={xFor(position)} y="38">{index + 1}</text></g>)}
+      {attemptPositions.map((position, index) => <g key={`b-${index}`} className="hud-pause-node is-attempt"><rect x={xFor(position) - 5} y="109" width="10" height="10" /><text x={xFor(position)} y="139">{index + 1}</text></g>)}
+      <line x1={xFor(sourcePositions[changed.gapIndex])} x2={xFor(sourcePositions[changed.gapIndex + 1])} y1="76" y2="76" className="hud-pause-bracket is-source" />
+      <line x1={xFor(attemptPositions[changed.gapIndex])} x2={xFor(attemptPositions[changed.gapIndex + 1])} y1="92" y2="92" className="hud-pause-bracket is-attempt" />
+      <text x="78" y="163" className="hud-pause-time-label">0 s</text><text x="662" y="163" className="hud-pause-time-label is-end">{(maximumMs / 1_000).toFixed(1)} s</text>
+    </svg>
+    <div className="hud-pause-reading" role="status" aria-live="polite">
+      <span>attacks {changed.gapIndex + 1} → {changed.gapIndex + 2} · observed onset change {deltaCopy}</span>
+      <strong>A: {bridgeCopy(changed.sourceBridge)} · B: {bridgeCopy(changed.attemptBridge)}</strong>
+      <small>{mutation.controlGapCount} other onset gap{mutation.controlGapCount === 1 ? "" : "s"} stayed within a local tolerance of 12% or at least 45 ms. The keys and signed interval path stayed fixed.</small>
+    </div>
+    <p className="hud-pause-guardrail">Onset spacing and release-proven silence are separate: lengthening a gap does not guarantee more quiet if a note keeps sounding. This comparison does not prove a phrase boundary, meter, expressive intention, emotion, preference, quality, or causal effect.</p>
+  </div>;
+}
+
 function PhraseCompareField({ session, liveReplayCount, comparison, availableAttackCount, doMidi, scale, showConventions, onStart, onCapture, onReplay, onPromote, onReport, onEnd }: {
   session: PhraseCompareSession | null;
   liveReplayCount: number;
@@ -3077,6 +3119,7 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
   onEnd: () => void;
 }) {
   const [endingRippleRevealKey, setEndingRippleRevealKey] = useState<string | null>(null);
+  const [pauseRevealKey, setPauseRevealKey] = useState<string | null>(null);
   const activeChoice = session ? PHRASE_CHANGE_CHOICES.find((choice) => choice.id === session.intention) ?? null : null;
   if (!session) return <section className="hud-phrase-compare is-entry" aria-labelledby="hud-phrase-compare-entry-title">
     <div className="hud-panel-heading"><span>One phrase · one declared change · five lenses</span><strong id="hud-phrase-compare-entry-title">Choose one thing to change</strong><small>Freeze your phrase with a question already in mind. The replay will show the intended coordinate, the control you tried to preserve, and every other lens that moved.</small></div>
@@ -3135,6 +3178,11 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
     : null;
   const endingRippleKey = endingRipple ? `${session.anchorEventId}:${session.comparison.map((event) => event.note).join(",")}` : null;
   const endingRippleRevealed = endingRippleKey != null && endingRippleRevealKey === endingRippleKey;
+  const pauseMutation = session.intention === "timing" && changeProfile?.controlPreserved
+    ? comparePhrasePauseMutation(session.baseline, session.comparison)
+    : null;
+  const pauseKey = pauseMutation?.kind === "one-gap" ? `${session.anchorEventId}:${pauseMutation.changedGapIndex}:${pauseMutation.attemptPhraseMs}` : null;
+  const pauseRevealed = pauseKey != null && pauseRevealKey === pauseKey;
   const lensLabel = (lens: "sound" | "relationships" | "motion" | "context") => lens === "context" ? "modeled context" : lens;
   const intendedEvidence = !changeProfile || !activeChoice ? "No declared change was stored with this comparison."
     : session.intention === "transpose" ? `Register center moved ${signedPhraseValue(registerDelta, 1)} keys.`
@@ -3153,6 +3201,8 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
     <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>A/B complete · declared intention · no combined score</span><strong id="hud-phrase-compare-title">One change, traced through five lenses</strong><small>A {session.baseline.length} attacks · B {session.comparison.length} attacks · the movable-Do frame stayed fixed while both specimens were compared.</small></div><div className="hud-builder-actions"><button type="button" onClick={onReplay}>Try the same change again</button><button type="button" onClick={onPromote}>Use B as new A</button><button type="button" onClick={onEnd}>Choose another test</button></div></div>
     {changeProfile && activeChoice ? <div className={`hud-phrase-change-reading ${changeProfile.targetObserved ? "has-target" : "is-unobserved"}`}><div className="sr-only hud-phrase-change-status" role="status" aria-live="polite">{`${activeChoice.label}. ${changeProfile.targetObserved ? "The intended coordinate moved." : "The intended coordinate did not move clearly."} ${intendedEvidence} ${changeProfile.controlPreserved ? "Control preserved" : "Control not preserved"}: ${activeChoice.control}. ${otherLensCopy} ${invariantLensCopy}`}</div><span>declared change · {activeChoice.label}</span><strong>{changeProfile.targetObserved ? "The intended coordinate moved" : "The intended coordinate did not move clearly"}</strong><p>{intendedEvidence}</p><small><b>{changeProfile.controlPreserved ? "Control preserved:" : "Control not preserved:"}</b> {activeChoice.control}. {otherLensCopy} {invariantLensCopy}</small>{endingRipple && endingRippleKey ? <button type="button" aria-pressed={endingRippleRevealed} onClick={() => setEndingRippleRevealKey(endingRippleRevealed ? null : endingRippleKey)}>{endingRippleRevealed ? "Hide ending ripple" : "Trace every ending relationship"}</button> : null}</div> : null}
     {endingRipple && endingRippleRevealed ? <PhraseEndingRippleView ripple={endingRipple} comparison={comparison} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : null}
+    {pauseMutation ? <div className={`hud-pause-entry is-${pauseMutation.kind}`} role="status" aria-live="polite"><div><span>Next question · same absolute pitch path</span><strong>{pauseMutation.kind === "one-gap" ? "Exactly one pause moved beyond performance tolerance" : pauseMutation.kind === "same" ? "No one pause moved clearly" : `${pauseMutation.changedGapIndices.length} onset gaps moved clearly`}</strong><small>{pauseMutation.kind === "one-gap" ? `${pauseMutation.controlGapCount} other gaps stayed near their source durations. Open the microscope to separate onset spacing from actual quiet.` : pauseMutation.kind === "same" ? "Small replay variation stayed inside the local 12% or 45 ms tolerance. Try again with one clearly shorter or longer pause." : "The broad timing comparison remains valid. The one-pause microscope opens only when one gap changes and the others remain near their source durations."}</small></div>{pauseMutation.kind === "one-gap" && pauseKey ? <button type="button" aria-expanded={pauseRevealed} aria-controls="hud-pause-mutation-detail" onClick={() => setPauseRevealKey(pauseRevealed ? null : pauseKey)}>{pauseRevealed ? "Hide changed pause" : "Trace the changed pause"}</button> : null}</div> : null}
+    {pauseMutation?.kind === "one-gap" && pauseRevealed ? <div id="hud-pause-mutation-detail"><PhrasePauseMutationView mutation={pauseMutation} /></div> : null}
     <div className="hud-phrase-lens-profile" role="group" aria-label="Five separate phrase comparison lenses">
       <article className={soundChanged ? "has-change" : "is-invariant"}><header><span>1 · sound</span><em>measured MIDI</em><strong>{soundChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> center {comparison.sound.meanMidiA.toFixed(1)} · span {comparison.sound.pitchSpanA} · attack {Math.round(comparison.sound.meanVelocityA)}</p><i aria-hidden="true">→</i><p><b>B</b> center {comparison.sound.meanMidiB.toFixed(1)} · span {comparison.sound.pitchSpanB} · attack {Math.round(comparison.sound.meanVelocityB)}</p></div><small>Register center {signedPhraseValue(registerDelta, 1)} keys · span {signedPhraseValue(spanDelta)} · mean MIDI attack {signedPhraseValue(velocityDelta)}. This is not acoustic loudness or timbre.</small></article>
       <article className={comparison.relationships.sameIntervalPath ? "is-invariant" : "has-change"}><header><span>2 · relationships</span><em>measured intervals</em><strong>{comparison.relationships.sameIntervalPath ? "invariant" : "changed"}</strong></header><div><p><b>A</b> {phraseMovePath(comparison.relationships.intervalPathA)}</p><i aria-hidden="true">→</i><p><b>B</b> {phraseMovePath(comparison.relationships.intervalPathB)}</p></div><small>{relationshipCopy}</small></article>
@@ -4661,7 +4711,7 @@ export function PianoLab() {
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} landingEvidence={resolutionLanding} landingEvents={resolutionEvidenceEvents} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onReflectResolution={beginResolutionForkReflection} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
-        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
+        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
       </> : null}
 
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}

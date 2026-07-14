@@ -92,6 +92,8 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /hud-breath-reading" role="status" aria-live="polite"/);
   assert.match(piano, /Unknown releases, overlaps, and merely long held notes never become quiet-space boundaries/);
   assert.match(piano, /does not detect intended phrasing, breath, meter, form, expressiveness, correctness, or musical goodness/);
+  assert.match(piano, />Compare one pause<\/button>/);
+  assert.match(piano, /onComparePause=\{\(\) => beginPhraseCompare\("timing"\)\}/);
   assert.match(piano, /modeled crunch/);
   assert.match(piano, /MIDI contains no acoustic roughness measurement/);
   assert.match(ear, /aria-labelledby="live-ear-title"/);
@@ -228,6 +230,14 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /!phraseEvents\.some\(\(event\) => event\.id === resolutionTarget\.sourceEvent!/);
   assert.match(piano, /holdBoundedExperienceSpecimen\("resolution-fork", specimen\)/);
   assert.match(piano, /prompt\.replace\("this phrase", "this intended landing in context"\)/);
+  assert.match(piano, /aria-label="One-pause timing comparison"/);
+  assert.match(piano, /Two performances of the same pitch path with one onset gap changed/);
+  assert.match(piano, /hud-pause-reading" role="status" aria-live="polite"/);
+  assert.match(piano, /"Trace the changed pause"/);
+  assert.match(piano, /aria-expanded=\{pauseRevealed\}/);
+  assert.match(piano, /aria-controls="hud-pause-mutation-detail"/);
+  assert.match(piano, /Onset spacing and release-proven silence are separate/);
+  assert.match(piano, /does not prove a phrase boundary, meter, expressive intention, emotion, preference, quality, or causal effect/);
   assert.match(piano, />Did the hands make the same time-shape\?</);
   assert.match(piano, /"Compare gesture timing"/);
   assert.match(piano, /aria-expanded=\{gestureTimingRevealed\}/);
@@ -256,6 +266,11 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-resolution-landing-node\.is-landing rect[\s\S]*var\(--piano-gold\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-resolution-feedback-actions button \{ width: 100%/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-resolution-landing-node\.is-landing rect \{ fill: Highlight/);
+  assert.match(css, /\.hud-pause-link \.is-attempt \{ stroke-dasharray/);
+  assert.match(css, /\.hud-pause-link\.is-changed line[\s\S]*var\(--piano-gold\)/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-pause-entry > button \{ width: 100%/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-pause-link\.is-changed line,[\s\S]*stroke: Highlight/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-pause-node\.is-attempt rect \{ stroke: LinkText/);
   assert.match(css, /\.hud-chord-gesture-test > button\[aria-expanded="true"\]/);
   assert.match(css, /\.hud-chord-gesture-hold\.is-pedal[\s\S]*stroke-dasharray/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-gesture-test > button \{ width: 100%/);
@@ -280,6 +295,8 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-breath-segments \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-breath-gate line \{ stroke: Highlight/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-breath-event circle \{ fill: Canvas; stroke: CanvasText/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-breath-next > button \{ width: 100%/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-breath-next \{ border-left-color: LinkText/);
   assert.match(css, /\.hud-walk-route li\.is-current[\s\S]*box-shadow/);
   assert.match(css, /\.piano-key\.is-active,[\s\S]*Highlight/);
   assert.match(css, /\.rhythm-live-axis > span[\s\S]*background: LinkText/);

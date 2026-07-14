@@ -398,6 +398,30 @@ export type PhraseChangeProfile = {
   otherChangedLenses: PhraseChangeLens[];
 };
 
+export type PhrasePauseGap = {
+  gapIndex: number;
+  sourceMs: number;
+  attemptMs: number;
+  deltaMs: number;
+  toleranceMs: number;
+  changed: boolean;
+  sourceBridge: ChordGestureBridgeEvidence;
+  attemptBridge: ChordGestureBridgeEvidence;
+};
+
+export type PhrasePauseMutation = {
+  kind: "same" | "one-gap" | "multiple-gaps" | "different-count" | "different-pitches";
+  attackCountA: number;
+  attackCountB: number;
+  pitchPathPreserved: boolean;
+  sourcePhraseMs: number;
+  attemptPhraseMs: number;
+  changedGapIndices: number[];
+  changedGapIndex: number | null;
+  controlGapCount: number;
+  gaps: PhrasePauseGap[];
+};
+
 export type PhraseEndingRipple = {
   sourcePositions: number[];
   attemptPositions: number[];
@@ -1839,6 +1863,76 @@ export function comparePhraseLenses(
       endingPitchClassA: pitchClassFromMidi(phraseA.at(-1)!.note),
       endingPitchClassB: pitchClassFromMidi(phraseB.at(-1)!.note),
     },
+  };
+}
+
+function performedGapBridge(event: PerformanceEvidenceEvent, next: PerformanceEvidenceEvent): ChordGestureBridgeEvidence {
+  if (event.releaseReason == null) return { kind: "unknown", durationMs: null, pedalExtended: false };
+  const finalRelease = event.releaseMs ?? (event.releaseReason === "key" ? event.keyReleaseMs : null);
+  if (finalRelease == null) return { kind: "unknown", durationMs: null, pedalExtended: false };
+  if (finalRelease > next.onsetMs) return { kind: "overlap", durationMs: finalRelease - next.onsetMs, pedalExtended: event.releaseReason === "pedal" };
+  if (finalRelease === next.onsetMs) return { kind: "touching", durationMs: 0, pedalExtended: false };
+  return { kind: "silence", durationMs: next.onsetMs - finalRelease, pedalExtended: false };
+}
+
+/**
+ * Tests whether two learner-bounded performances kept every absolute key while
+ * changing exactly one inter-onset gap beyond a performance tolerance. Attack
+ * spacing and release evidence remain separate facts; this does not detect a
+ * phrase boundary or attribute a listener response to a gap.
+ */
+export function comparePhrasePauseMutation(
+  source: PerformanceEvidenceEvent[],
+  attempt: PerformanceEvidenceEvent[],
+): PhrasePauseMutation | null {
+  if (source.length < 3 || attempt.length < 3) return null;
+  const invalid = [...source, ...attempt].some((event) => !Number.isInteger(event.note) || event.note < 0 || event.note > 127
+    || !Number.isFinite(event.onsetMs)
+    || (event.keyReleaseMs != null && (!Number.isFinite(event.keyReleaseMs) || event.keyReleaseMs < event.onsetMs))
+    || (event.releaseMs != null && (!Number.isFinite(event.releaseMs) || event.releaseMs < event.onsetMs)));
+  if (invalid) throw new RangeError("Phrase pause comparison requires finite MIDI positions, forward timing, and ordered releases.");
+  const forward = (events: PerformanceEvidenceEvent[]) => events.slice(1).every((event, index) => event.onsetMs > events[index].onsetMs);
+  if (!forward(source) || !forward(attempt)) throw new RangeError("Phrase pause attacks must move forward in time.");
+  const sameCount = source.length === attempt.length;
+  const pitchPathPreserved = sameCount && source.every((event, index) => event.note === attempt[index].note);
+  const sourcePhraseMs = source.at(-1)!.onsetMs - source[0].onsetMs;
+  const attemptPhraseMs = attempt.at(-1)!.onsetMs - attempt[0].onsetMs;
+  if (!sameCount) return {
+    kind: "different-count", attackCountA: source.length, attackCountB: attempt.length, pitchPathPreserved: false,
+    sourcePhraseMs, attemptPhraseMs, changedGapIndices: [], changedGapIndex: null, controlGapCount: 0, gaps: [],
+  };
+  if (!pitchPathPreserved) return {
+    kind: "different-pitches", attackCountA: source.length, attackCountB: attempt.length, pitchPathPreserved: false,
+    sourcePhraseMs, attemptPhraseMs, changedGapIndices: [], changedGapIndex: null, controlGapCount: 0, gaps: [],
+  };
+  const gaps = source.slice(1).map((event, index): PhrasePauseGap => {
+    const sourceMs = event.onsetMs - source[index].onsetMs;
+    const attemptMs = attempt[index + 1].onsetMs - attempt[index].onsetMs;
+    const deltaMs = attemptMs - sourceMs;
+    const toleranceMs = Math.max(45, sourceMs * 0.12);
+    return {
+      gapIndex: index,
+      sourceMs,
+      attemptMs,
+      deltaMs,
+      toleranceMs,
+      changed: Math.abs(deltaMs) > toleranceMs,
+      sourceBridge: performedGapBridge(source[index], event),
+      attemptBridge: performedGapBridge(attempt[index], attempt[index + 1]),
+    };
+  });
+  const changedGapIndices = gaps.filter((gap) => gap.changed).map((gap) => gap.gapIndex);
+  return {
+    kind: changedGapIndices.length === 0 ? "same" : changedGapIndices.length === 1 ? "one-gap" : "multiple-gaps",
+    attackCountA: source.length,
+    attackCountB: attempt.length,
+    pitchPathPreserved,
+    sourcePhraseMs,
+    attemptPhraseMs,
+    changedGapIndices,
+    changedGapIndex: changedGapIndices.length === 1 ? changedGapIndices[0] : null,
+    controlGapCount: gaps.length - changedGapIndices.length,
+    gaps,
   };
 }
 
