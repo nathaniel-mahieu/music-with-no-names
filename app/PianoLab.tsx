@@ -23,6 +23,7 @@ import {
   frequencyFromMidi,
   groupChordGestures,
   identifyChordCandidates,
+  interpretedChordNotes,
   intervalLandmark,
   landmarkTransitionProfile,
   matchesLandmarkStep,
@@ -111,6 +112,9 @@ type EventMeasure = {
 type HudChordGesture = ChordGesture<HudNoteEvent>;
 type ChordMeasure = {
   gesture: HudChordGesture;
+  interpretedNotes: number[];
+  audibleNotes: number[];
+  excludedInheritedNotes: number[];
   candidate: ChordCandidate | null;
   hasPreviousChord: boolean;
   crunch: number | null;
@@ -138,10 +142,11 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5;
+  version: 2 | 3 | 4 | 5 | 6;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
+  membershipCorrections?: Record<string, number[]>;
   focusLens: FocusLens;
   showConventions: boolean;
   frameMode: FrameMode;
@@ -434,7 +439,7 @@ function ChordGestureLane({ events, measures, selectedChordId, focusedId, bounda
         <div>
         {measures.map((measure) => {
           const slots = gestureSlots(measure.gesture, events);
-          const label = measure.candidate ? `${measure.candidate.exact ? "" : "≈ "}${chordLabel(measure.candidate, doMidi, showConventions)}` : `${new Set(measure.gesture.attackedNotes.map(pitchClassFromMidi)).size}-position field`;
+          const label = measure.candidate ? `${measure.candidate.exact ? "" : "≈ "}${chordLabel(measure.candidate, doMidi, showConventions)}` : `${new Set(measure.interpretedNotes.map(pitchClassFromMidi)).size}-position field`;
           return <button
             key={measure.gesture.id}
             type="button"
@@ -445,7 +450,7 @@ function ChordGestureLane({ events, measures, selectedChordId, focusedId, bounda
           >
             <span>{measure.gesture.kind} · {Math.round(measure.gesture.spreadMs)} ms</span>
             <strong>{label}</strong>
-            <small>{measure.gesture.attacks.length} attacks</small>
+            <small>{measure.interpretedNotes.length} read · {measure.audibleNotes.length} sounding</small>
           </button>;
         })}
         {!measures.length ? <p>Notes inside the chosen time window will share a bracket.</p> : null}
@@ -766,7 +771,7 @@ function chordLabel(candidate: ChordCandidate, doMidi: number, showConventions: 
   return `${root} · ${candidate.template.name}`;
 }
 
-function RelationshipTexture({ notes, inheritedNotes, doMidi, scale, showConventions }: { notes: number[]; inheritedNotes: number[]; doMidi: number; scale: PianoScale; showConventions: boolean }) {
+function RelationshipTexture({ notes, inheritedNotes, excludedInheritedNotes = [], doMidi, scale, showConventions }: { notes: number[]; inheritedNotes: number[]; excludedInheritedNotes?: number[]; doMidi: number; scale: PianoScale; showConventions: boolean }) {
   const unique = uniqueSorted(notes);
   const pairs = pairwiseIntervals(unique);
   const xFor = (note: number) => unique.length <= 1 ? 180 : 46 + (unique.indexOf(note) / (unique.length - 1)) * 268;
@@ -776,14 +781,19 @@ function RelationshipTexture({ notes, inheritedNotes, doMidi, scale, showConvent
   };
   return (
     <div className="hud-texture-panel">
-      <div className="hud-panel-heading"><span>Within the selected field</span><strong>Interval texture</strong><small>Thicker arcs sit nearer simple ratio landmarks; hollow nodes were already sounding.</small></div>
-      <svg viewBox="0 0 360 168" role="img" aria-label={pairs.length ? `${pairs.length} pairwise interval relationships` : "Interval texture needs two simultaneous notes"}>
+      <div className="hud-panel-heading"><span>Everything physically sounding</span><strong>Interval texture</strong><small>Thicker arcs sit nearer simple ratio landmarks; hollow nodes were inherited; crossed nodes are excluded only from the chord reading.</small></div>
+      <svg viewBox="0 0 360 168" role="img" aria-label={pairs.length ? `${pairs.length} pairwise interval relationships across every sounding note; ${excludedInheritedNotes.length} inherited note${excludedInheritedNotes.length === 1 ? " is" : "s are"} excluded from chord interpretation but retained here` : "Interval texture needs two simultaneous notes"}>
         <title>Pairwise interval texture</title>
         {pairs.map((pair) => {
           const x1 = xFor(pair.lower); const x2 = xFor(pair.upper); const peak = 126 - Math.min(90, (x2 - x1) * 0.38);
           return <path key={`${pair.lower}-${pair.upper}`} d={`M ${x1} 126 Q ${(x1 + x2) / 2} ${peak} ${x2} 126`} className="hud-texture-arc" style={{ "--arc-strength": pairScore(pair.upper - pair.lower) } as CSSProperties}><title>{pair.distance.relationship}, {pair.distance.cents} cents</title></path>;
         })}
-        {unique.map((note) => <g key={note}><circle cx={xFor(note)} cy="126" r="9" className={`hud-texture-node ${inheritedNotes.includes(note) ? "is-inherited" : ""}`} /><text x={xFor(note)} y="151" className="hud-point-label">{showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale)}</text></g>)}
+        {unique.map((note) => {
+          const inherited = inheritedNotes.includes(note);
+          const excluded = excludedInheritedNotes.includes(note);
+          const x = xFor(note);
+          return <g key={note}><circle cx={x} cy="126" r="9" className={`hud-texture-node ${inherited ? "is-inherited" : ""} ${excluded ? "is-excluded" : ""}`} />{excluded ? <><line x1={x - 5} x2={x + 5} y1="121" y2="131" className="hud-texture-exclusion" /><line x1={x + 5} x2={x - 5} y1="121" y2="131" className="hud-texture-exclusion" /></> : null}<text x={x} y="151" className="hud-point-label">{showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale)}</text></g>;
+        })}
         {unique.length < 2 ? <text x="180" y="78" className="hud-empty-label">Hold two notes to expose their interval</text> : null}
       </svg>
     </div>
@@ -1062,8 +1072,8 @@ function ChordCausePanel({ measures, selectedId, doMidi, showConventions }: {
   const current = measures[index] ?? measures.at(-1) ?? null;
   const previous = current ? measures[measures.indexOf(current) - 1] ?? null : null;
   if (!current || !previous) return <section className="hud-cause-panel"><div className="hud-panel-heading"><span>Change one chord</span><strong>Causal chord view</strong><small>A second grouped chord creates the comparison baseline.</small></div><p className="hud-empty-copy">Play two chord gestures. The HUD will separate what changed from how the model changed.</p></section>;
-  const previousSet = new Set(previous.gesture.attackedNotes.map(pitchClassFromMidi));
-  const currentSet = new Set(current.gesture.attackedNotes.map(pitchClassFromMidi));
+  const previousSet = new Set(previous.interpretedNotes.map(pitchClassFromMidi));
+  const currentSet = new Set(current.interpretedNotes.map(pitchClassFromMidi));
   const namePc = (pc: number) => showConventions ? CONVENTIONAL_PITCH_CLASSES[pc] : CHROMATIC_SOLFEGE[pitchClassFromMidi(pc - pitchClassFromMidi(doMidi))];
   const added = [...currentSet].filter((pc) => !previousSet.has(pc)).map(namePc);
   const removed = [...previousSet].filter((pc) => !currentSet.has(pc)).map(namePc);
@@ -1075,8 +1085,8 @@ function ChordCausePanel({ measures, selectedId, doMidi, showConventions }: {
     { label: "repose evidence", value: delta(current.arrival, previous.arrival) },
   ];
   return <section className="hud-cause-panel" aria-labelledby="hud-cause-title">
-    <div className="hud-panel-heading"><span>Change → consequence</span><strong id="hud-cause-title">Causal chord view</strong><small>These deltas describe this assumed sound model, not an emotional verdict.</small></div>
-    <div className="hud-cause-change"><span>{added.length ? `added ${added.join(" · ")}` : "added none"}</span><span>{removed.length ? `released ${removed.join(" · ")}` : "released none"}</span><span>{kept.length ? `kept ${kept.join(" · ")}` : "kept no positions"}</span></div>
+    <div className="hud-panel-heading"><span>Membership change → consequence</span><strong id="hud-cause-title">Causal chord view</strong><small>Entering or leaving the reading does not claim that a key was physically pressed or released. Deltas are not an emotional verdict.</small></div>
+    <div className="hud-cause-change"><span>{added.length ? `entered reading ${added.join(" · ")}` : "entered none"}</span><span>{removed.length ? `left reading ${removed.join(" · ")}` : "left none"}</span><span>{kept.length ? `stayed ${kept.join(" · ")}` : "stayed no positions"}</span></div>
     <div className="hud-cause-deltas">{deltas.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value == null ? "—" : `${item.value > 0 ? "+" : ""}${item.value}`}</strong><em>{item.value == null ? "not available" : item.value > 3 ? "more" : item.value < -3 ? "less" : "similar"}</em></span>)}</div>
   </section>;
 }
@@ -1093,8 +1103,8 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   const current = measures[index] ?? null;
   const previous = measures[index - 1] ?? null;
   if (!current || !previous) return <section className="hud-voice-coach"><div className="hud-panel-heading"><span>Chord-to-chord motion</span><strong>Voice-leading coach</strong><small>A second grouped chord reveals held and moving strands.</small></div><p className="hud-empty-copy">Play two chord gestures. The coach will trace each nearest voice without calling one path correct.</p></section>;
-  const priorNotes = uniqueSorted(previous.gesture.attackedNotes);
-  const currentNotes = uniqueSorted(current.gesture.attackedNotes);
+  const priorNotes = uniqueSorted(previous.interpretedNotes);
+  const currentNotes = uniqueSorted(current.interpretedNotes);
   const profile = voiceLeadingProfile(priorNotes, currentNotes);
   const allNotes = [...priorNotes, ...currentNotes];
   const low = Math.min(...allNotes) - 1;
@@ -1102,7 +1112,7 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   const yFor = (note: number) => 142 - ((note - low) / Math.max(1, high - low)) * 104;
   const label = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
   return <section className="hud-voice-coach" aria-labelledby="hud-voice-title">
-    <div className="hud-panel-heading"><span>Chord-to-chord motion</span><strong id="hud-voice-title">Voice-leading coach</strong><small>Horizontal means held · slope shows direction and size · broken ends show entering or released voices.</small></div>
+    <div className="hud-panel-heading"><span>Interpreted chord-to-chord motion</span><strong id="hud-voice-title">Voice-leading coach</strong><small>Horizontal means held · slope shows direction and size · broken ends show voices entering or leaving the reading, not necessarily key attacks or releases.</small></div>
     <svg viewBox="0 0 720 176" role="img" aria-label={`${profile.strands.length} voice-leading strands; largest leap ${profile.largestLeap} key steps; ${profile.motionClasses.join(", ") || "no classified motion"}`}>
       <title>Nearest voice paths between the selected chord and the chord before it</title>
       <text x="82" y="18" className="hud-axis-label">previous</text><text x="638" y="18" className="hud-axis-label">selected</text>
@@ -1115,7 +1125,7 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
           <line x1={fromX} y1={fromY} x2={toX} y2={toY} />
           {strand.from != null ? <><circle cx={fromX} cy={fromY} r="6" /><text x={fromX - 12} y={fromY + 4} className="hud-voice-label is-left">{label(strand.from)}</text></> : null}
           {strand.to != null ? <><circle cx={toX} cy={toY} r="6" /><text x={toX + 12} y={toY + 4} className="hud-voice-label">{label(strand.to)}</text></> : null}
-          <text x={(fromX + toX) / 2} y={(fromY + toY) / 2 - 7} className="hud-point-label">{strand.motion === "held" ? "held" : strand.motion === "added" || strand.motion === "released" ? strand.motion : `${strand.semitones > 0 ? "+" : ""}${strand.semitones}`}</text>
+          <text x={(fromX + toX) / 2} y={(fromY + toY) / 2 - 7} className="hud-point-label">{strand.motion === "held" ? "held" : strand.motion === "added" ? "entered" : strand.motion === "released" ? "left" : `${strand.semitones > 0 ? "+" : ""}${strand.semitones}`}</text>
         </g>;
       })}
     </svg>
@@ -1292,6 +1302,7 @@ export function PianoLab() {
   const [selectedChordId, setSelectedChordId] = useState<string | null>(null);
   const [chordWindowMs, setChordWindowMs] = useState(160);
   const [boundaryCorrections, setBoundaryCorrections] = useState<Record<number, ChordBoundaryCorrection>>({});
+  const [membershipCorrections, setMembershipCorrections] = useState<Record<string, number[]>>({});
   const [latchedNotes, setLatchedNotes] = useState<Map<number, number>>(new Map());
   const [showConventions, setShowConventions] = useState(false);
   const [frozen, setFrozen] = useState(false);
@@ -1341,7 +1352,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -1360,6 +1371,7 @@ export function PianoLab() {
             setFocusedId(restoredEvents.at(-1)?.id ?? null);
             setChordWindowMs(saved.chordWindowMs ?? 160);
             setBoundaryCorrections(saved.boundaryCorrections ?? {});
+            setMembershipCorrections(saved.membershipCorrections ?? {});
             setFocusLens(validLinkedLens ?? saved.focusLens ?? "explore");
             setShowConventions(Boolean(saved.showConventions));
             setFrameMode(saved.frameMode ?? "discover");
@@ -1389,9 +1401,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 5, phraseEvents, chordWindowMs, boundaryCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId };
+    const session: PersistedPianoSession = { version: 6, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, phraseEvents, resolutionForkSet, resolutionTarget, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, phraseEvents, resolutionForkSet, resolutionTarget, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -1504,19 +1516,25 @@ export function PianoLab() {
   const motifTransformations = useMemo(() => detectMotifTransformations(phraseEvents, 3), [phraseEvents]);
   const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events]);
   const chordMeasures = useMemo<ChordMeasure[]>(() => chordGestures.map((gesture, index) => {
-    const pitchClassCount = new Set(gesture.attackedNotes.map(pitchClassFromMidi)).size;
-    const candidates = pitchClassCount <= 5 ? identifyChordCandidates(gesture.attackedNotes, 3) : [];
+    const excludedInheritedNotes = (membershipCorrections[gesture.id] ?? []).filter((note) => gesture.inheritedNotes.includes(note));
+    const interpretedNotes = interpretedChordNotes(gesture, excludedInheritedNotes);
+    const pitchClassCount = new Set(interpretedNotes.map(pitchClassFromMidi)).size;
+    const candidates = pitchClassCount <= 5 ? identifyChordCandidates(interpretedNotes, 3) : [];
     const candidate = candidates.find((item) => item.exact) ?? candidates[0] ?? null;
-    const soundingNotes = gesture.soundingNotesAtClose.length ? gesture.soundingNotesAtClose : uniqueSorted(gesture.attackedNotes);
-    const perception = soundingNotes.length >= 2 ? sonorityPerceptionModel(soundingNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
-    const tendency = tonalTendency(soundingNotes, doMidi, scale);
+    const audibleNotes = gesture.soundingNotesAtClose.length ? gesture.soundingNotesAtClose : uniqueSorted(gesture.attackedNotes);
+    const perception = audibleNotes.length >= 2 ? sonorityPerceptionModel(audibleNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
+    const tendency = tonalTendency(interpretedNotes, doMidi, scale);
     const previous = chordGestures[index - 1];
-    const previousPitchClassCount = previous ? new Set(previous.attackedNotes.map(pitchClassFromMidi)).size : 0;
-    const previousCandidates = previous && previousPitchClassCount <= 5 ? identifyChordCandidates(previous.attackedNotes, 3) : [];
+    const previousInterpretedNotes = previous ? interpretedChordNotes(previous, membershipCorrections[previous.id] ?? []) : [];
+    const previousPitchClassCount = new Set(previousInterpretedNotes.map(pitchClassFromMidi)).size;
+    const previousCandidates = previous && previousPitchClassCount <= 5 ? identifyChordCandidates(previousInterpretedNotes, 3) : [];
     const previousCandidate = previousCandidates.find((item) => item.exact) ?? previousCandidates[0] ?? null;
-    const transition = chordTransitionEvidence(previous?.attackedNotes ?? null, gesture.attackedNotes, previousCandidate?.exact ? previousCandidate.rootPitchClass : null, candidate?.exact ? candidate.rootPitchClass : null);
+    const transition = chordTransitionEvidence(previous ? previousInterpretedNotes : null, interpretedNotes, previousCandidate?.exact ? previousCandidate.rootPitchClass : null, candidate?.exact ? candidate.rootPitchClass : null);
     return {
       gesture,
+      interpretedNotes,
+      audibleNotes,
+      excludedInheritedNotes,
       candidate,
       hasPreviousChord: Boolean(previous),
       crunch: perception?.roughness ?? null,
@@ -1528,7 +1546,7 @@ export function PianoLab() {
       rootTravelSteps: transition.rootTravelSteps,
       commonPitchClassCount: transition.commonPitchClassCount,
     };
-  }), [chordGestures, doMidi, scale, soundModelId]);
+  }), [chordGestures, doMidi, membershipCorrections, scale, soundModelId]);
   const selectedChordMeasure = chordMeasures.find((measure) => measure.gesture.id === selectedChordId) ?? chordMeasures.at(-1) ?? null;
   const effectiveSelectedChordId = selectedChordMeasure?.gesture.id ?? null;
   const selectedGesture = selectedChordMeasure?.gesture ?? null;
@@ -1553,13 +1571,14 @@ export function PianoLab() {
   const lastField = events.at(-1)?.fieldNotes ?? [];
   const fieldNotes = activeNoteNumbers.length ? activeNoteNumbers : lastField;
   const fieldIsLive = activeNoteNumbers.length > 0;
-  const analysisNotes = selectedGesture?.attackedNotes ?? fieldNotes;
-  const soundingAnalysisNotes = selectedGesture?.soundingNotesAtClose.length ? selectedGesture.soundingNotesAtClose : analysisNotes;
+  const analysisNotes = selectedChordMeasure?.interpretedNotes ?? fieldNotes;
+  const soundingAnalysisNotes = selectedChordMeasure?.audibleNotes ?? analysisNotes;
   const inheritedAnalysisNotes = selectedGesture?.inheritedNotes ?? [];
+  const excludedInheritedNotes = selectedChordMeasure?.excludedInheritedNotes ?? [];
   const fieldPitchClassCount = new Set(analysisNotes.map((note) => pitchClassFromMidi(note))).size;
   const chordCandidates = identifyChordCandidates(analysisNotes, 3);
   const nearby = analysisNotes.length ? nearbyScaleChords(analysisNotes, doMidi, scale, 3) : [];
-  const ghostAttemptNotes = activeNoteNumbers.length ? activeNoteNumbers : chordGestures.at(-1)?.attackedNotes ?? [];
+  const ghostAttemptNotes = activeNoteNumbers.length ? activeNoteNumbers : chordMeasures.at(-1)?.interpretedNotes ?? [];
   const ghostMatched = ghostChord ? samePitchClasses(ghostAttemptNotes, ghostChord.pitchClasses) : false;
   const resolutionMatched = resolutionTarget ? phraseEvents.some((event) => event.id > resolutionTarget.anchorEventId && pitchClassFromMidi(event.note) === resolutionTarget.pitchClass) : false;
   const focusedEvent = events.find((event) => event.id === focusedId) ?? events.at(-1) ?? null;
@@ -1608,6 +1627,7 @@ export function PianoLab() {
     setSelectedChordId(null);
     setRememberedFrame(null);
     setBoundaryCorrections({});
+    setMembershipCorrections({});
     setIntervalEchoTarget(null);
     setGhostChord(null);
     setGhostNotes([]);
@@ -1632,7 +1652,20 @@ export function PianoLab() {
       else delete next[eventId];
       return next;
     });
+    setMembershipCorrections({});
     setSelectedChordId(null);
+  };
+
+  const toggleInheritedMembership = (gestureId: string, note: number) => {
+    setMembershipCorrections((current) => {
+      const excluded = new Set(current[gestureId] ?? []);
+      if (excluded.has(note)) excluded.delete(note);
+      else excluded.add(note);
+      const next = { ...current };
+      if (excluded.size) next[gestureId] = [...excluded].sort((first, second) => first - second);
+      else delete next[gestureId];
+      return next;
+    });
   };
 
   const lockCandidate = (candidate: ScaleCandidate) => {
@@ -1808,7 +1841,8 @@ export function PianoLab() {
     const latestMotif = motifTransformations.find((motif) => motif.targetEventIds.includes(focusedEvent.id)) ?? motifTransformations[0];
     const motifCopy = latestMotif ? `Phrase memory also finds ${motifTitle(latestMotif)}.` : "";
     const transitionCopy = selectedChordMeasure ? selectedChordMeasure.hasPreviousChord ? `Grouped across ${Math.round(selectedChordMeasure.gesture.spreadMs)} ms: ${evidenceWord(selectedChordMeasure.novelty)} pitch-set novelty, ${evidenceWord(selectedChordMeasure.motion)} voice motion${selectedChordMeasure.rootTravelSteps == null ? "" : `, and ${selectedChordMeasure.rootTravelSteps} fifths step${selectedChordMeasure.rootTravelSteps === 1 ? "" : "s"} of root travel`}.` : `Grouped across ${Math.round(selectedChordMeasure.gesture.spreadMs)} ms; this first chord gesture sets the transition baseline.` : "";
-    const chordCopy = fieldCandidate ? fieldCandidate.exact ? `The ${selectedGesture ? "grouped attacks" : fieldIsLive ? "held" : "last"} form ${chordLabel(fieldCandidate, doMidi, showConventions)}.` : `The grouped field may outline ${chordLabel(fieldCandidate, doMidi, showConventions)}; tones are missing or added.` : fieldPitchClassCount > 5 ? `The ${fieldPitchClassCount}-position field is scale-like, so no chord label is forced.` : "Hold another note to expose chord relationships.";
+    const correctionCopy = excludedInheritedNotes.length ? `${excludedInheritedNotes.length} inherited note${excludedInheritedNotes.length === 1 ? " is" : "s are"} excluded from the chord reading but remain in the audible texture.` : "Inherited sounding notes currently remain in the chord reading.";
+    const chordCopy = fieldCandidate ? fieldCandidate.exact ? `The interpreted membership forms ${chordLabel(fieldCandidate, doMidi, showConventions)}. ${correctionCopy}` : `The interpreted membership may outline ${chordLabel(fieldCandidate, doMidi, showConventions)}; tones are missing or added. ${correctionCopy}` : fieldPitchClassCount > 5 ? `The ${fieldPitchClassCount}-position interpreted field is scale-like, so no chord label is forced. ${correctionCopy}` : "Hold another note to expose chord relationships.";
     return `${showConventions ? conventionalPitchName(focusedEvent.note) : context.syllable} arrived as ${intervalCopy}, ${routeCopy}; modeled evidence is ${motionCopy}. ${articulationCopy} ${motifCopy} ${chordCopy} ${transitionCopy}`.trim();
   })() : "Play a MIDI or on-screen key. One note attack will appear in every view at once.";
 
@@ -1818,19 +1852,21 @@ export function PianoLab() {
     const pressed = midi.pressed.has(note);
     const sustained = midi.sustained.has(note);
     const focused = focusedEvent?.note === note;
-    const chordMember = selectedGesture?.attackedNotes.includes(note) ?? false;
+    const chordMember = selectedChordMeasure?.interpretedNotes.includes(note) ?? false;
+    const attacked = selectedGesture?.attackedNotes.includes(note) ?? false;
     const inherited = selectedGesture?.inheritedNotes.includes(note) ?? false;
+    const inheritedExcluded = excludedInheritedNotes.includes(note);
     const chordGhost = ghostNotes.includes(note);
     const resolutionGhost = resolutionTarget != null && pitchClassFromMidi(note) === resolutionTarget.pitchClass;
     const landmarkGhost = focusLens === "paths" && landmarkTargetNotes.includes(note);
     const ghost = chordGhost || resolutionGhost || landmarkGhost;
     const home = context.stepsWithinOctave === 0;
-    const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", chordMember ? "is-chord-member" : "", inherited ? "is-inherited" : "", ghost ? "is-ghost" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
+    const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", attacked ? "is-chord-member" : "", inherited && chordMember ? "is-inherited" : "", inheritedExcluded ? "is-excluded" : "", ghost ? "is-ghost" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
       "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
       "--key-width": `${100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
-    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${chordMember ? ", attacked in selected chord" : inherited ? ", inherited into selected chord field" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
+    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${attacked ? ", attacked in selected chord" : inheritedExcluded ? ", sounding but excluded from selected chord interpretation" : inherited ? ", inherited and included in selected chord interpretation" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
   };
 
   const exactChord = chordCandidates.find((candidate) => candidate.exact);
@@ -1843,7 +1879,7 @@ export function PianoLab() {
         <div className="piano-hud-controls" aria-label="HUD controls">
           <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{midi.status}</strong></div></div>
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
-          <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label>
+          <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label>
           <button type="button" aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{frozen ? "Resume trace" : "Freeze trace"}</button>
           <button type="button" disabled={focusLens === "paths"} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{focusLens === "paths" ? "Do fixed for path" : frameMode === "locked" ? "Unlock Do" : "Lock Do"}</button>
           <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>Theory names</span></label>
@@ -1894,23 +1930,30 @@ export function PianoLab() {
       </div> : null}
 
       <div className="piano-hud-keyboard-wrap">
-        <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>solid held · ring sustained · gold chord attack · dotted inherited · dashed silent target · double mark Do</small></div>
+        <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>gold attacked · dotted inherited member · crossed inherited exclusion · dashed silent target · double mark Do</small></div>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
       </div>
 
       {(focusLens === "explore" || focusLens === "chords") ? <div className="piano-hud-analysis">
         <section className="hud-chord-panel" aria-labelledby="hud-chord-title">
-          <div className="hud-panel-heading"><span>{selectedGesture ? `${selectedGesture.kind} gesture · ${Math.round(selectedGesture.spreadMs)} ms` : fieldIsLive ? "Held now" : events.length ? "Last outlined field" : "Waiting for a field"}</span><strong id="hud-chord-title">Chord identity</strong><small>Chord attacks determine identity; already-held and pedal tones remain visible as inherited context.</small></div>
+          <div className="hud-panel-heading"><span>{selectedGesture ? `${selectedGesture.kind} gesture · ${Math.round(selectedGesture.spreadMs)} ms` : fieldIsLive ? "Held now" : events.length ? "Last outlined field" : "Waiting for a field"}</span><strong id="hud-chord-title">Chord membership</strong><small>Attacks always belong. Inherited held or pedal notes begin included; exclude one when it belongs only to the previous harmony.</small></div>
           {leadingChord ? <div className="hud-chord-result"><span>{leadingChord.exact ? "exact pitch-class match" : "possible outline"}</span><strong>{chordLabel(leadingChord, doMidi, showConventions)}</strong><small>{leadingChord.inversion > 0 ? `inversion ${leadingChord.inversion} · ` : ""}{leadingChord.missingPitchClasses.length ? `${leadingChord.missingPitchClasses.length} missing · ` : ""}{leadingChord.extraPitchClasses.length ? `${leadingChord.extraPitchClasses.length} added` : "no added tones"}</small></div> : fieldPitchClassCount > 5 ? <div className="hud-chord-result"><span>scale-like pitch field</span><strong>{fieldPitchClassCount} distinct positions</strong><small>Too many simultaneous positions for a useful chord-template label; inspect the interval texture and scale lens instead.</small></div> : <p className="hud-empty-copy">Hold two or more notes. The HUD will name exact matches separately from incomplete outlines.</p>}
           {selectedChordMeasure ? <div className="hud-chord-metrics" aria-label="Selected chord evidence">
-            <span><small>roughness</small><strong>{selectedChordMeasure.crunch == null ? "—" : Math.round(selectedChordMeasure.crunch * 100)}</strong><em>{selectedChordMeasure.crunch == null ? "no field" : evidenceWord(selectedChordMeasure.crunch)}</em></span>
+            <span><small>heard roughness</small><strong>{selectedChordMeasure.crunch == null ? "—" : Math.round(selectedChordMeasure.crunch * 100)}</strong><em>{selectedChordMeasure.crunch == null ? "no field" : evidenceWord(selectedChordMeasure.crunch)}</em></span>
             <span><small>toward Do</small><strong>{Math.round(selectedChordMeasure.pull * 100)}</strong><em>{evidenceWord(selectedChordMeasure.pull)}</em></span>
             <span><small>repose</small><strong>{Math.round(selectedChordMeasure.arrival * 100)}</strong><em>{evidenceWord(selectedChordMeasure.arrival)}</em></span>
             <span><small>pitch change</small><strong>{selectedChordMeasure.hasPreviousChord ? Math.round(selectedChordMeasure.novelty * 100) : "—"}</strong><em>{selectedChordMeasure.hasPreviousChord ? evidenceWord(selectedChordMeasure.novelty) : "baseline"}</em></span>
             <span><small>voice motion</small><strong>{selectedChordMeasure.hasPreviousChord ? Math.round(selectedChordMeasure.motion * 100) : "—"}</strong><em>{selectedChordMeasure.hasPreviousChord ? evidenceWord(selectedChordMeasure.motion) : "baseline"}</em></span>
             <span><small>fifths move</small><strong>{selectedChordMeasure.rootTravelSteps == null ? "—" : selectedChordMeasure.rootTravelSteps}</strong><em>{selectedChordMeasure.rootTravelSteps == null ? selectedChordMeasure.hasPreviousChord ? "root uncertain" : "baseline" : selectedChordMeasure.rootTravelSteps === 1 ? "neighbor" : "steps"}</em></span>
           </div> : null}
-          <div className="hud-field-notes">{soundingAnalysisNotes.map((note) => <span key={note} className={inheritedAnalysisNotes.includes(note) ? "is-inherited" : ""}><strong>{relativeSyllable(note, doMidi, scale)}</strong><small>{inheritedAnalysisNotes.includes(note) ? "inherited" : showConventions ? conventionalPitchName(note) : formatHz(frequencyFromMidi(note))}</small></span>)}</div>
+          <div className="hud-field-notes" aria-label="Correct inherited chord membership">{soundingAnalysisNotes.map((note) => {
+            const inherited = inheritedAnalysisNotes.includes(note);
+            const excluded = excludedInheritedNotes.includes(note);
+            const label = showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
+            if (!inherited || !selectedGesture) return <span key={note}><strong>{label}</strong><small>attacked · included</small></span>;
+            return <button key={note} type="button" className={`is-inherited ${excluded ? "is-excluded" : ""}`} aria-pressed={!excluded} aria-label={`${excluded ? "Restore" : "Exclude"} inherited ${label} ${excluded ? "to" : "from"} chord interpretation`} onClick={() => toggleInheritedMembership(selectedGesture.id, note)}><strong>{label}</strong><small>{excluded ? "excluded · restore" : "inherited · exclude"}</small></button>;
+          })}</div>
+          {selectedGesture?.inheritedNotes.length ? <div className="hud-membership-effect" role="status"><span>{excludedInheritedNotes.length ? `${excludedInheritedNotes.length} inherited ${excludedInheritedNotes.length === 1 ? "note" : "notes"} excluded` : "All sounding notes interpreted"}</span><strong>Reading changes · sound stays</strong><small>Chord identity, toward-Do evidence, the contextual share of repose, pitch change, root travel, and voice strands use interpreted membership. The full sounding field and heard roughness remain unchanged.</small></div> : null}
         </section>
 
         <section className="hud-nearby-panel" aria-labelledby="hud-nearby-title">
@@ -1920,12 +1963,12 @@ export function PianoLab() {
           {!nearby.length ? <p className="hud-empty-copy">Play a note or chord before comparing close, scale-derived moves.</p> : null}
         </section>
 
-        <RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} />
+        <RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} />
       </div> : null}
 
       {(focusLens === "explore" || focusLens === "chords") ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
 
-      {focusLens === "intervals" ? <div className="piano-focus-grid is-interval-practice"><IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} /><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
+      {focusLens === "intervals" ? <div className="piano-focus-grid is-interval-practice"><IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} /><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
 
       {(focusLens === "explore" || focusLens === "motion") ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
 

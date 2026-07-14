@@ -35,6 +35,8 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Select an event across every view/);
   assert.match(piano, /Chord gestures grouped by attack timing/);
   assert.match(piano, /aria-label="Selected chord evidence"/);
+  assert.match(piano, /aria-label="Correct inherited chord membership"/);
+  assert.match(piano, /Restore.*Exclude.*inherited/);
   assert.match(piano, /id="hud-chord-window"/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);

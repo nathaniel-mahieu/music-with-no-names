@@ -12,6 +12,7 @@ import {
   frequencyFromMidi,
   groupChordGestures,
   identifyChordCandidates,
+  interpretedChordNotes,
   inferScaleCandidates,
   intervalLandmark,
   landmarkStepPitchClasses,
@@ -134,6 +135,42 @@ test("keeps inherited sounding tones separate from chord attacks", () => {
   assert.deepEqual(gestures[0].inheritedNotes, [48, 60]);
   assert.deepEqual(gestures[0].soundingNotesAtClose, [48, 60, 64, 67]);
   assert.equal(gestures[0].kind, "together");
+});
+
+test("corrects chord interpretation without erasing the sounding field", () => {
+  const gesture = groupChordGestures([
+    { id: 1, note: 64, onsetMs: 100, fieldNotes: [60, 64] },
+    { id: 2, note: 67, onsetMs: 150, fieldNotes: [60, 64, 67] },
+  ], 80, 160)[0];
+  assert.deepEqual(interpretedChordNotes(gesture), [60, 64, 67]);
+  assert.equal(identifyChordCandidates(interpretedChordNotes(gesture), 1)[0].exact, true);
+  assert.deepEqual(interpretedChordNotes(gesture, [60]), [64, 67]);
+  assert.equal(identifyChordCandidates(interpretedChordNotes(gesture, [60]), 1)[0].exact, false);
+  assert.deepEqual(interpretedChordNotes(gesture, [60, 64, 999, Number.NaN]), [64, 67]);
+  assert.deepEqual(gesture.soundingNotesAtClose, [60, 64, 67]);
+});
+
+test("propagates corrected membership into chord transition context", () => {
+  const previous = groupChordGestures([
+    { id: 1, note: 64, onsetMs: 0, fieldNotes: [60, 64] },
+    { id: 2, note: 67, onsetMs: 40, fieldNotes: [60, 64, 67] },
+  ], 80, 160)[0];
+  const current = groupChordGestures([
+    { id: 3, note: 65, onsetMs: 500, fieldNotes: [60, 65] },
+    { id: 4, note: 69, onsetMs: 540, fieldNotes: [60, 65, 69] },
+  ], 80, 160)[0];
+  const previousReading = interpretedChordNotes(previous);
+  const automaticReading = interpretedChordNotes(current);
+  const correctedReading = interpretedChordNotes(current, [60]);
+  assert.equal(identifyChordCandidates(automaticReading, 1)[0].exact, true);
+  assert.equal(identifyChordCandidates(correctedReading, 1)[0].exact, false);
+  const automaticTransition = chordTransitionEvidence(previousReading, automaticReading);
+  const correctedTransition = chordTransitionEvidence(previousReading, correctedReading);
+  assert.equal(automaticTransition.commonPitchClassCount, 1);
+  assert.equal(correctedTransition.commonPitchClassCount, 0);
+  assert.ok(correctedTransition.pitchSetNovelty > automaticTransition.pitchSetNovelty);
+  assert.notDeepEqual(voiceLeadingProfile(previousReading, automaticReading), voiceLeadingProfile(previousReading, correctedReading));
+  assert.deepEqual(current.soundingNotesAtClose, [60, 65, 69]);
 });
 
 test("requires two distinct pitch classes before naming a temporal chord", () => {

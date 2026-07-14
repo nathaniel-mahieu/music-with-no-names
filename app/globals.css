@@ -7524,6 +7524,8 @@ footer a {
 .hud-keyboard .piano-key.is-pressed { box-shadow: inset 0 -8px var(--piano-coral), inset 0 0 0 3px var(--foreground) !important; }
 .hud-keyboard .piano-key.is-chord-member { outline: 3px solid var(--piano-gold); outline-offset: -7px; }
 .hud-keyboard .piano-key.is-inherited { outline: 3px dotted var(--piano-blue); outline-offset: -7px; }
+.hud-keyboard .piano-key.is-excluded { outline: 3px dotted var(--muted); outline-offset: -7px; opacity: .72; }
+.hud-keyboard .piano-key.is-excluded::after { content: "×"; position: absolute; right: 4px; bottom: 4px; color: var(--foreground); font-family: var(--font-mono), monospace; font-size: .68rem; }
 .hud-keyboard .piano-key.is-ghost:not(.is-active) { outline: 3px dashed var(--piano-coral); outline-offset: -7px; }
 
 .piano-hud-analysis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(280px, .9fr); border-bottom: 1px solid var(--line); }
@@ -7542,15 +7544,25 @@ footer a {
 .hud-chord-metrics strong { margin-top: 2px; font-family: var(--font-mono), monospace; font-size: .76rem; }
 .hud-chord-metrics em { margin-top: 2px; color: var(--muted); font-size: .55rem; font-style: normal; }
 .hud-field-notes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-.hud-field-notes span { min-width: 44px; padding: 5px; border-top: 1px solid var(--line); text-align: center; }
-.hud-field-notes span.is-inherited { border-top-style: dotted; opacity: .72; }
+.hud-field-notes span,
+.hud-field-notes button { min-width: 54px; padding: 6px; border: 0; border-top: 1px solid var(--line); color: var(--foreground); background: transparent; font: inherit; text-align: center; }
+.hud-field-notes button { border-top-color: var(--piano-blue); border-top-style: dotted; cursor: pointer; }
+.hud-field-notes button:hover { background: color-mix(in srgb, var(--piano-blue) 8%, transparent); }
+.hud-field-notes button.is-excluded { border-top-color: var(--muted); opacity: .7; text-decoration: line-through; text-decoration-thickness: 1px; }
+.hud-field-notes button:focus-visible { outline: 2px solid var(--foreground); outline-offset: 2px; }
 .hud-field-notes strong,
 .hud-field-notes small { display: block; font-size: .66rem; }
 .hud-field-notes small { margin-top: 2px; color: var(--muted); font-size: .58rem; }
+.hud-membership-effect { display: grid; gap: 3px; margin-top: 10px; padding: 9px 0 9px 10px; border-left: 2px solid var(--piano-blue); }
+.hud-membership-effect span,
+.hud-membership-effect small { color: var(--muted); font-size: .61rem; line-height: 1.4; }
+.hud-membership-effect strong { font-size: .68rem; font-weight: 500; }
 .hud-nearby-panel ol { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .hud-texture-arc { fill: none; stroke: var(--piano-blue); stroke-width: calc(1px + var(--arc-strength) * 4px); opacity: calc(.2 + var(--arc-strength) * .65); }
 .hud-texture-node { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 2; }
 .hud-texture-node.is-inherited { fill: transparent; stroke: var(--piano-blue); stroke-dasharray: 2 2; }
+.hud-texture-node.is-excluded { stroke: var(--muted); opacity: .75; }
+.hud-texture-exclusion { stroke: var(--foreground); stroke-width: 1.5; pointer-events: none; }
 
 .hud-evidence-panel { border-bottom: 1px solid var(--line); }
 .hud-trace-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 3px; }
@@ -7649,6 +7661,7 @@ footer a {
   .hud-keyboard { height: 132px; }
   .hud-keyboard .piano-key > small,
   .hud-keyboard .piano-key.is-home::after { display: none; }
+  .hud-keyboard .piano-key.is-excluded::after { display: block; }
   .hud-keyboard .piano-key.is-black { width: 5%; }
   .piano-hud-insight { grid-template-columns: 1fr; }
   .piano-hud-insight > span { grid-row: auto; }
@@ -7719,6 +7732,10 @@ footer a {
   .hud-fifths-closure-gap { fill: Canvas; stroke: CanvasText; }
   .hud-fifths-spiral-field g.is-current .hud-fifths-spiral-node { fill: Highlight; stroke: HighlightText; }
   .hud-keyboard .piano-key.is-sustained { outline-color: LinkText; }
+  .hud-keyboard .piano-key.is-excluded { outline-color: GrayText; }
+  .hud-field-notes button.is-excluded { border-color: GrayText; color: GrayText; }
+  .hud-texture-node.is-excluded,
+  .hud-texture-exclusion { stroke: GrayText; }
   .hud-chord-band { fill: Canvas; stroke: CanvasText; }
   .hud-chord-band.is-selected { fill: Highlight; stroke: HighlightText; }
   .hud-motif-source,

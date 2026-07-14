@@ -106,7 +106,11 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /maximum span/);
   assert.match(pianoLab, /diamonds summarize grouped chords/);
   assert.match(pianoLab, /first chord gesture sets the transition baseline/);
-  assert.match(pianoLab, /already-held and pedal tones remain visible as inherited context/);
+  assert.match(pianoLab, /Inherited held or pedal notes begin included/);
+  assert.match(pianoLab, /Reading changes · sound stays/);
+  assert.match(pianoLab, /excluded from the chord reading but remain in the audible texture/);
+  assert.match(pianoLab, /membershipCorrections/);
+  assert.match(pianoModel, /interpretedChordNotes/);
   assert.match(pianoLab, /sustain/);
   assert.match(pianoLab, /no sound, recording, or upload/i);
   assert.match(pianoLab, /No sound is generated or recorded/);

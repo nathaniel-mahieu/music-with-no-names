@@ -927,6 +927,29 @@ export function groupChordGestures<T extends TimedNoteAttack>(
   return gestures;
 }
 
+/**
+ * Builds the notes used for a chord reading while leaving the physically
+ * sounding field untouched. Attacked notes are always members. Inherited
+ * held or pedal notes begin as members, but a learner may explicitly exclude
+ * any of them when they belong to the preceding harmony instead.
+ */
+export function interpretedChordNotes<T extends TimedNoteAttack>(
+  gesture: ChordGesture<T>,
+  excludedInheritedNotes: readonly number[] = [],
+) {
+  const inherited = new Set(gesture.inheritedNotes.map(Math.round));
+  const excluded = new Set(
+    excludedInheritedNotes
+      .filter(Number.isFinite)
+      .map(Math.round)
+      .filter((note) => inherited.has(note)),
+  );
+  return [...new Set([
+    ...gesture.attackedNotes.map(Math.round),
+    ...gesture.inheritedNotes.map(Math.round).filter((note) => !excluded.has(note)),
+  ])].sort((first, second) => first - second);
+}
+
 function nearestVoiceDistance(source: number[], target: number[]) {
   if (!source.length || !target.length) return 0;
   return source.reduce((sum, note) => sum + Math.min(...target.map((targetNote) => Math.abs(note - targetNote))), 0) / source.length;

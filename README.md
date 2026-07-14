@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **First-Principles Fifths v1.36**. It provides:
+The current milestone is **Chord Membership Correction v1.37**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
@@ -23,22 +23,23 @@ The current milestone is **First-Principles Fifths v1.36**. It provides:
 - Phrase-level scale inference that uses the full sixty-second memory so the seven-attack microscope cannot forget an earlier Do and spuriously reframe the same phrase.
 - Local Web MIDI input with permission-aware device selection, note-on/off, velocity, duration, and sustain-pedal visualization. Piano Lab MIDI is analysis-only: it never synthesizes, records, or routes audio, and the seven-event phrase remains only in the current browser tab.
 - Interval Echo practice that asks the learner to reproduce a spacing from a different starting key without playing an answer.
-- A causal chord comparison that states which pitch positions were added, released, or retained before showing separate roughness, pull, and repose deltas.
+- A causal chord comparison that states which pitch positions entered, left, or stayed in the interpretation before showing separate roughness, pull, and repose deltas; it does not confuse membership with a physical key release.
 - Correctable chord grouping: any selected attack can explicitly start a new chord, join the previous chord, or return to timing-based inference.
+- Correctable inherited membership: held or pedal-carried notes enter a chord reading as visibly inherited members and can be excluded or restored one at a time. The correction updates chord identity, tonal pull, novelty, root travel, nearby moves, and voice leading while leaving the physically sounding interval texture and modeled roughness unchanged.
 - An explicit voice-leading coach that traces nearest held, rising, falling, added, and released voices; identifies parallel, contrary, oblique, bass, and largest-leap motion; and keeps these observations separate from harmonic quality.
 - Silent nearby-chord targets that mark ghost keys for the learner to perform. Suggestion buttons no longer enter notes or play an answer.
 - A prominent Assumed Spectrum control with sine, exact-harmonic, mellow-piano, and bright-piano teaching proxies. A live partial comb makes the spectral assumption visible while the copy states exactly which modeled outputs can change and which note, interval, scale, timing, tonal, and listener evidence remains fixed. The HUD does not claim to analyze the connected keyboard’s actual sound.
 - A first-principles fifths spiral inside the Scales focus: step from zero through twelve repeated 3:2 moves, see how octave folding preserves pitch-class position, expose the 23.46-cent pure closure mismatch, and continuously apply the small per-fifth equal-key correction until the open spiral becomes a closed circle.
 - A clickable fifths compass and spiral target that can make any fifth-neighbor position the new movable Do without entering or sounding a note. The selected Do and scale frame lock together, update every coordinated representation, persist in the tab, and are encoded in the URL.
-- Lab URLs encode the active surface and Piano focus lens, while the phrase, chosen frame, grouping corrections, and ghost target survive visits to other labs in the same tab.
+- Lab URLs encode the active surface and Piano focus lens, while the phrase, chosen frame, grouping and membership corrections, and ghost target survive visits to other labs in the same tab.
 - Movable-Do overlays for every piano key, with conventional note, scale, and interval names available only as an optional translation layer.
 - Four compatible frame families—bright seven-pitch, shadow seven-pitch, open five-pitch, and blues six-pitch routes—shown as hypotheses rather than automatic truth.
 - A selected-field interval texture plus separate modeled spectral crunch, pull toward the selected Do, repose/arrival evidence, pitch novelty, and voice motion—never a combined listenability or quality score.
 - A scale-and-center finder that ranks multiple compatible frames from recent pitch classes while making ambiguity and limited evidence visible.
 - Live circle-of-fifths mapping that marks held pitch classes and numbers recent attacks, plus a deliberately cautious scale-frame detector that waits for four distinct pitch classes before changing its stable frame.
 - Exact chord matching kept separate from incomplete outlines, with nearby scale-derived moves ranked by common tones instead of a claim about what should sound good.
-- Adjustable 80, 160, and 320 ms chord-gesture grouping with a hard two-window maximum span. Chord attacks remain distinct from notes inherited through holding or sustain.
-- Chord brackets aligned across staff, frequency, and evidence time; selected chord members also propagate into the fifths compass, scale lens, keyboard, interval texture, and chord-level crunch, pull, arrival, pitch-set novelty, voice-motion, and root-travel evidence.
+- Adjustable 80, 160, and 320 ms chord-gesture grouping with a hard two-window maximum span. Chord attacks remain distinct from notes inherited through holding or sustain, even when both contribute to the interpreted membership.
+- Chord brackets aligned across staff, frequency, and evidence time. Interpreted members propagate into identity, fifths, scale, pull, novelty, voice motion, and root travel; every physically sounding note remains in the interval texture and spectrum-dependent roughness evidence.
 - Clear outline-versus-exact chord language, an explicit unknown-root state, plain-language low/moderate/high evidence cues, and nearby chord realizations that minimize keyboard motion around the current hand position.
 - Controlled chord fields that connect physical differences to conditional possibilities such as fusion, weight, openness, or pressure without assigning fixed emotions.
 - A fifths compass derived from repeated near-3:2 moves, with the pure-versus-equal closure mismatch visible and manipulable beside the learner’s live phrase.
