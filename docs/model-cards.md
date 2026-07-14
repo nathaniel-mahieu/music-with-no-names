@@ -95,8 +95,9 @@ These cards describe educational models used by Music With No Names. A model out
 - **Atlas schema:** `mwno-landmark.v1`.
 - **Inputs:** declared measured values, curator hypotheses, uncertainty, listener spread, layer, provenance, and licensing.
 - **Outputs:** porous descriptive placements and listener/goal-conditioned proximity—not quality rankings.
+- **Live phrase bridge version:** `music-with-no-names.live-atlas.v1`. A valid tab-scoped phrase of at least four usable attacks yields relationship recurrence from pitch-class and relative-shape recurrence, piece-local surprise from incremental transition evidence, and timing activity from attack density plus onset-gap regularity. Missing evidence remains absent rather than being imputed. The square live mark and circular curator mark stay separate; changing the selected landmark never changes the live phrase values.
 - **Personal terrain version:** `mwno-personal-1`; weighted centers and bandwidths are learned from local ratings with visible sample-count uncertainty.
-- **Limits:** the bundled Atlas is a teaching set, not a statistically representative genre corpus. Its density clouds are derived only from the declared small starter corpora and must not be generalized to all music in a genre. Personal models with few samples are unstable and remain on the device.
+- **Limits:** the bundled Atlas is a teaching set, not a statistically representative genre corpus. Its density clouds are derived only from the declared small starter corpora and must not be generalized to all music in a genre. The live bridge compares a short MIDI-only phrase with curator hypotheses about whole recordings and intentionally does not compute similarity, a nearest landmark, style, emotion, quality, or causal explanation. Timing activity is narrower than embodied drive. Personal models with few samples are unstable and remain on the device.
 
 ## Governance
 

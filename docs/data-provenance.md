@@ -18,6 +18,8 @@ No commercial or third-party recording is bundled. Recording Lab operates on aud
 
 The initial Atlas entries are hand-authored pedagogical landmarks and transformations. They are not measurements of bundled copyrighted recordings and do not constitute a representative genre dataset. Each entry carries source type, method, version, layer, confidence or spread, and licensing metadata. The Atlas computes explicitly provisional density regions from three pop profiles, two blues profiles, and four selected-classical profiles; counts and methods remain visible, and the regions are deliberately porous and overlapping.
 
+The v1.51 live bridge does not add a recording corpus. Its live square is derived only from the current tab's retained MIDI attacks; the selected landmark's circular marks remain the existing curator-authored, whole-recording hypotheses. No phrase, audio, similarity result, or landmark assignment is uploaded or persisted as new Atlas data.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.
