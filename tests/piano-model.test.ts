@@ -7,6 +7,7 @@ import {
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
+  compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
   comparePhraseLenses,
@@ -222,6 +223,52 @@ test("separates a chord relationship from voicing, register, bass role, and doub
   assert.equal(compareChordVoicingEcho([60, 64, 67], [60, 63, 67])?.relationshipPreserved, false);
   assert.equal(compareChordVoicingEcho([60, 72], [62, 74]), null);
   assert.throws(() => compareChordVoicingEcho([60, 64, 128], [62, 66, 69]), RangeError);
+});
+
+test("preserves a complete chord move only under one shared transposition", () => {
+  const transposedAndRevoiced = compareChordMotionEcho(
+    [60, 64, 67], [60, 65, 69],
+    [66, 69, 74], [62, 67, 71],
+  );
+  assert.ok(transposedAndRevoiced);
+  assert.equal(transposedAndRevoiced.relationshipPreserved, true);
+  assert.equal(transposedAndRevoiced.pitchClassIdentityPreserved, false);
+  assert.equal(transposedAndRevoiced.transpositionSteps, 2);
+  assert.equal(transposedAndRevoiced.beforeRelationshipPreserved, true);
+  assert.equal(transposedAndRevoiced.afterRelationshipPreserved, true);
+  assert.deepEqual([
+    transposedAndRevoiced.sourceCommonPitchClassCount,
+    transposedAndRevoiced.sourceEnteredPitchClassCount,
+    transposedAndRevoiced.sourceLeftPitchClassCount,
+  ], [1, 2, 2]);
+  assert.deepEqual([
+    transposedAndRevoiced.attemptCommonPitchClassCount,
+    transposedAndRevoiced.attemptEnteredPitchClassCount,
+    transposedAndRevoiced.attemptLeftPitchClassCount,
+  ], [1, 2, 2]);
+
+  const sameMoveNewRegisters = compareChordMotionEcho(
+    [60, 64, 67], [60, 65, 69],
+    [64, 67, 72, 76], [65, 69, 72],
+  );
+  assert.ok(sameMoveNewRegisters);
+  assert.equal(sameMoveNewRegisters.relationshipPreserved, true);
+  assert.equal(sameMoveNewRegisters.pitchClassIdentityPreserved, true);
+  assert.equal(sameMoveNewRegisters.transpositionSteps, 0);
+
+  const endpointsShiftDifferently = compareChordMotionEcho(
+    [60, 64, 67], [60, 65, 69],
+    [62, 66, 69], [64, 69, 73],
+  );
+  assert.ok(endpointsShiftDifferently);
+  assert.equal(endpointsShiftDifferently.beforeRelationshipPreserved, true);
+  assert.equal(endpointsShiftDifferently.afterRelationshipPreserved, true);
+  assert.equal(endpointsShiftDifferently.beforeTranspositionSteps, 2);
+  assert.equal(endpointsShiftDifferently.afterTranspositionSteps, 4);
+  assert.equal(endpointsShiftDifferently.relationshipPreserved, false);
+
+  assert.equal(compareChordMotionEcho([60, 72], [65, 69], [62, 74], [67, 71]), null);
+  assert.throws(() => compareChordMotionEcho([60, 64, 67], [60, 65, 128], [62, 66, 69], [62, 67, 71]), RangeError);
 });
 
 test("declares controlled sonority fields as physical starting recipes", () => {

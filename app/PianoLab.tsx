@@ -17,6 +17,7 @@ import {
   TONAL_GRAVITY_WEIGHTS,
   articulationTimeline,
   chordTransitionEvidence,
+  compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
   comparePhraseLenses,
@@ -154,7 +155,7 @@ type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif";
 type ChordFocusMode = "cause" | "change" | "echo";
-type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo";
+type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo";
 type IntervalEchoTarget = {
   semitones: number;
   anchorEventId: number;
@@ -200,6 +201,22 @@ type ChordVoicingEchoSession = {
   rootPitchClass: number;
   scaleId: PianoScale["id"];
 };
+type ChordMotionEchoSession = {
+  sourceBeforeEvents: HudNoteEvent[];
+  sourceAfterEvents: HudNoteEvent[];
+  sourceBeforeNotes: number[];
+  sourceAfterNotes: number[];
+  anchorEventId: number;
+  attemptAnchorEventId: number;
+  rootPitchClass: number;
+  scaleId: PianoScale["id"];
+};
+type ChordMotionEchoAttempt = {
+  beforeGesture: HudChordGesture;
+  afterGesture: HudChordGesture;
+  beforeNotes: number[];
+  afterNotes: number[];
+};
 type PulseMirrorSession = {
   anchorEventId: number;
   capturedTapEventIds: number[];
@@ -234,7 +251,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -259,6 +276,7 @@ type PersistedPianoSession = {
   controlledSonoritySession?: ControlledSonoritySession | null;
   chordFocusMode?: ChordFocusMode;
   chordVoicingEchoSession?: ChordVoicingEchoSession | null;
+  chordMotionEchoSession?: ChordMotionEchoSession | null;
   motionFocusMode?: MotionFocusMode;
   pulseMirrorSession?: PulseMirrorSession | null;
   phraseCompareSession?: PhraseCompareSession | null;
@@ -391,6 +409,39 @@ function isChordVoicingEchoSession(value: unknown): value is ChordVoicingEchoSes
       && (event.releaseMs == null || Number.isFinite(event.releaseMs))
       && (event.source === "midi" || event.source === "screen")
       && isMidiNoteList(event.fieldNotes))
+    && Number.isInteger(session.rootPitchClass)
+    && session.rootPitchClass! >= 0
+    && session.rootPitchClass! < 12
+    && PIANO_SCALES.some((scale) => scale.id === session.scaleId);
+}
+
+function isChordMotionEchoSession(value: unknown): value is ChordMotionEchoSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<ChordMotionEchoSession>;
+  const validNotes = (notes: unknown) => isMidiNoteList(notes, 2)
+    && notes.length <= 6
+    && new Set(notes.map(pitchClassFromMidi)).size >= 2;
+  const validEvents = (events: unknown) => Array.isArray(events)
+    && events.length >= 2
+    && events.length <= 12
+    && new Set(events.map((event) => event?.id)).size === events.length
+    && events.every((event) => event
+      && Number.isInteger(event.id) && event.id > 0 && event.id <= session.anchorEventId!
+      && Number.isInteger(event.note) && event.note >= 0 && event.note <= 127
+      && Number.isFinite(event.velocity) && event.velocity >= 0 && event.velocity <= 127
+      && Number.isFinite(event.onsetMs)
+      && (event.keyReleaseMs == null || Number.isFinite(event.keyReleaseMs))
+      && (event.releaseMs == null || Number.isFinite(event.releaseMs))
+      && (event.source === "midi" || event.source === "screen")
+      && isMidiNoteList(event.fieldNotes));
+  return Number.isInteger(session.anchorEventId)
+    && session.anchorEventId! >= 0
+    && Number.isInteger(session.attemptAnchorEventId)
+    && session.attemptAnchorEventId! >= session.anchorEventId!
+    && validNotes(session.sourceBeforeNotes)
+    && validNotes(session.sourceAfterNotes)
+    && validEvents(session.sourceBeforeEvents)
+    && validEvents(session.sourceAfterEvents)
     && Number.isInteger(session.rootPitchClass)
     && session.rootPitchClass! >= 0
     && session.rootPitchClass! < 12
@@ -2218,7 +2269,7 @@ function ChordCausePanel({ measures, selectedId, doMidi, showConventions }: {
   </section>;
 }
 
-function ChordChangeLenses({ measures, selectedId, doMidi, scale, soundModelId, showConventions, onReflect }: {
+function ChordChangeLenses({ measures, selectedId, doMidi, scale, soundModelId, showConventions, onReflect, onStartMotionEcho }: {
   measures: ChordMeasure[];
   selectedId: string | null;
   doMidi: number;
@@ -2226,6 +2277,7 @@ function ChordChangeLenses({ measures, selectedId, doMidi, scale, soundModelId, 
   soundModelId: PianoSoundModelId;
   showConventions: boolean;
   onReflect: (events: HudNoteEvent[]) => void;
+  onStartMotionEcho: (before: ChordMeasure, after: ChordMeasure) => void;
 }) {
   const selectedIndex = measures.findIndex((measure) => measure.gesture.id === selectedId);
   const index = selectedIndex >= 0 ? selectedIndex : measures.length - 1;
@@ -2257,6 +2309,10 @@ function ChordChangeLenses({ measures, selectedId, doMidi, scale, soundModelId, 
     .filter((event, eventIndex, all) => all.findIndex((candidate) => candidate.id === event.id) === eventIndex)
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
   const readyToReflect = specimen.length >= 3;
+  const readyToEcho = [previous, current].every((measure) => measure.gesture.attacks.length >= 2
+    && measure.interpretedNotes.length >= 2
+    && measure.interpretedNotes.length <= 6
+    && new Set(measure.interpretedNotes.map(pitchClassFromMidi)).size >= 2);
   return <section className="hud-chord-change-lenses" aria-labelledby="hud-chord-change-title">
     <div className="hud-panel-heading"><span>Selected before + after · five lenses</span><strong id="hud-chord-change-title">What changed between these chords?</strong><small>{previousNotes.map(noteLabel).join(" · ")} → {currentNotes.map(noteLabel).join(" · ")} · the grouped MIDI interpretation can be corrected above</small></div>
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the selected chord change">
@@ -2266,7 +2322,90 @@ function ChordChangeLenses({ measures, selectedId, doMidi, scale, soundModelId, 
       <article className="is-modeled"><span>Context</span><em>selected Do + teaching model</em><strong>toward Do {Math.round(previous.pull * 100)}→{Math.round(current.pull * 100)} · repose {Math.round(previous.arrival * 100)}→{Math.round(current.arrival * 100)}</strong><small>{current.rootTravelSteps == null ? "Root travel is unavailable under the current chord readings." : `${current.rootTravelSteps} fifths step${current.rootTravelSteps === 1 ? "" : "s"} between exact interpreted roots.`} These are contextual coordinates, not felt resolution.</small></article>
       <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did this change feel like opening, arrival, motion, or something else?</strong><small>{readyToReflect ? "The HUD will freeze these exact two grouped gestures and ask for your report without filling it from the other lenses." : "At least three attacks across the two gestures are needed for a bounded reflection."}</small><button type="button" disabled={!readyToReflect} onClick={() => onReflect(specimen)}>Reflect on chord change</button></article>
     </div>
+    <div className="hud-chord-motion-next"><div><span>Next question · same source move</span><strong>Can this entire chord change survive elsewhere?</strong><small>Freeze both corrected fields, then replay both in a new key or voicing. The two endpoints must share one transposition; physical voice motion may change.</small></div><button type="button" disabled={!readyToEcho} onClick={() => onStartMotionEcho(previous, current)}>Freeze this two-chord move</button></div>
     <p className="hud-last-attack-limit">No lens is averaged into similarity, emotionality, correctness, listenability, or musical goodness.</p>
+  </section>;
+}
+
+function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attempt, attemptProgress, pendingNotes, doMidi, scale, soundModelId, showConventions, onEnd, onRetry, onReflect }: {
+  session: ChordMotionEchoSession;
+  sourceBeforeEvents: HudNoteEvent[];
+  sourceAfterEvents: HudNoteEvent[];
+  attempt: ChordMotionEchoAttempt | null;
+  attemptProgress: number;
+  pendingNotes: number[];
+  doMidi: number;
+  scale: PianoScale;
+  soundModelId: PianoSoundModelId;
+  showConventions: boolean;
+  onEnd: () => void;
+  onRetry: () => void;
+  onReflect: (events: HudNoteEvent[]) => void;
+}) {
+  const noteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
+  const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(Math.round(value * 10) / 10)}`;
+  const sourceBeforeNotes = uniqueSorted(session.sourceBeforeNotes);
+  const sourceAfterNotes = uniqueSorted(session.sourceAfterNotes);
+  const sourceMoveLabel = `${sourceBeforeNotes.map(noteLabel).join(" · ")} → ${sourceAfterNotes.map(noteLabel).join(" · ")}`;
+  const comparison = attempt ? compareChordMotionEcho(sourceBeforeNotes, sourceAfterNotes, attempt.beforeNotes, attempt.afterNotes) : null;
+
+  if (!attempt || !comparison) return <section className="hud-chord-motion-echo is-armed" aria-labelledby="hud-chord-motion-title">
+    <div className="hud-chord-echo-topline"><div className="hud-panel-heading"><span>Two-chord source held · silent</span><strong id="hud-chord-motion-title">Replay the whole move elsewhere</strong><small>{sourceMoveLabel} · release the source, then perform two new grouped chord fields.</small></div><button type="button" onClick={onEnd}>End move echo</button></div>
+    <div className="hud-chord-motion-progress" role="status" aria-live="polite"><span>{attemptProgress}/2 replay fields captured</span><strong>{attemptProgress === 0 ? "Play the first chord of the replay." : `First replay field: ${pendingNotes.map(noteLabel).join(" · ")}`}</strong><small>{attemptProgress === 0 ? "Choose any register or key. The second chord will reveal whether both endpoints shared one transposition." : "Now play the second grouped chord. A single later chord cannot silently complete this comparison."}</small></div>
+  </section>;
+
+  const attemptBeforeNotes = uniqueSorted(attempt.beforeNotes);
+  const attemptAfterNotes = uniqueSorted(attempt.afterNotes);
+  const attemptMoveLabel = `${attemptBeforeNotes.map(noteLabel).join(" · ")} → ${attemptAfterNotes.map(noteLabel).join(" · ")}`;
+  const sourceVoice = voiceLeadingProfile(sourceBeforeNotes, sourceAfterNotes);
+  const attemptVoice = voiceLeadingProfile(attemptBeforeNotes, attemptAfterNotes);
+  const sourceBeforeModel = sonorityPerceptionModel(sourceBeforeNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
+  const sourceAfterModel = sonorityPerceptionModel(sourceAfterNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
+  const attemptBeforeModel = sonorityPerceptionModel(attemptBeforeNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
+  const attemptAfterModel = sonorityPerceptionModel(attemptAfterNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
+  const sourceBeforeTendency = tonalTendency(sourceBeforeNotes, doMidi, scale);
+  const sourceAfterTendency = tonalTendency(sourceAfterNotes, doMidi, scale);
+  const attemptBeforeTendency = tonalTendency(attemptBeforeNotes, doMidi, scale);
+  const attemptAfterTendency = tonalTendency(attemptAfterNotes, doMidi, scale);
+  const span = (notes: number[]) => notes.at(-1)! - notes[0];
+  const relationshipStrong = comparison.relationshipPreserved
+    ? comparison.pitchClassIdentityPreserved
+      ? "same two-field move · pitch classes unchanged"
+      : `same two-field move · both fields shifted ${signed(comparison.transpositionSteps!)} keys`
+    : comparison.beforeRelationshipPreserved && comparison.afterRelationshipPreserved
+      ? `both chord types returned · shifts disagree (${signed(comparison.beforeTranspositionSteps!)} then ${signed(comparison.afterTranspositionSteps!)})`
+      : "one or both endpoint relationships changed";
+  const allNotes = [...sourceBeforeNotes, ...sourceAfterNotes, ...attemptBeforeNotes, ...attemptAfterNotes];
+  const low = Math.min(...allNotes) - 1;
+  const high = Math.max(...allNotes) + 1;
+  const xFor = (note: number) => 92 + ((note - low) / Math.max(1, high - low)) * 548;
+  const reflectionEvents = [...sourceBeforeEvents, ...sourceAfterEvents, ...attempt.beforeGesture.attacks, ...attempt.afterGesture.attacks]
+    .filter((event, index, events) => events.findIndex((candidate) => candidate.id === event.id) === index)
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  const modelScore = (value: number) => Math.round(value * 100);
+  const bassCopy = (profile: ReturnType<typeof voiceLeadingProfile>) => profile.bassMotion === 0 ? "held" : `${profile.bassMotion > 0 ? "up" : "down"} ${Math.abs(profile.bassMotion)}`;
+  return <section className="hud-chord-motion-echo is-comparing" aria-labelledby="hud-chord-motion-title">
+    <div className="hud-chord-echo-topline"><div className="hud-panel-heading"><span>{comparison.relationshipPreserved ? "Whole move matched · five lenses" : "Whole move changed · five lenses"}</span><strong id="hud-chord-motion-title">What survived across both chords?</strong><small>source {sourceMoveLabel} · replay {attemptMoveLabel}</small></div><div className="hud-chord-motion-actions"><button type="button" onClick={onRetry}>Try another move</button><button type="button" onClick={onEnd}>End move echo</button></div></div>
+    <svg className="hud-chord-motion-figure" viewBox="0 0 720 228" role="img" aria-label={`${relationshipStrong}. Source nearest-key travel ${sourceVoice.totalMotion}; replay travel ${attemptVoice.totalMotion}. Source bass ${bassCopy(sourceVoice)}; replay bass ${bassCopy(attemptVoice)}.`}>
+      <title>Source and replayed two-chord moves on one physical keyboard-position axis</title>
+      <text x="18" y="42" className="hud-echo-row-label">source before</text><text x="18" y="87" className="hud-echo-row-label">source after</text>
+      <text x="18" y="142" className="hud-echo-row-label">replay before</text><text x="18" y="187" className="hud-echo-row-label">replay after</text>
+      {sourceVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`source-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="38" y2="82" className={`hud-chord-motion-strand is-source is-${strand.motion}`}><title>{`Source voice interpretation: ${noteLabel(strand.from!)} to ${noteLabel(strand.to!)}, ${signed(strand.semitones)} keys`}</title></line>)}
+      {attemptVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`attempt-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="138" y2="182" className={`hud-chord-motion-strand is-attempt is-${strand.motion}`}><title>{`Replay voice interpretation: ${noteLabel(strand.from!)} to ${noteLabel(strand.to!)}, ${signed(strand.semitones)} keys`}</title></line>)}
+      {sourceBeforeNotes.map((note) => <circle key={`sb-${note}`} cx={xFor(note)} cy="38" r="6" className="hud-chord-motion-node is-source is-before"><title>{`Source before: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle>)}
+      {sourceAfterNotes.map((note) => <circle key={`sa-${note}`} cx={xFor(note)} cy="82" r="6" className="hud-chord-motion-node is-source is-after"><title>{`Source after: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle>)}
+      {attemptBeforeNotes.map((note) => <rect key={`ab-${note}`} x={xFor(note) - 6} y="132" width="12" height="12" className="hud-chord-motion-node is-attempt is-before"><title>{`Replay before: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
+      {attemptAfterNotes.map((note) => <rect key={`aa-${note}`} x={xFor(note) - 6} y="176" width="12" height="12" className="hud-chord-motion-node is-attempt is-after"><title>{`Replay after: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
+      <line x1="92" x2="640" y1="207" y2="207" className="hud-grid-line" /><text x="92" y="222" className="hud-echo-axis-label">lower keyboard position</text><text x="640" y="222" className="hud-echo-axis-label is-end">higher</text>
+    </svg>
+    <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the source and replayed chord move">
+      <article className="is-measured"><span>Sound</span><em>measured MIDI + modeled spectrum</em><strong>span {span(sourceBeforeNotes)}→{span(sourceAfterNotes)} vs {span(attemptBeforeNotes)}→{span(attemptAfterNotes)} keys</strong><small>Modeled roughness source {modelScore(sourceBeforeModel.roughness)}→{modelScore(sourceAfterModel.roughness)} · replay {modelScore(attemptBeforeModel.roughness)}→{modelScore(attemptAfterModel.roughness)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. Upper partials and acoustic result are assumed.</small></article>
+      <article className="is-measured"><span>Relationships</span><em>interpreted pitch-class transformation</em><strong>{relationshipStrong}</strong><small>Source stayed / entered / left: {comparison.sourceCommonPitchClassCount} / {comparison.sourceEnteredPitchClassCount} / {comparison.sourceLeftPitchClassCount}. Replay: {comparison.attemptCommonPitchClassCount} / {comparison.attemptEnteredPitchClassCount} / {comparison.attemptLeftPitchClassCount}. Matching requires one shared shift across both fields.</small></article>
+      <article className="is-measured"><span>Motion</span><em>nearest-key interpretations</em><strong>travel {sourceVoice.totalMotion} vs {attemptVoice.totalMotion} · largest leap {sourceVoice.largestLeap} vs {attemptVoice.largestLeap}</strong><small>Bass source {bassCopy(sourceVoice)} · replay {bassCopy(attemptVoice)}. Revoicing may change every physical strand while the two-field relationship survives; these are not intended voices or fingering.</small></article>
+      <article className="is-modeled"><span>Context</span><em>same selected Do + route</em><strong>toward Do source {modelScore(sourceBeforeTendency.homePull)}→{modelScore(sourceAfterTendency.homePull)} · replay {modelScore(attemptBeforeTendency.homePull)}→{modelScore(attemptAfterTendency.homePull)}</strong><small>Home evidence source {modelScore(sourceBeforeTendency.homeEvidence)}→{modelScore(sourceAfterTendency.homeEvidence)} · replay {modelScore(attemptBeforeTendency.homeEvidence)}→{modelScore(attemptAfterTendency.homeEvidence)}. A transposed relationship can occupy a different tonal context.</small></article>
+      <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did the replay preserve the same sense of direction?</strong><small>A structural match does not prove the same function, tension, resolution, emotion, preference, correctness, or goodness.</small>{comparison.relationshipPreserved ? <button type="button" disabled={reflectionEvents.length < 8} onClick={() => onReflect(reflectionEvents)}>Reflect on source + replayed move</button> : null}</article>
+    </div>
+    <p className="hud-last-attack-limit">The two-field relationship may stay invariant while every physical voice, frequency, spectrum proxy, selected-Do role, and listener response changes.</p>
   </section>;
 }
 
@@ -2529,6 +2668,7 @@ function experiencePromptForOrigin(prompt: string, origin: ExperienceOrigin) {
   if (origin === "interval-echo") return prompt.replace("this phrase", "this source-and-echo comparison");
   if (origin === "chord-change") return prompt.replace("this phrase", "this chord change");
   if (origin === "chord-voicing-echo") return prompt.replace("this phrase", "this source-and-revoicing comparison");
+  if (origin === "chord-motion-echo") return prompt.replace("this phrase", "this source-and-replayed chord move");
   return prompt;
 }
 
@@ -2558,8 +2698,8 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
   const questionPrompt = question ? experiencePromptForOrigin(question.prompt, origin) : undefined;
   const ready = captured.length >= 3;
   const boundedComparison = origin !== "phrase";
-  const specimenLabel = origin === "interval-echo" ? "interval source + echo" : origin === "chord-change" ? "chord before + after" : origin === "chord-voicing-echo" ? "chord source + voicing" : "reflection specimen";
-  const specimenState = origin === "interval-echo" || origin === "chord-voicing-echo" ? "comparison held" : origin === "chord-change" ? "change held" : "";
+  const specimenLabel = origin === "interval-echo" ? "interval source + echo" : origin === "chord-change" ? "chord before + after" : origin === "chord-voicing-echo" ? "chord source + voicing" : origin === "chord-motion-echo" ? "chord move source + replay" : "reflection specimen";
+  const specimenState = origin === "interval-echo" || origin === "chord-voicing-echo" || origin === "chord-motion-echo" ? "comparison held" : origin === "chord-change" ? "change held" : "";
   const repeatedReportCopy = `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} ${repeats.length === 1 ? "shares" : "share"} this relationship signature.`;
   const specimenCopy = origin === "interval-echo"
     ? `The exact source and replay are frozen together. ${repeatedReportCopy}`
@@ -2567,8 +2707,10 @@ function ExperienceLens({ captured, origin, latestCount, observations, draft, qu
       ? `The exact two grouped gestures are frozen together. ${repeatedReportCopy}`
       : origin === "chord-voicing-echo"
         ? `The exact source and revoicing gestures are frozen together. ${repeatedReportCopy}`
+        : origin === "chord-motion-echo"
+          ? `The exact two source fields and two replay fields are frozen together. ${repeatedReportCopy}`
       : `${repeats.length} prior report${repeats.length === 1 ? "" : "s"} with this relationship signature.`;
-  const saveLabel = origin === "phrase" ? "Save this phrase report" : origin === "chord-change" ? "Save this chord-change report" : origin === "chord-voicing-echo" ? "Save this voicing report" : "Save this comparison report";
+  const saveLabel = origin === "phrase" ? "Save this phrase report" : origin === "chord-change" ? "Save this chord-change report" : origin === "chord-voicing-echo" ? "Save this voicing report" : origin === "chord-motion-echo" ? "Save this chord-move report" : "Save this comparison report";
   const draftPlaced = draft.settledness != null && draft.energy != null;
   const xFor = (value: number) => 54 + value / 100 * 412;
   const yFor = (value: number) => 252 - value / 100 * 210;
@@ -2681,6 +2823,7 @@ export function PianoLab() {
   const [controlledSonoritySession, setControlledSonoritySession] = useState<ControlledSonoritySession | null>(null);
   const [chordFocusMode, setChordFocusMode] = useState<ChordFocusMode>("change");
   const [chordVoicingEchoSession, setChordVoicingEchoSession] = useState<ChordVoicingEchoSession | null>(null);
+  const [chordMotionEchoSession, setChordMotionEchoSession] = useState<ChordMotionEchoSession | null>(null);
   const [motionFocusMode, setMotionFocusMode] = useState<MotionFocusMode>("pulse");
   const [pulseMirrorSession, setPulseMirrorSession] = useState<PulseMirrorSession | null>(null);
   const [phraseCompareSession, setPhraseCompareSession] = useState<PhraseCompareSession | null>(null);
@@ -2719,7 +2862,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -2796,6 +2939,25 @@ export function PianoLab() {
                 fieldNotes: [...event.fieldNotes],
               })),
             });
+            if (isChordMotionEchoSession(saved.chordMotionEchoSession)) setChordMotionEchoSession({
+              ...saved.chordMotionEchoSession,
+              sourceBeforeEvents: saved.chordMotionEchoSession.sourceBeforeEvents.map((event) => ({
+                ...event,
+                onsetMs: event.onsetMs + shift,
+                keyReleaseMs: event.keyReleaseMs == null ? null : event.keyReleaseMs + shift,
+                releaseMs: event.releaseMs == null ? currentNow - 350 : event.releaseMs + shift,
+                releaseReason: event.releaseReason ?? "key",
+                fieldNotes: [...event.fieldNotes],
+              })),
+              sourceAfterEvents: saved.chordMotionEchoSession.sourceAfterEvents.map((event) => ({
+                ...event,
+                onsetMs: event.onsetMs + shift,
+                keyReleaseMs: event.keyReleaseMs == null ? null : event.keyReleaseMs + shift,
+                releaseMs: event.releaseMs == null ? currentNow - 350 : event.releaseMs + shift,
+                releaseReason: event.releaseReason ?? "key",
+                fieldNotes: [...event.fieldNotes],
+              })),
+            });
             if (isPulseMirrorSession(saved.pulseMirrorSession)) setPulseMirrorSession(saved.pulseMirrorSession);
             if (isPhraseCompareSession(saved.phraseCompareSession)) setPhraseCompareSession({ ...saved.phraseCompareSession, intention: saved.phraseCompareSession.intention ?? null });
           }
@@ -2810,6 +2972,7 @@ export function PianoLab() {
         setScaleWalkSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setControlledSonoritySession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setChordVoicingEchoSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
+        setChordMotionEchoSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setGravityCounterfactualSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setPhraseCompareSession((current) => current && current.rootPitchClass === linkedDoValue && current.scaleId === linkedScale.id ? current : null);
         setLandmarkCounterfactualSession((current) => current && current.rootPitchClass === linkedDoValue ? current : null);
@@ -2821,9 +2984,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 16, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 17, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordFocusMode, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -3009,6 +3172,42 @@ export function PianoLab() {
   const chordVoicingEchoComparison = chordVoicingEchoSession && chordVoicingEchoAttempt
     ? compareChordVoicingEcho(chordVoicingEchoSession.sourceNotes, chordVoicingEchoAttempt.interpretedNotes)
     : null;
+  const chordMotionEchoSourceBeforeEvents = useMemo(() => chordMotionEchoSession
+    ? chordMotionEchoSession.sourceBeforeEvents.map((source) => phraseEvents.find((event) => event.id === source.id) ?? source)
+    : [], [chordMotionEchoSession, phraseEvents]);
+  const chordMotionEchoSourceAfterEvents = useMemo(() => chordMotionEchoSession
+    ? chordMotionEchoSession.sourceAfterEvents.map((source) => phraseEvents.find((event) => event.id === source.id) ?? source)
+    : [], [chordMotionEchoSession, phraseEvents]);
+  const chordMotionEchoCandidates = useMemo(() => {
+    if (!chordMotionEchoSession) return [];
+    return groupChordGestures(
+      phraseEvents.filter((event) => event.id > chordMotionEchoSession.attemptAnchorEventId),
+      chordWindowMs,
+      chordWindowMs * 2,
+      boundaryCorrections,
+    ).map((gesture) => ({
+      gesture,
+      notes: uniqueSorted(interpretedChordNotes(gesture, membershipCorrections[gesture.id] ?? [])),
+    })).filter(({ gesture, notes }) => gesture.attacks.length >= 2
+      && notes.length >= 2
+      && notes.length <= 6
+      && new Set(notes.map(pitchClassFromMidi)).size >= 2)
+      .slice(0, 2);
+  }, [boundaryCorrections, chordMotionEchoSession, chordWindowMs, membershipCorrections, phraseEvents]);
+  const chordMotionEchoAttempt: ChordMotionEchoAttempt | null = chordMotionEchoCandidates.length === 2 ? {
+    beforeGesture: chordMotionEchoCandidates[0].gesture,
+    afterGesture: chordMotionEchoCandidates[1].gesture,
+    beforeNotes: chordMotionEchoCandidates[0].notes,
+    afterNotes: chordMotionEchoCandidates[1].notes,
+  } : null;
+  const chordMotionEchoComparison = chordMotionEchoSession && chordMotionEchoAttempt
+    ? compareChordMotionEcho(
+      chordMotionEchoSession.sourceBeforeNotes,
+      chordMotionEchoSession.sourceAfterNotes,
+      chordMotionEchoAttempt.beforeNotes,
+      chordMotionEchoAttempt.afterNotes,
+    )
+    : null;
 
   const activeNotesMap = useMemo(() => {
     const combined = new Map(latchedNotes);
@@ -3127,6 +3326,7 @@ export function PianoLab() {
     setGravityCounterfactualSession(null);
     setControlledSonoritySession(null);
     setChordVoicingEchoSession(null);
+    setChordMotionEchoSession(null);
     setPulseMirrorSession(null);
     setPhraseCompareSession(null);
     setLatchedNotes(new Map());
@@ -3160,6 +3360,7 @@ export function PianoLab() {
     setScaleWalkSession(null);
     setControlledSonoritySession(null);
     setChordVoicingEchoSession(null);
+    setChordMotionEchoSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setLockedScaleId(candidate.scale.id);
@@ -3177,6 +3378,7 @@ export function PianoLab() {
     setScaleWalkSession(null);
     setControlledSonoritySession(null);
     setChordVoicingEchoSession(null);
+    setChordMotionEchoSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setGhostChord(null);
@@ -3528,20 +3730,31 @@ export function PianoLab() {
     holdBoundedExperienceSpecimen("chord-voicing-echo", specimen);
   };
 
-  const beginChordVoicingEcho = () => {
-    const sourceNotes = selectedChordMeasure ? uniqueSorted(selectedChordMeasure.interpretedNotes) : [];
-    if (!selectedChordMeasure || selectedChordMeasure.gesture.attacks.length < 2 || sourceNotes.length > 6 || new Set(sourceNotes.map(pitchClassFromMidi)).size < 2) return;
-    const attackedNotes = new Set(selectedChordMeasure.gesture.attacks.map((event) => event.note));
-    const inheritedSourceEvents = sourceNotes
+  const beginChordMotionEchoReflection = (specimen: HudNoteEvent[]) => {
+    if (new Set(specimen.map((event) => event.id)).size < 8) return;
+    holdBoundedExperienceSpecimen("chord-motion-echo", specimen);
+  };
+
+  const freezeChordSourceEvents = (measure: ChordMeasure) => {
+    const notes = uniqueSorted(measure.interpretedNotes);
+    const attackedNotes = new Set(measure.gesture.attacks.map((event) => event.note));
+    const inheritedSourceEvents = notes
       .filter((note) => !attackedNotes.has(note))
-      .map((note) => phraseEvents.findLast((event) => event.note === note && event.id < selectedChordMeasure.gesture.attacks[0].id))
+      .map((note) => phraseEvents.findLast((event) => event.note === note && event.id < measure.gesture.attacks[0].id))
       .filter((event): event is HudNoteEvent => Boolean(event));
-    const sourceEvents = [...inheritedSourceEvents, ...selectedChordMeasure.gesture.attacks]
+    return [...inheritedSourceEvents, ...measure.gesture.attacks]
       .filter((event, index, source) => source.findIndex((candidate) => candidate.id === event.id) === index)
       .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id)
       .map((event) => ({ ...event, fieldNotes: [...event.fieldNotes] }));
+  };
+
+  const beginChordVoicingEcho = () => {
+    const sourceNotes = selectedChordMeasure ? uniqueSorted(selectedChordMeasure.interpretedNotes) : [];
+    if (!selectedChordMeasure || selectedChordMeasure.gesture.attacks.length < 2 || sourceNotes.length > 6 || new Set(sourceNotes.map(pitchClassFromMidi)).size < 2) return;
+    const sourceEvents = freezeChordSourceEvents(selectedChordMeasure);
     const sourceEventIds = sourceEvents.map((event) => event.id);
     setControlledSonoritySession(null);
+    setChordMotionEchoSession(null);
     setGhostChord(null);
     setGhostNotes([]);
     setResolutionTarget(null);
@@ -3556,6 +3769,42 @@ export function PianoLab() {
     url.searchParams.set("pianoDo", String(pitchClassFromMidi(doMidi)));
     url.searchParams.set("pianoScale", scale.id);
     window.history.replaceState(null, "", url);
+  };
+
+  const beginChordMotionEcho = (before: ChordMeasure, after: ChordMeasure) => {
+    const sourceBeforeNotes = uniqueSorted(before.interpretedNotes);
+    const sourceAfterNotes = uniqueSorted(after.interpretedNotes);
+    const validField = (measure: ChordMeasure, notes: number[]) => measure.gesture.attacks.length >= 2
+      && notes.length >= 2
+      && notes.length <= 6
+      && new Set(notes.map(pitchClassFromMidi)).size >= 2;
+    if (!validField(before, sourceBeforeNotes) || !validField(after, sourceAfterNotes)) return;
+    const sourceBeforeEvents = freezeChordSourceEvents(before);
+    const sourceAfterEvents = freezeChordSourceEvents(after);
+    const anchorEventId = Math.max(...sourceBeforeEvents.map((event) => event.id), ...sourceAfterEvents.map((event) => event.id));
+    setControlledSonoritySession(null);
+    setChordVoicingEchoSession(null);
+    setGhostChord(null);
+    setGhostNotes([]);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(doMidi);
+    setFrameMode("locked");
+    setChordMotionEchoSession({ sourceBeforeEvents, sourceAfterEvents, sourceBeforeNotes, sourceAfterNotes, anchorEventId, attemptAnchorEventId: anchorEventId, rootPitchClass: pitchClassFromMidi(doMidi), scaleId: scale.id });
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoLens", "chords");
+    url.searchParams.set("pianoChord", "change");
+    url.searchParams.set("pianoDo", String(pitchClassFromMidi(doMidi)));
+    url.searchParams.set("pianoScale", scale.id);
+    window.history.replaceState(null, "", url);
+  };
+
+  const retryChordMotionEcho = () => {
+    if (!chordMotionEchoAttempt) return;
+    const nextAnchor = chordMotionEchoAttempt.afterGesture.attacks.at(-1)?.id;
+    if (nextAnchor == null) return;
+    setChordMotionEchoSession((current) => current ? { ...current, attemptAnchorEventId: Math.max(current.attemptAnchorEventId, nextAnchor) } : current);
   };
 
   const selectChordMode = (mode: ChordFocusMode) => {
@@ -3682,7 +3931,15 @@ export function PianoLab() {
           ? `${chordVoicingEchoComparison.pitchClassIdentityPreserved ? "The pitch-class set survived" : `The internal relationship survived a ${chordVoicingEchoComparison.transpositionSteps! > 0 ? "+" : ""}${chordVoicingEchoComparison.transpositionSteps}-key transposition`}; register, bass role, spacing, doubling, modeled spectrum, context, and experience remain separate questions.`
           : "The latest grouped attempt changed the internal pitch-class relationship. The source remains frozen so you can try another voicing."
     : focusLens === "chords" && chordFocusMode === "change"
-      ? chordMeasures.length >= 2 ? "The selected before-and-after chord change is split across five independent lenses; choose Experience only if you want to report what the change felt like." : "Play two grouped chord gestures to create one before-and-after question."
+      ? chordMotionEchoSession
+        ? !chordMotionEchoAttempt || !chordMotionEchoComparison
+          ? `${chordMotionEchoCandidates.length}/2 replay fields captured. The two-chord source remains frozen until both new grouped fields are performed.`
+          : chordMotionEchoComparison.relationshipPreserved
+            ? `${chordMotionEchoComparison.pitchClassIdentityPreserved ? "The complete two-field pitch-class move survived" : `The complete move survived a ${chordMotionEchoComparison.transpositionSteps! > 0 ? "+" : ""}${chordMotionEchoComparison.transpositionSteps}-key transposition`}; physical voice motion, spectrum, context, and experience remain separate.`
+            : chordMotionEchoComparison.beforeRelationshipPreserved && chordMotionEchoComparison.afterRelationshipPreserved
+              ? "Both chord types returned, but they did not share one transposition, so the complete move changed."
+              : "One or both endpoint relationships changed. The source move remains frozen for an explicit retry."
+        : chordMeasures.length >= 2 ? "The selected before-and-after chord change is split across five independent lenses; freeze it only if you want to replay the entire move elsewhere." : "Play two grouped chord gestures to create one before-and-after question."
     : focusLens === "chords" && chordFocusMode === "cause" && controlledSonoritySession ? !controlledSonoritySession.baselineNotes
     ? "The starting field is only outlined. Perform every exact key to establish a physical and modeled baseline."
     : controlledSonoritySession.replayRequired
@@ -3718,7 +3975,7 @@ export function PianoLab() {
     : focusLens === "experience" ? experiencePhrase.length < 3
     ? "Play at least three attacks, then hold the latest phrase for a personal reflection."
     : experienceSaved
-      ? `Your ${experienceOrigin === "phrase" ? "phrase" : experienceOrigin === "chord-change" ? "chord-change" : experienceOrigin === "chord-voicing-echo" ? "chord-voicing" : "interval-comparison"} report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence.`
+      ? `Your ${experienceOrigin === "phrase" ? "phrase" : experienceOrigin === "chord-change" ? "chord-change" : experienceOrigin === "chord-voicing-echo" ? "chord-voicing" : experienceOrigin === "chord-motion-echo" ? "chord-move" : "interval-comparison"} report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence.`
       : experienceQuestionIndex < CHARACTER_QUESTIONS.length
         ? `Reflection ${experienceQuestionIndex + 1} of 4: ${experiencePromptForOrigin(CHARACTER_QUESTIONS[experienceQuestionIndex].prompt, experienceOrigin)}`
         : "All four personal dimensions are answered. Review them together before saving this observation."
@@ -3899,7 +4156,9 @@ export function PianoLab() {
       </div> : null}
 
       {focusLens === "explore" && !phraseCompareSession ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
-      {focusLens === "chords" && chordFocusMode === "change" ? <ChordChangeLenses measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onReflect={beginChordChangeReflection} /> : null}
+      {focusLens === "chords" && chordFocusMode === "change" ? chordMotionEchoSession
+        ? <ChordMotionEcho session={chordMotionEchoSession} sourceBeforeEvents={chordMotionEchoSourceBeforeEvents} sourceAfterEvents={chordMotionEchoSourceAfterEvents} attempt={chordMotionEchoAttempt} attemptProgress={chordMotionEchoCandidates.length} pendingNotes={chordMotionEchoCandidates[0]?.notes ?? []} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onEnd={() => setChordMotionEchoSession(null)} onRetry={retryChordMotionEcho} onReflect={beginChordMotionEchoReflection} />
+        : <ChordChangeLenses measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onReflect={beginChordChangeReflection} onStartMotionEcho={beginChordMotionEcho} /> : null}
       {focusLens === "chords" && chordFocusMode === "echo" ? <ChordVoicingEcho session={chordVoicingEchoSession} sourceEvents={chordVoicingEchoSourceEvents} sourceCandidate={selectedChordMeasure} attempt={chordVoicingEchoAttempt} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onStart={beginChordVoicingEcho} onEnd={() => setChordVoicingEchoSession(null)} onReflect={beginChordVoicingEchoReflection} /> : null}
 
       {focusLens === "intervals" ? <section className="hud-interval-lesson" aria-label="Interval context lesson">

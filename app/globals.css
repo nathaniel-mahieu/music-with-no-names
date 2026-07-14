@@ -8322,12 +8322,15 @@ footer a {
 .hud-cause-panel,
 .hud-voice-coach,
 .hud-chord-change-lenses,
-.hud-chord-echo { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
+.hud-chord-echo,
+.hud-chord-motion-echo { min-width: 0; padding: 17px 18px; border-bottom: 1px solid var(--line); }
 
 .hud-chord-echo-topline { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
 .hud-chord-echo-topline .hud-panel-heading { flex: 1 1 560px; }
 .hud-chord-echo-topline > button,
-.hud-chord-echo-arm > button { min-height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .72rem; cursor: pointer; }
+.hud-chord-echo-arm > button,
+.hud-chord-motion-actions button,
+.hud-chord-motion-next > button { min-height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .72rem; cursor: pointer; }
 .hud-chord-echo-arm > button:disabled { opacity: .45; cursor: not-allowed; }
 .hud-chord-echo-arm { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-top: 12px; padding: 12px 0 0; border-top: 1px solid var(--line); }
 .hud-chord-echo-arm > div { display: grid; flex: 1 1 460px; gap: 4px; }
@@ -8346,6 +8349,26 @@ footer a {
 .hud-chord-echo-node { stroke-width: 2; }
 .hud-chord-echo-node.is-source { fill: var(--surface-raised); stroke: var(--piano-blue); }
 .hud-chord-echo-node.is-attempt { fill: var(--piano-gold); stroke: var(--foreground); }
+.hud-chord-motion-next { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.hud-chord-motion-next > div { display: grid; flex: 1 1 560px; gap: 4px; }
+.hud-chord-motion-next span,
+.hud-chord-motion-next small,
+.hud-chord-motion-progress span,
+.hud-chord-motion-progress small { color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.hud-chord-motion-next strong,
+.hud-chord-motion-progress strong { font-size: .76rem; font-weight: 500; }
+.hud-chord-motion-next > button:disabled { opacity: .45; cursor: not-allowed; }
+.hud-chord-motion-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.hud-chord-motion-progress { display: grid; gap: 4px; margin-top: 13px; padding: 11px 0 11px 13px; border-left: 3px dashed var(--piano-blue); }
+.hud-chord-motion-figure { display: block; width: 100%; height: auto; margin-top: 10px; overflow: visible; border-top: 1px solid var(--line); }
+.hud-chord-motion-strand { stroke-width: 1.5; }
+.hud-chord-motion-strand.is-source { stroke: var(--line-strong); }
+.hud-chord-motion-strand.is-attempt { stroke: var(--piano-blue); stroke-dasharray: 4 3; }
+.hud-chord-motion-node { stroke-width: 2; }
+.hud-chord-motion-node.is-source.is-before { fill: var(--surface-raised); stroke: var(--piano-blue); }
+.hud-chord-motion-node.is-source.is-after { fill: var(--piano-blue); stroke: var(--foreground); }
+.hud-chord-motion-node.is-attempt.is-before { fill: var(--surface-raised); stroke: var(--foreground); }
+.hud-chord-motion-node.is-attempt.is-after { fill: var(--piano-gold); stroke: var(--foreground); }
 
 .hud-echo-current {
   display: grid;
@@ -9456,6 +9479,11 @@ footer a {
   .hud-chord-echo-arm > div { flex-basis: auto; }
   .hud-chord-echo-arm > button,
   .hud-chord-echo-topline > button { width: 100%; }
+  .hud-chord-motion-next { align-items: stretch; flex-direction: column; }
+  .hud-chord-motion-next > div { flex-basis: auto; }
+  .hud-chord-motion-next > button,
+  .hud-chord-motion-actions,
+  .hud-chord-motion-actions button { width: 100%; }
   .hud-echo-reading { grid-template-columns: 1fr; }
   .hud-echo-reading p:nth-child(even) { border-left: 0; }
   .hud-echo-reading p:nth-child(n + 2) { border-top: 1px solid var(--line); }
@@ -9620,6 +9648,12 @@ footer a {
   .hud-chord-echo-node.is-attempt { fill: Highlight; stroke: HighlightText; }
   .hud-chord-echo-strand { stroke: CanvasText; }
   .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
+  .hud-chord-motion-strand.is-source { stroke: CanvasText; }
+  .hud-chord-motion-strand.is-attempt { stroke: LinkText; }
+  .hud-chord-motion-node.is-source.is-before,
+  .hud-chord-motion-node.is-attempt.is-before { fill: Canvas; stroke: CanvasText; }
+  .hud-chord-motion-node.is-source.is-after { fill: LinkText; stroke: Canvas; }
+  .hud-chord-motion-node.is-attempt.is-after { fill: Highlight; stroke: HighlightText; }
   .hud-last-attack-reading { border-left-color: Highlight; }
   .hud-last-attack-reading.is-attributable { border-left-color: LinkText; }
   .hud-last-lenses article.is-measured { border-top-color: LinkText; }

@@ -71,6 +71,26 @@ export type ChordVoicingEchoComparison = {
   voiceCountChanged: boolean;
 };
 
+export type ChordMotionEchoComparison = {
+  sourceBeforePitchClasses: number[];
+  sourceAfterPitchClasses: number[];
+  attemptBeforePitchClasses: number[];
+  attemptAfterPitchClasses: number[];
+  relationshipPreserved: boolean;
+  pitchClassIdentityPreserved: boolean;
+  transpositionSteps: number | null;
+  beforeRelationshipPreserved: boolean;
+  afterRelationshipPreserved: boolean;
+  beforeTranspositionSteps: number | null;
+  afterTranspositionSteps: number | null;
+  sourceCommonPitchClassCount: number;
+  attemptCommonPitchClassCount: number;
+  sourceEnteredPitchClassCount: number;
+  attemptEnteredPitchClassCount: number;
+  sourceLeftPitchClassCount: number;
+  attemptLeftPitchClassCount: number;
+};
+
 export type TimedNoteAttack = RollingNoteEvent & {
   id: number;
   onsetMs: number;
@@ -732,6 +752,77 @@ export function compareChordVoicingEcho(sourceInput: number[], attemptInput: num
     attemptSpan: span(attemptNotes),
     centerShiftSteps: Math.round((center(attemptNotes) - center(sourceNotes)) * 1000) / 1000,
     voiceCountChanged: sourceNotes.length !== attemptNotes.length,
+  };
+}
+
+/**
+ * Tests whether an entire two-chord pitch-class transformation survived one
+ * shared transposition. Each endpoint may be revoiced or doubled, but both
+ * endpoints must move by the same modulo-twelve shift. Physical voice motion,
+ * register, spectrum, tonal context, and listener response remain outside the
+ * match rule.
+ */
+export function compareChordMotionEcho(
+  sourceBeforeInput: number[],
+  sourceAfterInput: number[],
+  attemptBeforeInput: number[],
+  attemptAfterInput: number[],
+): ChordMotionEchoComparison | null {
+  const allNotes = [...sourceBeforeInput, ...sourceAfterInput, ...attemptBeforeInput, ...attemptAfterInput];
+  if (allNotes.some((note) => !Number.isFinite(note) || note < 0 || note > 127)) {
+    throw new RangeError("Chord motion echo notes must be finite MIDI positions from 0 through 127.");
+  }
+  const normalizePitchClasses = (notes: number[]) => [...new Set(notes.map((note) => pitchClassFromMidi(Math.round(note))))].sort((first, second) => first - second);
+  const sourceBeforePitchClasses = normalizePitchClasses(sourceBeforeInput);
+  const sourceAfterPitchClasses = normalizePitchClasses(sourceAfterInput);
+  const attemptBeforePitchClasses = normalizePitchClasses(attemptBeforeInput);
+  const attemptAfterPitchClasses = normalizePitchClasses(attemptAfterInput);
+  if ([sourceBeforePitchClasses, sourceAfterPitchClasses, attemptBeforePitchClasses, attemptAfterPitchClasses].some((notes) => notes.length < 2)) return null;
+
+  const matchingShifts = (source: number[], attempt: number[]) => {
+    if (source.length !== attempt.length) return [];
+    const attemptSet = new Set(attempt);
+    return Array.from({ length: 12 }, (_, shift) => shift).filter((shift) => source.every((pitchClass) => attemptSet.has(modulo(pitchClass + shift, 12))));
+  };
+  const signedShift = (shift: number) => shift > 6 ? shift - 12 : shift;
+  const chooseShift = (shifts: number[]) => shifts.length
+    ? shifts.map(signedShift).sort((first, second) => Math.abs(first) - Math.abs(second) || first - second)[0]
+    : null;
+  const beforeShifts = matchingShifts(sourceBeforePitchClasses, attemptBeforePitchClasses);
+  const afterShifts = matchingShifts(sourceAfterPitchClasses, attemptAfterPitchClasses);
+  const afterShiftSet = new Set(afterShifts);
+  const sharedShifts = beforeShifts.filter((shift) => afterShiftSet.has(shift));
+  const transpositionSteps = chooseShift(sharedShifts);
+  const transitionCounts = (before: number[], after: number[]) => {
+    const beforeSet = new Set(before);
+    const afterSet = new Set(after);
+    return {
+      common: before.filter((pitchClass) => afterSet.has(pitchClass)).length,
+      entered: after.filter((pitchClass) => !beforeSet.has(pitchClass)).length,
+      left: before.filter((pitchClass) => !afterSet.has(pitchClass)).length,
+    };
+  };
+  const sourceCounts = transitionCounts(sourceBeforePitchClasses, sourceAfterPitchClasses);
+  const attemptCounts = transitionCounts(attemptBeforePitchClasses, attemptAfterPitchClasses);
+
+  return {
+    sourceBeforePitchClasses,
+    sourceAfterPitchClasses,
+    attemptBeforePitchClasses,
+    attemptAfterPitchClasses,
+    relationshipPreserved: transpositionSteps != null,
+    pitchClassIdentityPreserved: transpositionSteps === 0,
+    transpositionSteps,
+    beforeRelationshipPreserved: beforeShifts.length > 0,
+    afterRelationshipPreserved: afterShifts.length > 0,
+    beforeTranspositionSteps: chooseShift(beforeShifts),
+    afterTranspositionSteps: chooseShift(afterShifts),
+    sourceCommonPitchClassCount: sourceCounts.common,
+    attemptCommonPitchClassCount: attemptCounts.common,
+    sourceEnteredPitchClassCount: sourceCounts.entered,
+    attemptEnteredPitchClassCount: attemptCounts.entered,
+    sourceLeftPitchClassCount: sourceCounts.left,
+    attemptLeftPitchClassCount: attemptCounts.left,
   };
 }
 

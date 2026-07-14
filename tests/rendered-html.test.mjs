@@ -147,6 +147,13 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Reflect on source \+ voicing/);
   assert.match(pianoLab, /The exact source and revoicing gestures are frozen together/);
   assert.match(pianoLab, /Save this voicing report/);
+  assert.match(pianoLab, /Can this entire chord change survive elsewhere\?/);
+  assert.match(pianoLab, /compareChordMotionEcho/);
+  assert.match(pianoLab, /same two-field move · both fields shifted/);
+  assert.match(pianoLab, /Both chord types returned, but they did not share one transposition/);
+  assert.match(pianoLab, /Reflect on source \+ replayed move/);
+  assert.match(pianoLab, /The exact two source fields and two replay fields are frozen together/);
+  assert.match(pianoLab, /Save this chord-move report/);
   assert.match(pianoLab, /compareIntervalEcho/);
   assert.match(pianoLab, /What did this attack change\?/);
   assert.match(pianoLab, /Exactly one MIDI member entered/);
