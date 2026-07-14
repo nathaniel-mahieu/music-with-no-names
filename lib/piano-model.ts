@@ -209,7 +209,7 @@ export type PerformedScaleFingerprint = {
 };
 
 export type ScaleGapMutationComparison = {
-  kind: "same" | "one-position" | "different-count" | "multiple";
+  kind: "same" | "one-position" | "wide-position" | "different-count" | "multiple";
   sourceSteps: number[];
   attemptSteps: number[];
   sourcePositions: number[];
@@ -221,6 +221,22 @@ export type ScaleGapMutationComparison = {
   changedGapCount: number;
   changedPositionCount: number;
   movedSteps: number | null;
+};
+
+export type ScaleLandingIntervalRipple = {
+  sourcePosition: number;
+  attemptPosition: number;
+  movedSteps: number;
+  relationships: Array<{
+    retainedPosition: number;
+    sourceDistanceSteps: number;
+    attemptDistanceSteps: number;
+    distanceDelta: number;
+    sourceFrequencyRatio: number;
+    attemptFrequencyRatio: number;
+  }>;
+  changedRelationshipCount: number;
+  retainedRelationshipCount: number;
 };
 
 export type ScaleFingerprintMatch = {
@@ -1119,12 +1135,14 @@ export function compareScaleGapMutation(sourceInput: number[], attemptInput: num
   const gapDeltas = sameCount ? attemptSteps.map((step, index) => step - sourceSteps[index]) : null;
   const changedGapCount = gapDeltas?.filter((delta) => delta !== 0).length ?? 0;
   const changedPositionCount = Math.max(sourceOnlyPositions.length, attemptOnlyPositions.length);
+  const onePositionDifference = sourceOnlyPositions.length === 1 && attemptOnlyPositions.length === 1;
+  const movedSteps = onePositionDifference ? attemptOnlyPositions[0] - sourceOnlyPositions[0] : null;
   const kind = !sameCount
     ? "different-count"
     : sourceOnlyPositions.length === 0 && attemptOnlyPositions.length === 0
       ? "same"
-      : sourceOnlyPositions.length === 1 && attemptOnlyPositions.length === 1
-        ? "one-position"
+      : onePositionDifference
+        ? Math.abs(movedSteps!) === 1 ? "one-position" : "wide-position"
         : "multiple";
   return {
     kind,
@@ -1138,7 +1156,40 @@ export function compareScaleGapMutation(sourceInput: number[], attemptInput: num
     gapDeltas,
     changedGapCount,
     changedPositionCount,
-    movedSteps: kind === "one-position" ? attemptOnlyPositions[0] - sourceOnlyPositions[0] : null,
+    movedSteps,
+  };
+}
+
+/**
+ * Expands an exactly one-key scale-landing intervention into every normalized
+ * equal-key interval that contains the moved landing. Relationships among retained
+ * positions are counted as controls. Equal-key ratios describe 12-TET only;
+ * they do not estimate consonance, function, emotion, preference, or quality.
+ */
+export function compareScaleLandingIntervalRipple(sourceInput: number[], attemptInput: number[]): ScaleLandingIntervalRipple | null {
+  const comparison = compareScaleGapMutation(sourceInput, attemptInput);
+  if (comparison.kind !== "one-position") return null;
+  const sourcePosition = comparison.sourceOnlyPositions[0];
+  const attemptPosition = comparison.attemptOnlyPositions[0];
+  const relationships = comparison.retainedPositions.map((retainedPosition) => {
+    const sourceDistanceSteps = Math.abs(retainedPosition - sourcePosition);
+    const attemptDistanceSteps = Math.abs(retainedPosition - attemptPosition);
+    return {
+      retainedPosition,
+      sourceDistanceSteps,
+      attemptDistanceSteps,
+      distanceDelta: attemptDistanceSteps - sourceDistanceSteps,
+      sourceFrequencyRatio: 2 ** (sourceDistanceSteps / 12),
+      attemptFrequencyRatio: 2 ** (attemptDistanceSteps / 12),
+    };
+  });
+  return {
+    sourcePosition,
+    attemptPosition,
+    movedSteps: comparison.movedSteps!,
+    relationships,
+    changedRelationshipCount: relationships.length,
+    retainedRelationshipCount: comparison.retainedPositions.length * (comparison.retainedPositions.length - 1) / 2,
   };
 }
 

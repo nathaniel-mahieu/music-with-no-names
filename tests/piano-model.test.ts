@@ -13,6 +13,7 @@ import {
   compareChordVoicingEcho,
   compareIntervalEcho,
   compareScaleGapMutation,
+  compareScaleLandingIntervalRipple,
   comparePhraseLenses,
   phraseChangeProfile,
   controlledSonorityChange,
@@ -163,8 +164,30 @@ test("shows how one changed scale landing trades space between neighboring gaps"
   assert.equal(same.changedPositionCount, 0);
   assert.equal(compareScaleGapMutation(source, [2, 2, 2, 2, 2, 2]).kind, "different-count");
   assert.equal(compareScaleGapMutation(source, [1, 2, 2, 2, 2, 2, 1]).kind, "multiple");
+  const wideMove = compareScaleGapMutation(source, [2, 3, 2, 1, 1, 2, 1]);
+  assert.equal(wideMove.kind, "wide-position");
+  assert.equal(wideMove.movedSteps, 4);
   assert.throws(() => compareScaleGapMutation(source, [2, 2, 1]), RangeError);
   assert.throws(() => compareScaleGapMutation([0, 12], [6, 6]), RangeError);
+});
+
+test("shows the global interval ripple caused by one local scale landing move", () => {
+  const source = [2, 2, 1, 2, 2, 2, 1];
+  const lowered = [2, 1, 2, 2, 2, 2, 1];
+  const ripple = compareScaleLandingIntervalRipple(source, lowered)!;
+  assert.equal(ripple.sourcePosition, 4);
+  assert.equal(ripple.attemptPosition, 3);
+  assert.equal(ripple.movedSteps, -1);
+  assert.equal(ripple.changedRelationshipCount, 7);
+  assert.equal(ripple.retainedRelationshipCount, 21);
+  assert.deepEqual(ripple.relationships.map((relationship) => relationship.retainedPosition), [0, 2, 5, 7, 9, 11, 12]);
+  assert.deepEqual(ripple.relationships.map((relationship) => relationship.sourceDistanceSteps), [4, 2, 1, 3, 5, 7, 8]);
+  assert.deepEqual(ripple.relationships.map((relationship) => relationship.attemptDistanceSteps), [3, 1, 2, 4, 6, 8, 9]);
+  assert.ok(ripple.relationships.every((relationship) => Math.abs(relationship.distanceDelta) === 1));
+  assert.ok(Math.abs(ripple.relationships[0].sourceFrequencyRatio - 2 ** (4 / 12)) < 1e-12);
+  assert.ok(Math.abs(ripple.relationships[0].attemptFrequencyRatio - 2 ** (3 / 12)) < 1e-12);
+  assert.equal(compareScaleLandingIntervalRipple(source, source), null);
+  assert.equal(compareScaleLandingIntervalRipple(source, [2, 3, 2, 1, 1, 2, 1]), null);
 });
 
 test("translates exact and rotated fingerprints only after structure is known", () => {

@@ -46,6 +46,11 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Scale landing mutation comparison"/);
   assert.match(piano, />Change one landing<\/button>/);
   assert.match(piano, /Change one landing, keep the octave/);
+  assert.match(piano, /aria-label="Choose one consequence of the moved scale landing"/);
+  assert.match(piano, />Every connected interval<\/button>/);
+  assert.match(piano, /hud-scale-ripple" role="img" aria-label=\{summary\}/);
+  assert.match(piano, /Global consequence/);
+  assert.match(piano, /hud-scale-ripple-reading" role="status" aria-live="polite"/);
   assert.match(piano, /hud-scale-mutation-reading[\s\S]*role="status" aria-live="polite"/);
   assert.match(piano, /`Δ\$\{signed\(delta\)\}`/);
   assert.match(piano, /More than one landing moved, so no single-position explanation is justified/);
@@ -140,6 +145,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-scale-mutation-routes \.is-present\.is-changed i[\s\S]*border: 3px double/);
   assert.match(css, /\.hud-scale-mutation-gaps \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.hud-scale-mutation-reading \{ border-left-color: LinkText/);
+  assert.match(css, /\.hud-scale-mutation-view button\[aria-pressed="true"\]/);
+  assert.match(css, /\.hud-scale-ripple-spoke \.is-attempt i b[\s\S]*border: 1px dashed/);
+  assert.match(css, /\.hud-scale-ripple-spoke \.is-attempt i b[\s\S]*border-color: Highlight/);
+  assert.match(css, /\.hud-scale-ripple-reading \{ border-left-color: LinkText/);
   assert.match(piano, /aria-label="Interval context lesson"/);
   assert.match(piano, /aria-label="Five separate lenses for the source and echoed interval"/);
   assert.match(piano, />Reflect on source \+ echo<\/button>/);

@@ -24,6 +24,7 @@ import {
   compareIntervalEcho,
   comparePhraseLenses,
   compareScaleGapMutation,
+  compareScaleLandingIntervalRipple,
   controlledSonorityChange,
   conventionalPitchName,
   detectMotifTransformations,
@@ -77,6 +78,7 @@ import {
   type ResolutionFork,
   type ScaleCandidate,
   type ScaleGapMutationComparison,
+  type ScaleLandingIntervalRipple,
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type PhraseLensComparison,
@@ -1056,7 +1058,29 @@ function fifthsCoordinateLabel(offset: number) {
   return `${signed > 0 ? "+" : ""}${signed} repeated-fifth move${Math.abs(signed) === 1 ? "" : "s"} from Do`;
 }
 
+function ScaleLandingIntervalRippleView({ ripple }: { ripple: ScaleLandingIntervalRipple }) {
+  const ratio = (value: number) => `×${value.toFixed(3)}`;
+  const summary = `Landing ${ripple.sourcePosition} moved to ${ripple.attemptPosition}. ${ripple.changedRelationshipCount} normalized equal-key intervals touching that landing changed by one step; ${ripple.retainedRelationshipCount} intervals between retained landings kept their distance and ratio.`;
+  return <div className="hud-scale-ripple" role="img" aria-label={summary}>
+    <div className="hud-scale-ripple-heading"><span>one moved landing · every connected interval</span><strong>{ripple.sourcePosition} → {ripple.attemptPosition}</strong><small>Each equal-key step multiplies an ascending frequency interval by 2<sup>1/12</sup>. Bar length shows normalized key distance; the ratio is the corresponding 12-TET frequency multiplier.</small></div>
+    <div className="hud-scale-ripple-spokes">
+      {ripple.relationships.map((relationship) => <div key={relationship.retainedPosition} className="hud-scale-ripple-spoke">
+        <strong>to {relationship.retainedPosition}</strong>
+        <div>
+          <span className="is-source"><small>source</small><i><b style={{ "--ripple-width": `${relationship.sourceDistanceSteps / 12 * 100}%` } as CSSProperties} /></i><em>{relationship.sourceDistanceSteps} · {ratio(relationship.sourceFrequencyRatio)}</em></span>
+          <span className="is-attempt"><small>new</small><i><b style={{ "--ripple-width": `${relationship.attemptDistanceSteps / 12 * 100}%` } as CSSProperties} /></i><em>{relationship.attemptDistanceSteps} · {ratio(relationship.attemptFrequencyRatio)}</em></span>
+        </div>
+        <small>{relationship.distanceDelta < 0 ? "shorter" : "wider"} by one key step</small>
+      </div>)}
+    </div>
+    <div className="hud-scale-ripple-reading" role="status" aria-live="polite"><span>Global consequence</span><strong>{ripple.changedRelationshipCount} changed spokes · {ripple.retainedRelationshipCount} held relationships</strong><small>Only intervals touching the moved landing changed. Every retained-to-retained interval kept its equal-key distance and 12-TET ratio; absolute frequencies may differ if the replay started elsewhere. This is not a consonance, function, emotion, or quality judgment.</small></div>
+  </div>;
+}
+
 function ScaleGapMutationResult({ comparison }: { comparison: ScaleGapMutationComparison }) {
+  const [view, setView] = useState<"gaps" | "intervals">("gaps");
+  const ripple = comparison.kind === "one-position" ? compareScaleLandingIntervalRipple(comparison.sourceSteps, comparison.attemptSteps) : null;
+  const activeView = ripple ? view : "gaps";
   const sourceSet = new Set(comparison.sourcePositions);
   const attemptSet = new Set(comparison.attemptPositions);
   const sourceOnly = new Set(comparison.sourceOnlyPositions);
@@ -1072,6 +1096,8 @@ function ScaleGapMutationResult({ comparison }: { comparison: ScaleGapMutationCo
       ? "Every landing stayed fixed"
       : comparison.kind === "different-count"
         ? `Landing count ${comparison.sourcePositions.length} → ${comparison.attemptPositions.length}`
+        : comparison.kind === "wide-position"
+          ? `Landing ${comparison.sourceOnlyPositions[0]} → ${comparison.attemptOnlyPositions[0]}`
         : `${comparison.changedPositionCount} internal landings changed`;
   const detail = comparison.kind === "one-position"
     ? `${signed(comparison.movedSteps!)} equal-key step${Math.abs(comparison.movedSteps!) === 1 ? "" : "s"}; ${comparison.changedGapCount} neighboring gap${comparison.changedGapCount === 1 ? "" : "s"} changed while every retained landing and the octave closure stayed fixed.`
@@ -1079,10 +1105,13 @@ function ScaleGapMutationResult({ comparison }: { comparison: ScaleGapMutationCo
       ? "The source was reproduced exactly. Restart and move one internal landing by one key while keeping all the others."
       : comparison.kind === "different-count"
         ? "A landing was added or removed, so this attempt changes the route's density as well as its spacing. Restart and keep the same number of landings."
+        : comparison.kind === "wide-position"
+          ? `Only one landing moved, but it moved ${Math.abs(comparison.movedSteps!)} keys. This control asks for one key step so every changed interval can be attributed to the same minimal nudge.`
         : "More than one landing moved, so no single-position explanation is justified. Restart and change only one internal landing.";
   const summary = `${headline}. Source gaps ${comparison.sourceSteps.join(", ")}; new gaps ${comparison.attemptSteps.join(", ")}. Both routes total twelve equal-key steps.`;
   return <section className={`hud-scale-mutation is-${comparison.kind}`} aria-label="Scale landing mutation comparison">
-    <div className="hud-scale-mutation-routes" role="img" aria-label={summary}>
+    {ripple ? <div className="hud-scale-mutation-view" role="group" aria-label="Choose one consequence of the moved scale landing"><button type="button" aria-pressed={activeView === "gaps"} onClick={() => setView("gaps")}>Adjacent gaps</button><button type="button" aria-pressed={activeView === "intervals"} onClick={() => setView("intervals")}>Every connected interval</button></div> : null}
+    {activeView === "gaps" ? <><div className="hud-scale-mutation-routes" role="img" aria-label={summary}>
       {rows.map((row) => <div key={row.id} className={`is-${row.id}`}><strong>{row.label}</strong><div>{Array.from({ length: 13 }, (_, position) => {
         const present = row.positions.has(position);
         const changed = row.changed.has(position);
@@ -1095,7 +1124,7 @@ function ScaleGapMutationResult({ comparison }: { comparison: ScaleGapMutationCo
         return <span key={index} className={delta !== 0 ? "is-changed" : ""}><small>gap {index + 1}</small><strong>{gap}{delta === 0 ? "" : `→${comparison.attemptSteps[index]}`}</strong><em>{delta === 0 ? "held" : `Δ${signed(delta)}`}</em></span>;
       })}
     </div> : null}
-    <div className="hud-scale-mutation-reading" role="status" aria-live="polite"><span>{comparison.kind === "one-position" ? "One cause isolated" : "Compare the control"}</span><strong>{headline}</strong><small>{detail} Both gap lists still sum to 12, so frequency still doubles at the final landing.</small></div>
+    <div className="hud-scale-mutation-reading" role="status" aria-live="polite"><span>{comparison.kind === "one-position" ? "One cause isolated" : "Compare the control"}</span><strong>{headline}</strong><small>{detail} Both gap lists still sum to 12, so frequency still doubles at the final landing.</small></div></> : ripple ? <ScaleLandingIntervalRippleView ripple={ripple} /> : null}
   </section>;
 }
 
