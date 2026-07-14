@@ -1,7 +1,7 @@
 # Music With No Names — Development Roadmap
 
 Status: implementation underway
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## North star
 
@@ -526,6 +526,7 @@ Objective: introduce a piano as a silent, interactive translation of the existin
 - [x] **K2.6.42** Add Interval Context Echo v1.56: make the Piano Interval focus begin with one replay question; compare a frozen source and one independent two-attack echo through Relationship, Sound, Motion, Context, and Experience; preserve equal-key span and ratio only after a match; expose register, hertz gap, direction, onset gap, release-proven overlap, surrounding field size, and movable-Do roles as separate changing coordinates; compute selected-spectrum roughness and overlap only when both pairs demonstrably overlapped; accept safely shifted restored-session time coordinates; and place the interval network and assumed-partial microscope behind a native disclosure.
 - [x] **K2.6.43** Add Interval Experience Handoff v1.57: let a matched source-and-echo comparison enter the Personal Character Map as one exact four-attack specimen; retain the whole live phrase; keep measured MIDI, assumed-spectrum models, and listener report visibly separate; tailor reflection copy to the comparison; persist the report locally; surface it in Personal Lens export/deletion; and verify the complete handoff at desktop and 390-pixel widths without horizontal overflow.
 - [x] **K2.6.44** Add Chord Change Experience Handoff v1.58: make Chords focus ask one five-lens before-and-after question; compare the latest two learner-corrected grouped gestures through measured Sound and Relationships, interpreted Motion, modeled Context, and listener-only Experience without aggregation; freeze the exact two gestures for a four-question personal report; preserve that bounded specimen across focus changes until the learner explicitly returns to the whole phrase; reset it safely on Clear; persist it locally; surface it in Personal Lens export/deletion; and verify the complete flow at desktop and 390-pixel widths without horizontal overflow.
+- [x] **K2.6.45** Add Chord Voicing Echo v1.59: turn Chords into three one-question modes while retaining one live phrase; freeze a compact learner-corrected chord field with its performed source evidence; recognize exact pitch-class identity or one uniform transposition separately from register, inversion, bass role, spacing, doubling, nearest-key motion, assumed-spectrum roughness, selected-Do context, and listener experience; keep the source stable across independent mismatches, focus changes, phrase-window pruning, and reload; hand only a matched source-and-revoicing specimen to the Personal Character Map; and verify the complete flow at desktop and 390-pixel widths without horizontal overflow.
 
 Exit gate:
 
