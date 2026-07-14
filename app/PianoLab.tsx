@@ -83,6 +83,7 @@ import {
   type PhraseCharacterObservation,
   type PhraseCharacterRatings,
 } from "@/lib/personal-response";
+import { livePulseMirror, type LivePulseMirror } from "@/lib/rhythm-model";
 
 type MidiInputLike = {
   id: string;
@@ -134,6 +135,7 @@ type ChordMeasure = {
 };
 type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
+type MotionFocusMode = "pulse" | "touch" | "voices" | "motif";
 type IntervalEchoTarget = { semitones: number; anchorEventId: number };
 type ResolutionTarget = ResolutionFork & {
   anchorEventId: number;
@@ -153,6 +155,10 @@ type ControlledSonoritySession = {
   baselineNotes: number[] | null;
   replayRequired: boolean;
 };
+type PulseMirrorSession = {
+  anchorEventId: number;
+  capturedTapEventIds: number[];
+};
 
 type MidiCallbacks = {
   onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
@@ -161,7 +167,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -180,6 +186,8 @@ type PersistedPianoSession = {
   soundModelId?: PianoSoundModelId;
   scaleWalkSession?: ScaleWalkSession | null;
   controlledSonoritySession?: ControlledSonoritySession | null;
+  motionFocusMode?: MotionFocusMode;
+  pulseMirrorSession?: PulseMirrorSession | null;
 };
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -194,9 +202,15 @@ const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }>
   { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },
   { id: "scales", label: "Scales", description: "See how pitch evidence suggests Do and a scale route." },
   { id: "chords", label: "Chords", description: "Build one field, change one note, and trace the consequence." },
-  { id: "motion", label: "Motion", description: "Follow touch, articulation, motifs, pull, and voice movement through time." },
+  { id: "motion", label: "Motion", description: "Choose one question about pulse, touch, voices, or motif." },
   { id: "paths", label: "Paths", description: "Play pop, blues, cadence, and pedal-point archetypes as transferable relationships." },
   { id: "experience", label: "Experience", description: "Report how this phrase felt; keep your response separate from modeled evidence." },
+];
+const MOTION_FOCUS_MODES: Array<{ id: MotionFocusMode; label: string; question: string }> = [
+  { id: "pulse", label: "Pulse", question: "Where did each attack land?" },
+  { id: "touch", label: "Touch", question: "How did one touch meet the next?" },
+  { id: "voices", label: "Voices", question: "Which strands stayed or moved?" },
+  { id: "motif", label: "Motif", question: "What repeated, and what changed?" },
 ];
 
 const CHARACTER_QUESTIONS: Array<{
@@ -251,6 +265,20 @@ function isControlledSonoritySession(value: unknown): value is ControlledSonorit
     && isMidiNoteList(session.targetNotes)
     && baselineValid
     && typeof session.replayRequired === "boolean";
+}
+
+function isMotionFocusMode(value: unknown): value is MotionFocusMode {
+  return MOTION_FOCUS_MODES.some((mode) => mode.id === value);
+}
+
+function isPulseMirrorSession(value: unknown): value is PulseMirrorSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<PulseMirrorSession>;
+  return Number.isInteger(session.anchorEventId)
+    && session.anchorEventId! >= 0
+    && Array.isArray(session.capturedTapEventIds)
+    && (session.capturedTapEventIds.length === 0 || session.capturedTapEventIds.length === 4)
+    && session.capturedTapEventIds.every((id) => Number.isInteger(id) && id > session.anchorEventId!);
 }
 
 function currentHudTime() {
@@ -1113,10 +1141,11 @@ function motifPracticePrompt(motif: MotifTransformation | undefined) {
   return "Try next: keep the changed ending once, then return to the first ending.";
 }
 
-function PhraseMotionField({ events, articulation, motifs }: {
+function PhraseMotionField({ events, articulation, motifs, mode }: {
   events: HudNoteEvent[];
   articulation: ArticulationEvidence[];
   motifs: MotifTransformation[];
+  mode: "touch" | "motif";
 }) {
   const microscopeArticulation = articulation.slice(-7);
   const microscopeOffset = Math.max(0, events.length - microscopeArticulation.length);
@@ -1131,9 +1160,9 @@ function PhraseMotionField({ events, articulation, motifs }: {
     ? leadingMotifs.map((motif) => `${rangeLabel(motif.sourceStartIndex, motif.length)} to ${rangeLabel(motif.targetStartIndex, motif.length)}: ${motifTitle(motif)}`).join(". ")
     : "No three- or four-attack motif transformation detected yet.";
   return <section className="hud-phrase-motion" aria-labelledby="hud-phrase-motion-title">
-    <div className="hud-panel-heading"><span>Measured gesture + modeled recurrence</span><strong id="hud-phrase-motion-title">Touch, connection, and motif</strong><small>Timing can change the gesture while pitches stay fixed. Motif labels compare exact key-step shapes and normalized onset gaps.</small></div>
-    <div className="hud-motion-learning-grid">
-      <div className="hud-articulation-field">
+    <div className="hud-panel-heading"><span>{mode === "touch" ? "Measured MIDI contact" : "Modeled phrase recurrence"}</span><strong id="hud-phrase-motion-title">{mode === "touch" ? "How did one touch meet the next?" : "What repeated, and what changed?"}</strong><small>{mode === "touch" ? "Finger contact, pedal extension, overlap, and silence can change while the key sequence stays fixed." : "Compare exact key-step shapes and normalized onset gaps; change one property, then return."}</small></div>
+    <div className="hud-motion-learning-grid is-single">
+      {mode === "touch" ? <div className="hud-articulation-field">
         <div className="hud-subheading"><span>Captured MIDI timing</span><strong>Duration + articulation lane</strong><small>blue finger contact · gold pedal extension · link to the next attack</small></div>
         <div className="hud-articulation-lane" style={{ "--articulation-count": Math.max(1, microscopeArticulation.length) } as CSSProperties} aria-label="Finger, pedal, silence, and overlap for the seven-attack microscope">
           {microscopeArticulation.map((item, slot) => {
@@ -1150,9 +1179,9 @@ function PhraseMotionField({ events, articulation, motifs }: {
           {!microscopeArticulation.length ? <p>Play two attacks to see whether touch leaves silence, meets the next attack, or overlaps it.</p> : null}
         </div>
         <p className="hud-motion-teaching-copy">“Detached,” “joined,” and “overlap” describe captured timing relative to the next attack. They do not infer intended notation or judge technique.</p>
-      </div>
+      </div> : null}
 
-      <div className="hud-motif-field">
+      {mode === "motif" ? <div className="hud-motif-field">
         <div className="hud-subheading"><span>Local phrase comparison</span><strong>Motif transformation trail</strong><small>blue source · gold later statement · exact · transposed · rhythm changed · ending changed · return</small></div>
         <svg viewBox="0 0 720 192" role="img" aria-label={motifDescription}>
           <title>Repeated and transformed three- or four-attack shapes across the live phrase</title>
@@ -1184,8 +1213,109 @@ function PhraseMotionField({ events, articulation, motifs }: {
           <strong>{strongest ? motifTitle(strongest) : "repeat → change one property → return"}</strong>
           <small>{strongest ? `${rangeLabel(strongest.sourceStartIndex, strongest.length)} → ${rangeLabel(strongest.targetStartIndex, strongest.length)}. ${motifPracticePrompt(strongest)}` : motifPracticePrompt(undefined)}</small>
         </div>
-      </div>
+      </div> : null}
     </div>
+  </section>;
+}
+
+function MotionFocusGuide({ value, onChange }: { value: MotionFocusMode; onChange: (mode: MotionFocusMode) => void }) {
+  return <section className="hud-motion-guide" aria-labelledby="hud-motion-guide-title">
+    <div className="hud-panel-heading"><span>One phrase · one motion question</span><strong id="hud-motion-guide-title">Choose what to notice</strong><small>Each choice keeps the same live phrase but hides unrelated diagnostics. Nothing here grades timing or technique.</small></div>
+    <nav className="hud-motion-mode-nav" aria-label="Motion learning question">
+      {MOTION_FOCUS_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={value === mode.id} onClick={() => onChange(mode.id)}><span>{mode.label}</span><strong>{mode.question}</strong></button>)}
+    </nav>
+  </section>;
+}
+
+function PulseMirrorField({ session, mirror, expired, doMidi, scale, showConventions, onStart, onEnd }: {
+  session: PulseMirrorSession | null;
+  mirror: LivePulseMirror | null;
+  expired: boolean;
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+  onStart: () => void;
+  onEnd: () => void;
+}) {
+  const tapLabel = mirror?.tapNote == null ? null : showConventions ? conventionalPitchName(mirror.tapNote) : relativeSyllable(mirror.tapNote, doMidi, scale);
+  if (!session || !mirror) return <section className="hud-pulse-mirror" aria-labelledby="hud-pulse-title">
+    <div className="hud-panel-heading"><span>Declared pulse · silent</span><strong id="hud-pulse-title">Where did each attack land?</strong><small>First establish one physical time unit. Later attacks will be placed around it without inferring meter, groove, or correctness.</small></div>
+    <div className="hud-pulse-intro"><div><span>Four-tap anchor</span><strong>Repeat any one key four times at a comfortable steady pace.</strong><small>The first key becomes the anchor key. No metronome, sound, or answer is produced.</small></div><button type="button" onClick={onStart}>Begin pulse anchor</button></div>
+  </section>;
+
+  const tracking = mirror.status === "tracking" && !expired;
+  const invalid = mirror.status === "invalid" || expired;
+  const pulseMs = mirror.pulseMs ?? 500;
+  const anchorOnsetMs = mirror.anchorOnsetMs ?? 0;
+  const recentPlacements = mirror.placements.slice(-18);
+  const latestPlacement = recentPlacements.at(-1) ?? null;
+  const latestGap = mirror.gaps.at(-1) ?? null;
+  const latestElapsed = latestPlacement ? (latestPlacement.onsetMs - anchorOnsetMs) / pulseMs : 0;
+  const endPulse = Math.max(8, Math.ceil(latestElapsed) + 1);
+  const startPulse = Math.max(0, endPulse - 8);
+  const pulseIndexes = Array.from({ length: 9 }, (_, index) => startPulse + index);
+  const xForElapsed = (elapsed: number) => 54 + ((elapsed - startPulse) / 8) * 612;
+  const visiblePlacements = recentPlacements.filter((placement) => {
+    const elapsed = (placement.onsetMs - anchorOnsetMs) / pulseMs;
+    return elapsed >= startPulse - 0.12 && elapsed <= endPulse + 0.12;
+  });
+  const placementSummary = visiblePlacements.length
+    ? visiblePlacements.map((placement) => `${placement.attackCount} attack${placement.attackCount === 1 ? "" : "s"} closest to ${placement.phaseLabel}, phase ${placement.phase.toFixed(2)}`).join(". ")
+    : "The learner-declared pulse is ready; no later phrase attacks have arrived.";
+  const offsetCopy = latestPlacement ? latestPlacement.offsetMs === 0
+    ? "on the nearest pulse line"
+    : `${Math.abs(Math.round(latestPlacement.offsetMs))} ms ${latestPlacement.offsetMs > 0 ? "after" : "before"} the nearest pulse line`
+    : "waiting for a later attack";
+  const signedPercent = (value: number) => `${value > 0 ? "+" : ""}${Math.round(value)}%`;
+
+  let statusLabel = "Waiting for first tap";
+  let statusTitle = "Tap one key four times";
+  let statusCopy = "The first attack locks the anchor key; only later attacks of that same key complete the four-tap pulse.";
+  if (mirror.status === "capturing") {
+    statusLabel = `${mirror.tapEvents.length}/4 anchor taps · ${mirror.tapsNeeded} to go`;
+    statusTitle = `Keep tapping ${tapLabel}`;
+    statusCopy = `${mirror.ignoredDuringCapture ? `${mirror.ignoredDuringCapture} other-key attack${mirror.ignoredDuringCapture === 1 ? " was" : "s were"} ignored. ` : ""}Use gaps from 180 ms to 2 seconds; the four taps define the coordinate.`;
+  } else if (invalid) {
+    statusLabel = expired ? "Anchor left phrase memory" : "Anchor needs another try";
+    statusTitle = "Rebuild the four-tap pulse";
+    statusCopy = expired ? "The source taps aged out of the sixty-second phrase, so the HUD will not silently invent a replacement pulse." : `${mirror.invalidReason} Re-anchor at a comfortable pace.`;
+  } else if (tracking) {
+    statusLabel = "Pulse fixed by your taps";
+    statusTitle = recentPlacements.length ? "Your phrase is now crossing the pulse field" : "Now play a short phrase";
+    statusCopy = "Near-simultaneous attacks within 70 ms share one onset cluster. Their pitch membership remains separate from this timing view.";
+  }
+
+  return <section className="hud-pulse-mirror is-active" aria-labelledby="hud-pulse-title">
+    <div className="hud-sonority-topline"><div className="hud-panel-heading"><span>Learner-declared time unit · silent</span><strong id="hud-pulse-title">Where did each attack land?</strong><small>{tracking ? `${Math.round(pulseMs)} ms per pulse · ${mirror.pulsesPerMinute?.toFixed(1)} per minute · anchor-key ${tapLabel}` : "Repeat one key; the app does not infer pulse from an arbitrary melody."}</small></div><div className="hud-sonority-actions"><button type="button" onClick={onStart}>Re-anchor</button><button type="button" onClick={onEnd}>End</button></div></div>
+    <div className={`hud-pulse-status ${invalid ? "has-error" : tracking ? "is-ready" : ""}`} role="status" aria-live="polite"><span>{statusLabel}</span><strong>{statusTitle}</strong><small>{statusCopy}</small></div>
+    {!tracking ? <ol className="hud-pulse-capture" aria-label="Four pulse-anchor taps">{Array.from({ length: 4 }, (_, index) => <li key={index} className={index < mirror.tapEvents.length ? "is-complete" : index === mirror.tapEvents.length ? "is-current" : ""}><span>{index + 1}</span><strong>{index < mirror.tapEvents.length ? "captured" : index === mirror.tapEvents.length ? "next" : "waiting"}</strong></li>)}</ol> : null}
+    {tracking ? <>
+      <div className="hud-pulse-facts" aria-label="Declared pulse facts"><span><small>one pulse</small><strong>{Math.round(pulseMs)} ms</strong><em>physical time unit</em></span><span><small>same unit per minute</small><strong>{mirror.pulsesPerMinute?.toFixed(1)}</strong><em>not detected tempo</em></span><span><small>anchor-gap spread</small><strong>±{Math.round(mirror.tapSpreadMs ?? 0)} ms</strong><em>raw four-tap variation</em></span></div>
+      <div className="hud-pulse-plot">
+        <div className="hud-subheading"><span>Rolling eight-pulse coordinate</span><strong>Attack phase around your pulse</strong><small>solid vertical = pulse · dotted = halfway · circle = one clustered onset</small></div>
+        <svg viewBox="0 0 720 180" role="img" aria-label={placementSummary}>
+          <title>Later MIDI attack clusters placed against the learner’s four-tap pulse</title>
+          <line x1="54" x2="666" y1="104" y2="104" className="hud-pulse-axis" />
+          {pulseIndexes.map((pulseIndex, index) => {
+            const x = xForElapsed(pulseIndex);
+            const halfX = xForElapsed(pulseIndex + 0.5);
+            return <g key={pulseIndex}><line x1={x} x2={x} y1="34" y2="132" className="hud-pulse-line" /><text x={x} y="24" className="hud-pulse-label">P{pulseIndex}</text>{index < pulseIndexes.length - 1 ? <line x1={halfX} x2={halfX} y1="54" y2="124" className="hud-pulse-half" /> : null}</g>;
+          })}
+          {visiblePlacements.map((placement, index) => {
+            const elapsed = (placement.onsetMs - anchorOnsetMs) / pulseMs;
+            const x = xForElapsed(elapsed);
+            const y = 92 + (index % 3 - 1) * 18;
+            return <g key={placement.eventIds.join("-")}><circle cx={x} cy={y} r={placement.attackCount > 1 ? 7 : 5} className="hud-pulse-onset"><title>{`${placement.attackCount} attack${placement.attackCount === 1 ? "" : "s"}; closest to ${placement.phaseLabel}; phase ${placement.phase.toFixed(2)}`}</title></circle><text x={x} y={y + 21} className="hud-pulse-count">{placement.attackCount > 1 ? `×${placement.attackCount}` : "·"}</text></g>;
+          })}
+          {!visiblePlacements.length ? <text x="360" y="92" className="hud-pulse-empty">Play after the fourth anchor tap to place attacks here</text> : null}
+        </svg>
+      </div>
+      <div className="hud-pulse-reading">
+        <div><span>Latest phase coordinate</span><strong>{latestPlacement ? `${latestPlacement.phase.toFixed(2)} pulse · closest to ${latestPlacement.phaseLabel}` : "waiting for phrase"}</strong><small>{latestPlacement ? `${offsetCopy}; ${Math.round(latestPlacement.phaseError * 100)}% of a pulse from that simple phase landmark.` : "The anchor taps establish the pulse but are not counted as the phrase."}</small></div>
+        <div><span>Latest onset spacing</span><strong>{latestGap ? `${latestGap.pulseMultiple.toFixed(2)}× pulse · nearest ${latestGap.ratioLabel}` : "two later onset clusters needed"}</strong><small>{latestGap ? `${Math.round(latestGap.gapMs)} ms · ${signedPercent(latestGap.errorPercent)} from that ratio landmark.` : "A chord cluster counts once, so pitch density does not masquerade as rhythmic speed."}</small></div>
+      </div>
+      <p className="hud-pulse-guardrail">These are coordinates around the pulse you supplied—not timing accuracy, notation, meter, swing, groove quality, or musical goodness.</p>
+    </> : null}
   </section>;
 }
 
@@ -1586,6 +1716,8 @@ export function PianoLab() {
   const [fingerprintRotation, setFingerprintRotation] = useState(0);
   const [scaleWalkSession, setScaleWalkSession] = useState<ScaleWalkSession | null>(null);
   const [controlledSonoritySession, setControlledSonoritySession] = useState<ControlledSonoritySession | null>(null);
+  const [motionFocusMode, setMotionFocusMode] = useState<MotionFocusMode>("pulse");
+  const [pulseMirrorSession, setPulseMirrorSession] = useState<PulseMirrorSession | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
   const [lockedDoMidi, setLockedDoMidi] = useState(60);
@@ -1607,15 +1739,18 @@ export function PianoLab() {
       const linkedParams = new URLSearchParams(window.location.search);
       const linkedLens = linkedParams.get("pianoLens") as FocusLens | null;
       const validLinkedLens = FOCUS_LENSES.some((lens) => lens.id === linkedLens) ? linkedLens : null;
+      const linkedMotionMode = linkedParams.get("pianoMotion");
+      const validLinkedMotionMode = isMotionFocusMode(linkedMotionMode) ? linkedMotionMode : null;
       const linkedDoValue = Number(linkedParams.get("pianoDo"));
       const linkedScale = PIANO_SCALES.find((candidate) => candidate.id === linkedParams.get("pianoScale"));
       const validLinkedDo = linkedParams.has("pianoDo") && Number.isInteger(linkedDoValue) && linkedDoValue >= 0 && linkedDoValue < 12;
       if (validLinkedLens) setFocusLens(validLinkedLens);
+      if (validLinkedMotionMode) setMotionFocusMode(validLinkedMotionMode);
       try {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -1636,6 +1771,7 @@ export function PianoLab() {
             setBoundaryCorrections(saved.boundaryCorrections ?? {});
             setMembershipCorrections(saved.membershipCorrections ?? {});
             setFocusLens(validLinkedLens ?? saved.focusLens ?? "explore");
+            setMotionFocusMode(validLinkedMotionMode ?? (isMotionFocusMode(saved.motionFocusMode) ? saved.motionFocusMode : "pulse"));
             setShowConventions(Boolean(saved.showConventions));
             setFrameMode(saved.frameMode ?? "discover");
             setLockedScaleId(saved.lockedScaleId ?? DEFAULT_SCALE.id);
@@ -1662,6 +1798,7 @@ export function PianoLab() {
                 replayRequired: Boolean(saved.controlledSonoritySession.baselineNotes),
               });
             }
+            if (isPulseMirrorSession(saved.pulseMirrorSession)) setPulseMirrorSession(saved.pulseMirrorSession);
           }
         }
       } catch {
@@ -1681,9 +1818,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 8, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, controlledSonoritySession };
+    const session: PersistedPianoSession = { version: 9, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, phraseEvents, resolutionForkSet, resolutionTarget, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -1799,6 +1936,14 @@ export function PianoLab() {
   const nextNoteForks = useMemo(() => resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4), [frame.rootPitchClass, phraseEvents, scale]);
   const articulationEvidence = useMemo(() => articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0), [nowMs, phraseEvents]);
   const motifTransformations = useMemo(() => detectMotifTransformations(phraseEvents, 3), [phraseEvents]);
+  const pulseMirrorModel = useMemo(() => pulseMirrorSession ? livePulseMirror(phraseEvents, pulseMirrorSession.anchorEventId) : null, [phraseEvents, pulseMirrorSession]);
+  const pulseMirrorExpired = Boolean(pulseMirrorSession?.capturedTapEventIds.length && pulseMirrorSession.capturedTapEventIds.some((id) => !phraseEvents.some((event) => event.id === id)));
+  useEffect(() => {
+    if (!pulseMirrorSession || pulseMirrorSession.capturedTapEventIds.length || pulseMirrorModel?.status !== "tracking") return;
+    const capturedTapEventIds = pulseMirrorModel.tapEvents.map((event) => event.id);
+    const timer = window.setTimeout(() => setPulseMirrorSession((current) => current && !current.capturedTapEventIds.length ? { ...current, capturedTapEventIds } : current), 0);
+    return () => window.clearTimeout(timer);
+  }, [pulseMirrorModel, pulseMirrorSession]);
   const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events]);
   const chordMeasures = useMemo<ChordMeasure[]>(() => chordGestures.map((gesture, index) => {
     const excludedInheritedNotes = (membershipCorrections[gesture.id] ?? []).filter((note) => gesture.inheritedNotes.includes(note));
@@ -1947,6 +2092,7 @@ export function PianoLab() {
     setFingerprintRotation(0);
     setScaleWalkSession(null);
     setControlledSonoritySession(null);
+    setPulseMirrorSession(null);
     setLatchedNotes(new Map());
     midi.clear();
   };
@@ -2162,7 +2308,21 @@ export function PianoLab() {
     setFocusLens(lens);
     const url = new URL(window.location.href);
     url.searchParams.set("pianoLens", lens);
+    if (lens === "motion") url.searchParams.set("pianoMotion", motionFocusMode);
+    else url.searchParams.delete("pianoMotion");
     window.history.replaceState(null, "", url);
+  };
+
+  const selectMotionMode = (mode: MotionFocusMode) => {
+    setMotionFocusMode(mode);
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoLens", "motion");
+    url.searchParams.set("pianoMotion", mode);
+    window.history.replaceState(null, "", url);
+  };
+
+  const beginPulseMirror = () => {
+    setPulseMirrorSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, capturedTapEventIds: [] });
   };
 
   const selectLandmarkPath = (id: LandmarkPathId) => {
@@ -2202,6 +2362,9 @@ export function PianoLab() {
     setResolutionTarget({ ...fork, anchorEventId: phraseEvents.at(-1)?.id ?? 0, frameRootPitchClass: frame.rootPitchClass, frameScaleId: scale.id });
   };
 
+  const latestPulsePlacement = pulseMirrorModel?.placements.at(-1) ?? null;
+  const latestPulseGap = pulseMirrorModel?.gaps.at(-1) ?? null;
+
   const newestInsight = focusLens === "chords" && controlledSonoritySession ? !controlledSonoritySession.baselineNotes
     ? "The starting field is only outlined. Perform every exact key to establish a physical and modeled baseline."
     : controlledSonoritySession.replayRequired
@@ -2230,6 +2393,25 @@ export function PianoLab() {
     : focusLens === "paths" ? effectiveLandmarkStepIndex >= landmarkPath.steps.length
     ? `${landmarkPath.family} complete: ${landmarkPath.invariant}`
     : `${landmarkPath.family}: ${effectiveLandmarkStepIndex} of ${landmarkPath.steps.length} fields matched. Next, play the outlined ${landmarkPath.steps[effectiveLandmarkStepIndex].role}; ${landmarkPath.steps[effectiveLandmarkStepIndex].prompt.toLowerCase()}`
+    : focusLens === "motion" ? motionFocusMode === "pulse"
+      ? !pulseMirrorSession
+        ? "Begin a four-tap anchor to define one physical time unit before asking where later attacks land."
+        : pulseMirrorExpired
+          ? "The four source taps left the sixty-second phrase memory, so the pulse coordinate is paused until you re-anchor."
+          : pulseMirrorModel?.status === "waiting"
+            ? "The pulse experiment is armed. Your first attack chooses the one key to repeat four times."
+            : pulseMirrorModel?.status === "capturing"
+              ? `${pulseMirrorModel.tapEvents.length} of 4 same-key anchor taps captured; ${pulseMirrorModel.tapsNeeded} remain.`
+              : pulseMirrorModel?.status === "invalid"
+                ? "The four tap gaps fell outside the declared 180 ms to 2 second range; re-anchor rather than accepting a false coordinate."
+                : latestPulsePlacement
+                  ? `The latest onset cluster is at phase ${latestPulsePlacement.phase.toFixed(2)}, closest to ${latestPulsePlacement.phaseLabel}${latestPulseGap ? `; its preceding gap is ${latestPulseGap.pulseMultiple.toFixed(2)} times the pulse, nearest ${latestPulseGap.ratioLabel}` : ""}.`
+                  : "The pulse is fixed by your taps. Play a short phrase to place its attack clusters around that coordinate."
+      : motionFocusMode === "touch"
+        ? articulationEvidence.length ? `The latest touch is ${ARTICULATION_LABELS[articulationEvidence.at(-1)!.kind]}; finger duration, pedal tail, overlap, and silence remain separate measurements.` : "Play two attacks to compare finger contact, pedal extension, overlap, and silence."
+        : motionFocusMode === "voices"
+          ? chordMeasures.length >= 2 ? "The voice coach maps nearest keyboard strands; held, rising, falling, added, and released notes are descriptions, not inferred fingering." : "Play two chord gestures to reveal held and moving nearest-key strands."
+          : motifTransformations.length ? `${motifTitle(motifTransformations[0])}: repeat, change one property, then return.` : "Play a three- or four-attack shape, leave space, then repeat or transform it."
     : focusedEvent ? (() => {
     const context = noteContext(focusedEvent.note, doMidi, scale);
     const fieldCandidate = fieldPitchClassCount <= 5 ? selectedChordMeasure?.candidate ?? chordCandidates[0] : undefined;
@@ -2333,11 +2515,10 @@ export function PianoLab() {
         <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
-      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
-        <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
-        <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} />
-        <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} />
-      </div> : null}
+      </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
+        <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
+        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
+      </> : null}
 
       {focusLens === "chords" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}
 
@@ -2382,7 +2563,7 @@ export function PianoLab() {
 
       {focusLens === "intervals" ? <div className="piano-focus-grid is-interval-practice"><IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} /><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
 
-      {(focusLens === "explore" || focusLens === "motion") ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
+      {focusLens === "explore" ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
 
       <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Voice strands use nearest keyboard motion, not intended fingering. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>
     </section>

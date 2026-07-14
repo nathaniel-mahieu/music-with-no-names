@@ -180,6 +180,13 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /controlledSonoritySession/);
   assert.match(pianoLab, /replayRequired/);
   assert.match(pianoLab, /The comparison stays paused until the exact baseline is sounding/);
+  assert.match(pianoLab, /Where did each attack land/);
+  assert.match(pianoLab, /Repeat any one key four times/);
+  assert.match(pianoLab, /livePulseMirror/);
+  assert.match(pianoLab, /closest to.*phaseLabel/);
+  assert.match(pianoLab, /not timing accuracy, notation, meter, swing, groove quality, or musical goodness/);
+  assert.match(pianoLab, /One phrase · one motion question/);
+  assert.match(pianoLab, /pianoMotion/);
   assert.match(pianoLab, /setResolutionForkSet\(resolutionForkSet \?\? nextNoteForks\)/);
   assert.match(pianoLab, /pianoLens/);
   assert.doesNotMatch(pianoLab, /placeNearbyChord/);

@@ -44,6 +44,9 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-labelledby="hud-sonority-title"/);
   assert.match(piano, /aria-label="Separate conditional affordance changes"/);
   assert.match(piano, /silent controlled sonority reference/);
+  assert.match(piano, /aria-label="Motion learning question"/);
+  assert.match(piano, /aria-labelledby="hud-pulse-title"/);
+  assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);
@@ -78,6 +81,8 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.piano-key\.is-scale-walk-target/);
   assert.match(css, /\.piano-key\.is-sonority-target/);
   assert.match(css, /\.hud-sonority-question\.has-change[\s\S]*border-left/);
+  assert.match(css, /\.hud-pulse-status\.is-ready[\s\S]*border-left/);
+  assert.match(css, /\.hud-pulse-onset[\s\S]*Highlight/);
   assert.match(css, /\.hud-walk-route li\.is-current[\s\S]*box-shadow/);
   assert.match(css, /\.piano-key\.is-active,[\s\S]*Highlight/);
 });

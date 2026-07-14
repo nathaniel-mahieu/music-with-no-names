@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Controlled Sonority Fields v1.39**. It provides:
+The current milestone is **Live Pulse Mirror v1.40**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
@@ -12,6 +12,8 @@ The current milestone is **Controlled Sonority Fields v1.39**. It provides:
 - Local-only phrase reports that persist across visits, appear in the Personal Lens, join portable JSON export and the two-step deletion flow, and never upload MIDI or infer emotion, familiarity, or liking.
 - A Scale Lab that replaces absolute note letters with movable Do and a transposable octave orbit.
 - A persistent live phrase ribbon that keeps sixty seconds of attacks, velocity, key release, sounding duration, pedal-extended tails, and silence while the coordinated staff, frequency, chord, and evidence views magnify the latest seven attacks.
+- A learner-declared Live Pulse Mirror inside the Piano Motion focus. Repeat one key four times to establish a physical time unit, then place later attack clusters around pulse lines and inspect onset-spacing ratios. The coordinate is silent, survives reload, and never claims to detect meter, groove, timing accuracy, or musical goodness.
+- Four one-question Motion modes—Pulse, Touch, Voices, and Motif—that keep the same phrase while hiding unrelated diagnostics. Each mode is URL-addressable and tab-persistent.
 - A Motion-lens articulation lane that keeps finger contact, pedal extension, sounding overlap, and silence separate, then describes each connection as held, detached, joined, finger-overlapped, pedal-linked, or phrase-ending without inferring notation or judging technique.
 - A phrase-local motif trail that compares non-overlapping three- and four-attack shapes and distinguishes exact repetition, transposition, rhythmic variation, altered endings, and a return after intervening material.
 - One-property-at-a-time motif prompts—repeat, transpose, change the rhythm, alter the ending, and return—derived from the learner’s own live phrase rather than a separate exercise screen.
