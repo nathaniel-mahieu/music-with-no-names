@@ -1488,6 +1488,81 @@ function EvidenceTrace({ measures, chordMeasures, events, selectedChordId }: { m
   );
 }
 
+function LastAttackChange({ events, focusedId, doMidi, scale, showConventions, onReflect }: {
+  events: HudNoteEvent[];
+  focusedId: number | null;
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+  onReflect: () => void;
+}) {
+  const foundIndex = events.findIndex((event) => event.id === focusedId);
+  const selectedIndex = foundIndex >= 0 ? foundIndex : events.length - 1;
+  const event = events[selectedIndex] ?? events.at(-1) ?? null;
+  if (!event) return <section className="hud-last-attack" aria-labelledby="hud-last-attack-title">
+    <div className="hud-last-attack-heading"><span>One selected attack · five lenses</span><strong id="hud-last-attack-title">What did this attack change?</strong><small>Play one note. Measured, modeled, and personal evidence will stay visibly separate.</small></div>
+  </section>;
+
+  const actualIndex = events.findIndex((candidate) => candidate.id === event.id);
+  const previous = actualIndex > 0 ? events[actualIndex - 1] : null;
+  const beforeNotes = previous ? uniqueSorted(previous.fieldNotes) : [];
+  const afterNotes = uniqueSorted(event.fieldNotes);
+  const fieldChange = previous ? controlledSonorityChange(beforeNotes, afterNotes) : null;
+  const exactOneNoteAddition = fieldChange?.kind === "one-added" && fieldChange.changedNote === event.note;
+  const melodicMove = previous ? event.note - previous.note : null;
+  const onsetGapMs = previous ? Math.max(0, event.onsetMs - previous.onsetMs) : null;
+  const velocityDelta = previous ? event.velocity - previous.velocity : null;
+  const beforeTendency = tonalTendency(beforeNotes, doMidi, scale);
+  const afterTendency = tonalTendency(afterNotes, doMidi, scale);
+  const context = noteContext(event.note, doMidi, scale);
+  const label = showConventions ? conventionalPitchName(event.note) : context.syllable;
+  const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(Math.round(value))}`;
+  const createdIntervalCopy = exactOneNoteAddition && fieldChange.changedIntervals.length
+    ? fieldChange.changedIntervals.slice(0, 3).map((item) => `${item.distance.semitones} steps · ${item.distance.relationship}`).join(" / ")
+    : null;
+  const relationshipStrong = exactOneNoteAddition
+    ? createdIntervalCopy ?? "First field position established"
+    : fieldChange?.kind === "same"
+      ? melodicMove == null ? "No earlier relationship" : `Membership unchanged · melodic move ${signed(melodicMove)}`
+      : melodicMove == null
+        ? "No earlier microscope snapshot"
+        : `Melodic move ${signed(melodicMove)} keys`;
+  const relationshipSmall = exactOneNoteAddition
+    ? fieldChange.changedIntervals.length
+      ? `${fieldChange.changedIntervals.length} pairwise relationship${fieldChange.changedIntervals.length === 1 ? "" : "s"} can be attributed to this newly entered note.`
+      : "This is the first member of the field, so it creates a reference rather than a pair."
+    : fieldChange?.kind === "multiple"
+      ? `${fieldChange.addedNotes.length} note${fieldChange.addedNotes.length === 1 ? "" : "s"} entered and ${fieldChange.removedNotes.length} note${fieldChange.removedNotes.length === 1 ? "" : "s"} left between snapshots; those changes cannot all be attributed to this attack.`
+      : fieldChange?.kind === "one-removed"
+        ? "A note left between snapshots as this attack arrived, so the whole field change is not a one-note addition."
+        : fieldChange?.kind === "same"
+          ? "The attack changed the melodic sequence without adding a new MIDI member to the field."
+          : "The rolling microscope has no earlier field snapshot for a strict before/after attribution.";
+  const attribution = exactOneNoteAddition
+    ? `Exactly one MIDI member entered: ${label}. Its new pairwise relationships are attributable; the other lenses remain observations or models.`
+    : fieldChange?.kind === "same"
+      ? `${label} was attacked while the MIDI field membership stayed fixed. This is a repeated event, not a new field member.`
+      : fieldChange
+        ? `The field changed in more than one way around ${label}. The HUD reports snapshots without inventing a one-note cause.`
+        : `${label} is the earliest attack available in the seven-event microscope, so there is no earlier field snapshot to compare.`;
+  return <section className="hud-last-attack" aria-labelledby="hud-last-attack-title">
+    <div className="hud-last-attack-heading">
+      <span>Attack {actualIndex + 1} selected · five lenses</span>
+      <strong id="hud-last-attack-title">What did this attack change?</strong>
+      <small>{showConventions ? `${label} · ` : ""}{formatHz(context.frequencyHz)} · click another attack above to move the microscope</small>
+    </div>
+    <div className={`hud-last-attack-reading ${exactOneNoteAddition ? "is-attributable" : ""}`} role="status" aria-live="polite">{attribution}</div>
+    <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the selected attack change">
+      <article className="is-measured"><span>Sound</span><em>measured MIDI</em><strong>{label} · {formatHz(context.frequencyHz)}</strong><small>Attack {event.velocity}/127{velocityDelta == null ? "" : ` · ${signed(velocityDelta)} from prior attack`} · {previous ? `field ${beforeNotes.length}→${afterNotes.length} notes` : `current field snapshot ${afterNotes.length} note${afterNotes.length === 1 ? "" : "s"}`}. MIDI attack is not acoustic loudness.</small></article>
+      <article className="is-measured"><span>Relationships</span><em>{exactOneNoteAddition ? "attributable MIDI" : "measured snapshots"}</em><strong>{relationshipStrong}</strong><small>{relationshipSmall}</small></article>
+      <article className="is-measured"><span>Motion</span><em>measured time</em><strong>{melodicMove == null ? "First visible attack" : `${signed(melodicMove)} keys · ${Math.round(onsetGapMs!)} ms later`}</strong><small>{event.releaseMs == null ? "Still sounding in the captured state." : `Sounding duration ${durationLabel(event, event.releaseMs)}.`} This describes events, not fingering or technique.</small></article>
+      <article className="is-modeled"><span>Context</span><em>selected-frame model</em><strong>{previous ? `pull ${Math.round(beforeTendency.homePull * 100)}→${Math.round(afterTendency.homePull * 100)} · home ${Math.round(beforeTendency.homeEvidence * 100)}→${Math.round(afterTendency.homeEvidence * 100)}` : `current pull ${Math.round(afterTendency.homePull * 100)} · home evidence ${Math.round(afterTendency.homeEvidence * 100)}`}</strong><small>{label} is {context.inScale ? "inside" : "outside"} the selected {scale.name}. These are route-relative teaching proxies, not heard certainty.</small></article>
+      <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Not inferred</strong><small>Settledness, energy, familiarity, and liking belong to your report, not to the MIDI or context model.</small><button type="button" onClick={onReflect}>Reflect on this phrase</button></article>
+    </div>
+    <p className="hud-last-attack-limit">No lens is averaged into similarity, correctness, emotion, listenability, or musical goodness.</p>
+  </section>;
+}
+
 function nearbyLabel(chord: NearbyChord, doMidi: number, showConventions: boolean) {
   if (chord.candidate) return chordLabel(chord.candidate, doMidi, showConventions);
   return showConventions ? CONVENTIONAL_PITCH_CLASSES[chord.rootPitchClass] : chord.syllable;
@@ -3350,7 +3425,9 @@ export function PianoLab() {
 
       {focusLens === "explore" && !phraseCompareSession ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
 
-      <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Voice strands use nearest keyboard motion, not intended fingering. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>
+      {focusLens === "explore" && !phraseCompareSession
+        ? <LastAttackChange events={events} focusedId={focusedEvent?.id ?? null} doMidi={doMidi} scale={scale} showConventions={showConventions} onReflect={() => selectFocusLens("experience")} />
+        : <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Voice strands use nearest keyboard motion, not intended fingering. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>}
     </section>
   );
 }
