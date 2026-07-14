@@ -144,8 +144,12 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /<svg className="hud-chord-echo-figure"[\s\S]*role="img"/);
   assert.match(piano, />Freeze this relationship<\/button>/);
   assert.match(piano, />Reflect on source \+ voicing<\/button>/);
-  assert.match(piano, />What remains if register, doubling, and starting pitch disappear\?</);
-  assert.match(piano, />Fold into one octave<\/button>/);
+  assert.match(piano, /What remains if register, doubling, and starting pitch disappear\?/);
+  assert.match(piano, /Fold into one octave/);
+  assert.match(piano, /How did changing one position reshape the chord\?/);
+  assert.match(piano, /Compare changed gaps/);
+  assert.match(piano, /Delta labels show exactly which adjacent gaps gained or lost space/);
+  assert.match(piano, /both closed loops still total 12/);
   assert.match(piano, /aria-pressed=\{octaveFoldRevealed\}/);
   assert.match(piano, /<svg className="hud-chord-fold-figure"[\s\S]*role="img"/);
   assert.match(piano, /comparison start is a canonical rotation, not a chord root or movable Do/);
@@ -181,6 +185,8 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-chord-fold-test > button\[aria-pressed="true"\][\s\S]*background: var\(--foreground\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-chord-fold-test > button \{ width: 100%/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-chord-fold-figure \.is-attempt \.hud-chord-fold-node[\s\S]*HighlightText/);
+  assert.match(css, /\.hud-chord-fold-segment\.is-changed[\s\S]*stroke-dasharray: 2 2/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-chord-fold-segment\.is-changed \{ stroke: Highlight/);
   assert.match(css, /\.hud-chord-motion-node\.is-source\.is-before[\s\S]*CanvasText/);
   assert.match(css, /\.hud-chord-motion-node\.is-attempt\.is-after[\s\S]*HighlightText/);
   assert.match(css, /\.hud-chord-frame-options button\[aria-pressed="true"\][\s\S]*background: var\(--foreground\)/);

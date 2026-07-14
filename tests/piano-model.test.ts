@@ -8,6 +8,7 @@ import {
   articulationTimeline,
   chordGapFingerprint,
   chordTransitionEvidence,
+  compareChordGapMutation,
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
@@ -241,6 +242,26 @@ test("folds a chord into a transposition- and inversion-invariant gap loop", () 
   assert.notDeepEqual(changedThird.canonicalGaps, source.canonicalGaps);
   assert.equal(chordGapFingerprint([60, 72]), null);
   assert.throws(() => chordGapFingerprint([60, 128]), RangeError);
+});
+
+test("shows how one changed chord position redistributes adjacent octave gaps", () => {
+  const loweredThird = compareChordGapMutation([60, 64, 67], [60, 63, 67]);
+  assert.ok(loweredThird);
+  assert.deepEqual(loweredThird.retainedPitchClasses, [0, 7]);
+  assert.equal(loweredThird.anchorPitchClass, 0);
+  assert.equal(loweredThird.sourceChangedPitchClass, 4);
+  assert.equal(loweredThird.attemptChangedPitchClass, 3);
+  assert.equal(loweredThird.movedSteps, -1);
+  assert.deepEqual(loweredThird.sourceGaps, [4, 3, 5]);
+  assert.deepEqual(loweredThird.attemptGaps, [3, 4, 5]);
+  assert.deepEqual(loweredThird.gapDeltas, [-1, 1, 0]);
+  assert.equal(loweredThird.changedGapCount, 2);
+  assert.equal(loweredThird.sourceGaps.reduce((sum, gap) => sum + gap, 0), 12);
+  assert.equal(loweredThird.attemptGaps.reduce((sum, gap) => sum + gap, 0), 12);
+  assert.equal(compareChordGapMutation([60, 64, 67], [64, 67, 72]), null);
+  assert.equal(compareChordGapMutation([60, 64, 67], [60, 65, 69]), null);
+  assert.equal(compareChordGapMutation([60, 67], [60, 66]), null);
+  assert.throws(() => compareChordGapMutation([60, 64, 128], [60, 63, 67]), RangeError);
 });
 
 test("preserves a complete chord move only under one shared transposition", () => {

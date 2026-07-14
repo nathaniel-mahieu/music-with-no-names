@@ -78,6 +78,20 @@ export type ChordGapFingerprint = {
   duplicatePitchClassCount: number;
 };
 
+export type ChordGapMutation = {
+  sourcePitchClasses: number[];
+  attemptPitchClasses: number[];
+  retainedPitchClasses: number[];
+  sourceChangedPitchClass: number;
+  attemptChangedPitchClass: number;
+  anchorPitchClass: number;
+  sourceGaps: number[];
+  attemptGaps: number[];
+  gapDeltas: number[];
+  changedGapCount: number;
+  movedSteps: number;
+};
+
 export type ChordMotionEchoComparison = {
   sourceBeforePitchClasses: number[];
   sourceAfterPitchClasses: number[];
@@ -791,6 +805,53 @@ export function chordGapFingerprint(input: number[]): ChordGapFingerprint | null
     cyclicGaps,
     canonicalGaps,
     duplicatePitchClassCount: notes.length - pitchClasses.length,
+  };
+}
+
+/**
+ * Compares a source chord with an equal-sized field where exactly one unique
+ * pitch-class position was replaced. Both closed gap loops begin at the same
+ * retained pitch solely for alignment. That anchor is not a root or Do claim.
+ */
+export function compareChordGapMutation(sourceInput: number[], attemptInput: number[]): ChordGapMutation | null {
+  const allNotes = [...sourceInput, ...attemptInput];
+  if (allNotes.some((note) => !Number.isFinite(note) || note < 0 || note > 127)) {
+    throw new RangeError("Chord gap mutation notes must be finite MIDI positions from 0 through 127.");
+  }
+  const pitchClasses = (notes: number[]) => [...new Set(notes.map((note) => pitchClassFromMidi(Math.round(note))))].sort((first, second) => first - second);
+  const sourcePitchClasses = pitchClasses(sourceInput);
+  const attemptPitchClasses = pitchClasses(attemptInput);
+  if (sourcePitchClasses.length < 3 || sourcePitchClasses.length !== attemptPitchClasses.length) return null;
+  const sourceSet = new Set(sourcePitchClasses);
+  const attemptSet = new Set(attemptPitchClasses);
+  const sourceOnly = sourcePitchClasses.filter((pitchClass) => !attemptSet.has(pitchClass));
+  const attemptOnly = attemptPitchClasses.filter((pitchClass) => !sourceSet.has(pitchClass));
+  const retainedPitchClasses = sourcePitchClasses.filter((pitchClass) => attemptSet.has(pitchClass));
+  if (sourceOnly.length !== 1 || attemptOnly.length !== 1 || retainedPitchClasses.length < 2) return null;
+  const anchorPitchClass = retainedPitchClasses[0];
+  const gapsFromAnchor = (values: number[]) => {
+    const offsets = values.map((pitchClass) => modulo(pitchClass - anchorPitchClass, 12)).sort((first, second) => first - second);
+    return offsets.map((offset, index) => {
+      const next = offsets[(index + 1) % offsets.length] + (index === offsets.length - 1 ? 12 : 0);
+      return next - offset;
+    });
+  };
+  const sourceGaps = gapsFromAnchor(sourcePitchClasses);
+  const attemptGaps = gapsFromAnchor(attemptPitchClasses);
+  const gapDeltas = attemptGaps.map((gap, index) => gap - sourceGaps[index]);
+  const unsignedMove = modulo(attemptOnly[0] - sourceOnly[0], 12);
+  return {
+    sourcePitchClasses,
+    attemptPitchClasses,
+    retainedPitchClasses,
+    sourceChangedPitchClass: sourceOnly[0],
+    attemptChangedPitchClass: attemptOnly[0],
+    anchorPitchClass,
+    sourceGaps,
+    attemptGaps,
+    gapDeltas,
+    changedGapCount: gapDeltas.filter((delta) => delta !== 0).length,
+    movedSteps: unsignedMove > 6 ? unsignedMove - 12 : unsignedMove,
   };
 }
 

@@ -8361,10 +8361,13 @@ footer a {
 .hud-chord-fold-return { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
 .hud-chord-fold-segment { stroke: var(--line-strong); stroke-width: 2; }
 .hud-chord-fold-figure .is-attempt .hud-chord-fold-segment { stroke: var(--piano-blue); stroke-dasharray: 5 3; }
+.hud-chord-fold-segment.is-changed { stroke: var(--piano-coral); stroke-width: 3; stroke-dasharray: 2 2; }
 .hud-chord-fold-node { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 2; }
 .hud-chord-fold-figure .is-attempt .hud-chord-fold-node { fill: var(--piano-gold); }
+.hud-chord-fold-node.is-changed { stroke: var(--piano-coral); stroke-width: 3; }
 .hud-chord-fold-close { fill: var(--background); stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 2; }
 .hud-chord-fold-gap-label { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; }
+.hud-chord-fold-gap-label.is-changed { fill: var(--foreground); font-weight: 500; }
 .hud-chord-fold-reading { display: grid; grid-template-columns: auto auto minmax(240px, 1fr); gap: 5px 14px; align-items: center; padding: 10px 0 10px 12px; border-left: 3px solid var(--piano-blue); }
 .hud-chord-fold-reading span { color: var(--muted); font-size: .68rem; text-transform: uppercase; }
 .hud-chord-fold-reading strong { font-family: var(--font-mono), monospace; font-size: .78rem; font-weight: 500; }
@@ -9688,8 +9691,11 @@ footer a {
   .hud-chord-fold-return,
   .hud-chord-fold-segment { stroke: CanvasText; }
   .hud-chord-fold-figure .is-attempt .hud-chord-fold-segment { stroke: LinkText; }
+  .hud-chord-fold-segment.is-changed { stroke: Highlight; }
   .hud-chord-fold-node { fill: Canvas; stroke: CanvasText; }
   .hud-chord-fold-figure .is-attempt .hud-chord-fold-node { fill: Highlight; stroke: HighlightText; }
+  .hud-chord-fold-node.is-changed { stroke: Highlight; }
+  .hud-chord-fold-gap-label.is-changed { fill: CanvasText; }
   .hud-chord-fold-close { fill: Canvas; stroke: GrayText; }
   .hud-chord-fold-reading { border-left-color: LinkText; }
   .hud-chord-question-options button[aria-pressed="true"] { color: HighlightText; background: Highlight; }

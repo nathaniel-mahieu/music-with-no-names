@@ -18,6 +18,7 @@ import {
   articulationTimeline,
   chordGapFingerprint,
   chordTransitionEvidence,
+  compareChordGapMutation,
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
@@ -62,6 +63,7 @@ import {
   voiceLeadingProfile,
   type ChordCandidate,
   type ChordGapFingerprint,
+  type ChordGapMutation,
   type ChordBoundaryCorrection,
   type ChordGesture,
   type ControlledSonorityFieldId,
@@ -2068,43 +2070,57 @@ function ChordQuestionGuide({ value, onChange }: { value: ChordFocusMode; onChan
   </section>;
 }
 
-function ChordGapFoldFigure({ source, attempt, sourceVoiceCount, attemptVoiceCount }: {
+function ChordGapFoldFigure({ source, attempt, sourceVoiceCount, attemptVoiceCount, mutation, changedMoveLabel, anchorLabel }: {
   source: ChordGapFingerprint;
   attempt: ChordGapFingerprint;
   sourceVoiceCount: number;
   attemptVoiceCount: number;
+  mutation?: ChordGapMutation | null;
+  changedMoveLabel?: string;
+  anchorLabel?: string;
 }) {
-  const positions = (profile: ChordGapFingerprint) => profile.canonicalGaps.reduce<number[]>((values, gap) => [...values, values.at(-1)! + gap], [0]);
+  const sourceGaps = mutation?.sourceGaps ?? source.canonicalGaps;
+  const attemptGaps = mutation?.attemptGaps ?? attempt.canonicalGaps;
+  const positions = (gaps: number[]) => gaps.reduce<number[]>((values, gap) => [...values, values.at(-1)! + gap], [0]);
   const xFor = (position: number) => 92 + (position / 12) * 548;
-  const sameLoop = source.canonicalGaps.length === attempt.canonicalGaps.length
-    && source.canonicalGaps.every((gap, index) => gap === attempt.canonicalGaps[index]);
+  const sameLoop = sourceGaps.length === attemptGaps.length
+    && sourceGaps.every((gap, index) => gap === attemptGaps[index]);
   const rows = [
-    { id: "source", label: "source", y: 52, profile: source },
-    { id: "attempt", label: "new", y: 130, profile: attempt },
+    { id: "source", label: "source", y: 52, gaps: sourceGaps, changedPosition: mutation == null ? null : (mutation.sourceChangedPitchClass - mutation.anchorPitchClass + 12) % 12 },
+    { id: "attempt", label: "new", y: 130, gaps: attemptGaps, changedPosition: mutation == null ? null : (mutation.attemptChangedPitchClass - mutation.anchorPitchClass + 12) % 12 },
   ] as const;
-  const summary = `${sameLoop ? "Same" : "Different"} closed octave-gap loop. Source ${source.canonicalGaps.join(", ")} equal-key steps; new voicing ${attempt.canonicalGaps.join(", ")}. Register and doubling are omitted.`;
+  const summary = mutation
+    ? `One octave position changed by ${mutation.movedSteps > 0 ? "+" : mutation.movedSteps < 0 ? "minus " : ""}${Math.abs(mutation.movedSteps)} equal-key step${Math.abs(mutation.movedSteps) === 1 ? "" : "s"}. Source gaps ${sourceGaps.join(", ")}; new gaps ${attemptGaps.join(", ")}; ${mutation.changedGapCount} adjacent gaps changed. Both closed loops total twelve.`
+    : `${sameLoop ? "Same" : "Different"} closed octave-gap loop. Source ${sourceGaps.join(", ")} equal-key steps; new voicing ${attemptGaps.join(", ")}. Register and doubling are omitted.`;
   return <>
     <svg className="hud-chord-fold-figure" viewBox="0 0 720 184" role="img" aria-label={summary}>
-      <title>Source chord and new voicing folded into normalized twelve-step octave loops</title>
-      <desc>{summary} The comparison start is a canonical rotation, not a chord root or movable Do.</desc>
+      <title>{mutation ? "One changed chord position compared as two aligned octave-gap loops" : "Source chord and new voicing folded into normalized twelve-step octave loops"}</title>
+      <desc>{summary} {mutation ? `Both loops begin at retained ${anchorLabel ?? "pitch"} solely for alignment; this is not a root claim.` : "The comparison start is a canonical rotation, not a chord root or movable Do."}</desc>
       {rows.map((row) => {
-        const rowPositions = positions(row.profile);
+        const rowPositions = positions(row.gaps);
         return <g key={row.id} className={`is-${row.id}`}>
           <text x="20" y={row.y + 4} className="hud-echo-row-label">{row.label}</text>
           <path d={`M ${xFor(12)} ${row.y} C ${xFor(12)} ${row.y - 27}, ${xFor(0)} ${row.y - 27}, ${xFor(0)} ${row.y}`} className="hud-chord-fold-return" />
-          {row.profile.canonicalGaps.map((gap, index) => <g key={`${row.id}-gap-${index}`}>
-            <line x1={xFor(rowPositions[index])} x2={xFor(rowPositions[index + 1])} y1={row.y} y2={row.y} className="hud-chord-fold-segment" />
-            <text x={(xFor(rowPositions[index]) + xFor(rowPositions[index + 1])) / 2} y={row.y - 7} className="hud-chord-fold-gap-label">{gap}</text>
-          </g>)}
-          {rowPositions.slice(0, -1).map((position, index) => row.id === "source"
-            ? <circle key={`${row.id}-node-${index}`} cx={xFor(position)} cy={row.y} r="6" className="hud-chord-fold-node"><title>{`Source folded position ${index + 1}; next gap ${row.profile.canonicalGaps[index]} equal keys`}</title></circle>
-            : <rect key={`${row.id}-node-${index}`} x={xFor(position) - 6} y={row.y - 6} width="12" height="12" className="hud-chord-fold-node"><title>{`New-voicing folded position ${index + 1}; next gap ${row.profile.canonicalGaps[index]} equal keys`}</title></rect>)}
+          {row.gaps.map((gap, index) => {
+            const changed = mutation != null && mutation.gapDeltas[index] !== 0;
+            const delta = row.id === "attempt" && changed ? ` Δ${mutation!.gapDeltas[index] > 0 ? "+" : "−"}${Math.abs(mutation!.gapDeltas[index])}` : "";
+            return <g key={`${row.id}-gap-${index}`}>
+              <line x1={xFor(rowPositions[index])} x2={xFor(rowPositions[index + 1])} y1={row.y} y2={row.y} className={`hud-chord-fold-segment ${changed ? "is-changed" : ""}`} />
+              <text x={(xFor(rowPositions[index]) + xFor(rowPositions[index + 1])) / 2} y={row.y - 7} className={`hud-chord-fold-gap-label ${changed ? "is-changed" : ""}`}>{gap}{delta}</text>
+            </g>;
+          })}
+          {rowPositions.slice(0, -1).map((position, index) => {
+            const changed = position === row.changedPosition;
+            return row.id === "source"
+            ? <circle key={`${row.id}-node-${index}`} cx={xFor(position)} cy={row.y} r="6" className={`hud-chord-fold-node ${changed ? "is-changed" : ""}`}><title>{`Source folded position ${index + 1}${changed ? ", changed in the replay" : ""}; next gap ${row.gaps[index]} equal keys`}</title></circle>
+            : <rect key={`${row.id}-node-${index}`} x={xFor(position) - 6} y={row.y - 6} width="12" height="12" className={`hud-chord-fold-node ${changed ? "is-changed" : ""}`}><title>{`New-voicing folded position ${index + 1}${changed ? ", moved from the source" : ""}; next gap ${row.gaps[index]} equal keys`}</title></rect>;
+          })}
           <circle cx={xFor(12)} cy={row.y} r="4" className="hud-chord-fold-close"><title>Octave closure returns to the first position</title></circle>
         </g>;
       })}
-      <text x={xFor(0)} y="177" className="hud-echo-axis-label">comparison start · not root</text><text x={xFor(12)} y="177" className="hud-echo-axis-label is-end">12 = same position</text>
+      <text x={xFor(0)} y="177" className="hud-echo-axis-label">{mutation ? `retained ${anchorLabel ?? "pitch"} · comparison anchor` : "comparison start · not root"}</text><text x={xFor(12)} y="177" className="hud-echo-axis-label is-end">12 = same position</text>
     </svg>
-    <div className="hud-chord-fold-reading" role="status" aria-live="polite"><span>{sameLoop ? "Same interval loop" : "Interval loop changed"}</span><strong>{source.canonicalGaps.join(" · ")} {sameLoop ? "=" : "≠"} {attempt.canonicalGaps.join(" · ")}</strong><small>Source {sourceVoiceCount} physical key{sourceVoiceCount === 1 ? "" : "s"} → {source.pitchClasses.length} unique octave positions{source.duplicatePitchClassCount ? ` (${source.duplicatePitchClassCount} doubling removed)` : ""}; new {attemptVoiceCount} → {attempt.pitchClasses.length}{attempt.duplicatePitchClassCount ? ` (${attempt.duplicatePitchClassCount} doubling removed)` : ""}. The start is rotated only to compare loops—not to choose root, Do, function, or quality.</small></div>
+    <div className="hud-chord-fold-reading" role="status" aria-live="polite"><span>{mutation ? "Gap space redistributed" : sameLoop ? "Same interval loop" : "Interval loop changed"}</span><strong>{sourceGaps.join(" · ")} {mutation ? "→" : sameLoop ? "=" : "≠"} {attemptGaps.join(" · ")}</strong><small>{mutation ? `${changedMoveLabel ?? "One position changed"}; ${mutation.changedGapCount} gap${mutation.changedGapCount === 1 ? "" : "s"} changed while both closed loops still total 12. The retained ${anchorLabel ?? "pitch"} aligns only the geometry; its label comes from the selected frame, and alignment does not infer root, function, or quality.` : `Source ${sourceVoiceCount} physical key${sourceVoiceCount === 1 ? "" : "s"} → ${source.pitchClasses.length} unique octave positions${source.duplicatePitchClassCount ? ` (${source.duplicatePitchClassCount} doubling removed)` : ""}; new ${attemptVoiceCount} → ${attempt.pitchClasses.length}${attempt.duplicatePitchClassCount ? ` (${attempt.duplicatePitchClassCount} doubling removed)` : ""}. The start is rotated only to compare loops—not to choose root, Do, function, or quality.`}</small></div>
   </>;
 }
 
@@ -2145,7 +2161,9 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
   const attemptModel = sonorityPerceptionModel(attemptNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)));
   const sourceGapFingerprint = chordGapFingerprint(sourceNotes);
   const attemptGapFingerprint = chordGapFingerprint(attemptNotes);
-  const octaveFoldRevealed = comparison.relationshipPreserved
+  const gapMutation = comparison.relationshipPreserved ? null : compareChordGapMutation(sourceNotes, attemptNotes);
+  const canRevealGapStructure = comparison.relationshipPreserved || gapMutation != null;
+  const octaveFoldRevealed = canRevealGapStructure
     && sourceGapFingerprint != null
     && attemptGapFingerprint != null
     && octaveFoldSelection.attemptId === attempt.gesture.id
@@ -2166,13 +2184,17 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
     ? `every voice shifted ${signed(comparison.uniformPhysicalShiftSteps)} keys`
     : `${voice.motionClasses.join(" + ") || "nearest voices moved"} · largest leap ${voice.largestLeap}`;
   const modelDelta = Math.round((attemptModel.roughness - sourceModel.roughness) * 100);
+  const changedMoveLabel = gapMutation
+    ? `${pitchClassRoleLabel(gapMutation.sourceChangedPitchClass, doMidi, scale, showConventions)} → ${pitchClassRoleLabel(gapMutation.attemptChangedPitchClass, doMidi, scale, showConventions)} (${signed(gapMutation.movedSteps)} equal-key step${Math.abs(gapMutation.movedSteps) === 1 ? "" : "s"} around the octave)`
+    : undefined;
+  const gapAnchorLabel = gapMutation ? pitchClassRoleLabel(gapMutation.anchorPitchClass, doMidi, scale, showConventions) : undefined;
   const reflectionEvents = [...sourceEvents, ...attempt.gesture.attacks]
     .filter((event, index, events) => events.findIndex((candidate) => candidate.id === event.id) === index)
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
   return <section className="hud-chord-echo is-comparing" aria-labelledby="hud-chord-echo-title">
     <div className="hud-chord-echo-topline"><div className="hud-panel-heading"><span>{comparison.relationshipPreserved ? "Relationship matched · five lenses" : "Latest independent attempt · five lenses"}</span><strong id="hud-chord-echo-title">What survived the new voicing?</strong><small>{sourceNotes.map(label).join(" · ")} → {attemptNotes.map(label).join(" · ")} · source relationship remains frozen for another attempt</small></div><button type="button" onClick={onEnd}>End echo</button></div>
-    {comparison.relationshipPreserved && sourceGapFingerprint && attemptGapFingerprint ? <div className="hud-chord-fold-test" aria-labelledby="hud-chord-fold-title"><div><span>Next question · interval identity</span><strong id="hud-chord-fold-title">What remains if register, doubling, and starting pitch disappear?</strong><small>{octaveFoldRevealed ? "Both performed fields are folded into one twelve-step octave. Their unique positions are connected by adjacent equal-key gaps; the comparison start is normalized, not heard as root." : "Fold both performed fields into one octave and compare only the gaps between unique pitch positions. No chord name is needed."} This display-only view changes no MIDI, frequency, voicing, model, or listener report.</small></div><button type="button" aria-pressed={octaveFoldRevealed} onClick={() => setOctaveFoldSelection({ attemptId: attempt.gesture.id, revealed: !octaveFoldRevealed })}>Fold into one octave</button></div> : null}
-    {octaveFoldRevealed && sourceGapFingerprint && attemptGapFingerprint ? <ChordGapFoldFigure source={sourceGapFingerprint} attempt={attemptGapFingerprint} sourceVoiceCount={sourceNotes.length} attemptVoiceCount={attemptNotes.length} /> : <svg className="hud-chord-echo-figure" viewBox="0 0 720 184" role="img" aria-label={`${relationshipStrong}. Source span ${comparison.sourceSpan} keys; new span ${comparison.attemptSpan}; center shift ${signed(comparison.centerShiftSteps)} keys; ${comparison.bassRoleChanged ? "bass role changed" : "bass role retained or unavailable"}.`}>
+    {canRevealGapStructure && sourceGapFingerprint && attemptGapFingerprint ? <div className="hud-chord-fold-test" aria-labelledby="hud-chord-fold-title"><div><span>{gapMutation ? "Next question · one changed position" : "Next question · interval identity"}</span><strong id="hud-chord-fold-title">{gapMutation ? "How did changing one position reshape the chord?" : "What remains if register, doubling, and starting pitch disappear?"}</strong><small>{gapMutation ? octaveFoldRevealed ? `Both fields begin at retained ${gapAnchorLabel} and close at 12. Delta labels show exactly which adjacent gaps gained or lost space.` : `Exactly one unique octave position changed while ${gapMutation.retainedPitchClasses.length} stayed. Align the retained ${gapAnchorLabel} and compare how the closed gap loop redistributed.` : octaveFoldRevealed ? "Both performed fields are folded into one twelve-step octave. Their unique positions are connected by adjacent equal-key gaps; the comparison start is normalized, not heard as root." : "Fold both performed fields into one octave and compare only the gaps between unique pitch positions. No chord name is needed."} This display-only view changes no MIDI, frequency, voicing, model, or listener report.</small></div><button type="button" aria-pressed={octaveFoldRevealed} onClick={() => setOctaveFoldSelection({ attemptId: attempt.gesture.id, revealed: !octaveFoldRevealed })}>{gapMutation ? "Compare changed gaps" : "Fold into one octave"}</button></div> : null}
+    {octaveFoldRevealed && sourceGapFingerprint && attemptGapFingerprint ? <ChordGapFoldFigure source={sourceGapFingerprint} attempt={attemptGapFingerprint} sourceVoiceCount={sourceNotes.length} attemptVoiceCount={attemptNotes.length} mutation={gapMutation} changedMoveLabel={changedMoveLabel} anchorLabel={gapAnchorLabel} /> : <svg className="hud-chord-echo-figure" viewBox="0 0 720 184" role="img" aria-label={`${relationshipStrong}. Source span ${comparison.sourceSpan} keys; new span ${comparison.attemptSpan}; center shift ${signed(comparison.centerShiftSteps)} keys; ${comparison.bassRoleChanged ? "bass role changed" : "bass role retained or unavailable"}.`}>
       <title>Source chord and latest performed voicing on one keyboard-position axis</title>
       <text x="20" y="50" className="hud-echo-row-label">source</text><text x="20" y="132" className="hud-echo-row-label">new</text>
       <line x1="80" x2="640" y1="158" y2="158" className="hud-grid-line" />
@@ -2183,7 +2205,7 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
     </svg>}
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the source chord and new voicing">
       <article className="is-measured"><span>Sound</span><em>measured MIDI + modeled spectrum</em><strong>{sourceNotes.length}→{attemptNotes.length} voices · span {comparison.sourceSpan}→{comparison.attemptSpan} keys</strong><small>Modeled roughness {signed(modelDelta)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. The fundamentals and register are measured; the upper partials and acoustic result are assumed.</small></article>
-      <article className="is-measured"><span>Relationships</span><em>interpreted pitch classes</em><strong>{relationshipStrong}</strong><small>Bass-relative shapes {comparison.sourceBassRelativeShape.join(" · ")} → {comparison.attemptBassRelativeShape.join(" · ")}. Matching means one set relationship survived exact identity or uniform transposition—not that the experiences were identical.</small></article>
+      <article className="is-measured"><span>Relationships</span><em>interpreted pitch classes</em><strong>{relationshipStrong}</strong><small>Bass-relative shapes {comparison.sourceBassRelativeShape.join(" · ")} → {comparison.attemptBassRelativeShape.join(" · ")}. {gapMutation ? `One unique octave position changed while ${gapMutation.retainedPitchClasses.length} stayed; reveal the gap comparison to see how that difference redistributed the closed loop.` : "Matching means one set relationship survived exact identity or uniform transposition—not that the experiences were identical."}</small></article>
       <article className="is-measured"><span>Motion</span><em>nearest-key interpretation</em><strong>{movementStrong}</strong><small>Hand center {signed(comparison.centerShiftSteps)} keys · bass {voice.bassMotion === 0 ? "held" : `${voice.bassMotion > 0 ? "up" : "down"} ${Math.abs(voice.bassMotion)}`} · total nearest-key travel {voice.totalMotion}. This is not intended fingering.</small></article>
       <article className="is-modeled"><span>Context</span><em>selected Do + route</em><strong>toward Do {Math.round(sourceTendency.homePull * 100)}→{Math.round(attemptTendency.homePull * 100)} · home {Math.round(sourceTendency.homeEvidence * 100)}→{Math.round(attemptTendency.homeEvidence * 100)}</strong><small>{comparison.pitchClassIdentityPreserved ? "The selected-Do positions stayed fixed even though voicing could change." : comparison.relationshipPreserved ? "Transposition preserved the internal relationship while changing its selected-Do positions." : "The internal relationship and selected-Do positions both changed."} Context is modeled, not heard certainty.</small></article>
       <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did it still feel like the same chord relationship?</strong><small>The structural match does not answer similarity, function, emotion, preference, correctness, or goodness.</small>{comparison.relationshipPreserved ? <button type="button" disabled={reflectionEvents.length < 4} onClick={() => onReflect(reflectionEvents)}>Reflect on source + voicing</button> : null}</article>
