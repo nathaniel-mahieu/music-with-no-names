@@ -93,6 +93,26 @@ export type ScaleFrameSnapshot = {
   evidenceLabel: "no evidence" | "little evidence" | "several compatible frames" | "distinct within this catalog";
 };
 
+export type ScaleWalkAttempt = {
+  note: number;
+  kind: "find-do" | "started" | "matched" | "complete" | "restarted" | "try-again";
+  expectedMidi: number | null;
+  expectedGap: number | null;
+  actualGap: number | null;
+};
+
+export type AscendingScaleWalk = {
+  status: "waiting-do" | "walking" | "complete";
+  baseMidi: number | null;
+  routeOffsets: number[];
+  matchedNotes: number[];
+  nextIndex: number;
+  expectedMidi: number | null;
+  attemptCount: number;
+  errorCount: number;
+  lastAttempt: ScaleWalkAttempt | null;
+};
+
 export type PerformanceEvidenceEvent = RollingNoteEvent & {
   velocity?: number;
   onsetMs: number;
@@ -399,6 +419,72 @@ export function scaleSemitones(scale: PianoScale) {
     positions.push(position);
   }
   return positions;
+}
+
+/**
+ * Reads note-on attacks as one ascending octave route. The first matching Do
+ * establishes register in any octave. A wrong attack leaves completed steps
+ * intact so feedback can compare the attempted and expected physical gaps.
+ */
+export function evaluateAscendingScaleWalk(notes: number[], doPitchClass: number, scale: PianoScale): AscendingScaleWalk {
+  const routeOffsets = [...scaleSemitones(scale), 12];
+  const targetDo = modulo(Math.round(doPitchClass), 12);
+  let baseMidi: number | null = null;
+  let matchedNotes: number[] = [];
+  let nextIndex = 0;
+  let attemptCount = 0;
+  let errorCount = 0;
+  let lastAttempt: ScaleWalkAttempt | null = null;
+
+  notes.filter(Number.isFinite).map(Math.round).forEach((note) => {
+    if (nextIndex >= routeOffsets.length && baseMidi != null) return;
+    attemptCount += 1;
+    if (baseMidi == null) {
+      if (pitchClassFromMidi(note) !== targetDo) {
+        errorCount += 1;
+        lastAttempt = { note, kind: "find-do", expectedMidi: null, expectedGap: null, actualGap: null };
+        return;
+      }
+      baseMidi = note;
+      matchedNotes = [note];
+      nextIndex = 1;
+      lastAttempt = { note, kind: "started", expectedMidi: note, expectedGap: null, actualGap: null };
+      return;
+    }
+
+    const expectedMidi = baseMidi + routeOffsets[nextIndex];
+    const previousMidi = baseMidi + routeOffsets[nextIndex - 1];
+    const expectedGap = expectedMidi - previousMidi;
+    const actualGap = note - previousMidi;
+    if (note === expectedMidi) {
+      matchedNotes = [...matchedNotes, note];
+      nextIndex += 1;
+      lastAttempt = { note, kind: nextIndex >= routeOffsets.length ? "complete" : "matched", expectedMidi, expectedGap, actualGap };
+      return;
+    }
+    if (pitchClassFromMidi(note) === targetDo) {
+      baseMidi = note;
+      matchedNotes = [note];
+      nextIndex = 1;
+      lastAttempt = { note, kind: "restarted", expectedMidi: note, expectedGap: null, actualGap: null };
+      return;
+    }
+    errorCount += 1;
+    lastAttempt = { note, kind: "try-again", expectedMidi, expectedGap, actualGap };
+  });
+
+  const complete = baseMidi != null && nextIndex >= routeOffsets.length;
+  return {
+    status: baseMidi == null ? "waiting-do" : complete ? "complete" : "walking",
+    baseMidi,
+    routeOffsets,
+    matchedNotes,
+    nextIndex,
+    expectedMidi: baseMidi == null || complete ? null : baseMidi + routeOffsets[nextIndex],
+    attemptCount,
+    errorCount,
+    lastAttempt,
+  };
 }
 
 export function pitchClassFromMidi(note: number) {

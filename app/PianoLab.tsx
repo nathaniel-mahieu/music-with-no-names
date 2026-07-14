@@ -17,6 +17,7 @@ import {
   chordTransitionEvidence,
   conventionalPitchName,
   detectMotifTransformations,
+  evaluateAscendingScaleWalk,
   fifthStepForPitchClass,
   fifthsCircle,
   fifthsSpiral,
@@ -56,6 +57,7 @@ import {
   type PianoScale,
   type ResolutionFork,
   type ScaleCandidate,
+  type AscendingScaleWalk,
   type TonalGravityCandidate,
 } from "@/lib/piano-model";
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
@@ -134,6 +136,11 @@ type ResolutionTarget = ResolutionFork & {
   frameRootPitchClass?: number;
   frameScaleId?: PianoScale["id"];
 };
+type ScaleWalkSession = {
+  anchorEventId: number;
+  rootPitchClass: number;
+  scaleId: PianoScale["id"];
+};
 
 type MidiCallbacks = {
   onAttack: (note: number, velocity: number, channel: number, fieldNotes: number[], atMs: number) => void;
@@ -142,7 +149,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6;
+  version: 2 | 3 | 4 | 5 | 6 | 7;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -159,6 +166,7 @@ type PersistedPianoSession = {
   landmarkPathId?: LandmarkPathId;
   landmarkStepIndex?: number;
   soundModelId?: PianoSoundModelId;
+  scaleWalkSession?: ScaleWalkSession | null;
 };
 
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -242,7 +250,7 @@ function phraseCharacterEvidence(events: HudNoteEvent[], doMidi: number, scale: 
   const endingField = uniqueSorted(finalEvent.fieldNotes.length ? finalEvent.fieldNotes : [finalEvent.note]);
   const endingPerception = endingField.length >= 2 ? sonorityPerceptionModel(endingField.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
   const endingTendency = tonalTendency(endingField, doMidi, scale);
-  const noveltyValues = events.slice(1).map((event, index) => events.slice(0, index + 1).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? 0 : 1);
+  const noveltyValues: number[] = events.slice(1).map((event, index) => events.slice(0, index + 1).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? 0 : 1);
   const gravity = tonalGravityCandidates(events, phraseEnd, 2);
   return {
     measured: {
@@ -676,6 +684,105 @@ function strongestGravityDrivers(candidate: TonalGravityCandidate) {
     .slice(0, 2);
 }
 
+function fifthsCoordinateLabel(offset: number) {
+  const clockwise = fifthStepForPitchClass(pitchClassFromMidi(offset));
+  const signed = clockwise <= 6 ? clockwise : clockwise - 12;
+  if (signed === 0) return "same fifths position as Do";
+  return `${signed > 0 ? "+" : ""}${signed} repeated-fifth move${Math.abs(signed) === 1 ? "" : "s"} from Do`;
+}
+
+function GuidedScaleWalk({
+  session,
+  events,
+  progress,
+  scale,
+  showConventions,
+  nowMs,
+  onStart,
+  onRestart,
+  onEnd,
+}: {
+  session: ScaleWalkSession | null;
+  events: HudNoteEvent[];
+  progress: AscendingScaleWalk | null;
+  scale: PianoScale;
+  showConventions: boolean;
+  nowMs: number;
+  onStart: () => void;
+  onRestart: () => void;
+  onEnd: () => void;
+}) {
+  if (!session || !progress) {
+    return <div className="hud-guided-walk is-inactive">
+      <div className="hud-walk-intro">
+        <div className="hud-subheading"><span>Playable experiment · no sound</span><strong>Walk one octave by its gaps</strong><small>Fix the current Do and scale route, then begin on Do in any MIDI octave. The same sequence of physical gaps survives when the frequencies and hand position change.</small></div>
+        <button type="button" className="piano-primary-action" onClick={onStart}>Start guided walk</button>
+      </div>
+      <p>No note is entered or sounded when you start. Your next key attack supplies the first step.</p>
+    </div>;
+  }
+
+  const routeLabels = [...scale.solfege, "Do↑"];
+  const expectedIndex = progress.status === "waiting-do" ? 0 : progress.nextIndex;
+  const previousOffset = progress.nextIndex > 0 ? progress.routeOffsets[progress.nextIndex - 1] : 0;
+  const expectedOffset = progress.nextIndex < progress.routeOffsets.length ? progress.routeOffsets[progress.nextIndex] : 12;
+  const nextGap = expectedOffset - previousOffset;
+  const nextLandmark = intervalLandmark(nextGap);
+  const expectedContext = progress.expectedMidi == null || progress.baseMidi == null
+    ? null
+    : noteContext(progress.expectedMidi, progress.baseMidi, scale);
+  const lastAttempt = progress.lastAttempt;
+  const wrongAttempt = lastAttempt?.kind === "try-again" || lastAttempt?.kind === "find-do";
+  const actualContext = lastAttempt && progress.baseMidi != null ? noteContext(lastAttempt.note, progress.baseMidi, scale) : null;
+  const gravity = tonalGravityCandidates(events, nowMs || events.at(-1)?.onsetMs || 0, 12);
+  const doGravityIndex = gravity.findIndex((candidate) => candidate.rootPitchClass === session.rootPitchClass);
+  const doGravity = doGravityIndex >= 0 ? gravity[doGravityIndex] : null;
+  const gravityDrivers = doGravity ? strongestGravityDrivers(doGravity) : [];
+
+  let cue = "Play Do in any octave";
+  let feedback = "The first Do establishes the register. Only pitch relationships matter; the current frame is fixed for this walk.";
+  if (progress.status === "walking" && expectedContext) {
+    cue = `Move +${nextGap} ${nextGap === 1 ? "key" : "keys"} to ${expectedContext.syllable}`;
+    feedback = wrongAttempt && lastAttempt?.actualGap != null
+      ? `You moved ${lastAttempt.actualGap > 0 ? "+" : ""}${lastAttempt.actualGap} from the last correct step and reached ${actualContext?.syllable ?? "another position"}. This route asks for +${lastAttempt.expectedGap}. Progress stays here—try ${expectedContext.syllable} again.`
+      : lastAttempt?.kind === "restarted"
+        ? "A new Do restarted the same route in this register. The gap pattern did not change."
+        : `${progress.nextIndex} of ${progress.routeOffsets.length} positions are connected. The dashed keyboard key is a silent target.`;
+  } else if (progress.status === "complete") {
+    cue = "One octave complete: frequency doubled";
+    feedback = `You preserved ${scale.steps.join("–")} across ${progress.routeOffsets.length - 1} moves. The final Do is 2× the starting frequency, while the gap fingerprint stayed fixed.`;
+  } else if (lastAttempt?.kind === "find-do") {
+    const attempted = CHROMATIC_SOLFEGE[pitchClassFromMidi(lastAttempt.note - session.rootPitchClass)];
+    feedback = `That attack was ${attempted} relative to the selected Do. Start on Do in any octave; your progress will begin there.`;
+  }
+
+  return <div className={`hud-guided-walk is-active ${wrongAttempt ? "has-error" : ""}`} aria-label="Guided ascending scale walk">
+    <div className="hud-walk-topline">
+      <div className="hud-subheading"><span>Live route · selected frame fixed</span><strong>Walk one octave by its gaps</strong><small>{showConventions ? `${CONVENTIONAL_PITCH_CLASSES[session.rootPitchClass]} as Do · ${scale.conventionalName}` : `movable Do · ${scale.name}`} · begin on Do in any octave</small></div>
+      <div className="hud-walk-actions"><button type="button" onClick={onRestart}>Restart</button><button type="button" onClick={onEnd}>End walk</button></div>
+    </div>
+    <ol className="hud-walk-route" style={{ "--walk-count": progress.routeOffsets.length } as CSSProperties} aria-label={`Ascending route: ${routeLabels.join(", ")}`}>
+      {progress.routeOffsets.map((offset, index) => {
+        const complete = progress.status === "complete" || index < progress.nextIndex;
+        const current = progress.status !== "complete" && index === expectedIndex;
+        const gap = index === 0 ? "start" : `+${offset - progress.routeOffsets[index - 1]}`;
+        return <li key={`${offset}-${index}`} className={`${complete ? "is-complete" : ""} ${current ? "is-current" : ""}`} aria-current={current ? "step" : undefined}><span>{complete ? "✓" : current ? "→" : index + 1}</span><strong>{routeLabels[index]}</strong><small>{gap}</small></li>;
+      })}
+    </ol>
+    <div className="hud-walk-feedback" role="status" aria-live="polite">
+      <span>{progress.status === "complete" ? "Invariant found" : wrongAttempt ? "Compare the gaps" : progress.status === "waiting-do" ? "Find the starting point" : "Next physical move"}</span>
+      <strong>{cue}</strong>
+      <small>{feedback}</small>
+    </div>
+    {progress.status === "walking" && progress.expectedMidi != null && progress.baseMidi != null ? <div className="hud-walk-physics" aria-label="Physical context for the next scale step">
+      <span><small>next frequency</small><strong>{formatHz(frequencyFromMidi(progress.expectedMidi))}</strong><em>{(2 ** (expectedOffset / 12)).toFixed(3)}× starting Do</em></span>
+      <span><small>local interval</small><strong>+{nextGap} equal {nextGap === 1 ? "key" : "keys"}</strong><em>near {nextLandmark.landmarkLabel} · {nextLandmark.relationship}</em></span>
+      <span><small>fifths coordinate</small><strong>{expectedContext?.syllable}</strong><em>{fifthsCoordinateLabel(expectedOffset)}</em></span>
+    </div> : null}
+    {events.length ? <p className="hud-walk-gravity">In this performed route, Do currently ranks <strong>{doGravityIndex + 1} of 12</strong> center hypotheses{gravityDrivers.length ? `; its strongest cues are ${gravityDrivers.map((driver) => driver.label).join(" and ")}` : ""}. That contextual evidence can change even though the scale fingerprint cannot.</p> : null}
+  </div>;
+}
+
 function ScalePracticeField({
   phraseEvents,
   frame,
@@ -686,9 +793,17 @@ function ScalePracticeField({
   forks,
   target,
   targetMatched,
+  walkSession,
+  walkEvents,
+  walkProgress,
+  walkScale,
+  nowMs,
   onRotate,
   onChooseTarget,
   onClearTarget,
+  onStartWalk,
+  onRestartWalk,
+  onEndWalk,
 }: {
   phraseEvents: HudNoteEvent[];
   frame: ScaleCandidate;
@@ -699,9 +814,17 @@ function ScalePracticeField({
   forks: ResolutionFork[];
   target: ResolutionTarget | null;
   targetMatched: boolean;
+  walkSession: ScaleWalkSession | null;
+  walkEvents: HudNoteEvent[];
+  walkProgress: AscendingScaleWalk | null;
+  walkScale: PianoScale;
+  nowMs: number;
   onRotate: () => void;
   onChooseTarget: (fork: ResolutionFork) => void;
   onClearTarget: () => void;
+  onStartWalk: () => void;
+  onRestartWalk: () => void;
+  onEndWalk: () => void;
 }) {
   const fingerprint = scaleFingerprint(frame.scale, fingerprintRotation);
   const routePositions = scaleSemitones(frame.scale);
@@ -717,6 +840,7 @@ function ScalePracticeField({
   const movementLabel = (movement: number) => movement === 0 ? "repeat" : `${movement > 0 ? "+" : ""}${movement} key step${Math.abs(movement) === 1 ? "" : "s"}`;
   return <section className="hud-scale-practice" aria-labelledby="hud-scale-practice-title">
     <div className="hud-panel-heading"><span>Shape · center · choice</span><strong id="hud-scale-practice-title">Scale fingerprint + tonal gravity</strong><small>One performed phrase, three separate questions. These are hypotheses and invitations—not a key detector or a goodness score.</small></div>
+    <GuidedScaleWalk session={walkSession} events={walkEvents} progress={walkProgress} scale={walkScale} showConventions={showConventions} nowMs={nowMs} onStart={onStartWalk} onRestart={onRestartWalk} onEnd={onEndWalk} />
     <div className="hud-scale-learning-grid">
       <div className="hud-fingerprint-field">
         <div className="hud-subheading"><span>Selected frame · derived shape</span><strong>Read the gaps before the name</strong><small>{new Set(phraseEvents.map((event) => pitchClassFromMidi(event.note))).size} measured pitch classes encountered in phrase memory</small></div>
@@ -1323,6 +1447,7 @@ export function PianoLab() {
   const [characterStorageReady, setCharacterStorageReady] = useState(false);
   const [characterDeleteArmed, setCharacterDeleteArmed] = useState(false);
   const [fingerprintRotation, setFingerprintRotation] = useState(0);
+  const [scaleWalkSession, setScaleWalkSession] = useState<ScaleWalkSession | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
   const [lockedDoMidi, setLockedDoMidi] = useState(60);
@@ -1352,7 +1477,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -1384,6 +1509,15 @@ export function PianoLab() {
             if (LANDMARK_PATHS.some((path) => path.id === saved.landmarkPathId)) setLandmarkPathId(saved.landmarkPathId!);
             setLandmarkStepIndex(Math.max(0, Math.round(saved.landmarkStepIndex ?? 0)));
             if (isPianoSoundModelId(saved.soundModelId)) setSoundModelId(saved.soundModelId);
+            if (saved.scaleWalkSession
+              && Number.isInteger(saved.scaleWalkSession.anchorEventId)
+              && saved.scaleWalkSession.anchorEventId >= 0
+              && Number.isInteger(saved.scaleWalkSession.rootPitchClass)
+              && saved.scaleWalkSession.rootPitchClass >= 0
+              && saved.scaleWalkSession.rootPitchClass < 12
+              && PIANO_SCALES.some((candidate) => candidate.id === saved.scaleWalkSession!.scaleId)) {
+              setScaleWalkSession(saved.scaleWalkSession);
+            }
           }
         }
       } catch {
@@ -1401,9 +1535,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 6, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId };
+    const session: PersistedPianoSession = { version: 7, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, phraseEvents, resolutionForkSet, resolutionTarget, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordWindowMs, focusLens, frameMode, ghostChord, ghostNotes, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, phraseEvents, resolutionForkSet, resolutionTarget, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -1485,6 +1619,11 @@ export function PianoLab() {
     : discovered ?? { scale: DEFAULT_SCALE, rootPitchClass: 0, uniqueNoteCount: 0, inScaleCount: 0, routeCoveredCount: 0, matchFraction: 0, coverageFraction: 0, homePresent: false, fit: 0 };
   const doMidi = nearestMidiForPitchClass(frame.rootPitchClass, 60);
   const scale = frame.scale;
+  const scaleWalkScale = PIANO_SCALES.find((candidate) => candidate.id === scaleWalkSession?.scaleId) ?? scale;
+  const scaleWalkEvents = useMemo(() => scaleWalkSession ? phraseEvents.filter((event) => event.id > scaleWalkSession.anchorEventId) : [], [phraseEvents, scaleWalkSession]);
+  const scaleWalkProgress = useMemo<AscendingScaleWalk | null>(() => scaleWalkSession
+    ? evaluateAscendingScaleWalk(scaleWalkEvents.map((event) => event.note), scaleWalkSession.rootPitchClass, scaleWalkScale)
+    : null, [scaleWalkEvents, scaleWalkScale, scaleWalkSession]);
   useEffect(() => {
     if (!hydrated || focusLens !== "paths" || frameMode === "locked") return;
     const timer = window.setTimeout(() => {
@@ -1641,6 +1780,7 @@ export function PianoLab() {
     setExperienceSaved(false);
     setCharacterDeleteArmed(false);
     setFingerprintRotation(0);
+    setScaleWalkSession(null);
     setLatchedNotes(new Map());
     midi.clear();
   };
@@ -1669,6 +1809,7 @@ export function PianoLab() {
   };
 
   const lockCandidate = (candidate: ScaleCandidate) => {
+    setScaleWalkSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setLockedScaleId(candidate.scale.id);
@@ -1682,6 +1823,7 @@ export function PianoLab() {
 
   const chooseDoFromFifths = (rootPitchClass: number) => {
     const pitchClass = pitchClassFromMidi(rootPitchClass);
+    setScaleWalkSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     setGhostChord(null);
@@ -1696,6 +1838,7 @@ export function PianoLab() {
   };
 
   const toggleFrameMode = () => {
+    setScaleWalkSession(null);
     setResolutionTarget(null);
     setResolutionForkSet(null);
     if (frameMode === "discover") {
@@ -1713,6 +1856,28 @@ export function PianoLab() {
       url.searchParams.delete("pianoScale");
       window.history.replaceState(null, "", url);
     }
+  };
+
+  const beginScaleWalk = () => {
+    const rootPitchClass = pitchClassFromMidi(doMidi);
+    setResolutionTarget(null);
+    setResolutionForkSet(null);
+    setGhostChord(null);
+    setGhostNotes([]);
+    setFingerprintRotation(0);
+    setLockedScaleId(scale.id);
+    setLockedDoMidi(doMidi);
+    setFrameMode("locked");
+    setScaleWalkSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, rootPitchClass, scaleId: scale.id });
+    const url = new URL(window.location.href);
+    url.searchParams.set("pianoDo", String(rootPitchClass));
+    url.searchParams.set("pianoScale", scale.id);
+    window.history.replaceState(null, "", url);
+  };
+
+  const restartScaleWalk = () => {
+    if (!scaleWalkSession) return;
+    setScaleWalkSession({ ...scaleWalkSession, anchorEventId: phraseEvents.at(-1)?.id ?? 0 });
   };
 
   const captureExperiencePhrase = () => {
@@ -1770,6 +1935,7 @@ export function PianoLab() {
 
   const selectFocusLens = (lens: FocusLens) => {
     if (lens === "paths") {
+      setScaleWalkSession(null);
       setLockedScaleId(scale.id);
       setLockedDoMidi(doMidi);
       setFrameMode("locked");
@@ -1787,6 +1953,7 @@ export function PianoLab() {
   };
 
   const selectLandmarkPath = (id: LandmarkPathId) => {
+    setScaleWalkSession(null);
     setLockedScaleId(scale.id);
     setLockedDoMidi(doMidi);
     setFrameMode("locked");
@@ -1819,7 +1986,14 @@ export function PianoLab() {
     setResolutionTarget({ ...fork, anchorEventId: phraseEvents.at(-1)?.id ?? 0, frameRootPitchClass: frame.rootPitchClass, frameScaleId: scale.id });
   };
 
-  const newestInsight = focusLens === "experience" ? experiencePhrase.length < 3
+  const newestInsight = focusLens === "scales" && scaleWalkProgress ? scaleWalkProgress.status === "waiting-do"
+    ? "The scale frame is fixed. Play Do in any octave to establish a register; the walk will judge relationships, not absolute note names."
+    : scaleWalkProgress.status === "complete"
+      ? `The octave closed at 2:1 while the ${scaleWalkScale.steps.join("–")} gap fingerprint stayed invariant.`
+      : scaleWalkProgress.lastAttempt?.kind === "try-again"
+        ? `The last move was ${scaleWalkProgress.lastAttempt.actualGap}; the route asks for +${scaleWalkProgress.lastAttempt.expectedGap}. Progress was preserved so you can correct only that relationship.`
+        : `The last correct step changed the frequency and fifths position; the ${scaleWalkScale.steps.join("–")} route itself did not change.`
+    : focusLens === "experience" ? experiencePhrase.length < 3
     ? "Play at least three attacks, then hold the latest phrase for a personal reflection."
     : experienceSaved
       ? "Your phrase report was saved locally as one uncertain observation; it remains separate from measured and modeled evidence."
@@ -1859,14 +2033,15 @@ export function PianoLab() {
     const chordGhost = ghostNotes.includes(note);
     const resolutionGhost = resolutionTarget != null && pitchClassFromMidi(note) === resolutionTarget.pitchClass;
     const landmarkGhost = focusLens === "paths" && landmarkTargetNotes.includes(note);
+    const scaleWalkTarget = focusLens === "scales" && scaleWalkProgress?.status === "walking" && note === scaleWalkProgress.expectedMidi;
     const ghost = chordGhost || resolutionGhost || landmarkGhost;
     const home = context.stepsWithinOctave === 0;
-    const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", attacked ? "is-chord-member" : "", inherited && chordMember ? "is-inherited" : "", inheritedExcluded ? "is-excluded" : "", ghost ? "is-ghost" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
+    const className = ["piano-key", black ? "is-black" : "is-white", context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", focused ? "is-focused" : "", attacked ? "is-chord-member" : "", inherited && chordMember ? "is-inherited" : "", inheritedExcluded ? "is-excluded" : "", ghost ? "is-ghost" : "", scaleWalkTarget ? "is-scale-walk-target" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
       "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
       "--key-width": `${100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
-    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${attacked ? ", attacked in selected chord" : inheritedExcluded ? ", sounding but excluded from selected chord interpretation" : inherited ? ", inherited and included in selected chord interpretation" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
+    return <button key={note} type="button" className={className} style={style} aria-pressed={active} aria-label={`${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)}${showConventions ? `, ${conventionalPitchName(note)}` : ""}${sustained ? ", sustained by pedal" : ""}${attacked ? ", attacked in selected chord" : inheritedExcluded ? ", sounding but excluded from selected chord interpretation" : inherited ? ", inherited and included in selected chord interpretation" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : scaleWalkTarget ? ", silent guided scale-walk target" : ""}`} onClick={() => toggleScreenKey(note)}><span>{context.inScale || active || home || ghost || scaleWalkTarget ? context.syllable : "·"}</span>{showConventions ? <small>{conventionalPitchName(note)}</small> : null}</button>;
   };
 
   const exactChord = chordCandidates.find((candidate) => candidate.exact);
@@ -1922,7 +2097,7 @@ export function PianoLab() {
         <FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
         <ScaleLens events={events} chordNotes={analysisNotes} snapshots={snapshots} frame={frame} doMidi={doMidi} showConventions={showConventions} onAdopt={lockCandidate} />
         <FifthsDerivation doMidi={doMidi} showConventions={showConventions} onChooseDo={chooseDoFromFifths} />
-        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} />
+        <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <LandmarkPathCoach path={landmarkPath} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} /> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <div className="piano-focus-grid is-motion">
         <FrequencyView events={events} gestures={chordGestures} selectedChordId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
         <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} />

@@ -7281,6 +7281,43 @@ footer a {
   border-left: 0 !important;
 }
 
+.hud-guided-walk { margin: 16px 0 18px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); }
+.hud-guided-walk.is-inactive { padding: 15px 14px; }
+.hud-walk-intro,
+.hud-walk-topline { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; justify-content: space-between; }
+.hud-walk-intro .hud-subheading,
+.hud-walk-topline .hud-subheading { flex: 1 1 420px; margin: 0; }
+.hud-guided-walk.is-inactive > p { margin: 9px 0 0; color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.hud-walk-topline { padding: 13px 14px; }
+.hud-walk-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.hud-walk-actions button,
+.hud-walk-intro > button { min-height: 34px; padding: 0 11px; border: 1px solid var(--line-strong); color: var(--foreground); background: transparent; font: inherit; font-size: .72rem; cursor: pointer; }
+.hud-walk-intro > button.piano-primary-action { color: var(--background); border-color: var(--foreground); background: var(--foreground); }
+.hud-walk-route { display: grid; grid-template-columns: repeat(var(--walk-count), minmax(0, 1fr)); margin: 0; padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); list-style: none; }
+.hud-walk-route li { display: grid; grid-template-columns: auto 1fr; min-width: 0; gap: 2px 6px; align-items: center; padding: 9px 8px; color: var(--muted); }
+.hud-walk-route li + li { border-left: 1px solid var(--line); }
+.hud-walk-route li > span { grid-row: 1 / 3; display: grid; width: 22px; height: 22px; place-content: center; border: 1px solid var(--line-strong); border-radius: 50%; font-family: var(--font-mono), monospace; font-size: .66rem; }
+.hud-walk-route strong { overflow: hidden; font-size: .72rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.hud-walk-route small { color: inherit; font-family: var(--font-mono), monospace; font-size: .66rem; }
+.hud-walk-route li.is-complete { color: var(--foreground); }
+.hud-walk-route li.is-complete > span { border-color: var(--piano-blue); background: color-mix(in srgb, var(--piano-blue) 14%, transparent); }
+.hud-walk-route li.is-current { color: var(--foreground); background: color-mix(in srgb, var(--piano-gold) 9%, transparent); box-shadow: inset 0 -3px var(--piano-gold); }
+.hud-walk-route li.is-current > span { border-color: var(--piano-gold); border-style: dashed; }
+.hud-walk-feedback { display: grid; gap: 4px; padding: 13px 14px 13px 16px; border-left: 3px solid var(--piano-blue); }
+.hud-guided-walk.has-error .hud-walk-feedback { border-left-color: var(--piano-coral); }
+.hud-walk-feedback span { color: var(--piano-gold); font-size: .69rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.hud-walk-feedback strong { font-family: var(--font-display), Georgia, serif; font-size: 1.12rem; font-weight: 400; }
+.hud-walk-feedback small { max-width: 94ch; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.hud-walk-physics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.hud-walk-physics > span { display: grid; min-width: 0; gap: 3px; padding: 10px 14px; }
+.hud-walk-physics > span + span { border-left: 1px solid var(--line); }
+.hud-walk-physics small,
+.hud-walk-physics em { overflow-wrap: anywhere; color: var(--muted); font-size: .69rem; font-style: normal; line-height: 1.35; }
+.hud-walk-physics small { text-transform: uppercase; }
+.hud-walk-physics strong { font-family: var(--font-mono), monospace; font-size: .76rem; font-weight: 500; }
+.hud-walk-gravity { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: .69rem; line-height: 1.45; }
+.hud-walk-gravity strong { color: var(--foreground); font-weight: 500; }
+
 .hud-scale-learning-grid {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(0, 1.08fr) minmax(300px, .97fr);
@@ -7527,6 +7564,7 @@ footer a {
 .hud-keyboard .piano-key.is-excluded { outline: 3px dotted var(--muted); outline-offset: -7px; opacity: .72; }
 .hud-keyboard .piano-key.is-excluded::after { content: "×"; position: absolute; right: 4px; bottom: 4px; color: var(--foreground); font-family: var(--font-mono), monospace; font-size: .68rem; }
 .hud-keyboard .piano-key.is-ghost:not(.is-active) { outline: 3px dashed var(--piano-coral); outline-offset: -7px; }
+.hud-keyboard .piano-key.is-scale-walk-target:not(.is-active) { outline: 3px dashed var(--piano-blue); outline-offset: -7px; box-shadow: inset 0 -6px color-mix(in srgb, var(--piano-blue) 35%, transparent); }
 
 .piano-hud-analysis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(280px, .9fr); border-bottom: 1px solid var(--line); }
 .piano-hud-analysis > * + * { border-left: 1px solid var(--line); }
@@ -7625,6 +7663,8 @@ footer a {
   .piano-chord-learning-grid { grid-template-columns: 1fr; }
   .piano-chord-learning-grid > * + * { border-top: 1px solid var(--line); border-left: 0; }
   .hud-scale-learning-grid { grid-template-columns: 1fr 1fr; }
+  .hud-walk-route li { grid-template-columns: 1fr; justify-items: center; padding-inline: 4px; text-align: center; }
+  .hud-walk-route li > span { grid-row: auto; }
   .hud-fifths-derivation-body { grid-template-columns: 1fr; }
   .hud-fifths-spiral-field { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-resolution-field { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0 !important; }
@@ -7683,6 +7723,15 @@ footer a {
   .hud-voice-summary > span { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-voice-summary > span:last-child { border-bottom: 0; }
   .hud-scale-learning-grid { grid-template-columns: 1fr; }
+  .hud-walk-intro > button { width: 100%; }
+  .hud-walk-actions { width: 100%; }
+  .hud-walk-actions button { flex: 1; }
+  .hud-walk-route li { gap: 3px; padding: 7px 2px; }
+  .hud-walk-route li > span { width: 20px; height: 20px; }
+  .hud-walk-route strong,
+  .hud-walk-route small { font-size: .62rem; }
+  .hud-walk-physics { grid-template-columns: 1fr; }
+  .hud-walk-physics > span + span { border-top: 1px solid var(--line); border-left: 0; }
   .hud-scale-learning-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }
   .hud-fifths-equation { grid-template-columns: 1fr; }
   .hud-fifths-equation > * { border-right: 0; }
@@ -7732,6 +7781,7 @@ footer a {
   .hud-fifths-closure-gap { fill: Canvas; stroke: CanvasText; }
   .hud-fifths-spiral-field g.is-current .hud-fifths-spiral-node { fill: Highlight; stroke: HighlightText; }
   .hud-keyboard .piano-key.is-sustained { outline-color: LinkText; }
+  .hud-keyboard .piano-key.is-scale-walk-target { outline-color: Highlight; }
   .hud-keyboard .piano-key.is-excluded { outline-color: GrayText; }
   .hud-field-notes button.is-excluded { border-color: GrayText; color: GrayText; }
   .hud-texture-node.is-excluded,

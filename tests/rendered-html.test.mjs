@@ -164,6 +164,12 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoModel, /no song or recording is reproduced/i);
   assert.match(pianoLab, /Route fit \+ held time \+ recurrence \+ attack \+ low register \+ ending · named candidates were sounded/);
   assert.match(pianoLab, /No note was entered or sounded/);
+  assert.match(pianoLab, /Walk one octave by its gaps/);
+  assert.match(pianoLab, /begin on Do in any octave/);
+  assert.match(pianoLab, /Progress stays here/);
+  assert.match(pianoLab, /frequency doubled/);
+  assert.match(pianoLab, /evaluateAscendingScaleWalk/);
+  assert.match(pianoLab, /scaleWalkSession/);
   assert.match(pianoLab, /setResolutionForkSet\(resolutionForkSet \?\? nextNoteForks\)/);
   assert.match(pianoLab, /pianoLens/);
   assert.doesNotMatch(pianoLab, /placeNearbyChord/);

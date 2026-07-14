@@ -6,6 +6,7 @@ import {
   articulationTimeline,
   chordTransitionEvidence,
   detectMotifTransformations,
+  evaluateAscendingScaleWalk,
   fifthStepForPitchClass,
   fifthsCircle,
   fifthsSpiral,
@@ -51,6 +52,44 @@ test("builds each scale as an octave-closing route", () => {
   }
   assert.deepEqual(scaleSemitones(PIANO_SCALES[0]), [0, 2, 4, 5, 7, 9, 11]);
   assert.deepEqual(scaleSemitones(PIANO_SCALES[3]), [0, 3, 5, 6, 7, 10]);
+});
+
+test("walks an ascending scale from Do in any MIDI octave", () => {
+  const scale = PIANO_SCALES[0];
+  const low = evaluateAscendingScaleWalk([36, 38, 40, 41, 43, 45, 47, 48], 0, scale);
+  const high = evaluateAscendingScaleWalk([60, 62, 64, 65, 67, 69, 71, 72], 0, scale);
+  assert.equal(low.status, "complete");
+  assert.equal(high.status, "complete");
+  assert.deepEqual(low.matchedNotes.map((note) => note - low.baseMidi!), high.matchedNotes.map((note) => note - high.baseMidi!));
+  assert.deepEqual(high.routeOffsets, [0, 2, 4, 5, 7, 9, 11, 12]);
+  assert.equal(high.lastAttempt?.kind, "complete");
+});
+
+test("keeps scale-walk progress after a wrong gap and explains the retry", () => {
+  const scale = PIANO_SCALES[0];
+  const waiting = evaluateAscendingScaleWalk([61], 0, scale);
+  assert.equal(waiting.status, "waiting-do");
+  assert.equal(waiting.lastAttempt?.kind, "find-do");
+  const retry = evaluateAscendingScaleWalk([60, 62, 63], 0, scale);
+  assert.equal(retry.status, "walking");
+  assert.equal(retry.nextIndex, 2);
+  assert.equal(retry.expectedMidi, 64);
+  assert.equal(retry.lastAttempt?.expectedGap, 2);
+  assert.equal(retry.lastAttempt?.actualGap, 1);
+  assert.equal(retry.errorCount, 1);
+  const corrected = evaluateAscendingScaleWalk([60, 62, 63, 64], 0, scale);
+  assert.equal(corrected.nextIndex, 3);
+  assert.deepEqual(corrected.matchedNotes, [60, 62, 64]);
+});
+
+test("restarts an active scale walk when Do is played in a new octave", () => {
+  const scale = PIANO_SCALES[0];
+  const restarted = evaluateAscendingScaleWalk([48, 50, 60], 0, scale);
+  assert.equal(restarted.status, "walking");
+  assert.equal(restarted.baseMidi, 60);
+  assert.equal(restarted.nextIndex, 1);
+  assert.deepEqual(restarted.matchedNotes, [60]);
+  assert.equal(restarted.lastAttempt?.kind, "restarted");
 });
 
 test("keeps movable-Do context invariant under transposition", () => {

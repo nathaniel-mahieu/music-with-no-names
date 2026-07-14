@@ -4,7 +4,7 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Chord Membership Correction v1.37**. It provides:
+The current milestone is **Guided Scale Walk v1.38**. It provides:
 
 - Safe, user-initiated two-tone synthesis.
 - A silent Experience focus that freezes a learner's live phrase, asks one question at a time about settledness, energy, surprise/familiarity, and liking, and maps only those explicit reports. Dot size, ring weight, same-relationship highlighting, sample count, spread, and uncertainty remain inspectable without turning the result into a personality label or quality score.
@@ -18,6 +18,7 @@ The current milestone is **Chord Membership Correction v1.37**. It provides:
 - A silent Paths focus with generated pop-loop, blues-cycle, classical-cadence, and pedal-point archetypes. Each path fixes the current movable Do, marks compact ghost-key voicings, advances only after an exact pitch-class match in any octave, and reveals carried tones, nearest-voice motion, fifths travel, modeled crunch/repose, and pull without reproducing a song or entering an answer.
 - A single Piano HUD that aligns that phrase across grand staff notation, log-frequency height, a fixed circle of fifths, changing scale frames, chord identity, nearby scale chords, interval texture, and separate perceptual traces.
 - A focused scale-learning sequence that reads the selected route as a cyclic equal-key gap fingerprint before showing its conventional name, preserves the fingerprint under transposition, and rotates the starting gap to preview mode-like hearing.
+- A live, silent ascending scale walk that fixes the current Do and route, accepts the first Do in any MIDI octave, marks one exact next key, and teaches the octave as a reusable physical gap sequence. Wrong attacks preserve completed steps and compare the attempted gap with the expected one; a new Do restarts the same route in a different register; completion exposes the 2:1 frequency doubling alongside the invariant gap fingerprint, fifths coordinate, and changing tonal-gravity context.
 - A twelve-center tonal-gravity field that keeps route compatibility separate from performed evidence: held time, recurrence, attack strength, low-register placement, and phrase endings remain visible contributors rather than collapsing into key certainty.
 - Silent resolution forks for center return, minimum hand motion, the near-3:2 fifths neighbor, and a less-recent route tone. The learner chooses an intention, plays the outlined pitch class, and reflects on the result; the control never enters or sounds an answer.
 - Phrase-level scale inference that uses the full sixty-second memory so the seven-attack microscope cannot forget an earlier Do and spuriously reframe the same phrase.

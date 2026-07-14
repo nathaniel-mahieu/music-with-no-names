@@ -38,6 +38,9 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /aria-label="Correct inherited chord membership"/);
   assert.match(piano, /Restore.*Exclude.*inherited/);
   assert.match(piano, /id="hud-chord-window"/);
+  assert.match(piano, /aria-label="Guided ascending scale walk"/);
+  assert.match(piano, /role="status" aria-live="polite"/);
+  assert.match(piano, /silent guided scale-walk target/);
   assert.match(recording, /aria-live="polite"/);
   assert.match(journey, /role="img" aria-label=/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);
@@ -69,5 +72,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.doesNotMatch(scale, /className="degree-inspector"[^>]*aria-live/);
   assert.doesNotMatch(piano, /tabIndex=\{?[1-9]/);
   assert.match(css, /\.piano-key\.is-circle-target/);
+  assert.match(css, /\.piano-key\.is-scale-walk-target/);
+  assert.match(css, /\.hud-walk-route li\.is-current[\s\S]*box-shadow/);
   assert.match(css, /\.piano-key\.is-active,[\s\S]*Highlight/);
 });
