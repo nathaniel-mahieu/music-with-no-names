@@ -39,15 +39,18 @@ export type LiveEarIntervalProfile = {
   modelReadings: LiveEarModelReading[];
 };
 
+function isSafeEvent(event: PianoPhraseSpecimenEvent) {
+  return Number.isInteger(event.id)
+    && Number.isInteger(event.note)
+    && event.note >= 0
+    && event.note <= 127
+    && Number.isFinite(event.onsetMs)
+    && (event.releaseMs == null || (Number.isFinite(event.releaseMs) && event.releaseMs >= event.onsetMs));
+}
+
 function safeEvents(events: PianoPhraseSpecimenEvent[]) {
   return events
-    .filter((event) => Number.isInteger(event.id)
-      && Number.isInteger(event.note)
-      && event.note >= 0
-      && event.note <= 127
-      && Number.isFinite(event.onsetMs)
-      && event.onsetMs >= 0
-      && (event.releaseMs == null || (Number.isFinite(event.releaseMs) && event.releaseMs >= event.onsetMs)))
+    .filter(isSafeEvent)
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
 }
 
@@ -59,16 +62,8 @@ function interactionStatus(first: PianoPhraseSpecimenEvent, second: PianoPhraseS
     : { status: "separate" as const, overlapMs: 0 };
 }
 
-/**
- * Reads the latest performed interval. Spectral evidence is emitted only when
- * release timing proves that both fundamentals overlapped. Every upper partial
- * remains a declared teaching assumption rather than measured keyboard audio.
- */
-export function liveEarIntervalProfile(events: PianoPhraseSpecimenEvent[]): LiveEarIntervalProfile | null {
-  const usable = safeEvents(events);
-  if (usable.length < 2) return null;
-  const first = usable.at(-2)!;
-  const second = usable.at(-1)!;
+export function liveEarPairProfile(first: PianoPhraseSpecimenEvent, second: PianoPhraseSpecimenEvent): LiveEarIntervalProfile | null {
+  if (!isSafeEvent(first) || !isSafeEvent(second) || second.onsetMs < first.onsetMs) return null;
   const signedSteps = second.note - first.note;
   const steps = Math.abs(signedSteps);
   const firstHz = frequencyFromMidi(first.note);
@@ -112,4 +107,15 @@ export function liveEarIntervalProfile(events: PianoPhraseSpecimenEvent[]): Live
     overlapMs: timing.overlapMs,
     modelReadings,
   };
+}
+
+/**
+ * Reads the latest performed interval. Spectral evidence is emitted only when
+ * release timing proves that both fundamentals overlapped. Every upper partial
+ * remains a declared teaching assumption rather than measured keyboard audio.
+ */
+export function liveEarIntervalProfile(events: PianoPhraseSpecimenEvent[]): LiveEarIntervalProfile | null {
+  const usable = safeEvents(events);
+  if (usable.length < 2) return null;
+  return liveEarPairProfile(usable.at(-2)!, usable.at(-1)!);
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { liveEarIntervalProfile } from "../lib/live-ear.ts";
+import { liveEarIntervalProfile, liveEarPairProfile } from "../lib/live-ear.ts";
 import type { PianoPhraseSpecimenEvent } from "../lib/piano-session.ts";
 
 function event(id: number, note: number, onsetMs: number, releaseMs: number | null): PianoPhraseSpecimenEvent {
@@ -69,4 +69,27 @@ test("uses the latest two valid attacks and refuses undersized input", () => {
   assert.equal(profile.first.note, 60);
   assert.equal(profile.second.note, 63);
   assert.equal(profile.steps, 3);
+});
+
+test("compares an explicit source or echo pair without inventing simultaneous evidence", () => {
+  const melodic = liveEarPairProfile(event(1, 60, 0, 180), event(2, 67, 360, 620));
+  const harmonic = liveEarPairProfile(event(3, 72, 800, 1300), event(4, 79, 900, 1400));
+  assert.ok(melodic && harmonic);
+  assert.equal(melodic.steps, harmonic.steps);
+  assert.equal(melodic.equalFrequencyRatio, harmonic.equalFrequencyRatio);
+  assert.equal(melodic.interactionStatus, "separate");
+  assert.equal(melodic.modelReadings.length, 0);
+  assert.equal(harmonic.interactionStatus, "overlap");
+  assert.equal(harmonic.modelReadings.length, 4);
+});
+
+test("rejects an explicit pair whose chronology runs backward", () => {
+  assert.equal(liveEarPairProfile(event(2, 67, 200, 400), event(1, 60, 100, 300)), null);
+});
+
+test("accepts a phrase restored onto a negative relative-time coordinate", () => {
+  const restored = liveEarPairProfile(event(1, 60, -800, -300), event(2, 67, -650, -100));
+  assert.ok(restored);
+  assert.equal(restored.interactionStatus, "overlap");
+  assert.equal(restored.overlapMs, 350);
 });

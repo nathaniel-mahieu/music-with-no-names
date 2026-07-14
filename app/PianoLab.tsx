@@ -99,6 +99,7 @@ import {
 } from "@/lib/personal-response";
 import { livePulseMirror, type LivePulseMirror } from "@/lib/rhythm-model";
 import { PIANO_SESSION_KEY } from "@/lib/piano-session";
+import { liveEarPairProfile, type LiveEarIntervalProfile } from "@/lib/live-ear";
 
 type MidiInputLike = {
   id: string;
@@ -151,7 +152,12 @@ type ChordMeasure = {
 type FrameMode = "discover" | "locked";
 type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif";
-type IntervalEchoTarget = { semitones: number; anchorEventId: number; sourceNotes: [number, number] };
+type IntervalEchoTarget = {
+  semitones: number;
+  anchorEventId: number;
+  sourceNotes: [number, number];
+  sourceEvents: [HudNoteEvent, HudNoteEvent];
+};
 type ResolutionTarget = ResolutionFork & {
   anchorEventId: number;
   frameRootPitchClass?: number;
@@ -1871,7 +1877,9 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
   const latestDistance = latestPair ? Math.abs(latestPair[1].note - latestPair[0].note) : null;
   const afterTarget = target ? events.filter((event) => event.id > target.anchorEventId) : [];
   const completedAttemptCount = Math.floor(afterTarget.length / 2);
-  const attemptPair = completedAttemptCount ? [afterTarget[completedAttemptCount * 2 - 2].note, afterTarget[completedAttemptCount * 2 - 1].note] as [number, number] : null;
+  const attemptEvents = completedAttemptCount ? [afterTarget[completedAttemptCount * 2 - 2], afterTarget[completedAttemptCount * 2 - 1]] as [HudNoteEvent, HudNoteEvent] : null;
+  const attemptPair = attemptEvents ? [attemptEvents[0].note, attemptEvents[1].note] as [number, number] : null;
+  const sourceEvents = target ? target.sourceEvents.map((saved) => events.find((event) => event.id === saved.id) ?? saved) as [HudNoteEvent, HudNoteEvent] : latestPair;
   const sourcePair = target?.sourceNotes ?? (latestPair ? [latestPair[0].note, latestPair[1].note] as [number, number] : null);
   const sourceDistance = target?.semitones ?? latestDistance;
   const landmark = sourceDistance == null ? null : intervalLandmark(sourceDistance);
@@ -1879,30 +1887,44 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
   const model = pianoSoundModel(soundModelId);
   const noteLabel = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
   const pairLabel = (pair: [number, number]) => `${noteLabel(pair[0])} → ${noteLabel(pair[1])}`;
-  const sourceInteraction = target ? pianoPartialInteraction(frequencyFromMidi(target.sourceNotes[0]), frequencyFromMidi(target.sourceNotes[1]), soundModelId) : null;
-  const attemptInteraction = attemptPair ? pianoPartialInteraction(frequencyFromMidi(attemptPair[0]), frequencyFromMidi(attemptPair[1]), soundModelId) : null;
+  const sourceProfile = sourceEvents ? liveEarPairProfile(sourceEvents[0], sourceEvents[1]) : null;
+  const attemptProfile = attemptEvents ? liveEarPairProfile(attemptEvents[0], attemptEvents[1]) : null;
+  const sourceReading = sourceProfile?.modelReadings.find((reading) => reading.id === soundModelId) ?? null;
+  const attemptReading = attemptProfile?.modelReadings.find((reading) => reading.id === soundModelId) ?? null;
+  const auditoryComparable = Boolean(comparison?.matched && sourceReading && attemptReading);
   const signedSteps = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
-  const comparisonSummary = comparison && sourceInteraction && attemptInteraction
-    ? `${comparison.matched ? "The equal-key spacing matched" : "The equal-key spacing did not match"}. Source ${pairLabel(comparison.sourceNotes)} and echo ${pairLabel(comparison.attemptNotes)}; hand center shift ${signedSteps(comparison.centerShiftSteps)} keys; frequency gap ${comparison.sourceFrequencyGapHz.toFixed(1)} to ${comparison.attemptFrequencyGapHz.toFixed(1)} hertz; modeled roughness ${Math.round(sourceInteraction.roughness * 100)} to ${Math.round(attemptInteraction.roughness * 100)} under the ${model.shortLabel} assumed spectrum.`
+  const interactionLabel = (profile: LiveEarIntervalProfile | null) => profile?.interactionStatus === "overlap"
+    ? `${Math.round(profile.overlapMs ?? 0)} ms overlap`
+    : profile?.interactionStatus === "separate" ? "sequential" : "release unknown";
+  const fieldSize = (pair: readonly HudNoteEvent[] | null) => pair ? new Set(pair[1].fieldNotes).size : 0;
+  const spectralReading = auditoryComparable && sourceReading && attemptReading
+    ? `roughness ${Math.round(sourceReading.roughness * 100)} → ${Math.round(attemptReading.roughness * 100)}`
+    : sourceProfile && attemptProfile && comparison?.matched
+      ? `${interactionLabel(sourceProfile)} → ${interactionLabel(attemptProfile)}`
+      : "wait for a matched spacing";
+  const comparisonSummary = comparison && sourceProfile && attemptProfile
+    ? `${comparison.matched ? "The equal-key spacing matched" : "The equal-key spacing did not match"}. Source ${pairLabel(comparison.sourceNotes)} and echo ${pairLabel(comparison.attemptNotes)}; hand center shift ${signedSteps(comparison.centerShiftSteps)} keys; onset gap ${Math.round(sourceProfile.second.onsetMs - sourceProfile.first.onsetMs)} to ${Math.round(attemptProfile.second.onsetMs - attemptProfile.first.onsetMs)} milliseconds; interaction ${interactionLabel(sourceProfile)} to ${interactionLabel(attemptProfile)}. ${auditoryComparable && sourceReading && attemptReading ? `Modeled roughness ${Math.round(sourceReading.roughness * 100)} to ${Math.round(attemptReading.roughness * 100)} under the ${model.shortLabel} assumed spectrum.` : "No simultaneous spectral comparison is made unless both performed pairs demonstrably overlapped."}`
     : "";
   return (
     <section className="hud-echo-panel" aria-labelledby="hud-echo-title">
-      <div className="hud-panel-heading"><span>Transfer, don’t memorize</span><strong id="hud-echo-title">Interval Echo</strong><small>Replay one spacing elsewhere. See the relationship that survives and the physical coordinates that do not.</small></div>
+      <div className="hud-panel-heading"><span>One relationship · two musical jobs</span><strong id="hud-echo-title">Same spacing, different context</strong><small>Replay one hand span elsewhere. Compare what the relationship preserves with what register, timing, surrounding notes, and your listening can change.</small></div>
       {sourcePair && landmark && sourceDistance != null ? <div className="hud-echo-current">
         <span>{target ? "Frozen source" : "Latest pair"} · {pairLabel(sourcePair)}</span>
         <strong>{sourceDistance} key step{sourceDistance === 1 ? "" : "s"}</strong>
-        <small>{landmark.relationship} · near {landmark.landmarkLabel}</small>
+        <small>{landmark.relationship} · near {landmark.landmarkLabel}{sourceProfile ? ` · ${interactionLabel(sourceProfile)}` : ""}</small>
       </div> : <p className="hud-empty-copy">Play two notes to create an interval worth echoing.</p>}
       <div className="hud-echo-actions">
-        <button type="button" disabled={!latestPair || latestDistance == null} onClick={() => latestPair && latestDistance != null && onSetTarget({ semitones: latestDistance, anchorEventId: latestPair[1].id, sourceNotes: [latestPair[0].note, latestPair[1].note] })}>{target ? "Use latest pair as source" : "Echo this spacing"}</button>
+        <button type="button" disabled={!latestPair || latestDistance == null} onClick={() => latestPair && latestDistance != null && onSetTarget({ semitones: latestDistance, anchorEventId: latestPair[1].id, sourceNotes: [latestPair[0].note, latestPair[1].note], sourceEvents: [{ ...latestPair[0] }, { ...latestPair[1] }] })}>{target ? "Use latest pair as source" : "Echo this spacing"}</button>
         {target ? <button type="button" onClick={onClear}>End echo</button> : null}
       </div>
       {target ? <div className={`hud-echo-feedback ${comparison?.matched ? "is-match" : ""}`} aria-live="polite">
         <span>Ghost target · {target.semitones} key step{target.semitones === 1 ? "" : "s"}</span>
         <strong>{comparison == null ? afterTarget.length % 2 ? "Starting note captured. Play the second note." : "Play a new starting note, then a second note." : comparison.matched ? "Same spacing—now inspect what changed around it." : `You moved ${comparison.attemptSemitones}. Keep the ${target.semitones}-step span and try another two-note pair.`}</strong>
       </div> : null}
-      {comparison && sourceInteraction && attemptInteraction ? <div className={`hud-echo-comparison ${comparison.matched ? "is-match" : ""}`}>
+      {comparison && sourceProfile && attemptProfile ? <div className={`hud-echo-comparison ${comparison.matched ? "is-match" : ""}`}>
         <svg viewBox="0 0 420 112" role="img" aria-label={comparisonSummary}>
+          <title>Source and echo on one keyboard-position coordinate</title>
+          <desc>{comparisonSummary}</desc>
           {(() => {
             const allNotes = [...comparison.sourceNotes, ...comparison.attemptNotes];
             const minimum = Math.min(...allNotes) - 1;
@@ -1921,12 +1943,14 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
             </>;
           })()}
         </svg>
-        <div className="hud-echo-reading" role="status">
-          <p><span>{comparison.matched ? "held invariant" : "target relationship"}</span><strong>{comparison.sourceSemitones} steps · {comparison.equalKeyboardRatio.toFixed(3)}:1</strong><small>{comparison.matched ? `${landmark?.relationship}; equal-frequency ratio and hand span survived.` : `Attempt was ${comparison.attemptSemitones} steps; the target span did not survive.`}</small></p>
-          <p><span>physical coordinates changed</span><strong>{comparison.sourceFrequencyGapHz.toFixed(1)} → {comparison.attemptFrequencyGapHz.toFixed(1)} Hz gap</strong><small>Hand center {signedSteps(comparison.centerShiftSteps)} keys · direction {comparison.directionPreserved ? "preserved" : "reversed"}{comparison.uniformShiftSteps == null ? " · not one uniform shift" : ` · both notes ${signedSteps(comparison.uniformShiftSteps)} keys`}.</small></p>
-          <p><span>assumed spectral interaction</span><strong>roughness {Math.round(sourceInteraction.roughness * 100)} → {Math.round(attemptInteraction.roughness * 100)}</strong><small>Overlap {Math.round(sourceInteraction.overlap * 100)} → {Math.round(attemptInteraction.overlap * 100)} under {model.shortLabel.toLowerCase()}; MIDI supplied no partials.</small></p>
+        <div className="hud-echo-reading" role="group" aria-label="Five separate lenses for the source and echoed interval">
+          <p><span>Relationships · measured</span><strong>{comparison.sourceSemitones} steps · {comparison.equalKeyboardRatio.toFixed(3)}:1</strong><small>{comparison.matched ? `${landmark?.relationship}; equal-frequency ratio and hand span survived.` : `Attempt was ${comparison.attemptSemitones} steps; the target relationship did not survive.`}</small></p>
+          <p><span>Sound · measured + modeled</span><strong>{comparison.sourceFrequencyGapHz.toFixed(1)} → {comparison.attemptFrequencyGapHz.toFixed(1)} Hz · {spectralReading}</strong><small>Release evidence: {interactionLabel(sourceProfile)} → {interactionLabel(attemptProfile)}. {auditoryComparable && sourceReading && attemptReading ? `Assumed partial overlap ${Math.round(sourceReading.overlap * 100)} → ${Math.round(attemptReading.overlap * 100)} under ${model.shortLabel.toLowerCase()}.` : comparison.matched ? "At least one pair was sequential or release-unknown, so a simultaneous partial-interaction comparison would answer the wrong question." : "Spectral evidence waits until the performed relationship matches."} MIDI supplied no upper partials or acoustic loudness.</small></p>
+          <p><span>Motion · measured</span><strong>{Math.round(sourceProfile.second.onsetMs - sourceProfile.first.onsetMs)} → {Math.round(attemptProfile.second.onsetMs - attemptProfile.first.onsetMs)} ms attack gap</strong><small>Hand center {signedSteps(comparison.centerShiftSteps)} keys · direction {comparison.directionPreserved ? "preserved" : "reversed"}{comparison.uniformShiftSteps == null ? " · not one uniform shift" : ` · both notes ${signedSteps(comparison.uniformShiftSteps)} keys`}.</small></p>
+          <p><span>Context · selected Do</span><strong>{pairLabel(comparison.sourceNotes)} · versus · {pairLabel(comparison.attemptNotes)}</strong><small>{fieldSize(sourceEvents)} → {fieldSize(attemptEvents)} notes sounding at the second attack. These labels use the current movable-Do frame, not a detected function.</small></p>
+          <p><span>Experience · listener only</span><strong>Did the two intervals do the same thing for you?</strong><small>The HUD does not infer similarity, tension, beauty, preference, correctness, or musical quality from the matched span.</small></p>
         </div>
-        <p className="hud-echo-limit">A matched spacing preserves its equal-key ratio, not its absolute frequencies, hertz gap, register, loudness, fingering, modeled roughness, or your experience.</p>
+        <p className="hud-echo-limit">A matched spacing preserves one relationship—not its melodic or harmonic job. Register, timing, overlap, surrounding notes, selected tonal frame, assumed spectrum, and your experience can all change around it.</p>
       </div> : null}
     </section>
   );
@@ -3546,7 +3570,13 @@ export function PianoLab() {
 
       {((focusLens === "explore" && !phraseCompareSession) || focusLens === "chords") ? <div className="piano-chord-learning-grid"><ChordCausePanel measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} showConventions={showConventions} /><VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /></div> : null}
 
-      {focusLens === "intervals" ? <div className="piano-focus-grid is-interval-practice"><IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} /><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /><PartialInteractionMicroscope notes={soundingAnalysisNotes} focusedNote={focusedEvent?.note ?? null} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} /></div> : null}
+      {focusLens === "intervals" ? <section className="hud-interval-lesson" aria-label="Interval context lesson">
+        <IntervalEcho events={events} target={intervalEchoTarget} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onSetTarget={setIntervalEchoTarget} onClear={() => setIntervalEchoTarget(null)} />
+        <details className="hud-interval-tools">
+          <summary><span>Inspect the sounding field</span><small>Optional interval network and assumed-partial microscope</small></summary>
+          <div className="piano-focus-grid is-interval-practice"><RelationshipTexture notes={soundingAnalysisNotes} inheritedNotes={inheritedAnalysisNotes} excludedInheritedNotes={excludedInheritedNotes} doMidi={doMidi} scale={scale} showConventions={showConventions} /><PartialInteractionMicroscope notes={soundingAnalysisNotes} focusedNote={focusedEvent?.note ?? null} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} /></div>
+        </details>
+      </section> : null}
 
       {focusLens === "explore" && !phraseCompareSession ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
 
