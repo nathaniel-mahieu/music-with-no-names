@@ -31,6 +31,7 @@ import {
   controlledSonorityChange,
   conventionalPitchName,
   detectMotifTransformations,
+  compareMotifEcho,
   compareMotifFingerprints,
   evaluateAscendingScaleWalk,
   evaluatePerformedScaleFingerprint,
@@ -79,6 +80,7 @@ import {
   type LandmarkPath,
   type LandmarkPathId,
   type MotifTransformation,
+  type MotifEchoComparison,
   type MotifFingerprintComparison,
   type NearbyChord,
   type PianoScale,
@@ -245,6 +247,10 @@ type PulseMirrorSession = {
   anchorEventId: number;
   capturedTapEventIds: number[];
 };
+type MotifEchoSession = {
+  sourceEvents: HudNoteEvent[];
+  anchorEventId: number;
+};
 type PhraseCompareDimension = "settledness" | "energy" | "liking";
 type PhraseCompareReport = "a" | "same" | "b";
 type PhraseCompareSession = {
@@ -275,7 +281,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -303,6 +309,7 @@ type PersistedPianoSession = {
   chordMotionEchoSession?: ChordMotionEchoSession | null;
   motionFocusMode?: MotionFocusMode;
   pulseMirrorSession?: PulseMirrorSession | null;
+  motifEchoSession?: MotifEchoSession | null;
   phraseCompareSession?: PhraseCompareSession | null;
 };
 
@@ -496,6 +503,15 @@ function isPulseMirrorSession(value: unknown): value is PulseMirrorSession {
     && Array.isArray(session.capturedTapEventIds)
     && (session.capturedTapEventIds.length === 0 || session.capturedTapEventIds.length === 4)
     && session.capturedTapEventIds.every((id) => Number.isInteger(id) && id > session.anchorEventId!);
+}
+
+function isMotifEchoSession(value: unknown): value is MotifEchoSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<MotifEchoSession>;
+  return isFrozenPhraseSpecimen(session.sourceEvents, 4)
+    && (session.sourceEvents.length === 3 || session.sourceEvents.length === 4)
+    && Number.isInteger(session.anchorEventId)
+    && session.anchorEventId! >= Math.max(...session.sourceEvents.map((event) => event.id));
 }
 
 function isScaleFingerprintSession(value: unknown): value is ScaleFingerprintSession {
@@ -2043,8 +2059,9 @@ function motifSigned(value: number) {
   return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
 }
 
-function MotifFingerprintFigure({ motif, comparison, sourceLabel, targetLabel }: {
-  motif: MotifTransformation;
+function MotifFingerprintFigure({ id, readingTitle, comparison, sourceLabel, targetLabel }: {
+  id: string;
+  readingTitle: string;
   comparison: MotifFingerprintComparison;
   sourceLabel: string;
   targetLabel: string;
@@ -2064,8 +2081,9 @@ function MotifFingerprintFigure({ motif, comparison, sourceLabel, targetLabel }:
   ].filter(Boolean).join("; ") || "no detector property changed";
   const summary = `${sourceLabel} and ${targetLabel}. Relative pitch paths ${pitchPath(comparison.sourceRelativePitchPath)} and ${pitchPath(comparison.targetRelativePitchPath)}. Interval paths ${intervalPath(comparison.sourceIntervalPath)} and ${intervalPath(comparison.targetIntervalPath)}. Timing shares ${timingPath(comparison.sourceTimingShares)} and ${timingPath(comparison.targetTimingShares)}. Kept: ${kept || "no complete fingerprint"}. Changed: ${changed}.`;
   const timingLane = (shares: number[]) => <span className="hud-motif-time-bar" aria-hidden="true">{shares.map((share, index) => <i key={index} style={{ "--motif-gap-share": share } as CSSProperties}><b>{Math.round(share * 100)}%</b></i>)}</span>;
-  return <div className="hud-motif-fingerprint" aria-labelledby="hud-motif-fingerprint-title">
-    <div className="hud-subheading"><span>Detector made inspectable</span><strong id="hud-motif-fingerprint-title">What survived the return?</strong><small>Set each statement’s first key to 0; turn each onset gap into a share of that statement’s total span.</small></div>
+  const titleId = `hud-motif-fingerprint-${id}-title`;
+  return <div className="hud-motif-fingerprint" aria-labelledby={titleId}>
+    <div className="hud-subheading"><span>Comparison made inspectable</span><strong id={titleId}>What survived the return?</strong><small>Set each statement’s first key to 0; turn each onset gap into a share of that statement’s total span.</small></div>
     <div className="hud-motif-fingerprint-grid" role="img" aria-label={summary}>
       <span aria-hidden="true" />
       <strong>{sourceLabel}</strong>
@@ -2083,16 +2101,64 @@ function MotifFingerprintFigure({ motif, comparison, sourceLabel, targetLabel }:
     <div className="hud-motif-invariance-reading" role="status" aria-live="polite">
       <span>invariance before interpretation</span>
       <strong>Kept: {kept || "no complete fingerprint"}</strong>
-      <small>Changed: {changed}. This local comparison explains why the detector says “{motifTitle(motif)}”; it does not infer intended motif, formal function, emotion, quality, or correctness.</small>
+      <small>Changed: {changed}. This local comparison explains “{readingTitle}”; it does not infer intended motif, formal function, emotion, quality, or correctness.</small>
     </div>
   </div>;
 }
 
-function PhraseMotionField({ events, articulation, motifs, mode }: {
+function motifEchoTitle(comparison: MotifEchoComparison) {
+  if (comparison.kind === "exact-repeat") return "exact return";
+  if (comparison.kind === "transposed-repeat") return `same shape · start shifted ${motifSigned(comparison.startShiftSemitones)}`;
+  if (comparison.kind === "rhythmic-variation") return "same pitch shape · timing changed";
+  if (comparison.kind === "altered-ending") return `same opening · ending moved ${motifSigned(comparison.endingDeltaSemitones)}`;
+  return "more than one relationship changed";
+}
+
+function MotifEchoPractice({ events, session, attemptEvents, onStart, onRetry, onEnd }: {
+  events: HudNoteEvent[];
+  session: MotifEchoSession | null;
+  attemptEvents: HudNoteEvent[];
+  onStart: (length: 3 | 4) => void;
+  onRetry: () => void;
+  onEnd: () => void;
+}) {
+  const required = session?.sourceEvents.length ?? 0;
+  const completeAttempt = session && attemptEvents.length === required ? attemptEvents : null;
+  const comparison = session && completeAttempt ? compareMotifEcho(session.sourceEvents, completeAttempt) : null;
+  const sourceMoves = session ? session.sourceEvents.slice(1).map((event, index) => motifSigned(event.note - session.sourceEvents[index].note)).join(" · ") : "";
+  return <section className="hud-motif-echo" aria-labelledby="hud-motif-echo-title">
+    <div className="hud-subheading"><span>Learner-bounded experiment · silent</span><strong id="hud-motif-echo-title">Choose the shape before the model searches.</strong><small>Freeze exactly three or four recent attacks, then replay that whole statement. No smaller sub-match can replace your chosen boundary.</small></div>
+    {!session ? <div className="hud-motif-echo-start">
+      <div><span>source not chosen</span><strong>Play a short shape, then freeze its boundary.</strong><small>The later replay may keep everything, move the start, reshape time, alter only the ending, or change several properties.</small></div>
+      <div role="group" aria-label="Choose motif source length">
+        <button type="button" disabled={events.length < 3} onClick={() => onStart(3)}>Freeze last 3</button>
+        <button type="button" disabled={events.length < 4} onClick={() => onStart(4)}>Freeze last 4</button>
+      </div>
+    </div> : <>
+      <div className="hud-motif-echo-progress" role="status" aria-live="polite">
+        <span>source frozen · {required} attacks · moves {sourceMoves}</span>
+        <strong>{comparison ? motifEchoTitle(comparison) : `Play ${required - attemptEvents.length} more attack${required - attemptEvents.length === 1 ? "" : "s"}`}</strong>
+        <small>{comparison ? "Every chosen attack entered this comparison." : `${attemptEvents.length}/${required} replay attacks captured. Timing begins with your first replay attack.`}</small>
+      </div>
+      {comparison ? <MotifFingerprintFigure id="echo" readingTitle={motifEchoTitle(comparison)} comparison={comparison} sourceLabel="chosen source" targetLabel="your replay" /> : null}
+      <div className="hud-motif-echo-actions">
+        {comparison ? <button type="button" onClick={onRetry}>Try another return</button> : null}
+        <button type="button" onClick={onEnd}>Release source</button>
+      </div>
+    </>}
+  </section>;
+}
+
+function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSession = null, motifEchoAttempt = [], onStartMotifEcho = () => {}, onRetryMotifEcho = () => {}, onEndMotifEcho = () => {} }: {
   events: HudNoteEvent[];
   articulation: ArticulationEvidence[];
   motifs: MotifTransformation[];
   mode: "touch" | "motif";
+  motifEchoSession?: MotifEchoSession | null;
+  motifEchoAttempt?: HudNoteEvent[];
+  onStartMotifEcho?: (length: 3 | 4) => void;
+  onRetryMotifEcho?: () => void;
+  onEndMotifEcho?: () => void;
 }) {
   const microscopeArticulation = articulation.slice(-7);
   const microscopeOffset = Math.max(0, events.length - microscopeArticulation.length);
@@ -2168,7 +2234,8 @@ function PhraseMotionField({ events, articulation, motifs, mode }: {
           <button type="button" aria-expanded={fingerprintRevealed} aria-controls="hud-motif-fingerprint-detail" onClick={() => setRevealedMotifKey(fingerprintRevealed ? null : strongestKey)}>{fingerprintRevealed ? "Hide what survived" : "Show what survived"}</button>
           <small>Compare relationship shape separately from starting key and elapsed speed.</small>
         </div> : null}
-        {strongest && fingerprint && fingerprintRevealed ? <div id="hud-motif-fingerprint-detail"><MotifFingerprintFigure motif={strongest} comparison={fingerprint} sourceLabel={rangeLabel(strongest.sourceStartIndex, strongest.length)} targetLabel={rangeLabel(strongest.targetStartIndex, strongest.length)} /></div> : null}
+        {strongest && fingerprint && fingerprintRevealed ? <div id="hud-motif-fingerprint-detail"><MotifFingerprintFigure id="detected" readingTitle={motifTitle(strongest)} comparison={fingerprint} sourceLabel={rangeLabel(strongest.sourceStartIndex, strongest.length)} targetLabel={rangeLabel(strongest.targetStartIndex, strongest.length)} /></div> : null}
+        <MotifEchoPractice events={events} session={motifEchoSession} attemptEvents={motifEchoAttempt} onStart={onStartMotifEcho} onRetry={onRetryMotifEcho} onEnd={onEndMotifEcho} />
       </div> : null}
     </div>
   </section>;
@@ -3446,6 +3513,7 @@ export function PianoLab() {
   const [chordMotionEchoSession, setChordMotionEchoSession] = useState<ChordMotionEchoSession | null>(null);
   const [motionFocusMode, setMotionFocusMode] = useState<MotionFocusMode>("pulse");
   const [pulseMirrorSession, setPulseMirrorSession] = useState<PulseMirrorSession | null>(null);
+  const [motifEchoSession, setMotifEchoSession] = useState<MotifEchoSession | null>(null);
   const [phraseCompareSession, setPhraseCompareSession] = useState<PhraseCompareSession | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
@@ -3482,7 +3550,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13 || saved.version === 14 || saved.version === 15 || saved.version === 16 || saved.version === 17 || saved.version === 18 || saved.version === 19 || saved.version === 20) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -3589,6 +3657,7 @@ export function PianoLab() {
               })),
             });
             if (isPulseMirrorSession(saved.pulseMirrorSession)) setPulseMirrorSession(saved.pulseMirrorSession);
+            if (isMotifEchoSession(saved.motifEchoSession)) setMotifEchoSession(saved.motifEchoSession);
             if (isPhraseCompareSession(saved.phraseCompareSession)) setPhraseCompareSession({ ...saved.phraseCompareSession, intention: saved.phraseCompareSession.intention ?? null });
           }
         }
@@ -3614,9 +3683,9 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 19, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 20, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
-  }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+  }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motifEchoSession, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -3749,6 +3818,12 @@ export function PianoLab() {
   const nextNoteForks = useMemo(() => resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4), [frame.rootPitchClass, phraseEvents, scale]);
   const articulationEvidence = useMemo(() => articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0), [nowMs, phraseEvents]);
   const motifTransformations = useMemo(() => detectMotifTransformations(phraseEvents, 3), [phraseEvents]);
+  const motifEchoAttempt = useMemo(() => motifEchoSession
+    ? phraseEvents.filter((event) => event.id > motifEchoSession.anchorEventId).slice(0, motifEchoSession.sourceEvents.length)
+    : [], [motifEchoSession, phraseEvents]);
+  const motifEchoComparison = useMemo(() => motifEchoSession && motifEchoAttempt.length === motifEchoSession.sourceEvents.length
+    ? compareMotifEcho(motifEchoSession.sourceEvents, motifEchoAttempt)
+    : null, [motifEchoAttempt, motifEchoSession]);
   const pulseMirrorModel = useMemo(() => pulseMirrorSession ? livePulseMirror(phraseEvents, pulseMirrorSession.anchorEventId) : null, [phraseEvents, pulseMirrorSession]);
   const pulseMirrorExpired = Boolean(pulseMirrorSession?.capturedTapEventIds.length && pulseMirrorSession.capturedTapEventIds.some((id) => !phraseEvents.some((event) => event.id === id)));
   useEffect(() => {
@@ -3962,6 +4037,7 @@ export function PianoLab() {
     setChordVoicingEchoSession(null);
     setChordMotionEchoSession(null);
     setPulseMirrorSession(null);
+    setMotifEchoSession(null);
     setPhraseCompareSession(null);
     setLatchedNotes(new Map());
     midi.clear();
@@ -4484,6 +4560,16 @@ export function PianoLab() {
     setPulseMirrorSession({ anchorEventId: phraseEvents.at(-1)?.id ?? 0, capturedTapEventIds: [] });
   };
 
+  const beginMotifEcho = (length: 3 | 4) => {
+    if (phraseEvents.length < length) return;
+    const sourceEvents = freezePhraseSpecimen(phraseEvents.slice(-length), currentHudTime());
+    setMotifEchoSession({ sourceEvents, anchorEventId: phraseEvents.at(-1)?.id ?? 0 });
+  };
+
+  const retryMotifEcho = () => {
+    setMotifEchoSession((current) => current ? { ...current, anchorEventId: phraseEvents.at(-1)?.id ?? current.anchorEventId } : current);
+  };
+
   const selectLandmarkPath = (id: LandmarkPathId) => {
     setScaleWalkSession(null);
     setScaleFingerprintSession(null);
@@ -4658,7 +4744,11 @@ export function PianoLab() {
           ? phraseEvents.length >= 3 ? "The breath map marks only unusually long onset-group gaps that also contain release-proven silence; move its threshold to see which groupings depend on the model." : "Play at least three onset groups to compare local attack spacing with release-proven quiet."
         : motionFocusMode === "voices"
           ? chordMeasures.length >= 2 ? "The voice coach maps nearest keyboard strands; held, rising, falling, added, and released notes are descriptions, not inferred fingering." : "Play two chord gestures to reveal held and moving nearest-key strands."
-          : motifTransformations.length ? `${motifTitle(motifTransformations[0])}: repeat, change one property, then return.` : "Play a three- or four-attack shape, leave space, then repeat or transform it."
+          : motifEchoSession
+            ? motifEchoComparison
+              ? `${motifEchoTitle(motifEchoComparison)}: every attack in your chosen ${motifEchoSession.sourceEvents.length}-attack boundary was compared.`
+              : `${motifEchoAttempt.length}/${motifEchoSession.sourceEvents.length} replay attacks captured for the chosen motif boundary.`
+            : motifTransformations.length ? `${motifTitle(motifTransformations[0])}: repeat, change one property, then return.` : "Play a three- or four-attack shape, leave space, then repeat or transform it."
     : focusedEvent ? (() => {
     const context = noteContext(focusedEvent.note, doMidi, scale);
     const fieldCandidate = fieldPitchClassCount <= 5 ? selectedChordMeasure?.candidate ?? chordCandidates[0] : undefined;
@@ -4771,7 +4861,7 @@ export function PianoLab() {
         <ScalePracticeField phraseEvents={phraseEvents} frame={frame} doMidi={doMidi} showConventions={showConventions} soundModelId={soundModelId} gravity={gravityCandidates} fingerprintRotation={fingerprintRotation} forks={resolutionForkSet ?? nextNoteForks} target={resolutionTarget} targetMatched={resolutionMatched} landingEvidence={resolutionLanding} landingEvents={resolutionEvidenceEvents} fingerprintSession={scaleFingerprintSession} fingerprintProgress={performedScaleFingerprint} gravityCounterfactualSession={gravityCounterfactualSession} gravityCounterfactualResult={gravityCounterfactualResult} walkSession={scaleWalkSession} walkEvents={scaleWalkEvents} walkProgress={scaleWalkProgress} walkScale={scaleWalkScale} nowMs={nowMs} onRotate={() => setFingerprintRotation((current) => current + 1)} onChooseTarget={chooseResolutionTarget} onClearTarget={() => { setResolutionTarget(null); setResolutionForkSet(null); }} onReflectResolution={beginResolutionForkReflection} onStartFingerprint={beginScaleFingerprint} onRestartFingerprint={restartScaleFingerprint} onReplayFingerprint={replayScaleFingerprint} onRevealFingerprint={revealScaleFingerprint} onEndFingerprint={() => setScaleFingerprintSession(null)} onStartGravityCounterfactual={captureGravityCounterfactual} onTargetGravityCounterfactual={targetGravityCounterfactual} onCueGravityCounterfactual={cueGravityCounterfactual} onRecaptureGravityCounterfactual={captureGravityCounterfactual} onEndGravityCounterfactual={() => setGravityCounterfactualSession(null)} onStartWalk={beginScaleWalk} onRestartWalk={restartScaleWalk} onEndWalk={() => setScaleWalkSession(null)} />
       </div> : focusLens === "paths" ? <><LandmarkPathCoach path={landmarkPath} pathVoicings={landmarkVoicings} stepIndex={effectiveLandmarkStepIndex} targetNotes={landmarkTargetNotes} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} transposeSession={landmarkTransposeSession} counterfactualSession={landmarkCounterfactualSession} onSelect={selectLandmarkPath} onReplay={replayLandmarkPath} onTranspose={transposeLandmarkPath} onCounterfactual={beginLandmarkCounterfactual} onCounterfactualReport={reportLandmarkCounterfactual} onRestore={restoreLandmarkPath} /><FifthsCompass events={events} activeNotes={activeNoteNumbers} chordNotes={analysisNotes} chordRootPitchClass={selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate.rootPitchClass : null} doMidi={doMidi} scale={scale} focusedNote={focusedEvent?.note ?? null} showConventions={showConventions} onChooseDo={chooseDoFromFifths} /></> : focusLens === "experience" ? <ExperienceLens captured={experiencePhrase} origin={experienceOrigin} latestCount={phraseEvents.length} observations={phraseCharacterObservations} draft={experienceDraft} questionIndex={experienceQuestionIndex} saved={experienceSaved} evidence={experienceEvidence} soundModelLabel={soundModel.label} deleteArmed={characterDeleteArmed} onCapture={captureExperiencePhrase} onAnswer={answerExperienceQuestion} onBack={backExperienceQuestion} onSave={saveExperienceReport} onReflectAgain={reflectOnExperienceAgain} onArmDelete={() => setCharacterDeleteArmed(true)} onDelete={deletePhraseReports} /> : focusLens === "motion" ? <>
         <MotionFocusGuide value={motionFocusMode} onChange={selectMotionMode} />
-        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} />}
+        {motionFocusMode === "pulse" ? <PulseMirrorField session={pulseMirrorSession} mirror={pulseMirrorModel} expired={pulseMirrorExpired} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPulseMirror} onEnd={() => setPulseMirrorSession(null)} /> : motionFocusMode === "breath" ? <PhraseBreathField events={phraseEvents} doMidi={doMidi} scale={scale} showConventions={showConventions} onComparePause={() => beginPhraseCompare("timing")} /> : motionFocusMode === "voices" ? <VoiceLeadingCoach measures={chordMeasures} selectedId={effectiveSelectedChordId} doMidi={doMidi} scale={scale} showConventions={showConventions} /> : <PhraseMotionField events={phraseEvents} articulation={articulationEvidence} motifs={motifTransformations} mode={motionFocusMode} motifEchoSession={motifEchoSession} motifEchoAttempt={motifEchoAttempt} onStartMotifEcho={beginMotifEcho} onRetryMotifEcho={retryMotifEcho} onEndMotifEcho={() => setMotifEchoSession(null)} />}
       </> : null}
 
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}

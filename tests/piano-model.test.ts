@@ -13,6 +13,7 @@ import {
   compareChordMotionEcho,
   compareChordVoicingEcho,
   compareIntervalEcho,
+  compareMotifEcho,
   compareMotifFingerprints,
   comparePhraseEndingRipple,
   comparePhrasePauseMutation,
@@ -1144,6 +1145,35 @@ test("rejects contradictory or chronologically invalid motif fingerprint evidenc
   const motif = detectMotifTransformations(events)[0];
   assert.throws(() => compareMotifFingerprints(events, { ...motif, targetEventIds: [4, 5, 99] }), RangeError);
   assert.throws(() => compareMotifFingerprints(events.map((event) => event.id === 6 ? { ...event, onsetMs: 550 } : event), motif), RangeError);
+});
+
+test("compares the entire learner-bounded motif echo without choosing a smaller match", () => {
+  const source = motifEvents([60, 62, 65, 67], [0, 100, 200, 500]);
+  const transposed = motifEvents([67, 69, 72, 74], [800, 900, 1000, 1300]).map((event) => ({ ...event, id: event.id + 4 }));
+  const transposedResult = compareMotifEcho(source, transposed);
+  assert.ok(transposedResult);
+  assert.equal(transposedResult.kind, "transposed-repeat");
+  assert.equal(transposedResult.startShiftSemitones, 7);
+  assert.deepEqual(transposedResult.sourceIntervalPath, [2, 3, 2]);
+  assert.deepEqual(transposedResult.targetIntervalPath, [2, 3, 2]);
+
+  const transposedAndRetimed = motifEvents([67, 69, 72, 74], [800, 820, 900, 1300]).map((event) => ({ ...event, id: event.id + 4 }));
+  assert.equal(compareMotifEcho(source, transposedAndRetimed)?.kind, "multiple-changes");
+
+  const altered = motifEvents([60, 62, 65, 69], [800, 900, 1000, 1300]).map((event) => ({ ...event, id: event.id + 4 }));
+  const alteredResult = compareMotifEcho(source, altered);
+  assert.ok(alteredResult);
+  assert.equal(alteredResult.kind, "altered-ending");
+  assert.deepEqual(alteredResult.changedIntervalIndices, [2]);
+  assert.equal(alteredResult.endingDeltaSemitones, 2);
+
+  const multiple = motifEvents([61, 64, 66, 70], [800, 850, 1100, 1300]).map((event) => ({ ...event, id: event.id + 4 }));
+  const multipleResult = compareMotifEcho(source, multiple);
+  assert.ok(multipleResult);
+  assert.equal(multipleResult.kind, "multiple-changes");
+  assert.ok(multipleResult.changedIntervalIndices.length > 1);
+  assert.equal(compareMotifEcho(source.slice(0, 3), altered), null);
+  assert.throws(() => compareMotifEcho(source, transposed.map((event, index) => index === 3 ? { ...event, onsetMs: 850 } : event)), RangeError);
 });
 
 test("separates exact chord identity, inversion, and incomplete outlines", () => {

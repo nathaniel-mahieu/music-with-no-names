@@ -87,6 +87,7 @@ This ledger ties empirical claims to research anchors and marks where the produc
 ## Model governance
 
 - **Piano v1.72 extension:** the phrase-local motif detector now exposes the invariants behind its strongest match. Absolute starting pitch is factored into one signed shift, each statement’s pitch content becomes a zero-anchored signed-step path, and onset gaps become proportions of the statement span. The learner can therefore see whether a return kept pitch shape, opening shape, timing proportions, and starting key as separate facts. The display explains a local algorithmic match; it does not infer intended motif, formal function, style membership, emotion, preference, correctness, musical quality, or learning effectiveness.
+- **Piano v1.73 extension:** the learner can now declare the motif boundary before making a return. The source is exactly the latest three or four attacks, and the first equally sized replay is evaluated without sub-window search. This turns passive recurrence recognition into a controlled invariance exercise: keep everything, move the start, change timing, alter the ending, or change several coordinates. Labels remain rule-based descriptions of MIDI relationships, not evidence that a listener recognized form, that a style convention was satisfied, or that one version is more expressive, correct, valuable, or effective for learning.
 
 - Every model has a version, visible inputs, and limitations.
 - Curator placements in the Atlas are labeled as hypotheses.

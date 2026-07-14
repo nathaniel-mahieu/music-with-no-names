@@ -9362,6 +9362,21 @@ footer a {
 .hud-motif-invariance-reading span,
 .hud-motif-invariance-reading small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
 .hud-motif-invariance-reading strong { font-size: .76rem; font-weight: 500; }
+.hud-motif-echo { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.hud-motif-echo-start { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; align-items: center; margin-top: 10px; padding: 11px; border-left: 2px solid var(--piano-blue); background: var(--surface-soft); }
+.hud-motif-echo-start > div:first-child { display: grid; gap: 3px; }
+.hud-motif-echo-start span,
+.hud-motif-echo-start small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-motif-echo-start strong { font-size: .76rem; font-weight: 500; }
+.hud-motif-echo-start > div:last-child,
+.hud-motif-echo-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.hud-motif-echo button { min-height: 34px; padding: 7px 11px; border: 1px solid var(--line-strong); background: var(--surface-raised); color: var(--foreground); font: inherit; font-size: .72rem; cursor: pointer; }
+.hud-motif-echo button:disabled { cursor: not-allowed; opacity: .45; }
+.hud-motif-echo-progress { display: grid; gap: 3px; margin-top: 10px; padding: 10px 0 10px 11px; border-left: 2px solid var(--piano-gold); }
+.hud-motif-echo-progress span,
+.hud-motif-echo-progress small { color: var(--muted); font-size: .69rem; line-height: 1.4; }
+.hud-motif-echo-progress strong { font-size: .78rem; font-weight: 500; }
+.hud-motif-echo-actions { justify-content: flex-end; margin-top: 10px; }
 
 .hud-phrase-breath { min-width: 0; padding: 20px 18px; border-bottom: 1px solid var(--line); }
 .hud-breath-control { display: grid; grid-template-columns: minmax(210px, .7fr) minmax(240px, 1fr); gap: 6px 18px; align-items: center; margin-top: 13px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -9918,6 +9933,10 @@ footer a {
   .hud-motif-fingerprint-grid > * { padding: 6px 4px; }
   .hud-motif-fingerprint-grid code { font-size: .61rem; }
   .hud-motif-time-bar b { display: none; }
+  .hud-motif-echo-start { grid-template-columns: 1fr; }
+  .hud-motif-echo-start > div:last-child,
+  .hud-motif-echo-actions { display: grid; grid-template-columns: 1fr; }
+  .hud-motif-echo button { width: 100%; }
   .hud-breath-control { grid-template-columns: 1fr; }
   .hud-breath-control p { grid-column: auto; }
   .hud-breath-gate text,
@@ -10094,6 +10113,9 @@ footer a {
   .hud-motif-fingerprint { border-color: CanvasText; background: Canvas; }
   .hud-motif-time-bar i { background: Canvas; border-color: CanvasText; }
   .hud-motif-invariance-reading { border-left-color: LinkText; }
+  .hud-motif-echo-start { border-left-color: LinkText; background: Canvas; }
+  .hud-motif-echo-progress { border-left-color: Highlight; }
+  .hud-motif-echo button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
   .hud-landmark-selector button[aria-pressed="true"],
   .hud-landmark-progress li.is-current { border-color: Highlight; background: Highlight; color: HighlightText; }
   .hud-landmark-transpose { border-color: CanvasText; background: Canvas; }

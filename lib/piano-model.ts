@@ -553,6 +553,13 @@ export type MotifFingerprintComparison = {
   largestTimingChangeGapIndex: number | null;
 };
 
+export type MotifEchoComparison = MotifFingerprintComparison & {
+  kind: "exact-repeat" | "transposed-repeat" | "rhythmic-variation" | "altered-ending" | "multiple-changes";
+  exactPitchPath: boolean;
+  rhythmDistance: number;
+  endingDeltaSemitones: number;
+};
+
 export type LandmarkPathId = "pop-loop" | "blues-turn" | "classical-cadence" | "pedal-field";
 
 export type LandmarkPathStep = {
@@ -2484,6 +2491,82 @@ export function compareMotifFingerprints(
     rhythmWithinDetectorTolerance: averageDistance(sourceTimingShares, targetTimingShares) <= 0.12,
     changedIntervalIndices,
     largestTimingChangeGapIndex: largestTimingChange && largestTimingChange.magnitude > 0 ? largestTimingChange.index : null,
+  };
+}
+
+/**
+ * Compares a learner-chosen three- or four-attack source with one equally sized
+ * replay. Unlike the passive detector, this function never searches for a more
+ * favorable sub-window: every chosen attack remains part of the comparison.
+ */
+export function compareMotifEcho(
+  source: MotifNoteEvent[],
+  attempt: MotifNoteEvent[],
+): MotifEchoComparison | null {
+  if (source.length !== attempt.length || (source.length !== 3 && source.length !== 4)) return null;
+  const all = [...source, ...attempt];
+  const valid = all.every((event) => Number.isInteger(event.id)
+    && Number.isInteger(event.note) && event.note >= 0 && event.note <= 127
+    && Number.isFinite(event.onsetMs));
+  if (!valid || new Set(all.map((event) => event.id)).size !== all.length) {
+    throw new RangeError("Motif echo requires unique IDs, finite onset times, and MIDI positions from 0 through 127.");
+  }
+  const forward = (statement: MotifNoteEvent[]) => statement.slice(1).every((event, index) => event.onsetMs > statement[index].onsetMs);
+  if (!forward(source) || !forward(attempt)) throw new RangeError("Motif echo attacks must move forward in time within each statement.");
+
+  const sourceNotes = source.map((event) => event.note);
+  const targetNotes = attempt.map((event) => event.note);
+  const sourceRelativePitchPath = sourceNotes.map((note) => note - sourceNotes[0]);
+  const targetRelativePitchPath = targetNotes.map((note) => note - targetNotes[0]);
+  const intervalPath = (notes: number[]) => notes.slice(1).map((note, index) => note - notes[index]);
+  const sourceIntervalPath = intervalPath(sourceNotes);
+  const targetIntervalPath = intervalPath(targetNotes);
+  const sourceTimingShares = normalizedOnsetGaps(source);
+  const targetTimingShares = normalizedOnsetGaps(attempt);
+  const timingShareDeltas = targetTimingShares.map((share, index) => share - sourceTimingShares[index]);
+  const rhythmDistance = averageDistance(sourceTimingShares, targetTimingShares);
+  const rhythmWithinDetectorTolerance = rhythmDistance <= 0.12;
+  const changedIntervalIndices = sourceIntervalPath.flatMap((step, index) => step === targetIntervalPath[index] ? [] : [index]);
+  const pitchShapePreserved = changedIntervalIndices.length === 0;
+  const openingShapePreserved = sourceIntervalPath.slice(0, -1).every((step, index) => step === targetIntervalPath[index]);
+  const exactPitchPath = sameNumberSequence(sourceNotes, targetNotes);
+  const startShiftSemitones = targetNotes[0] - sourceNotes[0];
+  const endingDeltaSemitones = targetRelativePitchPath.at(-1)! - sourceRelativePitchPath.at(-1)!;
+  const largestTimingChange = timingShareDeltas.reduce<{ index: number; magnitude: number } | null>((largest, delta, index) => {
+    const magnitude = Math.abs(delta);
+    return !largest || magnitude > largest.magnitude ? { index, magnitude } : largest;
+  }, null);
+  const kind: MotifEchoComparison["kind"] = exactPitchPath && rhythmWithinDetectorTolerance
+    ? "exact-repeat"
+    : pitchShapePreserved && rhythmWithinDetectorTolerance && startShiftSemitones !== 0
+      ? "transposed-repeat"
+      : exactPitchPath
+        ? "rhythmic-variation"
+        : source.length === 4 && startShiftSemitones === 0 && openingShapePreserved
+          && changedIntervalIndices.length === 1 && changedIntervalIndices[0] === source.length - 2
+          && endingDeltaSemitones !== 0 && rhythmWithinDetectorTolerance
+          ? "altered-ending"
+          : "multiple-changes";
+  return {
+    kind,
+    sourceEventIds: source.map((event) => event.id),
+    targetEventIds: attempt.map((event) => event.id),
+    sourceRelativePitchPath,
+    targetRelativePitchPath,
+    sourceIntervalPath,
+    targetIntervalPath,
+    sourceTimingShares,
+    targetTimingShares,
+    timingShareDeltas,
+    startShiftSemitones,
+    pitchShapePreserved,
+    openingShapePreserved,
+    rhythmWithinDetectorTolerance,
+    changedIntervalIndices,
+    largestTimingChangeGapIndex: largestTimingChange && largestTimingChange.magnitude > 0 ? largestTimingChange.index : null,
+    exactPitchPath,
+    rhythmDistance,
+    endingDeltaSemitones,
   };
 }
 
