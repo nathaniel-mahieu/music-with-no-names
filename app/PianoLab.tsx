@@ -1061,7 +1061,8 @@ function fifthsCoordinateLabel(offset: number) {
 function ScaleLandingIntervalRippleView({ ripple }: { ripple: ScaleLandingIntervalRipple }) {
   const ratio = (value: number) => `×${value.toFixed(3)}`;
   const summary = `Landing ${ripple.sourcePosition} moved to ${ripple.attemptPosition}. ${ripple.changedRelationshipCount} normalized equal-key intervals touching that landing changed by one step; ${ripple.retainedRelationshipCount} intervals between retained landings kept their distance and ratio.`;
-  return <div className="hud-scale-ripple" role="img" aria-label={summary}>
+  return <div className="hud-scale-ripple">
+    <div className="sr-only hud-scale-ripple-summary" role="img" aria-label={summary} />
     <div className="hud-scale-ripple-heading"><span>one moved landing · every connected interval</span><strong>{ripple.sourcePosition} → {ripple.attemptPosition}</strong><small>Each equal-key step multiplies an ascending frequency interval by 2<sup>1/12</sup>. Bar length shows normalized key distance; the ratio is the corresponding 12-TET frequency multiplier.</small></div>
     <div className="hud-scale-ripple-spokes">
       {ripple.relationships.map((relationship) => <div key={relationship.retainedPosition} className="hud-scale-ripple-spoke">

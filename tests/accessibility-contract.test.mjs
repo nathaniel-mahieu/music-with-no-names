@@ -48,7 +48,7 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Change one landing, keep the octave/);
   assert.match(piano, /aria-label="Choose one consequence of the moved scale landing"/);
   assert.match(piano, />Every connected interval<\/button>/);
-  assert.match(piano, /hud-scale-ripple" role="img" aria-label=\{summary\}/);
+  assert.match(piano, /hud-scale-ripple-summary" role="img" aria-label=\{summary\}/);
   assert.match(piano, /Global consequence/);
   assert.match(piano, /hud-scale-ripple-reading" role="status" aria-live="polite"/);
   assert.match(piano, /hud-scale-mutation-reading[\s\S]*role="status" aria-live="polite"/);
