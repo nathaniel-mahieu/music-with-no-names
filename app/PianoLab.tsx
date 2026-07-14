@@ -4679,6 +4679,8 @@ export function PianoLab() {
       id: landmarkPath.id,
       label: `${landmarkPath.family} · ${landmarkPath.title} · ${variantLabel}`,
       variant: landmarkPerformanceVariant,
+      pathLabel: `${landmarkPath.family} · ${landmarkPath.title}`,
+      rootPitchClass: pitchClassFromMidi(doMidi),
     });
   };
 

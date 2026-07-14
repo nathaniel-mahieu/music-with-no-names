@@ -124,6 +124,11 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Save this landmark-path report/);
   assert.match(piano, /this performed landmark path/);
   assert.match(personal, /Latest performed landmark:/);
+  assert.match(personal, /latestLandmarkCharacterContrast\(phraseObservations\)/);
+  assert.match(personal, /What changed when you played this route again\?/);
+  assert.match(personal, /aria-label="Four listener reports shown separately"/);
+  assert.match(personal, /aria-label="Measured MIDI and modeled teaching evidence kept separate"/);
+  assert.match(personal, /The reports and evidence are aligned, not causally joined/);
   assert.match(piano, /aria-labelledby="hud-pulse-title"/);
   assert.match(piano, /Later MIDI attack clusters placed against the learner’s four-tap pulse/);
   assert.match(piano, /aria-labelledby="hud-phrase-breath-title"/);
@@ -173,6 +178,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /cloud-blues[\s\S]*border-style: dotted/);
   assert.match(css, /cloud-classical[\s\S]*border-style: double/);
   assert.match(css, /\.atlas-point[\s\S]*width: max\(50px, var\(--point-size\)\)/);
+  assert.match(css, /\.personal-landmark-axis > i b,[\s\S]*border-radius: 50%/);
+  assert.match(css, /\.personal-landmark-axis > i em[\s\S]*transform: rotate\(45deg\)/);
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.personal-landmark-pair \{ grid-template-columns: 1fr; \}/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.personal-landmark-axis > i em \{ border-color: Highlight/);
   assert.match(css, /\.lab-nav-primary[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(ratio, /<details className="lab-nav-more"/);
   assert.match(ratio, /aria-label="Live piano phrase available"/);

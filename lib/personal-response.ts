@@ -45,6 +45,8 @@ export type PhraseCharacterContext = {
   id: string;
   label: string;
   variant: "original" | "transposed" | "one-key-changed";
+  pathLabel?: string;
+  rootPitchClass?: number;
 };
 
 export type PhraseCharacterObservation = {
@@ -62,6 +64,15 @@ export type PhraseCharacterSummary = {
   center: PhraseCharacterRatings;
   spread: PhraseCharacterRatings;
   uncertainty: number;
+};
+
+export type LandmarkCharacterContrast = {
+  pathId: string;
+  pathLabel: string;
+  source: PhraseCharacterObservation & { context: PhraseCharacterContext };
+  target: PhraseCharacterObservation & { context: PhraseCharacterContext };
+  centerShift: number | null;
+  controlFacts: [string, string];
 };
 
 export const PHRASE_CHARACTER_STORAGE_KEY = "music-with-no-names.phrase-character.v1";
@@ -92,7 +103,9 @@ function validContext(value: unknown): value is PhraseCharacterContext {
   return candidate.kind === "landmark-path"
     && typeof candidate.id === "string" && candidate.id.length > 0 && candidate.id.length <= 80
     && typeof candidate.label === "string" && candidate.label.length > 0 && candidate.label.length <= 120
-    && (candidate.variant === "original" || candidate.variant === "transposed" || candidate.variant === "one-key-changed");
+    && (candidate.variant === "original" || candidate.variant === "transposed" || candidate.variant === "one-key-changed")
+    && (candidate.pathLabel == null || (typeof candidate.pathLabel === "string" && candidate.pathLabel.length > 0 && candidate.pathLabel.length <= 100))
+    && (candidate.rootPitchClass == null || (Number.isInteger(candidate.rootPitchClass) && candidate.rootPitchClass >= 0 && candidate.rootPitchClass < 12));
 }
 
 export function parsePhraseCharacterObservations(value: string | null): PhraseCharacterObservation[] {
@@ -143,6 +156,51 @@ export function summarizePhraseCharacter(observations: PhraseCharacterObservatio
     spread,
     uncertainty: Math.max(5, 30 / Math.sqrt(observations.length)),
   };
+}
+
+/**
+ * Selects the latest pair of particular reports for one performed landmark.
+ * No averaging or favorable pair search is performed: the target is the latest
+ * report that has an earlier report for the same generated path.
+ */
+export function latestLandmarkCharacterContrast(observations: PhraseCharacterObservation[]): LandmarkCharacterContrast | null {
+  for (let targetIndex = observations.length - 1; targetIndex >= 1; targetIndex -= 1) {
+    const target = observations[targetIndex];
+    if (!target.context || target.context.kind !== "landmark-path") continue;
+    let source: PhraseCharacterObservation | null = null;
+    for (let sourceIndex = targetIndex - 1; sourceIndex >= 0; sourceIndex -= 1) {
+      const candidate = observations[sourceIndex];
+      if (candidate.id !== target.id && candidate.context?.kind === "landmark-path" && candidate.context.id === target.context.id) {
+        source = candidate;
+        break;
+      }
+    }
+    if (!source?.context) continue;
+    const sourceRoot = source.context.rootPitchClass;
+    const targetRoot = target.context.rootPitchClass;
+    const centerShift = sourceRoot == null || targetRoot == null ? null : (targetRoot - sourceRoot + 12) % 12;
+    const centerFact = centerShift == null
+      ? "Center movement is unavailable for one earlier report."
+      : centerShift === 0
+        ? "The movable center stayed fixed."
+        : `The movable center moved +${centerShift} equal-key position${centerShift === 1 ? "" : "s"} around the octave.`;
+    const sourceChanged = source.context.variant === "one-key-changed";
+    const targetChanged = target.context.variant === "one-key-changed";
+    const routeFact = sourceChanged !== targetChanged
+      ? "One performance changed exactly one generated key position; the other kept the route."
+      : sourceChanged
+        ? "Both performances used the same declared one-key-changed route type."
+        : "The ordered generated relationship route stayed the control.";
+    return {
+      pathId: target.context.id,
+      pathLabel: target.context.pathLabel ?? source.context.pathLabel ?? target.context.label,
+      source: source as LandmarkCharacterContrast["source"],
+      target: target as LandmarkCharacterContrast["target"],
+      centerShift,
+      controlFacts: [centerFact, routeFact],
+    };
+  }
+  return null;
 }
 
 function weightedMean(samples: ResponseSample[], read: (sample: ResponseSample) => number) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   familiarityResponseTrend,
+  latestLandmarkCharacterContrast,
   learnPreferenceTerrain,
   parsePhraseCharacterObservations,
   phraseRelationshipSignature,
@@ -69,12 +70,41 @@ test("parses only complete bounded phrase-character observations", () => {
   const valid = {
     ...characterObservation("1", 30, 70),
     soundModelId: "bright-piano" as const,
-    context: { kind: "landmark-path" as const, id: "pop-loop", label: "loop archetype · original route", variant: "original" as const },
+    context: { kind: "landmark-path" as const, id: "pop-loop", label: "loop archetype · original route", variant: "original" as const, pathLabel: "loop archetype", rootPitchClass: 0 },
   };
   const invalid = { ...valid, ratings: { ...valid.ratings, liking: 140 } };
   const unknownModel = { ...valid, soundModelId: "actual-piano" };
   const unknownContext = { ...valid, context: { ...valid.context, variant: "universal-pop-feeling" } };
+  const invalidRoot = { ...valid, context: { ...valid.context, rootPitchClass: 12 } };
   assert.deepEqual(parsePhraseCharacterObservations(JSON.stringify([valid, invalid, unknownModel])), [valid]);
   assert.deepEqual(parsePhraseCharacterObservations(JSON.stringify([unknownContext])), []);
+  assert.deepEqual(parsePhraseCharacterObservations(JSON.stringify([invalidRoot])), []);
   assert.deepEqual(parsePhraseCharacterObservations("not json"), []);
+});
+
+test("aligns the latest two particular landmark reports without averaging them", () => {
+  const report = (id: string, variant: "original" | "transposed" | "one-key-changed", rootPitchClass: number, settledness: number): PhraseCharacterObservation => ({
+    ...characterObservation(id, settledness, 55),
+    context: {
+      kind: "landmark-path",
+      id: "pop-loop",
+      pathLabel: "Pop loop · Four-field return",
+      label: `Pop loop · Four-field return · ${variant}`,
+      variant,
+      rootPitchClass,
+    },
+  });
+  const first = report("1", "original", 0, 40);
+  const moved = report("2", "transposed", 7, 56);
+  const changed = report("3", "one-key-changed", 7, 31);
+  const movedContrast = latestLandmarkCharacterContrast([first, moved])!;
+  assert.equal(movedContrast.source.id, "1");
+  assert.equal(movedContrast.target.id, "2");
+  assert.equal(movedContrast.centerShift, 7);
+  assert.match(movedContrast.controlFacts.join(" "), /ordered generated relationship route stayed/);
+  const changedContrast = latestLandmarkCharacterContrast([first, moved, changed])!;
+  assert.equal(changedContrast.source.id, "2");
+  assert.equal(changedContrast.target.id, "3");
+  assert.match(changedContrast.controlFacts.join(" "), /changed exactly one generated key position/);
+  assert.equal(latestLandmarkCharacterContrast([first]), null);
 });

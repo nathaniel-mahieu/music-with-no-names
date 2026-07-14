@@ -5,11 +5,13 @@ import { LANDMARKS } from "./AtlasLab";
 import {
   PHRASE_CHARACTER_STORAGE_KEY,
   familiarityResponseTrend,
+  latestLandmarkCharacterContrast,
   learnPreferenceTerrain,
   parsePhraseCharacterObservations,
   summarizePhraseCharacter,
   terrainFit,
   type PhraseCharacterObservation,
+  type LandmarkCharacterContrast,
   type ResponseSample,
 } from "@/lib/personal-response";
 
@@ -112,6 +114,51 @@ function safeParseObservations(value: string | null): Observation[] {
   }
 }
 
+const LANDMARK_CHARACTER_FIELDS: Array<{ key: keyof PhraseCharacterObservation["ratings"]; label: string; low: string; high: string }> = [
+  { key: "settledness", label: "Settledness", low: "suspended", high: "settled" },
+  { key: "energy", label: "Energy", low: "calm", high: "energized" },
+  { key: "familiarity", label: "Familiarity", low: "surprising", high: "familiar" },
+  { key: "liking", label: "Liking", low: "less", high: "more" },
+];
+
+function signed(value: number, digits = 0) {
+  const rounded = Number(value.toFixed(digits));
+  return `${rounded > 0 ? "+" : ""}${rounded}`;
+}
+
+function LandmarkRouteContrast({ contrast }: { contrast: LandmarkCharacterContrast }) {
+  const { source, target } = contrast;
+  return <section className="personal-landmark-contrast" aria-labelledby="personal-landmark-contrast-title">
+    <header>
+      <div><span>Performed landmark · particular reports</span><h3 id="personal-landmark-contrast-title">What changed when you played this route again?</h3></div>
+      <strong>{contrast.pathLabel}</strong>
+    </header>
+    <div className="personal-landmark-pair" aria-label="Earlier and later landmark performances">
+      <div><span><i aria-hidden="true" />A · earlier</span><strong>{source.context.label}</strong></div>
+      <div><span><i aria-hidden="true" />B · later</span><strong>{target.context.label}</strong></div>
+    </div>
+    <p className="personal-landmark-control"><strong>Physical control</strong>{contrast.controlFacts.join(" ")}</p>
+    <div className="personal-landmark-axes" aria-label="Four listener reports shown separately">
+      {LANDMARK_CHARACTER_FIELDS.map((field) => {
+        const sourceValue = source.ratings[field.key];
+        const targetValue = target.ratings[field.key];
+        return <div className="personal-landmark-axis" key={field.key} role="img" aria-label={`${field.label}: earlier ${sourceValue}, later ${targetValue}, change ${signed(targetValue - sourceValue)}`}>
+          <span>{field.label}<small>{field.low} · {field.high}</small></span>
+          <i aria-hidden="true"><b style={{ left: `${sourceValue}%` }} /><em style={{ left: `${targetValue}%` }} /></i>
+          <output>{sourceValue} → {targetValue}<small>Δ {signed(targetValue - sourceValue)}</small></output>
+        </div>;
+      })}
+    </div>
+    <div className="personal-landmark-evidence" aria-label="Measured MIDI and modeled teaching evidence kept separate">
+      <span><small>measured · key span</small><strong>{source.evidence.measured.pitchSpan} → {target.evidence.measured.pitchSpan}</strong><em>Δ {signed(target.evidence.measured.pitchSpan - source.evidence.measured.pitchSpan)} keys</em></span>
+      <span><small>measured · overlap</small><strong>{Math.round(source.evidence.measured.overlapShare * 100)} → {Math.round(target.evidence.measured.overlapShare * 100)}%</strong><em>Δ {signed((target.evidence.measured.overlapShare - source.evidence.measured.overlapShare) * 100)} points</em></span>
+      <span><small>modeled · mean crunch</small><strong>{Math.round(source.evidence.modeled.meanCrunch * 100)} → {Math.round(target.evidence.modeled.meanCrunch * 100)}</strong><em>Δ {signed((target.evidence.modeled.meanCrunch - source.evidence.modeled.meanCrunch) * 100)} points</em></span>
+      <span><small>modeled · ending repose</small><strong>{Math.round(source.evidence.modeled.endingRepose * 100)} → {Math.round(target.evidence.modeled.endingRepose * 100)}</strong><em>Δ {signed((target.evidence.modeled.endingRepose - source.evidence.modeled.endingRepose) * 100)} points</em></span>
+    </div>
+    <p className="personal-landmark-limit">The reports and evidence are aligned, not causally joined. Two performances do not establish a preference, an emotional property, a style rule, or musical goodness.</p>
+  </section>;
+}
+
 export function PersonalLab() {
   const [landmarkId, setLandmarkId] = useState(LANDMARKS[0].id);
   const [goal, setGoal] = useState<GoalId>("curiosity");
@@ -147,6 +194,7 @@ export function PersonalLab() {
   const learnedTerrain = useMemo(() => learnPreferenceTerrain(responseSamples), [responseSamples]);
   const phraseCharacterSummary = useMemo(() => summarizePhraseCharacter(phraseObservations), [phraseObservations]);
   const latestLandmarkPhrase = useMemo(() => phraseObservations.findLast((observation) => observation.context?.kind === "landmark-path") ?? null, [phraseObservations]);
+  const landmarkCharacterContrast = useMemo(() => latestLandmarkCharacterContrast(phraseObservations), [phraseObservations]);
   const selectedHistory = useMemo(() => observations.filter((observation) => observation.landmarkId === landmarkId).map<ResponseSample>((observation) => ({ position: { tension: selected.tension, surprise: selected.surprise, drive: selected.drive }, liking: observation.ratings.liking, interest: observation.ratings.interest, familiarity: observation.ratings.familiarity, recordedAt: observation.recordedAt })), [landmarkId, observations, selected]);
   const historyTrend = useMemo(() => familiarityResponseTrend(selectedHistory), [selectedHistory]);
   const terrainRanking = useMemo(() => learnedTerrain ? LANDMARKS.map((landmark) => ({ landmark, fit: terrainFit(landmark, learnedTerrain) })).sort((a, b) => b.fit - a.fit).slice(0, 5) : [], [learnedTerrain]);
@@ -224,6 +272,8 @@ export function PersonalLab() {
         <div><span>Live Piano phrase reports</span><strong>{phraseCharacterSummary ? `${phraseCharacterSummary.sampleCount} reflection${phraseCharacterSummary.sampleCount === 1 ? "" : "s"} · center ${Math.round(phraseCharacterSummary.center.settledness)} settled / ${Math.round(phraseCharacterSummary.center.energy)} energy` : "No live phrase reflections yet"}</strong><small>{phraseCharacterSummary ? `${latestLandmarkPhrase?.context ? `Latest performed landmark: ${latestLandmarkPhrase.context.label}. ` : ""}Uncertainty ±${Math.round(phraseCharacterSummary.uncertainty)} · surprise/familiarity and liking remain separate report dimensions.` : "Use the Piano Experience focus to map your own phrase without asking the model to infer how it felt."}</small></div>
         <a href="?lab=piano&pianoLens=experience">Open live phrase map</a>
       </div>
+
+      {landmarkCharacterContrast ? <LandmarkRouteContrast contrast={landmarkCharacterContrast} /> : null}
 
       <div className="personal-context">
         <label>
