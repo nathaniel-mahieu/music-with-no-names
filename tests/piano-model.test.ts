@@ -8,6 +8,7 @@ import {
   articulationTimeline,
   chordTransitionEvidence,
   comparePhraseLenses,
+  phraseChangeProfile,
   controlledSonorityChange,
   detectMotifTransformations,
   evaluateAscendingScaleWalk,
@@ -519,6 +520,53 @@ test("keeps changed phrase lenses separate and refuses undersized specimens", ()
   assert.equal(comparison.motion.overlapShareA, 0.5);
   assert.equal(comparison.motion.overlapShareB, 0);
   assert.equal(comparePhraseLenses(phraseA.slice(0, 2), phraseB), null);
+});
+
+test("separates a declared transposition from its preserved relationship control", () => {
+  const phraseA = [
+    { note: 60, onsetMs: 0, releaseMs: 300, velocity: 70 },
+    { note: 64, onsetMs: 500, releaseMs: 800, velocity: 70 },
+    { note: 67, onsetMs: 1_000, releaseMs: 1_300, velocity: 70 },
+  ];
+  const phraseB = phraseA.map((event) => ({ ...event, note: event.note + 2 }));
+  const comparison = comparePhraseLenses(phraseA, phraseB);
+  assert.ok(comparison);
+  const profile = phraseChangeProfile(comparison, "transpose");
+  assert.equal(profile.targetObserved, true);
+  assert.equal(profile.controlPreserved, true);
+  assert.equal(profile.observations.register, true);
+  assert.equal(profile.observations.intervalPath, false);
+  assert.ok(profile.changedLenses.includes("sound"));
+  assert.ok(profile.invariantLenses.includes("relationships"));
+  assert.ok(!profile.otherChangedLenses.includes("sound"));
+});
+
+test("keeps intended timing and changed-ending controls inspectable without a score", () => {
+  const phraseA = [
+    { note: 60, onsetMs: 0, releaseMs: 250, velocity: 64 },
+    { note: 64, onsetMs: 500, releaseMs: 750, velocity: 64 },
+    { note: 67, onsetMs: 1_000, releaseMs: 1_250, velocity: 64 },
+  ];
+  const retimed = [
+    { note: 60, onsetMs: 0, releaseMs: 250, velocity: 64 },
+    { note: 64, onsetMs: 700, releaseMs: 950, velocity: 64 },
+    { note: 67, onsetMs: 2_000, releaseMs: 2_250, velocity: 64 },
+  ];
+  const timingComparison = comparePhraseLenses(phraseA, retimed);
+  assert.ok(timingComparison);
+  const timingProfile = phraseChangeProfile(timingComparison, "timing");
+  assert.equal(timingProfile.targetObserved, true);
+  assert.equal(timingProfile.controlPreserved, true);
+  assert.deepEqual(timingProfile.changedLenses, ["motion"]);
+
+  const newEnding = phraseA.map((event, index) => index === 2 ? { ...event, note: 69 } : event);
+  const endingComparison = comparePhraseLenses(phraseA, newEnding);
+  assert.ok(endingComparison);
+  const endingProfile = phraseChangeProfile(endingComparison, "ending");
+  assert.equal(endingProfile.targetObserved, true);
+  assert.equal(endingProfile.controlPreserved, true);
+  assert.equal(endingProfile.observations.ending, true);
+  assert.ok(endingProfile.otherChangedLenses.includes("context"));
 });
 
 test("offers contrasting unranked resolution forks without entering a note", () => {

@@ -39,6 +39,7 @@ import {
   noteContext,
   pairwiseIntervals,
   parseMidiMessage,
+  phraseChangeProfile,
   pitchClassFromMidi,
   pushPhraseEvent,
   pushRollingNoteEvent,
@@ -69,6 +70,7 @@ import {
   type AscendingScaleWalk,
   type PerformedScaleFingerprint,
   type PhraseLensComparison,
+  type PhraseChangeIntention,
   type TonalGravityCandidate,
   type TonalGravityCounterfactual,
   type TonalGravityCue,
@@ -189,6 +191,7 @@ type PhraseCompareSession = {
   baseline: HudNoteEvent[];
   anchorEventId: number;
   comparison: HudNoteEvent[] | null;
+  intention: PhraseChangeIntention | null;
   rootPitchClass: number;
   scaleId: PianoScale["id"];
   reports: Partial<Record<PhraseCompareDimension, PhraseCompareReport>>;
@@ -201,7 +204,7 @@ type MidiCallbacks = {
 };
 
 type PersistedPianoSession = {
-  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+  version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
   phraseEvents: HudNoteEvent[];
   chordWindowMs: number;
   boundaryCorrections: Record<number, ChordBoundaryCorrection>;
@@ -247,6 +250,20 @@ const MOTION_FOCUS_MODES: Array<{ id: MotionFocusMode; label: string; question: 
   { id: "touch", label: "Touch", question: "How did one touch meet the next?" },
   { id: "voices", label: "Voices", question: "Which strands stayed or moved?" },
   { id: "motif", label: "Motif", question: "What repeated, and what changed?" },
+];
+const PHRASE_CHANGE_CHOICES: Array<{
+  id: PhraseChangeIntention;
+  label: string;
+  question: string;
+  instruction: string;
+  control: string;
+}> = [
+  { id: "transpose", label: "Move the whole phrase", question: "Can the relationship survive a new register?", instruction: "Replay every pitch by the same number of keys.", control: "the signed interval path" },
+  { id: "timing", label: "Change the timing", question: "What changes when the pitch path keeps different time?", instruction: "Keep the same pitches; change the overall pace or spacing pattern.", control: "the absolute pitch path" },
+  { id: "touch", label: "Change the touch", question: "What changes when the same keys receive a different attack?", instruction: "Keep the same pitches; use a different MIDI attack strength.", control: "the absolute pitch path" },
+  { id: "articulation", label: "Change the connections", question: "What changes when notes overlap or separate differently?", instruction: "Keep the same pitches; change finger hold, silence, overlap, or pedal connection.", control: "the absolute pitch path" },
+  { id: "interval", label: "Change one interval", question: "How far does one changed spacing travel through the phrase?", instruction: "Keep the attack count; alter exactly one signed move.", control: "one and only one changed signed interval" },
+  { id: "ending", label: "Change the ending", question: "How does one new ending reshape context?", instruction: "Keep the earlier path; choose a different final position.", control: "the earlier path with only its final move changed" },
 ];
 const GRAVITY_CUE_OPTIONS: Array<{ id: TonalGravityCue; label: string; shortLabel: string; practice: string }> = [
   { id: "duration", label: "Held longest", shortLabel: "held time", practice: "Replay the same pitch collection and hold this position longer than the others." },
@@ -312,6 +329,10 @@ function isControlledSonoritySession(value: unknown): value is ControlledSonorit
 
 function isMotionFocusMode(value: unknown): value is MotionFocusMode {
   return MOTION_FOCUS_MODES.some((mode) => mode.id === value);
+}
+
+function isPhraseChangeIntention(value: unknown): value is PhraseChangeIntention {
+  return PHRASE_CHANGE_CHOICES.some((choice) => choice.id === value);
 }
 
 function isPulseMirrorSession(value: unknown): value is PulseMirrorSession {
@@ -391,6 +412,7 @@ function isPhraseCompareSession(value: unknown): value is PhraseCompareSession {
     && session.rootPitchClass! >= 0
     && session.rootPitchClass! < 12
     && PIANO_SCALES.some((scale) => scale.id === session.scaleId)
+    && (session.intention == null || isPhraseChangeIntention(session.intention))
     && validReports;
 }
 
@@ -1951,25 +1973,28 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
   doMidi: number;
   scale: PianoScale;
   showConventions: boolean;
-  onStart: () => void;
+  onStart: (intention: PhraseChangeIntention) => void;
   onCapture: () => void;
   onReplay: () => void;
   onPromote: () => void;
   onReport: (dimension: PhraseCompareDimension, report: PhraseCompareReport) => void;
   onEnd: () => void;
 }) {
+  const activeChoice = session ? PHRASE_CHANGE_CHOICES.find((choice) => choice.id === session.intention) ?? null : null;
   if (!session) return <section className="hud-phrase-compare is-entry" aria-labelledby="hud-phrase-compare-entry-title">
-    <div className="hud-panel-heading"><span>One phrase · one replay · five lenses</span><strong id="hud-phrase-compare-entry-title">What changed across the whole phrase?</strong><small>Freeze a short phrase, replay it with one intentional change, and compare sound, relationships, motion, context, and your own response without creating a goodness score.</small></div>
-    <button type="button" onClick={onStart} disabled={availableAttackCount < 3}>Freeze phrase A</button>
+    <div className="hud-panel-heading"><span>One phrase · one declared change · five lenses</span><strong id="hud-phrase-compare-entry-title">Choose one thing to change</strong><small>Freeze your phrase with a question already in mind. The replay will show the intended coordinate, the control you tried to preserve, and every other lens that moved.</small></div>
+    <div className="hud-phrase-intention-options" role="group" aria-label="Choose one phrase change to investigate">
+      {PHRASE_CHANGE_CHOICES.map((choice) => <button key={choice.id} type="button" onClick={() => onStart(choice.id)} disabled={availableAttackCount < 3}><strong>{choice.label}</strong><span>{choice.question}</span></button>)}
+    </div>
     <p>{availableAttackCount >= 3 ? `The latest ${Math.min(12, availableAttackCount)} attacks are available; a pause longer than 1.6 seconds starts a newer specimen when it contains at least three attacks.` : `Play at least ${3 - availableAttackCount} more attack${3 - availableAttackCount === 1 ? "" : "s"} first.`} No sound is generated or recorded.</p>
   </section>;
 
   const labelPitchClass = (pitchClass: number) => pitchClassRoleLabel(pitchClass, doMidi, scale, showConventions);
   if (!session.comparison || !comparison) return <section className="hud-phrase-compare is-capturing" aria-labelledby="hud-phrase-compare-title">
-    <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>Phrase A frozen · frame fixed</span><strong id="hud-phrase-compare-title">Replay it as phrase B</strong><small>A contains {session.baseline.length} attacks. Release any held keys, then preserve the phrase or intentionally change register, intervals, timing, touch, or ending.</small></div><button type="button" onClick={onEnd}>End</button></div>
+    <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>Phrase A frozen · frame fixed · intention declared</span><strong id="hud-phrase-compare-title">{activeChoice?.question ?? "Replay it as phrase B"}</strong><small>{activeChoice?.instruction ?? "Replay the phrase with one intentional change."} A contains {session.baseline.length} attacks.</small></div><button type="button" onClick={onEnd}>Choose another test</button></div>
     <div className="hud-phrase-capture-status" role="status" aria-live="polite"><span>B replay</span><strong>{liveReplayCount} attack{liveReplayCount === 1 ? "" : "s"} captured after A</strong><small>Aim for roughly {session.baseline.length}; capture is available after three and keeps at most twelve.</small></div>
-    <div className="hud-phrase-change-prompts" aria-label="Possible one-property replay changes"><span>same path · new register</span><span>same pitches · new timing</span><span>same notes · new touch</span><span>change the ending</span></div>
-    <div className="hud-builder-actions"><button type="button" onClick={onCapture} disabled={liveReplayCount < 3}>Freeze phrase B</button><button type="button" onClick={onStart}>Replace phrase A with latest</button></div>
+    {activeChoice ? <div className="hud-phrase-intention-active" aria-label={`Current change intention: ${activeChoice.label}`}><span>change</span><strong>{activeChoice.label}</strong><small>Try to preserve: {activeChoice.control}.</small></div> : null}
+    <div className="hud-builder-actions"><button type="button" onClick={onCapture} disabled={liveReplayCount < 3}>Freeze phrase B</button></div>
     <p className="hud-phrase-limit">The replay is learner-bounded rather than automatically segmented. MIDI captures events, not your instrument audio or intention.</p>
   </section>;
 
@@ -2007,8 +2032,24 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
     const adjective = dimension === "settledness" ? "more settled" : dimension === "energy" ? "more energized" : "liked more";
     return `${report.toUpperCase()} ${adjective}`;
   };
+  const changeProfile = session.intention ? phraseChangeProfile(comparison, session.intention) : null;
+  const lensLabel = (lens: "sound" | "relationships" | "motion" | "context") => lens === "context" ? "modeled context" : lens;
+  const intendedEvidence = !changeProfile || !activeChoice ? "No declared change was stored with this comparison."
+    : session.intention === "transpose" ? `Register center moved ${signedPhraseValue(registerDelta, 1)} keys.`
+      : session.intention === "timing" ? timingCopy
+        : session.intention === "touch" ? `Mean MIDI attack moved ${signedPhraseValue(velocityDelta)}.`
+          : session.intention === "articulation" ? `Sounding-overlap share moved ${signedPhraseValue(overlapDelta * 100)} points.`
+            : session.intention === "interval" ? `${comparison.relationships.changedMoveCount} signed move${comparison.relationships.changedMoveCount === 1 ? "" : "s"} changed.`
+              : `The ending moved from ${labelPitchClass(comparison.context.endingPitchClassA)} to ${labelPitchClass(comparison.context.endingPitchClassB)}.`;
+  const otherLensCopy = changeProfile?.otherChangedLenses.length
+    ? `Other observed lens changes: ${changeProfile.otherChangedLenses.map(lensLabel).join(", ")}.`
+    : "No other lens crossed its display threshold.";
+  const invariantLensCopy = changeProfile?.invariantLenses.length
+    ? `Invariant lenses: ${changeProfile.invariantLenses.map(lensLabel).join(", ")}.`
+    : "Every measured or modeled lens crossed a display threshold.";
   return <section className="hud-phrase-compare is-complete" aria-labelledby="hud-phrase-compare-title">
-    <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>A/B complete · no combined score</span><strong id="hud-phrase-compare-title">The same replay through five lenses</strong><small>A {session.baseline.length} attacks · B {session.comparison.length} attacks · the movable-Do frame stayed fixed while both specimens were compared.</small></div><div className="hud-builder-actions"><button type="button" onClick={onReplay}>Replay B again</button><button type="button" onClick={onPromote}>Use B as new A</button><button type="button" onClick={onEnd}>End</button></div></div>
+    <div className="hud-phrase-compare-topline"><div className="hud-panel-heading"><span>A/B complete · declared intention · no combined score</span><strong id="hud-phrase-compare-title">One change, traced through five lenses</strong><small>A {session.baseline.length} attacks · B {session.comparison.length} attacks · the movable-Do frame stayed fixed while both specimens were compared.</small></div><div className="hud-builder-actions"><button type="button" onClick={onReplay}>Try the same change again</button><button type="button" onClick={onPromote}>Use B as new A</button><button type="button" onClick={onEnd}>Choose another test</button></div></div>
+    {changeProfile && activeChoice ? <div className={`hud-phrase-change-reading ${changeProfile.targetObserved ? "has-target" : "is-unobserved"}`} role="status" aria-live="polite"><span>declared change · {activeChoice.label}</span><strong>{changeProfile.targetObserved ? "The intended coordinate moved" : "The intended coordinate did not move clearly"}</strong><p>{intendedEvidence}</p><small><b>{changeProfile.controlPreserved ? "Control preserved:" : "Control not preserved:"}</b> {activeChoice.control}. {otherLensCopy} {invariantLensCopy}</small></div> : null}
     <div className="hud-phrase-lens-profile" role="group" aria-label="Five separate phrase comparison lenses">
       <article className={soundChanged ? "has-change" : "is-invariant"}><header><span>1 · sound</span><em>measured MIDI</em><strong>{soundChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> center {comparison.sound.meanMidiA.toFixed(1)} · span {comparison.sound.pitchSpanA} · attack {Math.round(comparison.sound.meanVelocityA)}</p><i aria-hidden="true">→</i><p><b>B</b> center {comparison.sound.meanMidiB.toFixed(1)} · span {comparison.sound.pitchSpanB} · attack {Math.round(comparison.sound.meanVelocityB)}</p></div><small>Register center {signedPhraseValue(registerDelta, 1)} keys · span {signedPhraseValue(spanDelta)} · mean MIDI attack {signedPhraseValue(velocityDelta)}. This is not acoustic loudness or timbre.</small></article>
       <article className={comparison.relationships.sameIntervalPath ? "is-invariant" : "has-change"}><header><span>2 · relationships</span><em>measured intervals</em><strong>{comparison.relationships.sameIntervalPath ? "invariant" : "changed"}</strong></header><div><p><b>A</b> {phraseMovePath(comparison.relationships.intervalPathA)}</p><i aria-hidden="true">→</i><p><b>B</b> {phraseMovePath(comparison.relationships.intervalPathB)}</p></div><small>{relationshipCopy}</small></article>
@@ -2192,7 +2233,7 @@ export function PianoLab() {
         const raw = window.sessionStorage.getItem(PIANO_SESSION_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as PersistedPianoSession;
-          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12) && Array.isArray(saved.phraseEvents)) {
+          if ((saved.version === 2 || saved.version === 3 || saved.version === 4 || saved.version === 5 || saved.version === 6 || saved.version === 7 || saved.version === 8 || saved.version === 9 || saved.version === 10 || saved.version === 11 || saved.version === 12 || saved.version === 13) && Array.isArray(saved.phraseEvents)) {
             const lastOnset = saved.phraseEvents.at(-1)?.onsetMs ?? currentNow;
             const shift = currentNow - lastOnset - 350;
             const restoredPhrase = saved.phraseEvents.map((event) => ({
@@ -2243,7 +2284,7 @@ export function PianoLab() {
               });
             }
             if (isPulseMirrorSession(saved.pulseMirrorSession)) setPulseMirrorSession(saved.pulseMirrorSession);
-            if (isPhraseCompareSession(saved.phraseCompareSession)) setPhraseCompareSession(saved.phraseCompareSession);
+            if (isPhraseCompareSession(saved.phraseCompareSession)) setPhraseCompareSession({ ...saved.phraseCompareSession, intention: saved.phraseCompareSession.intention ?? null });
           }
         }
       } catch {
@@ -2265,7 +2306,7 @@ export function PianoLab() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const session: PersistedPianoSession = { version: 12, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
+    const session: PersistedPianoSession = { version: 13, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, motionFocusMode, pulseMirrorSession, phraseCompareSession };
     try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
   }, [boundaryCorrections, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkPathId, landmarkStepIndex, lockedDoMidi, lockedScaleId, membershipCorrections, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
 
@@ -2362,6 +2403,9 @@ export function PianoLab() {
   const phraseLensComparison = useMemo<PhraseLensComparison | null>(() => phraseCompareSession?.comparison
     ? comparePhraseLenses(phraseCompareSession.baseline, phraseCompareSession.comparison)
     : null, [phraseCompareSession]);
+  const phraseChangeReading = useMemo(() => phraseLensComparison && phraseCompareSession?.intention
+    ? phraseChangeProfile(phraseLensComparison, phraseCompareSession.intention)
+    : null, [phraseCompareSession?.intention, phraseLensComparison]);
   const scaleWalkScale = PIANO_SCALES.find((candidate) => candidate.id === scaleWalkSession?.scaleId) ?? scale;
   const scaleWalkEvents = useMemo(() => scaleWalkSession ? phraseEvents.filter((event) => event.id > scaleWalkSession.anchorEventId) : [], [phraseEvents, scaleWalkSession]);
   const scaleWalkProgress = useMemo<AscendingScaleWalk | null>(() => scaleWalkSession
@@ -2636,7 +2680,7 @@ export function PianoLab() {
     }
   };
 
-  const beginPhraseCompare = () => {
+  const beginPhraseCompare = (intention: PhraseChangeIntention) => {
     const source = latestReplayablePhrase(phraseEvents);
     if (source.length < 3) return;
     const rootPitchClass = pitchClassFromMidi(doMidi);
@@ -2657,6 +2701,7 @@ export function PianoLab() {
       baseline: freezePhraseSpecimen(source, currentHudTime()),
       anchorEventId: phraseEvents.at(-1)?.id ?? 0,
       comparison: null,
+      intention,
       rootPitchClass,
       scaleId: scale.id,
       reports: {},
@@ -2966,10 +3011,10 @@ export function PianoLab() {
   const gravityCounterfactualTargetLabel = gravityCounterfactualSession ? pitchClassRoleLabel(gravityCounterfactualSession.targetPitchClass, doMidi, scale, showConventions) : "candidate";
 
   const newestInsight = focusLens === "explore" && phraseCompareSession ? !phraseCompareSession.comparison || !phraseLensComparison
-    ? `Phrase A is frozen. Play phrase B, changing one property if you can; ${phraseCompareLiveEvents.length} of at least 3 replay attacks are captured.`
-    : phraseLensComparison.relationships.sameIntervalPath
-      ? `The signed interval path stayed invariant${phraseLensComparison.relationships.uniformTransposition ? ` while every pitch shifted ${signedPhraseValue(phraseLensComparison.relationships.uniformTransposition)} keys` : ""}; sound, motion, context, and your report remain separate comparisons.`
-      : `${phraseLensComparison.relationships.changedMoveCount} interval moves changed between A and B; the other four lenses show different consequences without combining them into a verdict.`
+    ? `${PHRASE_CHANGE_CHOICES.find((choice) => choice.id === phraseCompareSession.intention)?.instruction ?? "Play phrase B with one declared change."} ${phraseCompareLiveEvents.length} of at least 3 replay attacks are captured.`
+    : phraseChangeReading
+      ? `${phraseChangeReading.targetObserved ? "The declared coordinate moved" : "The declared coordinate did not move clearly"}; its control was ${phraseChangeReading.controlPreserved ? "preserved" : "not preserved"}. ${phraseChangeReading.otherChangedLenses.length ? `Other changed lenses: ${phraseChangeReading.otherChangedLenses.join(", ")}.` : "No other lens crossed its display threshold."}`
+      : "Phrase A and B remain separate five-lens comparisons without a combined verdict."
     : focusLens === "chords" && controlledSonoritySession ? !controlledSonoritySession.baselineNotes
     ? "The starting field is only outlined. Perform every exact key to establish a physical and modeled baseline."
     : controlledSonoritySession.replayRequired

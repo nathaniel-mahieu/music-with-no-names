@@ -252,6 +252,20 @@ export type PhraseLensComparison = {
   };
 };
 
+export type PhraseChangeIntention = "transpose" | "timing" | "touch" | "articulation" | "interval" | "ending";
+export type PhraseChangeLens = "sound" | "relationships" | "motion" | "context";
+export type PhraseChangeObservation = "register" | "span" | "touch" | "intervalPath" | "timing" | "articulation" | "ending" | "context";
+
+export type PhraseChangeProfile = {
+  intention: PhraseChangeIntention;
+  targetObserved: boolean;
+  controlPreserved: boolean;
+  observations: Record<PhraseChangeObservation, boolean>;
+  changedLenses: PhraseChangeLens[];
+  invariantLenses: PhraseChangeLens[];
+  otherChangedLenses: PhraseChangeLens[];
+};
+
 export type ResolutionFork = {
   id: "center-return" | "least-motion" | "fifths-neighbor" | "fresh-route" | "alternate-route";
   label: string;
@@ -1176,6 +1190,81 @@ export function comparePhraseLenses(
       endingPitchClassA: pitchClassFromMidi(phraseA.at(-1)!.note),
       endingPitchClassB: pitchClassFromMidi(phraseB.at(-1)!.note),
     },
+  };
+}
+
+/**
+ * Reads a five-lens comparison against one learner-declared change intention.
+ * This does not score execution or claim that one visible difference caused
+ * another; it only separates the intended coordinate, its control condition,
+ * and other observed lens changes.
+ */
+export function phraseChangeProfile(
+  comparison: PhraseLensComparison,
+  intention: PhraseChangeIntention,
+): PhraseChangeProfile {
+  const register = Math.abs(comparison.sound.meanMidiB - comparison.sound.meanMidiA) >= 0.5;
+  const span = comparison.sound.pitchSpanA !== comparison.sound.pitchSpanB;
+  const touch = Math.abs(comparison.sound.meanVelocityB - comparison.sound.meanVelocityA) >= 1;
+  const intervalPath = !comparison.relationships.sameIntervalPath;
+  const durationChanged = comparison.motion.tempoRatio != null && Math.abs(comparison.motion.tempoRatio - 1) > 0.05;
+  const timing = !comparison.motion.sameTimingShape || durationChanged;
+  const articulation = Math.abs(comparison.motion.overlapShareB - comparison.motion.overlapShareA) > 0.05;
+  const ending = comparison.context.endingPitchClassA !== comparison.context.endingPitchClassB;
+  const context = comparison.context.leadingCenterA !== comparison.context.leadingCenterB
+    || comparison.context.leadingScaleIdA !== comparison.context.leadingScaleIdB
+    || Math.abs(comparison.context.clarityB - comparison.context.clarityA) > 0.03
+    || ending;
+  const observations: PhraseChangeProfile["observations"] = {
+    register,
+    span,
+    touch,
+    intervalPath,
+    timing,
+    articulation,
+    ending,
+    context,
+  };
+  const sameAbsolutePitchPath = comparison.relationships.sameIntervalPath
+    && comparison.relationships.uniformTransposition === 0;
+  const equalMoveCounts = comparison.relationships.intervalPathA.length === comparison.relationships.intervalPathB.length;
+  const sameEarlierMoves = equalMoveCounts
+    && comparison.relationships.intervalPathA.slice(0, -1).every((move, index) => move === comparison.relationships.intervalPathB[index]);
+  const targetObserved = intention === "transpose" ? register
+    : intention === "timing" ? timing
+      : intention === "touch" ? touch
+        : intention === "articulation" ? articulation
+          : intention === "interval" ? intervalPath
+            : ending;
+  const controlPreserved = intention === "transpose"
+    ? comparison.relationships.sameIntervalPath && comparison.relationships.uniformTransposition != null
+    : intention === "timing" || intention === "touch" || intention === "articulation"
+      ? sameAbsolutePitchPath
+      : intention === "interval"
+        ? equalMoveCounts && comparison.relationships.changedMoveCount === 1
+        : sameEarlierMoves && comparison.relationships.changedMoveCount === 1;
+  const lensChanged: Record<PhraseChangeLens, boolean> = {
+    sound: register || span || touch,
+    relationships: intervalPath,
+    motion: timing || articulation,
+    context,
+  };
+  const lensOrder: PhraseChangeLens[] = ["sound", "relationships", "motion", "context"];
+  const changedLenses = lensOrder.filter((lens) => lensChanged[lens]);
+  const invariantLenses = lensOrder.filter((lens) => !lensChanged[lens]);
+  const primaryLens: PhraseChangeLens = intention === "transpose" || intention === "touch"
+    ? "sound"
+    : intention === "timing" || intention === "articulation"
+      ? "motion"
+      : "relationships";
+  return {
+    intention,
+    targetObserved,
+    controlPreserved,
+    observations,
+    changedLenses,
+    invariantLenses,
+    otherChangedLenses: changedLenses.filter((lens) => lens !== primaryLens),
   };
 }
 
