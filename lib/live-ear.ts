@@ -111,7 +111,8 @@ export function liveEarPairProfile(first: PianoPhraseSpecimenEvent, second: Pian
 
 /**
  * Reads the latest performed interval. Spectral evidence is emitted only when
- * release timing proves that both fundamentals overlapped. Every upper partial
+ * release timing proves that both note events overlapped. Their reference
+ * frequencies are derived from MIDI key numbers at A4=440; every upper partial
  * remains a declared teaching assumption rather than measured keyboard audio.
  */
 export function liveEarIntervalProfile(events: PianoPhraseSpecimenEvent[]): LiveEarIntervalProfile | null {

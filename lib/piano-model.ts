@@ -956,7 +956,8 @@ export function frequencyFromMidi(note: number, tuningHz = 440) {
 
 /**
  * Finds a small Pareto set of shared-cycle hypotheses for two to six performed
- * equal-tempered fundamentals. Each candidate trades a shorter integer
+ * A4=440 equal-tempered reference frequencies derived from MIDI positions.
+ * Each candidate trades a shorter integer
  * harmonic template against lower cents mismatch. It does not inspect upper
  * partials, phase, chord identity, tonal function, or a listener response.
  */

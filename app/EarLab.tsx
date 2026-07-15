@@ -103,20 +103,20 @@ function LiveEarBridge({ events, hydrated, onNavigateToPiano }: {
   const summary = interactionReady
     ? `${profile.steps} equal-key steps and a ${profile.equalFrequencyRatio.toFixed(3)} to one frequency ratio stay fixed. Four assumed sound models produce ${LIVE_EAR_METRICS.map((metric) => `${metric.label.toLowerCase()} values ${profile.modelReadings.map((reading) => modelScale(reading[metric.key])).join(", ")}`).join("; ")}.`
     : profile
-      ? `${profile.steps} equal-key steps and a ${profile.equalFrequencyRatio.toFixed(3)} to one frequency ratio were measured, but ${profile.interactionStatus === "separate" ? "the first attack ended before the second began" : "release timing is missing"}, so no simultaneous spectral-interaction result is shown.`
-      : "Play two attacks in Piano to compare one interval relationship with its physical realization.";
+      ? `${profile.steps} equal-key steps were measured and imply a ${profile.equalFrequencyRatio.toFixed(3)} to one 12-TET reference-frequency ratio, but ${profile.interactionStatus === "separate" ? "the first attack ended before the second began" : "release timing is missing"}, so no simultaneous spectral-interaction result is shown.`
+      : "Play two attacks in Piano to compare one interval relationship with its reference-frequency realization.";
 
   return <section className="live-ear-bridge" aria-labelledby="live-ear-title">
     <div className="live-ear-heading">
       <div><span>Latest Piano interval · one question</span><h3 id="live-ear-title">Which conclusions survive when only the assumed sound changes?</h3></div>
-      <p>MIDI supplies two fundamentals and timing—not overtones. The relationship can be measured directly; every auditory result below must declare a spectrum.</p>
+      <p>MIDI supplies two key numbers and timing—not acoustic pitch or overtones. The app derives 12-TET reference frequencies at A4=440; every auditory result below must declare a spectrum.</p>
     </div>
 
     {!hydrated ? <p className="live-ear-loading" role="status">Looking for the retained Piano phrase…</p> : profile ? <>
-      <div className="live-ear-invariants" aria-label="Measured interval invariants">
+      <div className="live-ear-invariants" aria-label="Measured MIDI and derived interval invariants">
         <span><small>hand movement</small><strong>{signedStepLabel(profile.signedSteps)}</strong></span>
-        <span><small>frequency relationship</small><strong>{profile.equalFrequencyRatio.toFixed(3)} : 1</strong></span>
-        <span><small>physical realization</small><strong>{profile.lowerHz.toFixed(1)} → {profile.upperHz.toFixed(1)} Hz</strong></span>
+        <span><small>12-TET frequency ratio</small><strong>{profile.equalFrequencyRatio.toFixed(3)} : 1</strong></span>
+        <span><small>A4=440 reference</small><strong>{profile.lowerHz.toFixed(1)} → {profile.upperHz.toFixed(1)} Hz</strong></span>
         <span><small>simultaneous evidence</small><strong>{profile.interactionStatus === "overlap" ? `${Math.round(profile.overlapMs ?? 0)} ms overlap` : profile.interactionStatus === "separate" ? "separated in time" : "release unknown"}</strong></span>
       </div>
 
@@ -152,8 +152,8 @@ function LiveEarBridge({ events, hydrated, onNavigateToPiano }: {
         </div>
 
         <div className="live-ear-lenses" role="group" aria-label="Five separate lenses for this interval and its assumed sounds">
-          <article><span>Sound</span><em>measured MIDI</em><strong>{profile.lowerHz.toFixed(1)} + {profile.upperHz.toFixed(1)} Hz</strong><small>{Math.round(profile.overlapMs ?? 0)} ms of overlap is proven by attack and release timing. MIDI attack strength is not acoustic loudness.</small></article>
-          <article><span>Relationships</span><em>measured</em><strong>{profile.steps} steps · {profile.equalFrequencyRatio.toFixed(3)} : 1</strong><small>This equal-key relationship survives every spectrum assumption shown here.</small></article>
+          <article><span>Sound</span><em>MIDI timing + derived references</em><strong>{profile.lowerHz.toFixed(1)} + {profile.upperHz.toFixed(1)} Hz</strong><small>{Math.round(profile.overlapMs ?? 0)} ms of overlap is proven by attack and release timing. Hz assumes A4=440; MIDI attack strength is not acoustic loudness.</small></article>
+          <article><span>Relationships</span><em>MIDI keys + derived ratio</em><strong>{profile.steps} steps · {profile.equalFrequencyRatio.toFixed(3)} : 1</strong><small>This equal-key relationship survives every spectrum assumption shown here.</small></article>
           <article><span>Motion</span><em>measured</em><strong>{signedStepLabel(profile.signedSteps)}</strong><small>The second attack began {Math.round(profile.second.onsetMs - profile.first.onsetMs)} ms later. Changing an assumed spectrum does not change that gesture.</small></article>
           <article><span>Auditory</span><em>modeled</em><strong>{strongestDifference?.label ?? "Model-dependent"}</strong><small>{strongestDifference ? `Largest displayed model spread: ${Math.round(strongestDifference.spread * 100)} points.` : "The model readings remain separate."} These are teaching proxies, not the connected instrument.</small></article>
           <article><span>Experience</span><em>listener only</em><strong>Not inferred</strong><small>Friction, fit, and fusion do not determine tension, beauty, liking, or what this interval meant in your phrase.</small></article>
@@ -164,11 +164,11 @@ function LiveEarBridge({ events, hydrated, onNavigateToPiano }: {
       </div>}
 
       <div className="live-ear-boundary">
-        <p><strong>What changed here:</strong> only the assumed overtone pattern. <strong>What stayed fixed:</strong> MIDI keys, fundamentals, interval, timing, and your actual response. None of the four models measures a keyboard patch, DAW, speaker, room, or ear.</p>
+        <p><strong>What changed here:</strong> only the assumed overtone pattern. <strong>What stayed fixed:</strong> MIDI key numbers, their A4=440 reference coordinates, interval, and timing. Pitch bend, instrument tuning, audio pitch, and your response are not captured; none of the four models measures a keyboard patch, DAW, speaker, room, or ear.</p>
         {onNavigateToPiano && interactionReady ? <button type="button" onClick={onNavigateToPiano}>Replay with different overlap or register</button> : null}
       </div>
     </> : <div className="live-ear-empty">
-      <div><strong>No retained interval yet</strong><p>Play two attacks in Piano. Their physical spacing can be compared immediately; simultaneous auditory evidence appears only when release timing proves that the sounds overlapped.</p></div>
+      <div><strong>No retained interval yet</strong><p>Play two attacks in Piano. Their key spacing and 12-TET reference ratio can be compared immediately; simultaneous auditory evidence appears only when release timing proves that the note events overlapped.</p></div>
       {onNavigateToPiano ? <button type="button" onClick={onNavigateToPiano}>Play two attacks in Piano</button> : null}
     </div>}
   </section>;

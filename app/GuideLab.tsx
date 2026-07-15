@@ -23,7 +23,7 @@ const GLOSSARY = [
   ["scale", "an ordered gap pattern that repeats when frequency doubles"],
   ["scale degree", "one position relative to Do"],
   ["transposition", "moving every pitch together while keeping their relationships"],
-  ["piano key", "one physical control in a twelve-equal-step tuning; its role changes when Do changes"],
+  ["piano key", "one physical or on-screen control; this app maps its MIDI number to a 12-TET reference while its musical role changes when Do changes"],
   ["circle of fifths", "repeated near-3:2 moves, folded into one octave and closed by equal temperament"],
   ["roughness", "modeled interaction between nearby frequencies that overlap in time"],
   ["harmonicity", "how well spectral components fit a harmonic pattern"],

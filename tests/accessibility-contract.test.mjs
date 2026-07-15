@@ -354,6 +354,12 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /role="img" aria-label=\{summary\}/);
   assert.match(piano, /Phases are reset together only for this visual comparison/);
   assert.match(piano, /Not a detected root, chord name, tonal function, acoustic fusion, consonance, emotion, or goodness/);
+  assert.match(piano, /Reference-frequency height/);
+  assert.match(piano, /Derived from MIDI key number at A4=440 Hz/);
+  assert.match(piano, /pitch bend, instrument tuning, and audio pitch are not captured/);
+  assert.match(piano, /Candidate shared periodicity · derived reference frequencies/);
+  assert.match(ear, /MIDI supplies two key numbers and timing—not acoustic pitch or overtones/);
+  assert.match(ear, /Pitch bend, instrument tuning, audio pitch, and your response are not captured/);
   assert.match(piano, /simultaneous partial-interaction comparison would answer the wrong question/);
   assert.match(css, /\.hud-echo-reading[\s\S]*grid-template-columns: repeat\(3/);
   assert.match(css, /\.hud-echo-experience button \{ justify-self: start/);

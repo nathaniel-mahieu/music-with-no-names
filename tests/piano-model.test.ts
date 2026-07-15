@@ -79,7 +79,7 @@ test("maps equal-tempered MIDI notes to physical frequency", () => {
   assert.ok(Math.abs(frequencyFromMidi(72) / frequencyFromMidi(60) - 2) < 1e-12);
 });
 
-test("offers transparent shared-cycle tradeoffs for live equal-tempered fundamentals", () => {
+test("offers transparent shared-cycle tradeoffs for MIDI-derived reference frequencies", () => {
   const brightTriad = sharedCycleCandidates([60, 64, 67]);
   assert.equal(brightTriad.length, 1);
   assert.deepEqual(brightTriad[0].harmonics, [4, 5, 6]);
