@@ -139,6 +139,7 @@ import {
 import { livePulseMirror, type LivePulseMirror } from "@/lib/rhythm-model";
 import { PIANO_SESSION_KEY } from "@/lib/piano-session";
 import { liveEarPairProfile, type LiveEarIntervalProfile } from "@/lib/live-ear";
+import { PianoImmersion } from "@/app/PianoImmersion";
 
 type MidiInputLike = {
   id: string;
@@ -189,7 +190,7 @@ type ChordMeasure = {
   commonPitchClassCount: number;
 };
 type FrameMode = "discover" | "locked";
-type FocusLens = "explore" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
+type FocusLens = "explore" | "immersion" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif" | "breath";
 type ChordFocusMode = "cause" | "change" | "echo";
 type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo" | "resolution-fork" | "motif-return" | "landmark-path";
@@ -353,6 +354,7 @@ const FIFTHS_ORDER = fifthsCircle();
 const EVENT_X = (slot: number) => 84 + slot * 88;
 const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }> = [
   { id: "explore", label: "Explore", description: "See the whole phrase across every representation." },
+  { id: "immersion", label: "Immersion", description: "Let register, fifths, intervals, timing, chords, and pull become one living sky." },
   { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },
   { id: "scales", label: "Scales", description: "See how pitch evidence suggests Do and a scale route." },
   { id: "chords", label: "Chords", description: "Choose one question about a note, a chord change, or a new voicing." },
@@ -5348,7 +5350,7 @@ export function PianoLab() {
   return (
     <section className="advanced-lab piano-lab piano-hud" aria-labelledby="piano-hud-title">
       <header className="piano-hud-header">
-        <div><p className="section-kicker">Silent MIDI piano companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>Every attack keeps one numbered column across staff, reference frequency, and evidence. MIDI sends note data only—there is no sound, recording, or upload.</p></div>
+        <div><p className="section-kicker">Silent MIDI piano companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} MIDI sends note data only—there is no sound, recording, or upload.</p></div>
         <div className="piano-hud-controls" aria-label="HUD controls">
           <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{midi.status}</strong></div></div>
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
@@ -5367,17 +5369,32 @@ export function PianoLab() {
         <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
       </div>
 
-      <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} />
+      {focusLens !== "immersion" ? <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} /> : null}
 
       <nav className="piano-focus-lenses" aria-label="Learning focus">
         {FOCUS_LENSES.map((lens) => <button key={lens.id} type="button" aria-pressed={focusLens === lens.id} onClick={() => selectFocusLens(lens.id)}><strong>{lens.label}</strong><span>{lens.description}</span></button>)}
       </nav>
 
-      <PhraseRibbon events={phraseEvents} nowMs={nowMs || phraseEvents.at(-1)?.onsetMs || 0} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} />
+      {focusLens === "immersion" ? <PianoImmersion
+        events={events}
+        phraseEvents={phraseEvents}
+        measures={measures}
+        chordMeasures={chordMeasures}
+        activeNotes={activeNoteNumbers.map((note) => ({ note, velocity: activeNotesMap.get(note) ?? 0, pressed: midi.pressed.has(note), sustained: midi.sustained.has(note) }))}
+        doMidi={doMidi}
+        scale={scale}
+        frameMode={frameMode}
+        chordWindowMs={chordWindowMs}
+        soundModelId={soundModelId}
+        showConventions={showConventions}
+        onSoundModelChange={setSoundModelId}
+      /> : null}
+
+      {focusLens !== "immersion" ? <PhraseRibbon events={phraseEvents} nowMs={nowMs || phraseEvents.at(-1)?.onsetMs || 0} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} /> : null}
 
       {focusLens === "chords" ? <ChordQuestionGuide value={chordFocusMode} onChange={selectChordMode} /> : null}
 
-      <div className="hud-event-selector" aria-label="Select an event across every view">{events.map((event, index) => <button key={event.id} type="button" aria-pressed={focusedEvent?.id === event.id} onClick={() => { setFocusedId(event.id); const containing = chordGestures.find((gesture) => gesture.attacks.some((attack) => attack.id === event.id)); if (containing) setSelectedChordId(containing.id); }}><strong>{index + 1}</strong><span>{showConventions ? conventionalPitchName(event.note) : relativeSyllable(event.note, doMidi, scale)}</span><small>{durationLabel(event, nowMs || event.onsetMs)}{event.releaseReason === "pedal" ? " · pedal" : ""}</small></button>)}</div>
+      {focusLens !== "immersion" ? <div className="hud-event-selector" aria-label="Select an event across every view">{events.map((event, index) => <button key={event.id} type="button" aria-pressed={focusedEvent?.id === event.id} onClick={() => { setFocusedId(event.id); const containing = chordGestures.find((gesture) => gesture.attacks.some((attack) => attack.id === event.id)); if (containing) setSelectedChordId(containing.id); }}><strong>{index + 1}</strong><span>{showConventions ? conventionalPitchName(event.note) : relativeSyllable(event.note, doMidi, scale)}</span><small>{durationLabel(event, nowMs || event.onsetMs)}{event.releaseReason === "pedal" ? " · pedal" : ""}</small></button>)}</div> : null}
 
       {focusLens === "explore" ? <PhraseCompareField session={phraseCompareSession} liveReplayCount={phraseCompareLiveEvents.length} comparison={phraseLensComparison} availableAttackCount={phraseEvents.length} doMidi={doMidi} scale={scale} showConventions={showConventions} onStart={beginPhraseCompare} onCapture={capturePhraseCompareReplay} onReplay={replayPhraseCompare} onPromote={promotePhraseCompareReplay} onReport={reportPhraseCompare} onEnd={() => setPhraseCompareSession(null)} /> : null}
 
@@ -5409,10 +5426,13 @@ export function PianoLab() {
 
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}
 
-      <div className="piano-hud-keyboard-wrap">
+      {focusLens === "immersion" ? <details className="piano-immersion-keyboard">
+        <summary><span>Open the silent hand horizon</span><small>Optional on-screen keys for testing without a MIDI device. They visualize only and never make sound.</small></summary>
+        <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
+      </details> : <div className="piano-hud-keyboard-wrap">
         <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>gold attacked · dotted inherited member · crossed inherited exclusion · dashed silent target · double mark Do</small></div>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
-      </div>
+      </div>}
 
       {((focusLens === "explore" && !phraseCompareSession) || focusLens === "chords") ? <div className={`piano-hud-analysis ${focusLens === "chords" ? "is-chords-focused" : ""}`}>
         <section className="hud-chord-panel" aria-labelledby="hud-chord-title">
@@ -5463,7 +5483,7 @@ export function PianoLab() {
 
       {focusLens === "explore" && !phraseCompareSession ? <EvidenceTrace measures={measures} chordMeasures={chordMeasures} events={events} selectedChordId={effectiveSelectedChordId} /> : null}
 
-      {focusLens === "explore" && !phraseCompareSession
+      {focusLens === "immersion" ? null : focusLens === "explore" && !phraseCompareSession
         ? <LastAttackChange events={events} focusedId={focusedEvent?.id ?? null} doMidi={doMidi} scale={scale} showConventions={showConventions} onReflect={() => selectFocusLens("experience")} />
         : <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Displayed Hz values assume 12-TET at A4=440; pitch bend, instrument tuning, and audio pitch are not read. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>}
     </section>

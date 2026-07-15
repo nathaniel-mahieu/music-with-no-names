@@ -4,8 +4,9 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **MIDI Reference-Frequency Provenance v1.84**. It provides:
+The current milestone is **Resonance Sky v1.85**. It provides:
 
+- A new silent Immersion focus inside Piano: one near-black Resonance Sky places attacks by fixed circle-of-fifths direction and equal-key/log-frequency register depth, colors them by role around the current movable Do, retains up to twenty-eight recent marks with the latest seven bright, joins a bounded register-spanning sample of the current field with named interval-reference filaments, wraps compact attack groups in chord mist, traces nearest-key voice wakes, and keeps selected-frame pull, matching-field assumed-spectrum crunch, phrase-local newness, attack strength, scale membership, release-proven silence, and recency in separate visual channels. Integer-ratio references remain distinct from the geometric √2 octave midpoint. The visual never generates audio or collapses those channels into emotion, correctness, preference, or musical goodness; every essential mark has a named text counterpart, reduced-motion and forced-color treatment, and a 390-pixel immersive crop.
 - Safe, user-initiated two-tone synthesis.
 - A companion-first learning hierarchy: Start, the live Piano companion, and the learner's Personal Lens stay prominent while specialist pitch, time, listening, recording, and landmark labs live in one grouped disclosure instead of competing as eleven equal destinations.
 - A persistent return-to-phrase cue outside Piano whenever the current tab contains live attacks. It reports the phrase size and active learning lens, preserves the movable-Do frame and URL state, and returns to the same silent phrase without turning its measurements into a score.

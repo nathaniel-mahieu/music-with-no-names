@@ -11,6 +11,38 @@ test("every learning lab exposes a named semantic region", async () => {
   }
 });
 
+test("immersive piano sky keeps visual channels named, bounded, and non-color-only", async () => {
+  const [piano, immersion, model, css] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-immersion-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
+  assert.match(piano, /<details className="piano-immersion-keyboard">/);
+  assert.match(immersion, /<section className="piano-immersion" aria-labelledby="piano-immersion-title">/);
+  assert.match(immersion, /role="img" aria-labelledby="piano-immersion-svg-title piano-immersion-svg-description"/);
+  assert.match(immersion, /<desc id="piano-immersion-svg-description">\{visualSummary\}<\/desc>/);
+  assert.match(immersion, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(immersion, /window\.setTimeout\(\(\) => setAnnouncedSummary\(visualSummary\), 280\)/);
+  assert.match(immersion, /<select id="immersion-sound-model"/);
+  assert.match(immersion, /dash density shows 12-TET mismatch to the named reference/);
+  assert.match(immersion, /a dashed edge means rolled/);
+  assert.match(immersion, /a broken segment needs release-proven silence/);
+  assert.match(immersion, /The view never combines these channels into correctness, emotion, preference, or musical goodness/);
+  assert.match(immersion, /Pitch bend, keyboard or DAW tuning, acoustic pitch, audio spectrum, and acoustic loudness are not captured/);
+  assert.doesNotMatch(immersion, /tabIndex=\{?[1-9]/);
+  assert.match(model, /IMMERSION_MAX_TRAIL_EVENTS = 28/);
+  assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
+  assert.match(model, /IMMERSION_MAX_INTERVAL_LINKS = 12/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.piano-immersion-note\.is-latest \.cosmos-node-bloom \{ animation: none/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-reading \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-stage \* \{ filter: none/);
+  assert.match(css, /\.piano-immersion-note \.cosmos-node\.is-outside-route[\s\S]*stroke-dasharray/);
+  assert.match(css, /\.immersion-pedal-ring[\s\S]*stroke-dasharray/);
+});
+
 test("dynamic visuals and status changes expose nonvisual descriptions", async () => {
   const [ratio, scale, piano, ear, harmony, rhythm, recording, journey, atlas, personal] = await Promise.all([
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
