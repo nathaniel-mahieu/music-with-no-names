@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { performance } from "node:perf_hooks";
 import { analyzeMonoAudio } from "../lib/audio-analysis.ts";
+import { immersionCloudHull } from "../lib/piano-immersion-model.ts";
 
 test("two-minute analysis stays bounded in time, memory, and frame count", () => {
   const sampleRate = 12000;
@@ -23,4 +24,16 @@ test("two-minute analysis stays bounded in time, memory, and frame count", () =>
   assert.ok(result.resolutions[0].frames.length <= 2400);
   assert.ok(result.resolutions[1].frames.length <= 1800);
   assert.ok(result.resolutions[2].frames.length <= 900);
+});
+
+test("a full MIDI-range immersion hull stays geometrically bounded", () => {
+  const notes = Array.from({ length: 128 }, (_, note) => note);
+  const started = performance.now();
+  const hull = immersionCloudHull(notes, 60);
+  const elapsed = performance.now() - started;
+
+  assert.ok(hull);
+  assert.equal(hull.pointCount, 128);
+  assert.ok(hull.path.length < 3000, `dense hull path grew to ${hull.path.length} characters`);
+  assert.ok(elapsed < 100, `dense hull took ${elapsed.toFixed(1)} ms`);
 });

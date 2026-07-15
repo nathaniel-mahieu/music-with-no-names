@@ -25,6 +25,7 @@ import {
   type PianoSoundModelId,
 } from "@/lib/piano-sound-model";
 import {
+  IMMERSION_MAX_FIELD_NOTES,
   IMMERSION_VIEWBOX,
   immersionArcPath,
   immersionAttackContour,
@@ -309,6 +310,7 @@ export const PianoImmersion = memo(function PianoImmersion({
     : null;
   const matchingMeasure = latestMeasure && immersionSameNoteField(latestMeasure.event.fieldNotes, fieldNotes) ? latestMeasure : null;
   const currentCrunch = matchingChord?.crunch ?? matchingMeasure?.crunch ?? null;
+  const crunchLimitReached = fieldNotes.length > IMMERSION_MAX_FIELD_NOTES;
   const phraseNewness = immersionPhraseNewness(phraseEvents);
   const fifthsTide = immersionFifthsTide(phraseEvents, events, chordWindowMs);
   const fifthsDrift = fifthsTide.flatMap((scope) => scope.centerPoint ? [scope.centerPoint] : []);
@@ -447,8 +449,13 @@ export const PianoImmersion = memo(function PianoImmersion({
   const currentReading = latestEvent
     ? `${latestLabel} arrived at MIDI key ${latestEvent.note}. ${activeNumbers.length ? `${activeNumbers.length} ${activeNumbers.length === 1 ? "position is" : "positions are"} held or pedal-sustained in the live sounding field.` : `No keys remain held; the fibers preserve the latest attack-time snapshot${fieldNotes.length ? ` of ${fieldNotes.length} positions` : ""}.`}`
     : "Play a MIDI key, or open the silent hand horizon below. The first attack will light the sky.";
+  const crunchReading = currentCrunch != null
+    ? `modeled crunch is ${evidenceWord(currentCrunch)} under ${currentModel.shortLabel.toLowerCase()}`
+    : crunchLimitReached
+      ? `modeled crunch pauses above ${IMMERSION_MAX_FIELD_NOTES} positions to keep live rendering bounded`
+      : "modeled crunch needs a matching multi-note field";
   const metricReading = latestEvent
-    ? `For the ${fieldProvenance}, selected-frame pull is ${evidenceWord(tendency.homePull)}; home evidence is ${evidenceWord(tendency.homeEvidence)}; the latest first/return bloom is ${evidenceWord(phraseNewness)}${currentCrunch == null ? "; modeled crunch needs a matching multi-note field" : `; modeled crunch is ${evidenceWord(currentCrunch)} under ${currentModel.shortLabel.toLowerCase()}`}.${samplingReading}`
+    ? `For the ${fieldProvenance}, selected-frame pull is ${evidenceWord(tendency.homePull)}; home evidence is ${evidenceWord(tendency.homeEvidence)}; the latest first/return bloom is ${evidenceWord(phraseNewness)}; ${crunchReading}.${samplingReading}`
     : "Hue, size, trails, filaments, and mist remain separate visual channels; none is a goodness or emotion score.";
   const visualSummary = latestEvent
     ? `Resonance Sky contains ${Math.min(28, phraseEvents.length)} recent attack marks and ${events.length} bright microscope attacks. Latest: ${latestRole}; ${latestMove}; ${latestRecurrence}. The ${fieldProvenance} contains ${fieldNotes.length} positions and ${intervalField.totalPairCount} possible pairwise intervals; ${intervalField.links.length} bounded filaments are shown${sampleInterval ? `, including ${sampleInterval.relationship} near ${sampleInterval.landmarkLabel}` : ""}. ${chordCopy} ${routeEvidenceCopy} ${contextCopy} ${motifCopy ?? "No relationship-window return is currently drawn."} ${metricReading} Musical quality and listener feeling are not inferred.`
@@ -536,7 +543,7 @@ export const PianoImmersion = memo(function PianoImmersion({
           <select id="immersion-sound-model" value={soundModelId} onChange={(event) => onSoundModelChange(event.target.value as PianoSoundModelId)}>
             {PIANO_SOUND_MODELS.map((model) => <option key={model.id} value={model.id}>{model.shortLabel}</option>)}
           </select>
-          <small>Only coral modeled crunch responds; no keyboard audio is read.</small>
+          <small>Only coral modeled crunch responds; no keyboard audio is read. Dense fields above {IMMERSION_MAX_FIELD_NOTES} positions pause this one model.</small>
         </label>
       </div>
 
@@ -547,10 +554,6 @@ export const PianoImmersion = memo(function PianoImmersion({
           <title id="piano-immersion-svg-title">Resonance Sky for the current MIDI phrase</title>
           <desc id="piano-immersion-svg-description">{visualSummary}</desc>
           <defs>
-            <filter id={`${instanceId}-soft-glow`} x="-80%" y="-80%" width="260%" height="260%">
-              <feGaussianBlur stdDeviation="5" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
             <radialGradient id={`${instanceId}-home-well`}>
               <stop offset="0" stopColor="#ffd36a" stopOpacity="0.44" />
               <stop offset="0.42" stopColor="#ffd36a" stopOpacity="0.12" />
@@ -558,10 +561,13 @@ export const PianoImmersion = memo(function PianoImmersion({
             </radialGradient>
             {visibleClouds.map(({ measure, gradientId }) => {
               const notes = [...new Set(measure.interpretedNotes)];
+              const colorNotes = notes.length <= IMMERSION_MAX_FIELD_NOTES
+                ? notes
+                : Array.from({ length: IMMERSION_MAX_FIELD_NOTES }, (_, index) => notes[Math.round(index * (notes.length - 1) / (IMMERSION_MAX_FIELD_NOTES - 1))]);
               return <linearGradient key={gradientId} id={gradientId} x1="0" y1="0" x2="1" y2="1">
-                {notes.map((note, index) => {
+                {colorNotes.map((note, index) => {
                   const point = immersionPitchPoint(note, doMidi);
-                  return <stop key={note} offset={`${notes.length <= 1 ? 50 : index / (notes.length - 1) * 100}%`} stopColor={immersionRoleColor(point, routePitchClasses.has(point.pitchClass))} stopOpacity={measure === matchingChord ? 0.22 : 0.1} />;
+                  return <stop key={note} offset={`${colorNotes.length <= 1 ? 50 : index / (colorNotes.length - 1) * 100}%`} stopColor={immersionRoleColor(point, routePitchClasses.has(point.pitchClass))} stopOpacity={measure === matchingChord ? 0.22 : 0.1} />;
                 })}
               </linearGradient>;
             })}
@@ -641,7 +647,7 @@ export const PianoImmersion = memo(function PianoImmersion({
           <g className="immersion-chord-clouds" aria-label={`${visibleClouds.length} recent timing-group membranes using the ${chordWindowMs} millisecond chord window`}>
             {visibleClouds.map(({ measure, interpretedHull, audibleHull, gradientId }) => interpretedHull ? <g key={measure.gesture.id} className={`${measure.gesture.kind === "rolled" ? "is-rolled" : "is-together"} ${measure.candidate?.exact ? "is-exact" : "is-incomplete"} ${measure === matchingChord ? "is-current" : "is-history"}`}>
               {audibleHull ? <path className="immersion-audible-hull" d={audibleHull.path}><title>Outer edge: everything sounding at the timing-group close, including tones excluded from the chord interpretation</title></path> : null}
-              <path className="immersion-interpreted-hull" d={interpretedHull.path} fill={`url(#${gradientId})`} filter={measure === matchingChord ? `url(#${instanceId}-soft-glow)` : undefined}><title>{measure.gesture.kind} group: {measure.gesture.attacks.length} attacks across {Math.round(measure.gesture.spreadMs)} milliseconds; inner membrane follows interpreted membership; {measure.candidate?.exact ? `exact ${measure.candidate.template.name} catalog shape` : "no exact catalog shape"}</title></path>
+              <path className="immersion-interpreted-hull" d={interpretedHull.path} fill={`url(#${gradientId})`}><title>{measure.gesture.kind} group: {measure.gesture.attacks.length} attacks across {Math.round(measure.gesture.spreadMs)} milliseconds; inner membrane follows interpreted membership; {measure.candidate?.exact ? `exact ${measure.candidate.template.name} catalog shape` : "no exact catalog shape"}</title></path>
               <path className="immersion-timing-hull" d={interpretedHull.path}><title>{measure.gesture.kind === "rolled" ? "Dotted overtrace: attacks were rolled across the grouping window" : "No dotted overtrace: attacks arrived together"}</title></path>
             </g> : null)}
           </g>
@@ -733,7 +739,7 @@ export const PianoImmersion = memo(function PianoImmersion({
               const recurrenceCount = seenPitchCounts.get(point.pitchClass) ?? 1;
               return <g key={event.id} className={`piano-immersion-note ${recentIndex >= 0 ? "is-microscope" : "is-memory"} ${recentIndex >= 0 && recentIndex < Math.max(0, events.length - 5) ? "is-older-label" : ""} ${isLatest ? "is-latest" : ""}`} style={{ "--immersion-pitch": color, "--immersion-recency": 0.18 + recency * 0.82 } as CSSProperties}>
                 <title>{noteLabel(event.note, doMidi, scale, showConventions)} · MIDI key {event.note} · {inScale ? "inside" : "outside"} selected route · pitch class appears {recurrenceCount} time{recurrenceCount === 1 ? "" : "s"} in retained memory</title>
-                <circle className="cosmos-node-bloom" cx={point.x} cy={point.y} r={size + 10} filter={isLatest ? `url(#${instanceId}-soft-glow)` : undefined} />
+                <circle className="cosmos-node-bloom" cx={point.x} cy={point.y} r={size + 10} />
                 {isLatest
                   ? <path className={inScale ? "cosmos-node is-route" : "cosmos-node is-outside-route"} d={fourPointStarPath(point.x, point.y, size + 3, Math.max(3.5, size * 0.42))} />
                   : <circle className={inScale ? "cosmos-node is-route" : "cosmos-node is-outside-route"} cx={point.x} cy={point.y} r={size} />}

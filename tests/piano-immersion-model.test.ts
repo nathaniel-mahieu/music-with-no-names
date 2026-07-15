@@ -240,6 +240,15 @@ test("builds valid closed cloud hulls for one, two, and three notes", () => {
   assert.equal(immersionCloudHull([], 60), null);
 });
 
+test("reduces dense same-direction registers to their boundary while retaining source count", () => {
+  const notes = [24, 36, 48, 60, 72, 84, 96, 108];
+  const hull = immersionCloudHull(notes, 60);
+  assert.ok(hull);
+  assert.equal(hull.pointCount, notes.length);
+  assert.match(hull.path, / L .+ A /);
+  assert.doesNotMatch(hull.path, / Q /);
+});
+
 test("separates chord bass shape, cyclic gaps, physical gaps, and doubling", () => {
   const shape = immersionChordShape([60, 64, 67, 72]);
   assert.deepEqual(shape, {

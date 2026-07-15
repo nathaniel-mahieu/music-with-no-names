@@ -140,6 +140,7 @@ import { livePulseMirror, type LivePulseMirror } from "@/lib/rhythm-model";
 import { PIANO_SESSION_KEY } from "@/lib/piano-session";
 import { liveEarPairProfile, type LiveEarIntervalProfile } from "@/lib/live-ear";
 import { PianoImmersion } from "@/app/PianoImmersion";
+import { IMMERSION_MAX_FIELD_NOTES } from "@/lib/piano-immersion-model";
 
 type MidiInputLike = {
   id: string;
@@ -424,6 +425,7 @@ function measureChordGestures(
   doMidi: number,
   scale: PianoScale,
   soundModelId: PianoSoundModelId,
+  maximumPerceptionNotes = Number.POSITIVE_INFINITY,
 ): ChordMeasure[] {
   return gestures.map((gesture, index) => {
     const excludedInheritedNotes = (membershipCorrections[gesture.id] ?? []).filter((note) => gesture.inheritedNotes.includes(note));
@@ -432,7 +434,9 @@ function measureChordGestures(
     const candidates = pitchClassCount <= 5 ? identifyChordCandidates(interpretedNotes, 3) : [];
     const candidate = candidates.find((item) => item.exact) ?? candidates[0] ?? null;
     const audibleNotes = gesture.soundingNotesAtClose.length ? gesture.soundingNotesAtClose : uniqueSorted(gesture.attackedNotes);
-    const perception = audibleNotes.length >= 2 ? sonorityPerceptionModel(audibleNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
+    const perception = audibleNotes.length >= 2 && audibleNotes.length <= maximumPerceptionNotes
+      ? sonorityPerceptionModel(audibleNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)))
+      : null;
     const tendency = tonalTendency(interpretedNotes, doMidi, scale);
     const previous = gestures[index - 1];
     const previousInterpretedNotes = previous ? interpretedChordNotes(previous, membershipCorrections[previous.id] ?? []) : [];
@@ -4193,12 +4197,6 @@ export function PianoLab() {
     try { window.localStorage.setItem(PHRASE_CHARACTER_STORAGE_KEY, JSON.stringify(phraseCharacterObservations)); } catch { /* Continue without persistent reports when storage is unavailable. */ }
   }, [characterStorageReady, phraseCharacterObservations]);
 
-  useEffect(() => {
-    if (!phraseEvents.length) return;
-    const timer = window.setInterval(() => setNowMs(currentHudTime()), 120);
-    return () => window.clearInterval(timer);
-  }, [phraseEvents.length]);
-
   const updateEvents = useCallback((updater: (current: HudNoteEvent[]) => HudNoteEvent[]) => {
     const nextPhrase = updater(phraseEventsRef.current);
     phraseEventsRef.current = nextPhrase;
@@ -4323,9 +4321,15 @@ export function PianoLab() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [experiencePhrase.length, focusLens, hydrated, phraseEvents]);
-  const gravityCandidates = useMemo(() => tonalGravityCandidates(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0, 12), [nowMs, phraseEvents]);
-  const nextNoteForks = useMemo(() => resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4), [frame.rootPitchClass, phraseEvents, scale]);
-  const articulationEvidence = useMemo(() => articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0), [nowMs, phraseEvents]);
+  const gravityCandidates = useMemo(() => focusLens === "immersion"
+    ? []
+    : tonalGravityCandidates(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0, 12), [focusLens, nowMs, phraseEvents]);
+  const nextNoteForks = useMemo(() => focusLens === "scales"
+    ? resolutionForks(phraseEvents, frame.rootPitchClass, scale, 4)
+    : [], [focusLens, frame.rootPitchClass, phraseEvents, scale]);
+  const articulationEvidence = useMemo(() => focusLens === "motion"
+    ? articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0)
+    : [], [focusLens, nowMs, phraseEvents]);
   const motifTransformations = useMemo(() => detectMotifTransformations(phraseEvents, 3), [phraseEvents]);
   const motifEchoAttempt = useMemo(() => motifEchoSession
     ? phraseEvents.filter((event) => event.id > motifEchoSession.anchorEventId).slice(0, motifEchoSession.sourceEvents.length)
@@ -4342,9 +4346,17 @@ export function PianoLab() {
     return () => window.clearTimeout(timer);
   }, [pulseMirrorModel, pulseMirrorSession]);
   const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events]);
-  const chordMeasures = useMemo(() => measureChordGestures(chordGestures, membershipCorrections, doMidi, scale, soundModelId), [chordGestures, doMidi, membershipCorrections, scale, soundModelId]);
+  const chordMeasures = useMemo(() => measureChordGestures(
+    chordGestures,
+    membershipCorrections,
+    doMidi,
+    scale,
+    soundModelId,
+    focusLens === "immersion" ? IMMERSION_MAX_FIELD_NOTES : Number.POSITIVE_INFINITY,
+  ), [chordGestures, doMidi, focusLens, membershipCorrections, scale, soundModelId]);
   const immersionChordGestures = useMemo(() => groupChordGestures(phraseEvents, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, phraseEvents]);
-  const immersionChordMeasures = useMemo(() => measureChordGestures(immersionChordGestures, membershipCorrections, doMidi, scale, soundModelId), [doMidi, immersionChordGestures, membershipCorrections, scale, soundModelId]);
+  const immersionChordMeasureGestures = useMemo(() => immersionChordGestures.slice(-5), [immersionChordGestures]);
+  const immersionChordMeasures = useMemo(() => measureChordGestures(immersionChordMeasureGestures, membershipCorrections, doMidi, scale, soundModelId, IMMERSION_MAX_FIELD_NOTES).slice(-4), [doMidi, immersionChordMeasureGestures, membershipCorrections, scale, soundModelId]);
   const selectedChordMeasure = chordMeasures.find((measure) => measure.gesture.id === selectedChordId) ?? chordMeasures.at(-1) ?? null;
   const effectiveSelectedChordId = selectedChordMeasure?.gesture.id ?? null;
   const selectedGesture = selectedChordMeasure?.gesture ?? null;
@@ -4412,7 +4424,23 @@ export function PianoLab() {
     pressed: midi.pressed.has(note),
     sustained: midi.sustained.has(note),
   })), [activeNoteNumbers, activeNotesMap, midi.pressed, midi.sustained]);
-  const immersionNearbyReady = Boolean(phraseEvents.length && nowMs - phraseEvents.at(-1)!.onsetMs >= 420);
+  const immersionLatestOnsetMs = phraseEvents.at(-1)?.onsetMs ?? 0;
+  const immersionNearbyReady = Boolean(phraseEvents.length && nowMs - immersionLatestOnsetMs >= 420);
+  useEffect(() => {
+    if (!phraseEvents.length) return;
+    if (focusLens !== "immersion") {
+      const interval = window.setInterval(() => setNowMs(currentHudTime()), 120);
+      return () => window.clearInterval(interval);
+    }
+    if (activeNoteNumbers.length) {
+      const interval = window.setInterval(() => setNowMs(currentHudTime()), 500);
+      return () => window.clearInterval(interval);
+    }
+    if (immersionNearbyReady) return;
+    const remainingMs = Math.max(16, immersionLatestOnsetMs + 420 - currentHudTime() + 16);
+    const timeout = window.setTimeout(() => setNowMs(currentHudTime()), remainingMs);
+    return () => window.clearTimeout(timeout);
+  }, [activeNoteNumbers.length, focusLens, immersionLatestOnsetMs, immersionNearbyReady, phraseEvents.length]);
   useEffect(() => {
     if (focusLens !== "chords" || chordFocusMode !== "cause" || !controlledSonoritySession || controlledSonoritySession.baselineNotes || !controlledSonoritySession.targetNotes.length) return;
     if (!sameMidiNotes(activeNoteNumbers, controlledSonoritySession.targetNotes)) return;
@@ -4480,7 +4508,10 @@ export function PianoLab() {
 
   const measures = useMemo<EventMeasure[]>(() => events.map((event, index) => {
     const notes = uniqueSorted(event.fieldNotes);
-    const perception = notes.length >= 2 ? sonorityPerceptionModel(notes.map((note) => pianoSoundVoice(frequencyFromMidi(note), Math.max(0.12, (note === event.note ? event.velocity : 88) / 127), soundModelId))) : null;
+    const maximumPerceptionNotes = focusLens === "immersion" ? IMMERSION_MAX_FIELD_NOTES : Number.POSITIVE_INFINITY;
+    const perception = notes.length >= 2 && notes.length <= maximumPerceptionNotes
+      ? sonorityPerceptionModel(notes.map((note) => pianoSoundVoice(frequencyFromMidi(note), Math.max(0.12, (note === event.note ? event.velocity : 88) / 127), soundModelId)))
+      : null;
     const tendency = tonalTendency(notes, doMidi, scale);
     const previous = events[index - 1];
     const interval = previous ? Math.abs(event.note - previous.note) : 0;
@@ -4492,7 +4523,7 @@ export function PianoLab() {
       novelty: previous ? (events.slice(0, index).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? Math.min(0.35, interval / 36) : Math.min(1, 0.72 + interval / 48)) : 0,
       motion: previous ? Math.min(1, interval / 7) : 0,
     };
-  }), [doMidi, events, scale, soundModelId]);
+  }), [doMidi, events, focusLens, scale, soundModelId]);
 
   const currentMeasure = measures.at(-1);
   const previousMeasure = measures.at(-2);

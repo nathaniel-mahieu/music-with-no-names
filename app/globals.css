@@ -8418,7 +8418,7 @@ footer a {
 }
 
 .piano-immersion-model small { color: #909bad; font-size: .61rem; line-height: 1.4; }
-.piano-immersion-stage { position: relative; z-index: 1; min-width: 0; }
+.piano-immersion-stage { position: relative; z-index: 1; min-width: 0; contain: layout paint; }
 .piano-immersion-stage svg { display: block; width: 100%; height: auto; overflow: visible; }
 .immersion-dust circle { fill: #c9d8f4; }
 

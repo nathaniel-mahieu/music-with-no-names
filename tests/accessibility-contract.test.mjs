@@ -20,6 +20,10 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
   ]);
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
   assert.match(piano, /<details className="piano-immersion-keyboard">/);
+  assert.match(piano, /immersionChordGestures\.slice\(-5\)/);
+  assert.match(piano, /measureChordGestures\(immersionChordMeasureGestures[\s\S]*IMMERSION_MAX_FIELD_NOTES\)\.slice\(-4\)/);
+  assert.match(piano, /focusLens !== "immersion"[\s\S]*window\.setInterval\(\(\) => setNowMs\(currentHudTime\(\)\), 120\)/);
+  assert.match(piano, /window\.setTimeout\(\(\) => setNowMs\(currentHudTime\(\)\), remainingMs\)/);
   assert.match(immersion, /<section className="piano-immersion" aria-labelledby="piano-immersion-title">/);
   assert.match(immersion, /role="img" aria-labelledby="piano-immersion-svg-title piano-immersion-svg-description"/);
   assert.match(immersion, /<desc id="piano-immersion-svg-description">\{visualSummary\}<\/desc>/);
@@ -36,6 +40,8 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
   assert.match(immersion, /<details className="piano-immersion-guide">/);
   assert.match(immersion, /preserveAspectRatio="xMidYMid slice"/);
   assert.match(immersion, /Pitch bend, keyboard or DAW tuning, acoustic pitch, audio spectrum, and acoustic loudness are not captured/);
+  assert.match(immersion, /modeled crunch pauses above/);
+  assert.doesNotMatch(immersion, /feGaussianBlur|<filter /);
   assert.doesNotMatch(immersion, /tabIndex=\{?[1-9]/);
   assert.match(model, /IMMERSION_MAX_TRAIL_EVENTS = 28/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
@@ -48,6 +54,7 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
   assert.match(css, /\.piano-immersion-note \.cosmos-node\.is-outside-route[\s\S]*stroke-dasharray/);
   assert.match(css, /\.immersion-pedal-ring[\s\S]*stroke-dasharray/);
   assert.match(css, /path:not\(\.immersion-root-curve\)[^}]*stroke-dasharray: none/);
+  assert.match(css, /\.piano-immersion-stage \{[^}]*contain: layout paint/);
 });
 
 test("dynamic visuals and status changes expose nonvisual descriptions", async () => {

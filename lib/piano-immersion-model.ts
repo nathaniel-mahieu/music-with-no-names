@@ -329,7 +329,15 @@ export function immersionChordShape(notesInput: number[]) {
 }
 
 export function immersionCloudHull(notesInput: number[], doMidi: number, padding = 30) {
-  const points = [...new Set(notesInput.filter(Number.isFinite).map(safeMidi))].map((note) => immersionPitchPoint(note, doMidi));
+  const notes = [...new Set(notesInput.filter(Number.isFinite).map(safeMidi))].sort((first, second) => first - second);
+  const boundaryNotes = [...notes.reduce((groups, note) => {
+    const pitchClass = pitchClassFromMidi(note);
+    const group = groups.get(pitchClass) ?? [];
+    group.push(note);
+    groups.set(pitchClass, group);
+    return groups;
+  }, new Map<number, number[]>()).values()].flatMap((group) => group.length <= 2 ? group : [group[0], group.at(-1)!]);
+  const points = boundaryNotes.map((note) => immersionPitchPoint(note, doMidi));
   if (!points.length) return null;
   const centerX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
   const centerY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
@@ -339,7 +347,7 @@ export function immersionCloudHull(notesInput: number[], doMidi: number, padding
     return {
       centerX,
       centerY,
-      pointCount: 1,
+      pointCount: notes.length,
       path: `M ${(point.x - radius).toFixed(2)} ${point.y.toFixed(2)} A ${radius} ${radius} 0 1 0 ${(point.x + radius).toFixed(2)} ${point.y.toFixed(2)} A ${radius} ${radius} 0 1 0 ${(point.x - radius).toFixed(2)} ${point.y.toFixed(2)} Z`,
     };
   }
@@ -351,7 +359,7 @@ export function immersionCloudHull(notesInput: number[], doMidi: number, padding
     return {
       centerX,
       centerY,
-      pointCount: 2,
+      pointCount: notes.length,
       path: `M ${(first.x + normalX).toFixed(2)} ${(first.y + normalY).toFixed(2)} L ${(second.x + normalX).toFixed(2)} ${(second.y + normalY).toFixed(2)} A ${padding} ${padding} 0 0 1 ${(second.x - normalX).toFixed(2)} ${(second.y - normalY).toFixed(2)} L ${(first.x - normalX).toFixed(2)} ${(first.y - normalY).toFixed(2)} A ${padding} ${padding} 0 0 1 ${(first.x + normalX).toFixed(2)} ${(first.y + normalY).toFixed(2)} Z`,
     };
   }
@@ -360,7 +368,7 @@ export function immersionCloudHull(notesInput: number[], doMidi: number, padding
     const angle = distance > 1 ? Math.atan2(point.y - centerY, point.x - centerX) : index / points.length * Math.PI * 2;
     return { x: point.x + Math.cos(angle) * padding, y: point.y + Math.sin(angle) * padding };
   }).sort((first, second) => Math.atan2(first.y - centerY, first.x - centerX) - Math.atan2(second.y - centerY, second.x - centerX));
-  return { centerX, centerY, pointCount: points.length, path: closedSmoothPath(expanded) };
+  return { centerX, centerY, pointCount: notes.length, path: closedSmoothPath(expanded) };
 }
 
 function boxesOverlap(first: ImmersionAnnotation["bounds"], second: ImmersionAnnotation["bounds"]) {
