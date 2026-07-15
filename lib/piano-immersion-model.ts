@@ -1,13 +1,18 @@
 import {
   fifthStepForPitchClass,
   intervalLandmark,
+  noteContext,
   pitchClassFromMidi,
+  scaleSemitones,
+  type PianoScale,
 } from "./piano-model.ts";
 
 export const IMMERSION_VIEWBOX = { width: 1200, height: 700, centerX: 600, centerY: 350 } as const;
 export const IMMERSION_MAX_TRAIL_EVENTS = 28;
 export const IMMERSION_MAX_FIELD_NOTES = 8;
 export const IMMERSION_MAX_INTERVAL_LINKS = 12;
+export const IMMERSION_MAX_ANNOTATIONS = 5;
+export const IMMERSION_MAX_CONTOUR_EVENTS = 12;
 
 export type ImmersionPitchPoint = {
   note: number;
@@ -31,6 +36,39 @@ export type ImmersionIntervalLink = {
   relationship: string;
   referenceKind: "integer-ratio" | "geometric-midpoint";
   errorCents: number;
+};
+
+export type ImmersionAnnotationInput = {
+  id: string;
+  anchorX: number;
+  anchorY: number;
+  lines: string[];
+  priority: number;
+};
+
+export type ImmersionAnnotation = ImmersionAnnotationInput & {
+  x: number;
+  y: number;
+  textAnchor: "start" | "end";
+  leaderX: number;
+  leaderY: number;
+  bounds: { left: number; top: number; right: number; bottom: number };
+};
+
+export type ImmersionFifthsScopeId = "cluster" | "microscope" | "phrase";
+
+export type ImmersionFifthsScope = {
+  id: ImmersionFifthsScopeId;
+  label: string;
+  radius: number;
+  eventCount: number;
+  uniquePitchClassCount: number;
+  countsByFifthStep: number[];
+  maximumCount: number;
+  concentration: number;
+  centerPitchClass: number | null;
+  centerPoint: { x: number; y: number } | null;
+  densityPath: string;
 };
 
 function modulo(value: number, divisor: number) {
@@ -97,6 +135,317 @@ export function immersionDirectionPoint(pitchClassInput: number, radius: number)
 
 export function immersionRoleColor(point: ImmersionPitchPoint, inScale: boolean) {
   return `hsl(${point.hue} ${inScale ? 82 : 42}% ${inScale ? 66 : 62}%)`;
+}
+
+export function immersionArcPath(pitchClassInput: number, radius: number, spanDegrees = 18) {
+  const pitchClass = pitchClassFromMidi(pitchClassInput);
+  const fifthStep = fifthStepForPitchClass(pitchClass);
+  const centerDegrees = fifthStep * 30 - 90;
+  const start = (centerDegrees - spanDegrees / 2) * Math.PI / 180;
+  const end = (centerDegrees + spanDegrees / 2) * Math.PI / 180;
+  const startX = IMMERSION_VIEWBOX.centerX + Math.cos(start) * radius;
+  const startY = IMMERSION_VIEWBOX.centerY + Math.sin(start) * radius;
+  const endX = IMMERSION_VIEWBOX.centerX + Math.cos(end) * radius;
+  const endY = IMMERSION_VIEWBOX.centerY + Math.sin(end) * radius;
+  return `M ${startX.toFixed(2)} ${startY.toFixed(2)} A ${radius.toFixed(2)} ${radius.toFixed(2)} 0 0 1 ${endX.toFixed(2)} ${endY.toFixed(2)}`;
+}
+
+export function immersionScaleSectors(scale: PianoScale, rootPitchClassInput: number) {
+  const rootPitchClass = pitchClassFromMidi(rootPitchClassInput);
+  const positions = scaleSemitones(scale);
+  const degreeByPitchClass = new Map(positions.map((position, degreeIndex) => [modulo(rootPitchClass + position, 12), degreeIndex]));
+  return Array.from({ length: 12 }, (_, fifthStep) => {
+    const pitchClass = modulo(fifthStep * 7, 12);
+    const degreeIndex = degreeByPitchClass.get(pitchClass) ?? -1;
+    return { pitchClass, fifthStep, inRoute: degreeIndex >= 0, degreeIndex };
+  });
+}
+
+function closedSmoothPath(points: Array<{ x: number; y: number }>) {
+  if (points.length < 3) return immersionCurve(points);
+  const last = points.at(-1)!;
+  const first = points[0];
+  let path = `M ${((last.x + first.x) / 2).toFixed(2)} ${((last.y + first.y) / 2).toFixed(2)}`;
+  points.forEach((point, index) => {
+    const next = points[(index + 1) % points.length];
+    path += ` Q ${point.x.toFixed(2)} ${point.y.toFixed(2)} ${((point.x + next.x) / 2).toFixed(2)} ${((point.y + next.y) / 2).toFixed(2)}`;
+  });
+  return `${path} Z`;
+}
+
+export function immersionFifthsTide<T extends { id: number; note: number; onsetMs: number }>(
+  phraseEventsInput: T[],
+  microscopeEventsInput: T[],
+  chordWindowMs: number,
+): ImmersionFifthsScope[] {
+  const phraseEvents = phraseEventsInput
+    .filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note) && Number.isFinite(event.onsetMs))
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  const microscopeEvents = microscopeEventsInput
+    .filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note) && Number.isFinite(event.onsetMs))
+    .slice(-7);
+  const latestOnset = phraseEvents.at(-1)?.onsetMs ?? 0;
+  const safeWindow = clamp(Number.isFinite(chordWindowMs) ? chordWindowMs : 160, 40, 1000);
+  const inputs: Array<{ id: ImmersionFifthsScopeId; label: string; radius: number; events: T[]; bulge: number }> = [
+    { id: "cluster", label: `latest ${Math.round(safeWindow)} ms`, radius: 268, events: phraseEvents.filter((event) => latestOnset - event.onsetMs <= safeWindow), bulge: 12 },
+    { id: "microscope", label: "last seven attacks", radius: 288, events: microscopeEvents, bulge: 11 },
+    { id: "phrase", label: "retained phrase", radius: 308, events: phraseEvents, bulge: 10 },
+  ];
+
+  return inputs.map((input) => {
+    const countsByFifthStep = Array.from({ length: 12 }, () => 0);
+    input.events.forEach((event) => {
+      countsByFifthStep[fifthStepForPitchClass(pitchClassFromMidi(event.note))] += 1;
+    });
+    const maximumCount = Math.max(...countsByFifthStep, 0);
+    const points = countsByFifthStep.map((count, fifthStep) => {
+      const strength = maximumCount > 0 ? count / maximumCount : 0;
+      const radius = input.radius + strength * input.bulge;
+      const angle = (fifthStep * 30 - 90) * Math.PI / 180;
+      return {
+        x: IMMERSION_VIEWBOX.centerX + Math.cos(angle) * radius,
+        y: IMMERSION_VIEWBOX.centerY + Math.sin(angle) * radius,
+      };
+    });
+    const vector = countsByFifthStep.reduce((result, count, fifthStep) => {
+      const angle = (fifthStep * 30 - 90) * Math.PI / 180;
+      return { x: result.x + Math.cos(angle) * count, y: result.y + Math.sin(angle) * count, total: result.total + count };
+    }, { x: 0, y: 0, total: 0 });
+    const concentration = vector.total > 0 ? Math.hypot(vector.x, vector.y) / vector.total : 0;
+    const centerAngle = vector.total > 0 ? Math.atan2(vector.y, vector.x) : 0;
+    const centerStep = modulo(Math.round((centerAngle * 180 / Math.PI + 90) / 30), 12);
+    const centerPitchClass = vector.total > 0 && concentration >= 0.15 ? modulo(centerStep * 7, 12) : null;
+    return {
+      id: input.id,
+      label: input.label,
+      radius: input.radius,
+      eventCount: input.events.length,
+      uniquePitchClassCount: countsByFifthStep.filter((count) => count > 0).length,
+      countsByFifthStep,
+      maximumCount,
+      concentration,
+      centerPitchClass,
+      centerPoint: centerPitchClass == null ? null : immersionDirectionPoint(centerPitchClass, input.radius),
+      densityPath: closedSmoothPath(points),
+    };
+  });
+}
+
+export function immersionAttackKnowledge<T extends { id: number; note: number; onsetMs: number }>(eventsInput: T[], doMidi: number, scale: PianoScale) {
+  const events = eventsInput.filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note) && Number.isFinite(event.onsetMs));
+  const latest = events.at(-1);
+  if (!latest) return null;
+  const previous = events.at(-2) ?? null;
+  const priorSamePitchClassIndex = events.slice(0, -1).findLastIndex((event) => pitchClassFromMidi(event.note) === pitchClassFromMidi(latest.note));
+  const moveSteps = previous ? Math.round(latest.note - previous.note) : null;
+  return {
+    event: latest,
+    context: noteContext(latest.note, doMidi, scale),
+    stepsFromDo: Math.round(latest.note - doMidi),
+    relationToDo: intervalLandmark(latest.note - doMidi),
+    previous,
+    moveSteps,
+    moveLandmark: moveSteps == null ? null : intervalLandmark(moveSteps),
+    onsetGapMs: previous ? Math.max(0, latest.onsetMs - previous.onsetMs) : null,
+    pitchClassOccurrenceCount: events.filter((event) => pitchClassFromMidi(event.note) === pitchClassFromMidi(latest.note)).length,
+    attacksSincePreviousPitchClass: priorSamePitchClassIndex < 0 ? null : events.length - 2 - priorSamePitchClassIndex,
+  };
+}
+
+export function immersionAttackContour<T extends { id: number; note: number; onsetMs: number }>(eventsInput: T[], chordWindowMs: number) {
+  const events = eventsInput
+    .filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note) && Number.isFinite(event.onsetMs))
+    .slice(-IMMERSION_MAX_CONTOUR_EVENTS);
+  if (!events.length) return { points: [], segments: [], groupCount: 0, monophonic: false };
+  const firstOnset = events[0].onsetMs;
+  const lastOnset = events.at(-1)!.onsetMs;
+  const timeSpan = Math.max(1, lastOnset - firstOnset);
+  const minimumNote = Math.min(...events.map((event) => event.note));
+  const maximumNote = Math.max(...events.map((event) => event.note));
+  const pitchCenter = (minimumNote + maximumNote) / 2;
+  const pitchSpan = Math.max(12, maximumNote - minimumNote);
+  let groupIndex = 0;
+  const safeWindow = clamp(Number.isFinite(chordWindowMs) ? chordWindowMs : 160, 40, 1000);
+  let groupStartOnset = events[0].onsetMs;
+  const points = events.map((event, index) => {
+    if (index > 0) {
+      const gapFromPrevious = event.onsetMs - events[index - 1].onsetMs;
+      const spanFromGroupStart = event.onsetMs - groupStartOnset;
+      if (gapFromPrevious > safeWindow || spanFromGroupStart > safeWindow * 2) {
+        groupIndex += 1;
+        groupStartOnset = event.onsetMs;
+      }
+    }
+    return {
+      event,
+      groupIndex,
+      x: 350 + (event.onsetMs - firstOnset) / timeSpan * 500,
+      y: 570 - (event.note - pitchCenter) / pitchSpan * 48,
+    };
+  });
+  const groupSizes = new Map<number, number>();
+  points.forEach((point) => groupSizes.set(point.groupIndex, (groupSizes.get(point.groupIndex) ?? 0) + 1));
+  const segments = points.slice(1).map((point, index) => {
+    const previous = points[index];
+    const steps = point.event.note - previous.event.note;
+    return {
+      from: previous,
+      to: point,
+      steps,
+      gapMs: point.event.onsetMs - previous.event.onsetMs,
+      sameGroup: point.groupIndex === previous.groupIndex,
+      connectAsLine: (groupSizes.get(point.groupIndex) ?? 0) === 1 && (groupSizes.get(previous.groupIndex) ?? 0) === 1,
+    };
+  });
+  return {
+    points,
+    segments,
+    groupCount: groupSizes.size,
+    monophonic: [...groupSizes.values()].every((size) => size === 1),
+  };
+}
+
+export function immersionChordShape(notesInput: number[]) {
+  const notes = [...new Set(notesInput.filter(Number.isFinite).map(safeMidi))].sort((first, second) => first - second);
+  if (notes.length < 2) return null;
+  const bass = notes[0];
+  const bassPitchClass = pitchClassFromMidi(bass);
+  const bassRelativePositions = [...new Set(notes.map((note) => modulo(pitchClassFromMidi(note) - bassPitchClass, 12)))].sort((first, second) => first - second);
+  const cyclicGaps = bassRelativePositions.map((position, index) => {
+    const next = bassRelativePositions[(index + 1) % bassRelativePositions.length] + (index === bassRelativePositions.length - 1 ? 12 : 0);
+    return next - position;
+  });
+  return {
+    bass,
+    bassPitchClass,
+    noteCount: notes.length,
+    pitchClassCount: bassRelativePositions.length,
+    bassRelativePositions,
+    cyclicGaps,
+    physicalGaps: notes.slice(1).map((note, index) => note - notes[index]),
+    span: notes.at(-1)! - notes[0],
+    doublingCount: notes.length - bassRelativePositions.length,
+  };
+}
+
+export function immersionCloudHull(notesInput: number[], doMidi: number, padding = 30) {
+  const points = [...new Set(notesInput.filter(Number.isFinite).map(safeMidi))].map((note) => immersionPitchPoint(note, doMidi));
+  if (!points.length) return null;
+  const centerX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const centerY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+  if (points.length === 1) {
+    const point = points[0];
+    const radius = padding + 12;
+    return {
+      centerX,
+      centerY,
+      pointCount: 1,
+      path: `M ${(point.x - radius).toFixed(2)} ${point.y.toFixed(2)} A ${radius} ${radius} 0 1 0 ${(point.x + radius).toFixed(2)} ${point.y.toFixed(2)} A ${radius} ${radius} 0 1 0 ${(point.x - radius).toFixed(2)} ${point.y.toFixed(2)} Z`,
+    };
+  }
+  if (points.length === 2) {
+    const [first, second] = points;
+    const length = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+    const normalX = -(second.y - first.y) / length * padding;
+    const normalY = (second.x - first.x) / length * padding;
+    return {
+      centerX,
+      centerY,
+      pointCount: 2,
+      path: `M ${(first.x + normalX).toFixed(2)} ${(first.y + normalY).toFixed(2)} L ${(second.x + normalX).toFixed(2)} ${(second.y + normalY).toFixed(2)} A ${padding} ${padding} 0 0 1 ${(second.x - normalX).toFixed(2)} ${(second.y - normalY).toFixed(2)} L ${(first.x - normalX).toFixed(2)} ${(first.y - normalY).toFixed(2)} A ${padding} ${padding} 0 0 1 ${(first.x + normalX).toFixed(2)} ${(first.y + normalY).toFixed(2)} Z`,
+    };
+  }
+  const expanded = points.map((point, index) => {
+    const distance = Math.hypot(point.x - centerX, point.y - centerY);
+    const angle = distance > 1 ? Math.atan2(point.y - centerY, point.x - centerX) : index / points.length * Math.PI * 2;
+    return { x: point.x + Math.cos(angle) * padding, y: point.y + Math.sin(angle) * padding };
+  }).sort((first, second) => Math.atan2(first.y - centerY, first.x - centerX) - Math.atan2(second.y - centerY, second.x - centerX));
+  return { centerX, centerY, pointCount: points.length, path: closedSmoothPath(expanded) };
+}
+
+function boxesOverlap(first: ImmersionAnnotation["bounds"], second: ImmersionAnnotation["bounds"]) {
+  return !(first.right + 8 < second.left || second.right + 8 < first.left || first.bottom + 6 < second.top || second.bottom + 6 < first.top);
+}
+
+function wrapAnnotationLines(lines: string[], maximumCharacters = 40) {
+  return lines.flatMap((line) => {
+    if (line.length <= maximumCharacters) return [line];
+    const words = line.split(/\s+/).filter(Boolean);
+    const wrapped: string[] = [];
+    let current = "";
+    words.forEach((word) => {
+      if (!current) {
+        current = word;
+        return;
+      }
+      if (`${current} ${word}`.length <= maximumCharacters) current += ` ${word}`;
+      else {
+        wrapped.push(current);
+        current = word;
+      }
+    });
+    if (current) wrapped.push(current);
+    return wrapped.length ? wrapped : [line.slice(0, maximumCharacters)];
+  });
+}
+
+export function planImmersionAnnotations(
+  inputs: ImmersionAnnotationInput[],
+  limit = IMMERSION_MAX_ANNOTATIONS,
+  reservedBounds: ImmersionAnnotation["bounds"][] = [],
+) {
+  const placed: ImmersionAnnotation[] = [];
+  const safeLimit = clamp(Number.isFinite(limit) ? Math.floor(limit) : IMMERSION_MAX_ANNOTATIONS, 0, IMMERSION_MAX_ANNOTATIONS);
+  const sorted = inputs
+    .filter((input) => input.lines.length > 0 && input.lines.every((line) => typeof line === "string"))
+    .sort((first, second) => second.priority - first.priority || first.id.localeCompare(second.id));
+
+  for (const input of sorted) {
+    if (placed.length >= safeLimit) break;
+    const wrappedLines = wrapAnnotationLines(input.lines);
+    const dx = input.anchorX - IMMERSION_VIEWBOX.centerX;
+    const dy = input.anchorY - IMMERSION_VIEWBOX.centerY;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const radial = { x: dx / length, y: dy / length };
+    const tangent = { x: -radial.y, y: radial.x };
+    const offsets = [
+      { x: radial.x * 58, y: radial.y * 58 },
+      { x: tangent.x * 70, y: tangent.y * 70 },
+      { x: -tangent.x * 70, y: -tangent.y * 70 },
+      { x: -radial.x * 62, y: -radial.y * 62 },
+      { x: 0, y: -72 },
+    ];
+    const width = Math.min(292, Math.max(...wrappedLines.map((line) => line.length), 8) * 6.4 + 16);
+    const height = wrappedLines.length * 15 + 6;
+    let chosen: ImmersionAnnotation | null = null;
+    for (const offset of offsets) {
+      const rawX = clamp(input.anchorX + offset.x, 318, 882);
+      const rawY = clamp(input.anchorY + offset.y, 66, 640 - height);
+      const textAnchor: ImmersionAnnotation["textAnchor"] = rawX >= input.anchorX ? "start" : "end";
+      const bounds = {
+        left: textAnchor === "start" ? rawX : rawX - width,
+        right: textAnchor === "start" ? rawX + width : rawX,
+        top: rawY - 12,
+        bottom: rawY - 12 + height,
+      };
+      if (bounds.left < 300 || bounds.right > 900
+        || reservedBounds.some((reserved) => boxesOverlap(bounds, reserved))
+        || placed.some((annotation) => boxesOverlap(bounds, annotation.bounds))) continue;
+      chosen = {
+        ...input,
+        lines: wrappedLines,
+        x: rawX,
+        y: rawY,
+        textAnchor,
+        leaderX: rawX + (textAnchor === "start" ? -6 : 6),
+        leaderY: rawY - 4,
+        bounds,
+      };
+      break;
+    }
+    if (chosen) placed.push(chosen);
+  }
+  return placed;
 }
 
 export function immersionTrail<T extends { id: number; note: number }>(events: T[], doMidi: number) {

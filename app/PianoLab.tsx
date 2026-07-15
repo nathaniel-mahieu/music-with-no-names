@@ -418,6 +418,47 @@ function uniqueSorted(notes: number[]) {
   return [...new Set(notes.map(Math.round))].sort((first, second) => first - second);
 }
 
+function measureChordGestures(
+  gestures: HudChordGesture[],
+  membershipCorrections: Readonly<Record<string, number[]>>,
+  doMidi: number,
+  scale: PianoScale,
+  soundModelId: PianoSoundModelId,
+): ChordMeasure[] {
+  return gestures.map((gesture, index) => {
+    const excludedInheritedNotes = (membershipCorrections[gesture.id] ?? []).filter((note) => gesture.inheritedNotes.includes(note));
+    const interpretedNotes = interpretedChordNotes(gesture, excludedInheritedNotes);
+    const pitchClassCount = new Set(interpretedNotes.map(pitchClassFromMidi)).size;
+    const candidates = pitchClassCount <= 5 ? identifyChordCandidates(interpretedNotes, 3) : [];
+    const candidate = candidates.find((item) => item.exact) ?? candidates[0] ?? null;
+    const audibleNotes = gesture.soundingNotesAtClose.length ? gesture.soundingNotesAtClose : uniqueSorted(gesture.attackedNotes);
+    const perception = audibleNotes.length >= 2 ? sonorityPerceptionModel(audibleNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
+    const tendency = tonalTendency(interpretedNotes, doMidi, scale);
+    const previous = gestures[index - 1];
+    const previousInterpretedNotes = previous ? interpretedChordNotes(previous, membershipCorrections[previous.id] ?? []) : [];
+    const previousPitchClassCount = new Set(previousInterpretedNotes.map(pitchClassFromMidi)).size;
+    const previousCandidates = previous && previousPitchClassCount <= 5 ? identifyChordCandidates(previousInterpretedNotes, 3) : [];
+    const previousCandidate = previousCandidates.find((item) => item.exact) ?? previousCandidates[0] ?? null;
+    const transition = chordTransitionEvidence(previous ? previousInterpretedNotes : null, interpretedNotes, previousCandidate?.exact ? previousCandidate.rootPitchClass : null, candidate?.exact ? candidate.rootPitchClass : null);
+    return {
+      gesture,
+      interpretedNotes,
+      audibleNotes,
+      excludedInheritedNotes,
+      candidate,
+      hasPreviousChord: Boolean(previous),
+      crunch: perception?.roughness ?? null,
+      pull: tendency.homePull,
+      arrival: (perception?.repose ?? 0.5) * 0.55 + tendency.homeEvidence * 0.45,
+      novelty: transition.pitchSetNovelty,
+      motion: transition.voiceMotion,
+      rootTravel: transition.rootTravel,
+      rootTravelSteps: transition.rootTravelSteps,
+      commonPitchClassCount: transition.commonPitchClassCount,
+    };
+  });
+}
+
 function samePitchClasses(firstNotes: number[], secondPitchClasses: number[]) {
   const first = [...new Set(firstNotes.map(pitchClassFromMidi))].sort((a, b) => a - b);
   const second = [...new Set(secondPitchClasses.map(pitchClassFromMidi))].sort((a, b) => a - b);
@@ -4301,38 +4342,9 @@ export function PianoLab() {
     return () => window.clearTimeout(timer);
   }, [pulseMirrorModel, pulseMirrorSession]);
   const chordGestures = useMemo(() => groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events]);
-  const chordMeasures = useMemo<ChordMeasure[]>(() => chordGestures.map((gesture, index) => {
-    const excludedInheritedNotes = (membershipCorrections[gesture.id] ?? []).filter((note) => gesture.inheritedNotes.includes(note));
-    const interpretedNotes = interpretedChordNotes(gesture, excludedInheritedNotes);
-    const pitchClassCount = new Set(interpretedNotes.map(pitchClassFromMidi)).size;
-    const candidates = pitchClassCount <= 5 ? identifyChordCandidates(interpretedNotes, 3) : [];
-    const candidate = candidates.find((item) => item.exact) ?? candidates[0] ?? null;
-    const audibleNotes = gesture.soundingNotesAtClose.length ? gesture.soundingNotesAtClose : uniqueSorted(gesture.attackedNotes);
-    const perception = audibleNotes.length >= 2 ? sonorityPerceptionModel(audibleNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId))) : null;
-    const tendency = tonalTendency(interpretedNotes, doMidi, scale);
-    const previous = chordGestures[index - 1];
-    const previousInterpretedNotes = previous ? interpretedChordNotes(previous, membershipCorrections[previous.id] ?? []) : [];
-    const previousPitchClassCount = new Set(previousInterpretedNotes.map(pitchClassFromMidi)).size;
-    const previousCandidates = previous && previousPitchClassCount <= 5 ? identifyChordCandidates(previousInterpretedNotes, 3) : [];
-    const previousCandidate = previousCandidates.find((item) => item.exact) ?? previousCandidates[0] ?? null;
-    const transition = chordTransitionEvidence(previous ? previousInterpretedNotes : null, interpretedNotes, previousCandidate?.exact ? previousCandidate.rootPitchClass : null, candidate?.exact ? candidate.rootPitchClass : null);
-    return {
-      gesture,
-      interpretedNotes,
-      audibleNotes,
-      excludedInheritedNotes,
-      candidate,
-      hasPreviousChord: Boolean(previous),
-      crunch: perception?.roughness ?? null,
-      pull: tendency.homePull,
-      arrival: (perception?.repose ?? 0.5) * 0.55 + tendency.homeEvidence * 0.45,
-      novelty: transition.pitchSetNovelty,
-      motion: transition.voiceMotion,
-      rootTravel: transition.rootTravel,
-      rootTravelSteps: transition.rootTravelSteps,
-      commonPitchClassCount: transition.commonPitchClassCount,
-    };
-  }), [chordGestures, doMidi, membershipCorrections, scale, soundModelId]);
+  const chordMeasures = useMemo(() => measureChordGestures(chordGestures, membershipCorrections, doMidi, scale, soundModelId), [chordGestures, doMidi, membershipCorrections, scale, soundModelId]);
+  const immersionChordGestures = useMemo(() => groupChordGestures(phraseEvents, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, phraseEvents]);
+  const immersionChordMeasures = useMemo(() => measureChordGestures(immersionChordGestures, membershipCorrections, doMidi, scale, soundModelId), [doMidi, immersionChordGestures, membershipCorrections, scale, soundModelId]);
   const selectedChordMeasure = chordMeasures.find((measure) => measure.gesture.id === selectedChordId) ?? chordMeasures.at(-1) ?? null;
   const effectiveSelectedChordId = selectedChordMeasure?.gesture.id ?? null;
   const selectedGesture = selectedChordMeasure?.gesture ?? null;
@@ -4388,6 +4400,19 @@ export function PianoLab() {
     return combined;
   }, [latchedNotes, midi.notes]);
   const activeNoteNumbers = useMemo(() => uniqueSorted(Array.from(activeNotesMap.keys())), [activeNotesMap]);
+  const immersionTimeBucket = activeNoteNumbers.length ? Math.floor(nowMs / 500) : 0;
+  const immersionGravityCandidates = useMemo(() => {
+    const latestEvidenceMs = phraseEvents.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), phraseEvents.at(-1)?.onsetMs ?? 0);
+    const observationMs = immersionTimeBucket ? Math.max(latestEvidenceMs, immersionTimeBucket * 500) : latestEvidenceMs;
+    return tonalGravityCandidates(phraseEvents, observationMs, 3);
+  }, [immersionTimeBucket, phraseEvents]);
+  const immersionActiveNotes = useMemo(() => activeNoteNumbers.map((note) => ({
+    note,
+    velocity: activeNotesMap.get(note) ?? 0,
+    pressed: midi.pressed.has(note),
+    sustained: midi.sustained.has(note),
+  })), [activeNoteNumbers, activeNotesMap, midi.pressed, midi.sustained]);
+  const immersionNearbyReady = Boolean(phraseEvents.length && nowMs - phraseEvents.at(-1)!.onsetMs >= 420);
   useEffect(() => {
     if (focusLens !== "chords" || chordFocusMode !== "cause" || !controlledSonoritySession || controlledSonoritySession.baselineNotes || !controlledSonoritySession.targetNotes.length) return;
     if (!sameMidiNotes(activeNoteNumbers, controlledSonoritySession.targetNotes)) return;
@@ -5379,11 +5404,15 @@ export function PianoLab() {
         events={events}
         phraseEvents={phraseEvents}
         measures={measures}
-        chordMeasures={chordMeasures}
-        activeNotes={activeNoteNumbers.map((note) => ({ note, velocity: activeNotesMap.get(note) ?? 0, pressed: midi.pressed.has(note), sustained: midi.sustained.has(note) }))}
+        chordMeasures={immersionChordMeasures}
+        activeNotes={immersionActiveNotes}
         doMidi={doMidi}
         scale={scale}
         frameMode={frameMode}
+        frameSnapshot={latestSnapshot ?? null}
+        gravityCandidates={immersionGravityCandidates}
+        motifs={motifTransformations}
+        nearbyReady={immersionNearbyReady}
         chordWindowMs={chordWindowMs}
         soundModelId={soundModelId}
         showConventions={showConventions}

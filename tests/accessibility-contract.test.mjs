@@ -27,20 +27,27 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
   assert.match(immersion, /window\.setTimeout\(\(\) => setAnnouncedSummary\(visualSummary\), 280\)/);
   assert.match(immersion, /<select id="immersion-sound-model"/);
   assert.match(immersion, /dash density shows 12-TET mismatch to the named reference/);
-  assert.match(immersion, /a dashed edge means rolled/);
-  assert.match(immersion, /a broken segment needs release-proven silence/);
-  assert.match(immersion, /The view never combines these channels into correctness, emotion, preference, or musical goodness/);
+  assert.match(immersion, /long dash = incomplete catalog fit · dotted overtrace = rolled timing/);
+  assert.match(immersion, /shortest circular distance, direction not retained/);
+  assert.match(immersion, /className="immersion-root-curve"/);
+  assert.match(immersion, /broken wake needs release-proven silence/);
+  assert.match(immersion, /These channels are never collapsed into correctness, emotion, preference, or musical goodness/);
+  assert.match(immersion, /latest attack-time snapshot/);
+  assert.match(immersion, /<details className="piano-immersion-guide">/);
+  assert.match(immersion, /preserveAspectRatio="xMidYMid slice"/);
   assert.match(immersion, /Pitch bend, keyboard or DAW tuning, acoustic pitch, audio spectrum, and acoustic loudness are not captured/);
   assert.doesNotMatch(immersion, /tabIndex=\{?[1-9]/);
   assert.match(model, /IMMERSION_MAX_TRAIL_EVENTS = 28/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
   assert.match(model, /IMMERSION_MAX_INTERVAL_LINKS = 12/);
+  assert.match(model, /IMMERSION_MAX_ANNOTATIONS = 5/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.piano-immersion-note\.is-latest \.cosmos-node-bloom \{ animation: none/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-reading \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-stage \* \{ filter: none/);
   assert.match(css, /\.piano-immersion-note \.cosmos-node\.is-outside-route[\s\S]*stroke-dasharray/);
   assert.match(css, /\.immersion-pedal-ring[\s\S]*stroke-dasharray/);
+  assert.match(css, /path:not\(\.immersion-root-curve\)[^}]*stroke-dasharray: none/);
 });
 
 test("dynamic visuals and status changes expose nonvisual descriptions", async () => {

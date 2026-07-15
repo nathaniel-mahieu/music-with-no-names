@@ -8348,7 +8348,7 @@ footer a {
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
 
-/* Piano HUD v1.85: one continuous, non-evaluative MIDI relationship sky. */
+/* Piano HUD v1.86: one continuous, non-evaluative MIDI relationship sky. */
 .piano-immersion {
   --immersion-violet: #c69cff;
   position: relative;
@@ -8422,29 +8422,67 @@ footer a {
 .piano-immersion-stage svg { display: block; width: 100%; height: auto; overflow: visible; }
 .immersion-dust circle { fill: #c9d8f4; }
 
-.immersion-register-depth circle {
+.immersion-register-beacons path {
   fill: none;
-  stroke: rgba(194, 211, 239, .08);
+  stroke: rgba(194, 211, 239, .11);
   stroke-width: 1;
-  stroke-dasharray: 2 14;
+  stroke-dasharray: 2 11;
+}
+.immersion-register-beacons circle { fill: rgba(213, 224, 244, .28); }
+.immersion-register-beacons text {
+  fill: rgba(194, 211, 239, .38);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: #070a12;
+  stroke-width: 3px;
 }
 
-.immersion-register-depth text {
-  fill: rgba(194, 211, 239, .22);
-  font-size: 10px;
-  letter-spacing: .16em;
-  text-anchor: middle;
-  text-transform: uppercase;
+.immersion-fifths-tide .immersion-tide-envelope {
+  fill: none;
+  stroke: rgba(208, 220, 244, .12);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.immersion-fifths-tide .is-microscope .immersion-tide-envelope { stroke: rgba(165, 185, 234, .16); }
+.immersion-fifths-tide .is-cluster .immersion-tide-envelope { stroke: rgba(212, 190, 244, .2); }
+.immersion-fifths-tide .immersion-tide-visit {
+  fill: none;
+  stroke: rgba(226, 233, 249, calc(.18 + var(--immersion-tide) * .42));
+  stroke-width: calc(1px + var(--immersion-tide) * 3px);
+  stroke-linecap: round;
+}
+.immersion-fifths-tide .is-cluster .immersion-tide-visit { stroke: rgba(215, 185, 255, calc(.22 + var(--immersion-tide) * .5)); }
+.immersion-fifths-tide text {
+  fill: rgba(196, 208, 231, .5);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-anchor: end;
+}
+.immersion-fifths-drift {
+  fill: none;
+  stroke: rgba(239, 243, 251, .28);
+  stroke-width: 1.2;
+  stroke-dasharray: 1 6;
 }
 
-.immersion-scale-aurora circle {
-  fill: var(--immersion-pitch);
-  opacity: .12;
-  filter: url(#immersion-soft-glow);
-}
+.immersion-route-hypotheses path { fill: none; stroke-linecap: round; }
+.immersion-route-hypotheses .is-leading { stroke: rgba(142, 223, 230, .42); stroke-width: 2.2; stroke-dasharray: 7 5; }
+.immersion-route-hypotheses .is-runner { stroke: rgba(198, 156, 255, .3); stroke-width: 1.5; stroke-dasharray: 2 6; }
 
-.immersion-scale-aurora g.is-seen circle { opacity: .33; }
-.immersion-scale-aurora g.is-home circle { opacity: .5; stroke: var(--piano-gold); stroke-width: 2; }
+.immersion-scale-aurora path {
+  fill: none;
+  stroke: var(--immersion-pitch);
+  stroke-linecap: round;
+}
+.immersion-scale-aurora g.is-route path { stroke-width: 8; opacity: .22; }
+.immersion-scale-aurora g.is-route.is-seen path { opacity: .52; }
+.immersion-scale-aurora g.is-outside-route path { stroke-width: 1.6; stroke-dasharray: 2 5; opacity: .24; }
+.immersion-scale-aurora g.is-outside-route.is-seen path { stroke-width: 2.5; opacity: .5; }
+.immersion-scale-aurora .immersion-route-seed { fill: var(--immersion-pitch); opacity: .82; }
+.immersion-scale-aurora g.is-home path { stroke: var(--piano-gold); opacity: .72; }
 .immersion-scale-aurora text {
   fill: #aab5ca;
   font-family: var(--font-mono), monospace;
@@ -8463,13 +8501,34 @@ footer a {
 .immersion-do-meridian > circle:last-of-type { fill: #070a12; stroke: var(--piano-gold); stroke-width: 3; }
 .immersion-do-meridian text { fill: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: 11px; text-anchor: middle; }
 
-.immersion-chord-clouds ellipse:last-child {
-  fill: none;
-  stroke: rgba(173, 185, 255, .18);
-  stroke-width: 1.5;
+.immersion-context-rosette > path { fill: rgba(237, 232, 216, .16); stroke: rgba(246, 237, 214, .74); stroke-width: 1.4; }
+.immersion-context-rosette circle { fill: rgba(246, 237, 214, calc(.2 + var(--immersion-cue) * .68)); stroke: #070a12; stroke-width: 1; }
+
+.immersion-chord-root-wake > .immersion-root-curve { fill: none; stroke: rgba(202, 176, 245, .24); stroke-width: 1.5; stroke-dasharray: 3 6; }
+.immersion-chord-root-wake > path:not(.immersion-root-curve) { fill: #070a12; stroke: rgba(215, 190, 255, .56); stroke-width: 1.5; stroke-dasharray: none; }
+.immersion-chord-root-wake > path.is-latest { fill: rgba(198, 156, 255, .28); stroke: #e7d5ff; stroke-width: 2; stroke-dasharray: none; }
+
+.immersion-chord-clouds .immersion-interpreted-hull,
+.immersion-chord-clouds .immersion-audible-hull,
+.immersion-chord-clouds .immersion-timing-hull {
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
-.immersion-chord-clouds g.is-current ellipse:last-child { stroke: rgba(194, 157, 255, .48); stroke-width: 2; }
-.immersion-chord-clouds g.is-rolled ellipse:last-child { stroke-dasharray: 5 8; }
+.immersion-chord-clouds .immersion-interpreted-hull {
+  stroke: rgba(186, 199, 241, .28);
+  stroke-width: 1.4;
+}
+.immersion-chord-clouds .immersion-audible-hull {
+  fill: none;
+  stroke: rgba(226, 232, 246, .18);
+  stroke-width: 1;
+  stroke-dasharray: 1 8;
+}
+.immersion-chord-clouds g.is-history { opacity: .46; }
+.immersion-chord-clouds g.is-current .immersion-interpreted-hull { stroke: rgba(222, 206, 255, .76); stroke-width: 2.5; }
+.immersion-chord-clouds g.is-incomplete .immersion-interpreted-hull { stroke-dasharray: 8 6; }
+.immersion-chord-clouds .immersion-timing-hull { fill: none; stroke: transparent; stroke-width: 5; }
+.immersion-chord-clouds g.is-rolled .immersion-timing-hull { stroke: rgba(240, 231, 255, .52); stroke-dasharray: 1 9; }
 .immersion-crunch-haze {
   fill: none;
   stroke: var(--piano-coral);
@@ -8478,10 +8537,18 @@ footer a {
   opacity: calc(.14 + var(--immersion-crunch) * .5);
 }
 
+.immersion-nearby-fields .immersion-nearby-orbit { fill: rgba(9, 13, 23, .68); stroke: rgba(225, 232, 246, .35); stroke-width: 1.2; stroke-dasharray: 2 5; }
+.immersion-nearby-fields circle.is-retained { fill: rgba(232, 239, 251, .72); }
+.immersion-nearby-fields circle.is-entering { fill: #070a12; stroke: rgba(143, 216, 224, .78); stroke-width: 1.4; }
+.immersion-nearby-fields text { fill: #c5cfdf; font-family: var(--font-mono), monospace; font-size: 11px; paint-order: stroke; stroke: #070a12; stroke-width: 3px; }
+
+.immersion-motif-bridge path { fill: none; stroke: rgba(223, 229, 243, .42); stroke-width: 2; stroke-dasharray: 2 8; }
+.immersion-motif-bridge circle { fill: none; stroke: rgba(223, 229, 243, .48); stroke-width: 1.5; stroke-dasharray: 3 4; }
+
 .immersion-voice-wake path {
   fill: none;
-  stroke: rgba(112, 213, 223, .5);
-  stroke-width: 2;
+  stroke: rgba(150, 176, 211, .42);
+  stroke-width: 1.6;
 }
 .immersion-voice-wake path.is-held { stroke-width: 3.5; }
 .immersion-voice-wake path.is-added,
@@ -8495,6 +8562,15 @@ footer a {
   stroke-linejoin: round;
 }
 
+.immersion-attack-contour > text:first-child { fill: rgba(194, 205, 226, .58); font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: .04em; }
+.immersion-attack-contour .immersion-contour-horizon { fill: none; stroke: rgba(181, 195, 220, .09); stroke-width: 18; stroke-linecap: round; }
+.immersion-attack-contour .immersion-contour-bouquet { fill: rgba(198, 156, 255, .045); stroke: rgba(198, 156, 255, .34); stroke-width: 1.2; stroke-dasharray: 2 5; }
+.immersion-attack-contour g path { fill: none; stroke: rgba(221, 228, 242, .4); stroke-width: 1.5; stroke-linecap: round; }
+.immersion-attack-contour g.is-same-group path { stroke: rgba(198, 156, 255, .52); stroke-dasharray: 2 4; }
+.immersion-attack-contour g.is-group-bridge path { stroke: rgba(221, 228, 242, .2); stroke-dasharray: 7 5; }
+.immersion-attack-contour circle { fill: #e2e8f4; stroke: #070a12; stroke-width: 1.2; }
+.immersion-attack-contour g text { fill: #cbd4e3; font-family: var(--font-mono), monospace; font-size: 11px; paint-order: stroke; stroke: #070a12; stroke-width: 3px; text-anchor: middle; }
+
 .immersion-attack-gaps path {
   fill: none;
   stroke: rgba(239, 243, 251, calc(.23 + var(--immersion-gap) * .22));
@@ -8507,23 +8583,14 @@ footer a {
 .immersion-interval-filaments path {
   fill: none;
   stroke: #7de1e5;
-  stroke-width: 2.4px;
+  stroke-width: 1.7px;
   stroke-linecap: round;
-  opacity: .72;
-  filter: url(#immersion-soft-glow);
+  opacity: .22;
 }
+.immersion-interval-filaments g.is-primary path { stroke-width: 2.8px; opacity: .84; }
+.immersion-interval-filaments g.is-secondary path { opacity: .18; }
 .immersion-interval-filaments g.is-near path { stroke-dasharray: 10 5; }
 .immersion-interval-filaments g.is-offset path { stroke-dasharray: 2 7; }
-.immersion-interval-filaments text {
-  fill: #d7f6f6;
-  font-family: var(--font-mono), monospace;
-  font-size: 10px;
-  paint-order: stroke;
-  stroke: #070a12;
-  stroke-width: 4px;
-  stroke-linejoin: round;
-  text-anchor: middle;
-}
 
 .immersion-newness-bloom {
   fill: none;
@@ -8531,7 +8598,6 @@ footer a {
   stroke-width: calc(1px + var(--immersion-newness) * 3px);
   stroke-dasharray: 2 7;
   opacity: calc(.18 + var(--immersion-newness) * .58);
-  filter: url(#immersion-soft-glow);
 }
 
 .immersion-pull-current {
@@ -8540,15 +8606,13 @@ footer a {
   stroke-width: calc(1px + var(--immersion-pull) * 5px);
   stroke-linecap: round;
   opacity: calc(.2 + var(--immersion-pull) * .65);
-  marker-end: url(#immersion-pull-arrow);
 }
-#immersion-pull-arrow path { fill: var(--piano-gold); }
+.piano-immersion-stage marker path { fill: var(--piano-gold); }
 
 .piano-immersion-note { opacity: var(--immersion-recency); }
 .piano-immersion-note .cosmos-node-bloom {
   fill: var(--immersion-pitch);
-  opacity: .17;
-  filter: url(#immersion-soft-glow);
+  opacity: .14;
 }
 .piano-immersion-note .cosmos-node {
   fill: var(--immersion-pitch);
@@ -8558,7 +8622,10 @@ footer a {
 .piano-immersion-note .cosmos-node.is-outside-route { fill: #070a12; stroke: var(--immersion-pitch); stroke-width: 2.4; stroke-dasharray: 3 3; }
 .piano-immersion-note.is-microscope { opacity: 1; }
 .piano-immersion-note.is-latest .cosmos-node { stroke: #fffaf0; stroke-width: 3; }
-.piano-immersion-note.is-latest .cosmos-node-bloom { animation: immersion-note-bloom 520ms ease-out both; }
+.piano-immersion-note.is-latest .cosmos-node-bloom { animation: immersion-note-bloom 520ms ease-out both; transform-box: fill-box; transform-origin: center; }
+.piano-immersion-note .cosmos-node-specular { fill: rgba(255, 255, 255, .8); pointer-events: none; }
+.piano-immersion-note .cosmos-node-echo { fill: none; stroke: var(--immersion-pitch); stroke-width: 1.4; stroke-dasharray: 2 5; opacity: .58; }
+.piano-immersion-note .cosmos-route-notch { stroke: #f0f3fa; stroke-width: 2; stroke-linecap: round; }
 .piano-immersion-note text {
   fill: #f4f0e7;
   font-family: var(--font-mono), monospace;
@@ -8569,37 +8636,88 @@ footer a {
   stroke-linejoin: round;
 }
 
-.immersion-active-core { fill: var(--immersion-pitch); stroke: #fff; stroke-width: 2.4; }
-.immersion-active-corona { fill: var(--immersion-pitch); opacity: .22; filter: url(#immersion-soft-glow); }
+.immersion-active-core { fill: none; stroke: var(--immersion-pitch); stroke-width: 2.8; }
+.immersion-active-stars .is-pressed .immersion-active-core { stroke: #fff; stroke-width: 3.2; }
+.immersion-active-corona { fill: var(--immersion-pitch); opacity: .1; }
 .immersion-pedal-ring { fill: none; stroke: var(--immersion-pitch); stroke-width: 2; stroke-dasharray: 3 5; }
+
+.immersion-annotations line { stroke: rgba(229, 235, 247, .48); stroke-width: 1; stroke-dasharray: 1 4; }
+.immersion-annotations circle { fill: #f3f0e8; stroke: #070a12; stroke-width: 1.5; }
+.immersion-annotations text {
+  fill: #f1eee6;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: rgba(5, 7, 12, .96);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+.immersion-annotations text tspan:first-child { fill: #fffaf0; font-weight: 700; }
+.immersion-annotations .is-current-chord text tspan:first-child { fill: #dec9ff; }
+.immersion-annotations .is-route-evidence text tspan:first-child { fill: #a9e6e9; }
+.immersion-annotations .is-context-center text tspan:first-child { fill: #f0dfb7; }
+
 .immersion-empty-reading text { fill: #b7c0d2; font-family: var(--font-display), Georgia, serif; text-anchor: middle; }
 .immersion-empty-reading text:first-child { fill: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
 .immersion-empty-reading text:nth-child(2) { font-size: 25px; }
 .immersion-empty-reading text:nth-child(3) { fill: #7f8a9e; font-size: 15px; }
 
 @keyframes immersion-note-bloom {
-  from { opacity: .58; transform: scale(.42); transform-origin: center; }
-  to { opacity: .17; transform: scale(1); transform-origin: center; }
+  from { opacity: .58; transform: scale(.42); transform-origin: center; transform-box: fill-box; }
+  to { opacity: .17; transform: scale(1); transform-origin: center; transform-box: fill-box; }
 }
 
+.piano-immersion-orienting {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 8px clamp(20px, 4vw, 52px) 18px;
+  background: linear-gradient(180deg, transparent, rgba(7, 10, 18, .44));
+}
+.piano-immersion-orienting p { display: grid; align-content: start; gap: 5px; min-width: 0; margin: 0; padding: 14px 22px 12px 0; }
+.piano-immersion-orienting p + p { padding-left: 22px; border-left: 1px solid rgba(225, 232, 246, .1); }
+.piano-immersion-orienting span { color: #8f9bb0; font-family: var(--font-mono), monospace; font-size: .69rem; letter-spacing: .08em; text-transform: uppercase; }
+.piano-immersion-orienting strong { color: #f4f0e8; font-size: .76rem; font-weight: 550; line-height: 1.45; }
+.piano-immersion-orienting small { color: #9ca8bc; font-size: .7rem; line-height: 1.5; }
+.piano-immersion-orienting .is-note span { color: #e8cf92; }
+.piano-immersion-orienting .is-field span { color: #d4b8fb; }
+.piano-immersion-orienting .is-frame span { color: #91dce1; }
+
+.piano-immersion-guide {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid rgba(225, 232, 246, .08);
+  border-bottom: 1px solid rgba(225, 232, 246, .08);
+}
+.piano-immersion-guide > summary {
+  padding: 12px clamp(20px, 4vw, 52px);
+  color: #abb6c8;
+  font-family: var(--font-mono), monospace;
+  font-size: .7rem;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
 .piano-immersion-legend {
   position: relative;
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 16px 28px;
-  padding: 0 clamp(20px, 4vw, 52px) 22px;
+  padding: 5px clamp(20px, 4vw, 52px) 20px;
 }
 .piano-immersion-legend > span { display: grid; flex: 1 1 270px; grid-template-columns: 18px 1fr; gap: 2px 8px; align-items: center; min-width: 0; }
 .piano-immersion-legend i { grid-row: 1 / 3; display: block; width: 14px; height: 14px; border: 2px solid #dfe8f7; border-radius: 50%; }
-.piano-immersion-legend strong { font-size: .67rem; font-weight: 650; }
-.piano-immersion-legend small { color: #909bad; font-size: .59rem; line-height: 1.42; }
+.piano-immersion-legend strong { font-size: .72rem; font-weight: 650; }
+.piano-immersion-legend small { color: #909bad; font-size: .68rem; line-height: 1.46; }
 .piano-immersion-legend .is-pitch i { border-color: var(--piano-gold); background: linear-gradient(135deg, var(--piano-gold), var(--piano-blue)); box-shadow: 0 0 12px rgba(236, 199, 109, .48); }
 .piano-immersion-legend .is-route i { border-color: var(--piano-blue); box-shadow: 0 0 0 5px rgba(112, 213, 223, .12); }
+.piano-immersion-legend .is-tide i { border-color: #d3c1ee; border-style: double; box-shadow: 0 0 0 4px rgba(211, 193, 238, .09), 0 0 0 8px rgba(211, 193, 238, .05); }
 .piano-immersion-legend .is-interval i { width: 17px; height: 0; border: 0; border-top: 3px solid var(--piano-blue); border-radius: 0; }
 .piano-immersion-legend .is-chord i { border-color: var(--immersion-violet); border-style: dashed; border-radius: 48% 52% 60% 40%; }
 .piano-immersion-legend .is-context i { border-color: var(--piano-gold); border-right-color: var(--piano-coral); border-bottom-color: var(--immersion-violet); border-style: dashed; }
 .piano-immersion-legend .is-time i { width: 17px; height: 0; border: 0; border-top: 2px dashed #dfe8f7; border-radius: 0; }
+.piano-immersion-legend .is-echo i { border-style: dotted; box-shadow: 5px 0 0 -2px #070a12, 5px 0 0 0 #dfe8f7; }
 
 .piano-immersion-reading {
   position: relative;
@@ -8608,14 +8726,13 @@ footer a {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 5px 18px;
   align-items: baseline;
-  padding: 18px clamp(20px, 4vw, 52px) 22px;
-  background: linear-gradient(90deg, rgba(17, 24, 39, .88), rgba(7, 10, 18, .56));
-  box-shadow: inset 0 1px rgba(226, 235, 249, .09);
+  padding: 22px clamp(20px, 4vw, 52px) 24px;
+  background: linear-gradient(180deg, rgba(7, 10, 18, .18), rgba(12, 17, 29, .78));
 }
 .piano-immersion-reading > span { grid-row: 1 / 4; }
 .piano-immersion-reading > strong { font-size: .76rem; font-weight: 500; line-height: 1.5; }
-.piano-immersion-reading > small { color: #a7b1c3; font-size: .66rem; line-height: 1.48; }
-.piano-immersion-reading > em { color: #7f899b; font-size: .6rem; font-style: normal; line-height: 1.45; }
+.piano-immersion-reading > small { color: #a7b1c3; font-size: .7rem; line-height: 1.48; }
+.piano-immersion-reading > em { color: #7f899b; font-size: .68rem; font-style: normal; line-height: 1.45; }
 
 .piano-immersion-keyboard {
   padding: 0 clamp(20px, 4vw, 52px) 24px;
@@ -10254,6 +10371,9 @@ footer a {
 @media (max-width: 900px) {
   .piano-immersion-intro { align-items: start; flex-direction: column; padding-top: 22px; }
   .piano-immersion-model { flex: 0 0 auto; width: min(100%, 300px); min-width: 0; }
+  .piano-immersion-orienting { grid-template-columns: 1fr; }
+  .piano-immersion-orienting p { padding: 12px 0; }
+  .piano-immersion-orienting p + p { padding-left: 0; border-top: 1px solid rgba(225, 232, 246, .1); border-left: 0; }
   .piano-immersion-legend > span { flex-basis: 230px; }
   .piano-hud-header { grid-template-columns: 1fr; }
   .piano-hud-controls { justify-content: flex-start; }
@@ -10325,9 +10445,10 @@ footer a {
   .piano-immersion-intro { gap: 17px; padding-inline: 18px; }
   .piano-immersion-intro p { font-size: .69rem; }
   .piano-immersion-stage { margin-inline: -3px; }
-  .piano-immersion-stage svg { width: 100%; height: min(116vw, 460px); }
+  .piano-immersion-stage svg { width: 100%; height: min(100vw, 420px); }
   .piano-immersion-note.is-older-label text { display: none; }
-  .immersion-interval-filaments text { font-size: 9px; }
+  .piano-immersion-orienting { padding-inline: 18px; }
+  .piano-immersion-guide > summary { padding-inline: 18px; }
   .piano-immersion-legend { gap: 13px; padding-inline: 18px; }
   .piano-immersion-legend > span { flex-basis: 100%; }
   .piano-immersion-reading { grid-template-columns: 1fr; padding-inline: 18px; }
@@ -10598,39 +10719,69 @@ footer a {
 
 @media (forced-colors: active) {
   .piano-immersion,
+  .piano-immersion-orienting,
+  .piano-immersion-guide,
   .piano-immersion-reading,
   .piano-immersion-keyboard { color: CanvasText; background: Canvas; }
   .piano-immersion-model select { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
   .piano-immersion-stage * { filter: none !important; }
   .immersion-dust circle { fill: GrayText; }
-  .immersion-register-depth circle { stroke: GrayText; }
-  .immersion-register-depth text,
+  .immersion-register-beacons path,
+  .immersion-register-beacons circle { stroke: GrayText; }
+  .immersion-register-beacons text,
+  .immersion-fifths-tide text,
   .immersion-scale-aurora text,
   .immersion-do-meridian text,
+  .immersion-nearby-fields text,
+  .immersion-attack-contour text,
   .piano-immersion-note text,
-  .immersion-interval-filaments text,
+  .immersion-annotations text,
   .immersion-empty-reading text { fill: CanvasText; stroke: Canvas; }
-  .immersion-scale-aurora circle { fill: Canvas; stroke: LinkText; stroke-width: 2; opacity: 1; }
-  .immersion-scale-aurora g.is-seen circle { fill: LinkText; stroke: CanvasText; opacity: 1; }
-  .immersion-scale-aurora g.is-home circle { fill: Highlight; stroke: HighlightText; }
+  .immersion-fifths-tide path { fill: none; stroke: GrayText; opacity: 1; }
+  .immersion-route-hypotheses path { fill: none; stroke: LinkText; opacity: 1; }
+  .immersion-route-hypotheses .is-runner { stroke: Highlight; }
+  .immersion-scale-aurora path { fill: none; stroke: LinkText; stroke-width: 3; opacity: 1; }
+  .immersion-scale-aurora g.is-outside-route path { stroke: CanvasText; stroke-dasharray: 2 5; }
+  .immersion-scale-aurora .immersion-route-seed { fill: LinkText; stroke: CanvasText; opacity: 1; }
+  .immersion-scale-aurora g.is-home path { stroke: Highlight; }
   .immersion-do-meridian line,
   .immersion-pull-current { stroke: Highlight; opacity: 1; }
   .immersion-do-meridian circle { fill: Canvas !important; stroke: Highlight !important; }
-  .immersion-chord-clouds ellipse { fill: none !important; stroke: CanvasText !important; opacity: 1; }
-  .immersion-chord-clouds g.is-rolled ellipse { stroke-dasharray: 5 8; }
+  .immersion-context-rosette path,
+  .immersion-context-rosette circle { fill: Canvas; stroke: Highlight; opacity: 1; }
+  .immersion-chord-root-wake path { fill: Canvas !important; stroke: LinkText !important; opacity: 1; }
+  .immersion-chord-clouds path { fill: none !important; stroke: CanvasText !important; opacity: 1; }
+  .immersion-chord-clouds g.is-incomplete .immersion-interpreted-hull { stroke-dasharray: 8 6; }
+  .immersion-chord-clouds g.is-rolled .immersion-timing-hull { stroke: Highlight !important; stroke-dasharray: 1 9; }
   .immersion-crunch-haze { fill: none; stroke: CanvasText; opacity: 1; stroke-dasharray: 2 7; }
+  .immersion-nearby-fields circle { fill: Canvas; stroke: LinkText; opacity: 1; }
+  .immersion-nearby-fields circle.is-retained { fill: LinkText; stroke: CanvasText; }
+  .immersion-motif-bridge path,
+  .immersion-motif-bridge circle { fill: none; stroke: Highlight; opacity: 1; }
   .immersion-voice-wake path,
   .immersion-interval-filaments path { stroke: LinkText; opacity: 1; }
   .immersion-memory-wake,
   .immersion-attack-gaps path { stroke: CanvasText; opacity: 1; }
+  .immersion-attack-contour path,
+  .immersion-attack-contour ellipse { fill: none; stroke: CanvasText; opacity: 1; }
+  .immersion-attack-contour circle { fill: Canvas; stroke: CanvasText; }
   .immersion-newness-bloom { stroke: Highlight; opacity: 1; stroke-dasharray: 2 6; }
   .piano-immersion-note .cosmos-node,
   .immersion-active-core { fill: Canvas; stroke: CanvasText; }
   .piano-immersion-note .cosmos-node.is-route,
   .immersion-active-stars .is-pressed .immersion-active-core { fill: LinkText; stroke: CanvasText; }
   .piano-immersion-note .cosmos-node.is-outside-route { fill: Canvas; stroke: CanvasText; stroke-dasharray: 3 3; }
+  .piano-immersion-note .cosmos-node-specular { fill: CanvasText; }
+  .piano-immersion-note .cosmos-node-echo,
+  .piano-immersion-note .cosmos-route-notch { fill: none; stroke: Highlight; opacity: 1; }
+  .piano-immersion-note,
+  .immersion-chord-clouds g.is-history { opacity: 1; }
+  .immersion-active-core,
   .immersion-active-corona { fill: none; stroke: CanvasText; opacity: 1; }
+  .immersion-active-stars .is-pressed .immersion-active-core { fill: none; stroke: Highlight; }
   .immersion-pedal-ring { stroke: Highlight; }
+  .immersion-annotations line { stroke: CanvasText; }
+  .immersion-annotations circle { fill: Canvas; stroke: CanvasText; }
   .piano-immersion-legend i { forced-color-adjust: auto; border-color: CanvasText !important; background: Canvas !important; box-shadow: none !important; }
   .hud-note-head,
   .hud-frequency-dot,
