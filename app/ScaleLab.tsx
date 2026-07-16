@@ -6,9 +6,11 @@ import {
   SCALE_HEARING_PATHS,
   degreeEvidence,
   intervalStepRecipe,
+  scaleDegreeFields,
   scaleDegrees,
   scaleFingerprint,
   stepFrequencyRatio,
+  type ScaleDegreeField,
 } from "@/lib/scale-model";
 import {
   SYNTH_MASTER_GAIN,
@@ -40,10 +42,23 @@ const THEORY_BRIDGES: Record<PresetId, { commonName: string; degrees: string; no
   whole: { commonName: "whole-tone scale", degrees: "six equal medium gaps", note: "Its symmetry gives every degree the same local gap shape." },
 };
 
+const DEGREE_FIELD_OVERVIEWS: Record<PresetId, string> = {
+  seven: "Across all seven degrees: 3 major-triad shapes · 3 minor-triad shapes · 1 diminished shape.",
+  five: "Across this minor pentatonic route: 3 even fourth-stacks · 2 familiar triad pitch sets heard in inversion.",
+  whole: "Every degree repeats the relative 0–4–8 geometry; six starts alternate between two pitch-class sets, and spacing alone supplies no unique root.",
+};
+
 function describeInteraction(roughness: number, overlap: number) {
   if (roughness > 0.38) return "more overtone crowding";
   if (overlap > 0.24) return "more overtone alignment";
   return "less overtone crowding";
+}
+
+function describeTriadReading(field: ScaleDegreeField) {
+  const reading = field.triadReading;
+  if (!reading) return "No major, minor, diminished, or augmented triad exactly names this pitch set. The open spacing is still a usable sonority, not a failed chord.";
+  if (reading.quality === "augmented") return "Conventional bridge: augmented triad. Its 4–4–4 pitch-class cycle is symmetric, so spacing alone does not select one unique root.";
+  return `Conventional bridge: ${reading.rootSyllable} ${reading.quality} triad · ${reading.inversion}. ${field.syllable} is the ${reading.bassRole} in the bass.`;
 }
 
 function makeHarmonicWave(context: AudioContext) {
@@ -82,7 +97,7 @@ function useScaleAudio(referenceHz: number, ratios: number[]) {
 
   const playSequence = useCallback(async (
     indices: number[],
-    options: { silentIndex?: number | null; simultaneous?: boolean; label: string },
+    options: { silentIndex?: number | null; simultaneous?: boolean; octaveOffsets?: number[]; label: string },
   ) => {
     shutdown(true, `Preparing ${options.label}…`);
     if (!window.AudioContext) {
@@ -94,8 +109,14 @@ function useScaleAudio(referenceHz: number, ratios: number[]) {
     master.gain.setValueAtTime(0.0001, context.currentTime);
     playbackRef.current = { context, master };
     setIsPlaying(true);
+    let resumeTimeout: number | null = null;
     try {
-      await context.resume();
+      await Promise.race([
+        context.resume(),
+        new Promise<never>((_, reject) => {
+          resumeTimeout = window.setTimeout(() => reject(new Error("Audio start timed out.")), 1800);
+        }),
+      ]);
     } catch {
       if (playbackRef.current?.context !== context) return;
       playbackRef.current = null;
@@ -103,6 +124,8 @@ function useScaleAudio(referenceHz: number, ratios: number[]) {
       setIsPlaying(false);
       setMessage("Sound could not start in this browser. Try the listening action again.");
       return;
+    } finally {
+      if (resumeTimeout != null) window.clearTimeout(resumeTimeout);
     }
     if (playbackRef.current?.context !== context || context.state === "closed") return;
 
@@ -118,6 +141,7 @@ function useScaleAudio(referenceHz: number, ratios: number[]) {
 
     indices.forEach((degreeIndex, sequenceIndex) => {
       const startOffset = options.simultaneous ? 0 : sequenceIndex * 0.44;
+      const octaveOffset = options.octaveOffsets?.[sequenceIndex] ?? 0;
       if (sequenceIndex === options.silentIndex) {
         timersRef.current.push(window.setTimeout(() => setActiveDegrees([]), startOffset * 1000));
         return;
@@ -127,7 +151,7 @@ function useScaleAudio(referenceHz: number, ratios: number[]) {
       const gain = context.createGain();
       const sourceGain = options.simultaneous ? simultaneousSourceGain : 1;
       oscillator.setPeriodicWave(wave);
-      oscillator.frequency.setValueAtTime(referenceHz * (ratios[degreeIndex] ?? 1), start);
+      oscillator.frequency.setValueAtTime(referenceHz * (ratios[degreeIndex] ?? 1) * 2 ** octaveOffset, start);
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.linearRampToValueAtTime(sourceGain, start + 0.018);
       gain.gain.setValueAtTime(sourceGain, start + 0.27);
@@ -173,11 +197,13 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
 
   const preset = SCALE_PRESETS.find((item) => item.id === presetId) ?? SCALE_PRESETS[0];
   const degrees = useMemo(() => scaleDegrees(preset.steps, preset.syllables), [preset]);
+  const degreeFields = useMemo(() => scaleDegreeFields(preset.steps, preset.syllables), [preset]);
   const fingerprint = useMemo(() => scaleFingerprint(preset.steps), [preset]);
   const playbackRatios = useMemo(() => [...degrees.map((item) => item.ratio), 2], [degrees]);
   const audio = useScaleAudio(referenceHz, playbackRatios);
   const highDoIndex = degrees.length;
   const degree = degrees[Math.min(selectedDegree, degrees.length - 1)];
+  const degreeField = degreeFields[Math.min(selectedDegree, degreeFields.length - 1)];
   const evidence = useMemo(() => degreeEvidence(referenceHz, degree), [referenceHz, degree]);
   const recipe = useMemo(() => intervalStepRecipe(preset.steps, degree.index), [preset.steps, degree.index]);
   const recipeSemitones = recipe.reduce((sum, segment) => sum + segment.step, 0);
@@ -376,6 +402,138 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
               </details>
             </div>
           </div>
+
+          <section className="degree-harmonic-field" aria-labelledby="degree-field-title">
+            <div className="degree-field-intro">
+              <div>
+                <span>Scale-degree harmonic field</span>
+                <h3 id="degree-field-title">Stack scale degrees into three-note shapes.</h3>
+              </div>
+              <p>Take one scale pitch, skip the next scale pitch, and repeat until three pitches are selected. In a seven-note major scale this builds familiar triads. In five-note and symmetric scales, the same rule reveals fourth-stacks, inversions, and equal divisions instead.</p>
+            </div>
+
+            <fieldset className="degree-field-scale-choices">
+              <legend>Compare a scale route</legend>
+              {SCALE_PRESETS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={presetId === item.id}
+                  onClick={() => { choosePreset(item.id); setSelectedDegree(0); }}
+                >
+                  <strong>{THEORY_BRIDGES[item.id].commonName}</strong>
+                  <small>{item.steps.join("–")} semitones</small>
+                </button>
+              ))}
+            </fieldset>
+
+            <p className="degree-field-overview">{DEGREE_FIELD_OVERVIEWS[presetId]}</p>
+
+            <fieldset className="degree-field-degree-choices">
+              <legend>Choose a starting degree</legend>
+              <div className="degree-field-degree-grid">
+                {degreeFields.map((field) => (
+                  <button
+                    key={`${presetId}-${field.degreeIndex}`}
+                    type="button"
+                    aria-pressed={degreeField.degreeIndex === field.degreeIndex}
+                    aria-controls="degree-field-reading"
+                    aria-label={`Degree ${field.degreeNumber}, ${field.syllable}, ${field.semitonesFromDo} semitones from Do; incoming gap ${field.incomingGap}, outgoing gap ${field.outgoingGap}; stack shape ${field.semitoneShape.join("–")} semitones`}
+                    onClick={() => { audio.stop(); setSelectedDegree(field.degreeIndex); }}
+                  >
+                    <span>{field.degreeNumber} · {field.syllable}</span>
+                    <strong>+{field.semitonesFromDo} st</strong>
+                    <small>in {field.incomingGap} · out {field.outgoingGap}</small>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <div id="degree-field-reading" className="degree-field-reading">
+              <p className="sr-only degree-field-live-summary" role="status" aria-live="polite" aria-atomic="true">Degree {degreeField.degreeNumber}, {degreeField.syllable}, {degreeField.semitonesFromDo} semitones from Do. Scale-native stack {degreeField.tones.map((tone) => tone.syllable).join(", ")}; bass-relative shape {degreeField.semitoneShape.join(", ")} semitones; {degreeField.shape.label}.</p>
+              <div className="degree-field-selected">
+                <span>Degree {degreeField.degreeNumber} · {degreeField.syllable}</span>
+                <h4>+{degreeField.semitonesFromDo} semitones from Do</h4>
+                <p>The previous scale pitch is {degreeField.incomingGap} semitone{degreeField.incomingGap === 1 ? "" : "s"} away; the next is {degreeField.outgoingGap} semitone{degreeField.outgoingGap === 1 ? "" : "s"} away.</p>
+              </div>
+
+              <div
+                className="degree-stack-plot"
+                role="img"
+                aria-label={`Scale-native stack from degree ${degreeField.degreeNumber}, ${degreeField.syllable}: ${degreeField.tones.map((tone) => `${tone.syllable} at ${tone.semitonesAboveBass} semitones above the bass`).join(", ")}. Successive gaps ${degreeField.adjacentGaps[0]} and ${degreeField.adjacentGaps[1]} semitones.`}
+              >
+                <span className="degree-stack-axis-label">semitones above the selected bass</span>
+                <div className="degree-stack-axis" aria-hidden="true">
+                  <i className="degree-stack-track" />
+                  {Array.from({ length: 13 }, (_, semitone) => (
+                    <span
+                      key={`tick-${semitone}`}
+                      className={`degree-stack-tick ${semitone === 0 ? "is-start" : ""} ${semitone === 12 ? "is-end" : ""}`}
+                      style={{ left: `${semitone / 12 * 100}%` }}
+                    >
+                      <i />{semitone % 3 === 0 ? <small>{semitone}</small> : null}
+                    </span>
+                  ))}
+                  {degreeField.adjacentGaps.map((gap, index) => (
+                    <span
+                      key={`gap-${index}`}
+                      className="degree-stack-segment"
+                      style={{
+                        left: `${degreeField.tones[index].semitonesAboveBass / 12 * 100}%`,
+                        width: `${gap / 12 * 100}%`,
+                      }}
+                    >
+                      <strong>{gap} st</strong>
+                    </span>
+                  ))}
+                  {degreeField.tones.map((tone, index) => (
+                    <span
+                      key={`${tone.degreeIndex}-${tone.octave}-${index}`}
+                      className={`degree-stack-tone ${index === 0 ? "is-bass" : ""}`}
+                      style={{ left: `${tone.semitonesAboveBass / 12 * 100}%` }}
+                    >
+                      <strong>{tone.syllable}{tone.octave > 0 ? "↑" : ""}</strong>
+                      <small>+{tone.semitonesAboveBass} st</small>
+                      <i />
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <p className="degree-field-equation">
+                <strong>Take {degreeField.tones.map((tone) => `${tone.degreeNumber}${tone.octave > 0 ? "↑" : ""}`).join("–")}</strong>
+                <span>{degreeField.tones.map((tone) => `${tone.syllable}${tone.octave > 0 ? "↑" : ""}`).join("–")} · bass-relative shape {degreeField.semitoneShape.join("–")} st · gaps {degreeField.adjacentGaps.join(" + ")} st</span>
+              </p>
+
+              <div className="degree-field-character">
+                <div>
+                  <span>Structural character</span>
+                  <strong>{degreeField.shape.label}</strong>
+                  <p>{degreeField.shape.character}</p>
+                </div>
+                <div>
+                  <span>Optional chord-language bridge</span>
+                  <strong>{degreeField.triadReading ? `${degreeField.triadReading.quality} triad` : "no single tertian name"}</strong>
+                  <p>{describeTriadReading(degreeField)}</p>
+                </div>
+              </div>
+
+              <div className="degree-field-actions">
+                <button type="button" onClick={() => void audio.playSequence(
+                  degreeField.tones.map((tone) => tone.degreeIndex),
+                  { octaveOffsets: degreeField.tones.map((tone) => tone.octave), label: `${degreeField.syllable} scale-native stack one pitch at a time` },
+                )}>Hear one pitch at a time</button>
+                <button type="button" onClick={() => void audio.playSequence(
+                  degreeField.tones.map((tone) => tone.degreeIndex),
+                  { simultaneous: true, octaveOffsets: degreeField.tones.map((tone) => tone.octave), label: `${degreeField.syllable} scale-native stack together` },
+                )}>Hear the three-note stack</button>
+                {audio.isPlaying ? <button type="button" onClick={audio.stop}>Stop sound</button> : null}
+              </div>
+              <p className="degree-field-audio-status">{audio.message}</p>
+              <p className="degree-field-guardrail">Structural character describes this upward voicing. It does not predict emotion, goodness, or a required resolution; bass, register, rhythm, timbre, phrase, style, and listener all change the experience.</p>
+            </div>
+          </section>
+
           <div className="lesson-next"><span>Can you hear the difference between pitches in sequence and pitches together?</span><button type="button" onClick={() => chooseLesson("pull")}>Next: hear what comes next</button></div>
         </section>
       ) : (

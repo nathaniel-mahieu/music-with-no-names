@@ -97,6 +97,9 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(scaleLab, /answer restored inside the phrase/);
   assert.match(scaleLab, /minor pentatonic/);
   assert.match(scaleLab, /A nearby gap does not decide what comes next/);
+  assert.match(scaleLab, /Stack scale degrees into three-note shapes/);
+  assert.match(scaleLab, /fourth-stacks, inversions, and equal divisions/);
+  assert.match(scaleLab, /does not predict emotion, goodness, or a required resolution/);
   assert.doesNotMatch(scaleLab, /Move Do to the next landmark/);
   assert.match(pianoLab, /Connect MIDI/);
   assert.match(pianoLab, /Attack history/);

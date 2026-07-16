@@ -77,6 +77,10 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(scale, /name="scale-degree"/);
   assert.match(scale, /aria-live="polite"/);
   assert.match(scale, /<ol className="step-fingerprint"/);
+  assert.match(scale, /aria-labelledby="degree-field-title"/);
+  assert.match(scale, /aria-controls="degree-field-reading"/);
+  assert.match(scale, /className="degree-stack-plot"[\s\S]*role="img"[\s\S]*aria-label=/);
+  assert.match(scale, /className="sr-only degree-field-live-summary"[\s\S]*aria-live="polite"[\s\S]*aria-atomic="true"/);
   assert.match(piano, /aria-label="Silent two-octave on-screen piano/);
   assert.match(piano, /aria-live="polite"/);
   assert.match(piano, /Grand staff showing/);
@@ -271,6 +275,8 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /\.hud-landmark-change-lenses[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-change-lenses \{ grid-template-columns: 1fr; \}/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-change-node\.is-after \{ fill: LinkText/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.degree-field-degree-grid button\[aria-pressed="true"\]/);
+  assert.match(css, /@media \(max-width: 380px\)[\s\S]*\.degree-field-degree-grid \{ grid-template-columns: repeat\(3/);
   assert.match(css, /\.hud-landmark-compare-field > rect:first-child[\s\S]*stroke-dasharray: 3 3/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-compare-table > div \{ grid-template-columns: 1fr 1fr; \}/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-compare-field > rect:first-child \{ stroke: Highlight/);

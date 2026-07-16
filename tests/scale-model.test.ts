@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SCALE_HEARING_PATHS, SCALE_PRESETS, degreeEvidence, intervalStepRecipe, rotateScale, scaleDegrees, scaleFingerprint, stepFrequencyRatio } from "../lib/scale-model.ts";
+import { SCALE_HEARING_PATHS, SCALE_PRESETS, degreeEvidence, intervalStepRecipe, rotateScale, scaleDegreeFields, scaleDegrees, scaleFingerprint, stepFrequencyRatio } from "../lib/scale-model.ts";
 
 test("every preset closes exactly at one octave", () => {
   for (const preset of SCALE_PRESETS) {
@@ -64,4 +64,65 @@ test("inner-hearing challenges are scale-specific and valid without modulo wrapp
       assert.notEqual(missingDegree, challenge.path[challenge.missingPosition + 1]);
     }
   }
+});
+
+test("alternate degrees produce the familiar major-scale triad field", () => {
+  const preset = SCALE_PRESETS.find((item) => item.id === "seven")!;
+  const fields = scaleDegreeFields(preset.steps, preset.syllables);
+  assert.deepEqual(fields.map((field) => field.semitoneShape), [
+    [0, 4, 7],
+    [0, 3, 7],
+    [0, 3, 7],
+    [0, 4, 7],
+    [0, 4, 7],
+    [0, 3, 7],
+    [0, 3, 6],
+  ]);
+  assert.deepEqual(fields.map((field) => field.triadReading?.quality), ["major", "minor", "minor", "major", "major", "minor", "diminished"]);
+  assert.ok(fields.every((field) => field.triadReading?.inversion === "root position"));
+});
+
+test("minor pentatonic fields expose fourth-stacks and inverted familiar triads", () => {
+  const preset = SCALE_PRESETS.find((item) => item.id === "five")!;
+  const fields = scaleDegreeFields(preset.steps, preset.syllables);
+  assert.deepEqual(fields.map((field) => field.semitoneShape), [
+    [0, 5, 10],
+    [0, 4, 9],
+    [0, 5, 10],
+    [0, 5, 10],
+    [0, 5, 9],
+  ]);
+  assert.deepEqual(fields.map((field) => field.shape.id), ["even-fourths", "third-then-fourth", "even-fourths", "even-fourths", "fourth-then-third"]);
+  assert.equal(fields[1].triadReading?.quality, "minor");
+  assert.equal(fields[1].triadReading?.rootSyllable, "Do");
+  assert.equal(fields[1].triadReading?.inversion, "first inversion");
+  assert.equal(fields[4].triadReading?.quality, "major");
+  assert.equal(fields[4].triadReading?.rootSyllable, "Me");
+  assert.equal(fields[4].triadReading?.inversion, "second inversion");
+  assert.equal(fields[0].triadReading, null);
+});
+
+test("whole-tone alternate-degree stacks repeat one symmetric augmented geometry", () => {
+  const preset = SCALE_PRESETS.find((item) => item.id === "whole")!;
+  const fields = scaleDegreeFields(preset.steps, preset.syllables);
+  assert.equal(fields.length, 6);
+  assert.ok(fields.every((field) => field.semitoneShape.join("-") === "0-4-8"));
+  assert.ok(fields.every((field) => field.shape.id === "augmented-thirds"));
+  assert.ok(fields.every((field) => field.triadReading?.inversion === "symmetric root reading"));
+});
+
+test("scale-degree fields preserve octave wraps and exact local scale gaps", () => {
+  const preset = SCALE_PRESETS.find((item) => item.id === "five")!;
+  const fields = scaleDegreeFields(preset.steps, preset.syllables);
+  assert.deepEqual(fields[4].tones.map((tone) => [tone.degreeNumber, tone.octave, tone.semitonesFromDo]), [
+    [5, 0, 10],
+    [2, 1, 15],
+    [4, 1, 19],
+  ]);
+  assert.deepEqual(fields.map((field) => [field.incomingGap, field.outgoingGap]), [[2, 3], [3, 2], [2, 2], [2, 3], [3, 2]]);
+});
+
+test("scale-degree field labels reject non-keyboard octave routes", () => {
+  assert.throws(() => scaleDegreeFields([2, 2, 2], ["Do", "Re", "Mi"]), /totaling twelve/);
+  assert.throws(() => scaleDegreeFields([2.5, 2.5, 2.5, 2.5, 2], ["Do", "Re", "Mi", "Fa", "Sol"]), /integer semitone/);
 });

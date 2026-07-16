@@ -760,7 +760,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.88
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.89
         </div>
       </header>
 
