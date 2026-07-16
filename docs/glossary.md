@@ -5,13 +5,17 @@
 | Frequency | Physical cycles per second, measured in hertz. | Pitch, note identity, importance. |
 | Pitch | A listener’s perceptual organization of periodic sound. | A single Fourier peak or guaranteed fundamental. |
 | Ratio | Multiplicative relationship between frequencies or durations. | A conventional interval name or a goodness score. |
+| Semitone | One equal-tempered piano-key step; in 12-TET it multiplies reference frequency by `2^(1/12)`, and twelve semitones form a 2:1 octave. | A fixed amount of tension, roughness, resolution, emotion, or quality. |
+| Interval | Pitch distance between two events or simultaneous components; this project may expose semitone count, frequency ratio, direction, register, timing, and context separately. | Semitone count alone or one universal consonance rank. |
 | Partial | One frequency component of a source spectrum. | Necessarily an exact harmonic. |
+| Fundamental reference | The A4=440 12-TET frequency derived from a MIDI key number and used as a teaching coordinate. | Measured acoustic pitch from the keyboard, DAW, microphone, or room. |
 | Harmonicity | Fit between observed components and one or more harmonic templates. | Smoothness, stability, liking. |
 | Periodicity | Evidence that a waveform or event pattern repeats after a duration. | Musical meter, closure, pleasure. |
 | Roughness | A sensory-interaction hypothesis for nearby components within auditory frequency selectivity. | Dissonance in every musical sense. |
 | Fusion | Degree to which a listener organizes sources as one auditory object. | Harmonicity or liking. |
 | Consonance | A historically and contextually overloaded family of sensory, structural, and cultural judgments. | Any one model output. The UI avoids using it as a meter. |
 | Stability | Context-dependent expectation that an event can function as a center, continuation, or stopping point. | Low roughness. |
+| Resolution | A listener's context-dependent experience of arrival, release, or directional completion after a path. | A compulsory one-semitone move or a property fixed by major, minor, or diminished chord type. |
 | Tension | Felt or modeled activation toward change, continuation, or release. | Roughness, loudness, or negative emotion alone. |
 | Pulse | A periodic timing hypothesis that organizes events. | A fixed meter name or exact clock grid. |
 | Groove | Embodied urge and timing relationship involving pulse, microtiming, pattern, and listener. | Syncopation or pulse confidence alone. |

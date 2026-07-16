@@ -69,6 +69,7 @@ import {
   scaleFingerprint,
   scaleFrameTimeline,
   scaleSemitones,
+  semitoneFieldProfile,
   sharedCycleCandidates,
   tonalGravityCandidates,
   tonalGravityCounterfactual,
@@ -382,7 +383,7 @@ const PHRASE_CHANGE_CHOICES: Array<{
   instruction: string;
   control: string;
 }> = [
-  { id: "transpose", label: "Move the whole phrase", question: "Can the relationship survive a new register?", instruction: "Replay every pitch by the same number of keys.", control: "the signed interval path" },
+  { id: "transpose", label: "Move the whole phrase", question: "Can the relationship survive a new register?", instruction: "Replay every pitch by the same number of semitones.", control: "the signed interval path" },
   { id: "timing", label: "Change the timing", question: "What changes when the pitch path keeps different time?", instruction: "Keep the same pitches. Change one pause for the pause microscope, or reshape the broader timing path.", control: "the absolute pitch path" },
   { id: "touch", label: "Change the touch", question: "What changes when the same keys receive a different attack?", instruction: "Keep the same pitches; use a different MIDI attack strength.", control: "the absolute pitch path" },
   { id: "articulation", label: "Change the connections", question: "What changes when notes overlap or separate differently?", instruction: "Keep the same pitches; change finger hold, silence, overlap, or pedal connection.", control: "the absolute pitch path" },
@@ -413,6 +414,13 @@ const CHARACTER_VALUES = [0, 25, 50, 75, 100];
 
 function formatHz(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
+}
+
+function formatSemitones(value: number, digits = 0, showPlus = false) {
+  const rounded = Number(value.toFixed(digits));
+  const magnitude = Math.abs(rounded);
+  const sign = rounded < 0 ? "−" : rounded > 0 && showPlus ? "+" : "";
+  return `${sign}${magnitude.toFixed(digits)} semitone${magnitude === 1 ? "" : "s"}`;
 }
 
 function uniqueSorted(notes: number[]) {
@@ -1037,7 +1045,7 @@ function FrequencyView({ events, gestures, selectedChordId, doMidi, scale, focus
           return <g key={event.id} className={event.id === focusedId ? "is-focused" : ""}>
             <circle cx={EVENT_X(slot)} cy={yFor(event.note)} r="6" className="hud-frequency-dot" />
             <text x={EVENT_X(slot)} y={Math.max(14, yFor(event.note) - 10)} className="hud-point-label">{showConventions ? conventionalPitchName(event.note) : context.syllable}</text>
-            <text x={EVENT_X(slot)} y="153" className="hud-event-label">{event.note === doMidi ? "1:1" : landmark.landmarkLabel}</text>
+            <text x={EVENT_X(slot)} y="153" className="hud-event-label">{event.note === doMidi ? "0 st · 1:1" : `${context.rawStepsFromDo > 0 ? "+" : ""}${context.rawStepsFromDo} st · ${landmark.landmarkLabel}`}</text>
           </g>;
         })}
       </svg>
@@ -1060,7 +1068,7 @@ function FifthsCompass({ events, activeNotes, chordNotes, chordRootPitchClass, d
   const doStep = fifthStepForPitchClass(pitchClassFromMidi(doMidi));
   return (
     <div className="hud-circle-panel">
-      <div className="hud-panel-heading"><span>Pitch geography</span><strong>Fifths compass</strong><small>Clockwise neighbors differ by the near-3:2 relation. Choose any position to make it movable Do.</small></div>
+      <div className="hud-panel-heading"><span>Pitch geography</span><strong>Fifths compass</strong><small>One clockwise fifths step is +7 semitones modulo the octave (or −5 by the shorter route), near 3:2. Choose any position to make it movable Do.</small></div>
       <div className="hud-fifths-circle" role="group" aria-label="Choose movable Do around the circle of fifths; event numbers, active notes, and selected chord members remain marked">
         <div className="hud-fifths-center"><span>{chordNotes.length ? "selected chord" : "current frame"}</span><strong>{chordNotes.length ? chordRootPitchClass == null ? "root ?" : showConventions ? CONVENTIONAL_PITCH_CLASSES[chordRootPitchClass] : CHROMATIC_SOLFEGE[pitchClassFromMidi(chordRootPitchClass - pitchClassFromMidi(doMidi))] : "Do"}</strong><small>{chordNotes.length ? chordRootPitchClass == null ? `${new Set(chordNotes.map(pitchClassFromMidi)).size} positions · outline` : `${new Set(chordNotes.map(pitchClassFromMidi)).size} positions · exact root` : showConventions ? CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi)] : scale.name.replace(" route", "")}</small></div>
         {FIFTHS_ORDER.nodes.map((node) => {
@@ -1068,7 +1076,8 @@ function FifthsCompass({ events, activeNotes, chordNotes, chordRootPitchClass, d
           const relative = CHROMATIC_SOLFEGE[pitchClassFromMidi(absolutePc - pitchClassFromMidi(doMidi))];
           const eventVisits = visits.get(node.step) ?? [];
           const className = ["hud-fifth-node", node.step === doStep ? "is-home" : "", activeSteps.has(node.step) ? "is-active" : "", chordSteps.has(node.step) ? "is-chord-member" : "", node.step === chordRootStep ? "is-chord-root" : "", node.step === focusedStep ? "is-focused" : ""].filter(Boolean).join(" ");
-          return <button type="button" key={node.step} className={className} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties} aria-pressed={node.step === doStep} aria-label={`${node.step === doStep ? "Current movable Do" : `Make ${relative} movable Do`}; fifths step ${node.step}${eventVisits.length ? `; attacks ${eventVisits.join(", ")}` : ""}`} onClick={() => onChooseDo(absolutePc)}>
+          const semitoneOffset = pitchClassFromMidi(absolutePc - pitchClassFromMidi(doMidi));
+          return <button type="button" key={node.step} className={className} style={{ "--fifth-angle": `${node.step * 30}deg` } as CSSProperties} aria-pressed={node.step === doStep} aria-label={`${node.step === doStep ? "Current movable Do" : `Make ${relative} movable Do`}; ${semitoneOffset} semitone${semitoneOffset === 1 ? "" : "s"} above current Do modulo the octave; fifths step ${node.step}${eventVisits.length ? `; attacks ${eventVisits.join(", ")}` : ""}`} onClick={() => onChooseDo(absolutePc)}>
             <strong>{showConventions ? CONVENTIONAL_PITCH_CLASSES[absolutePc] : relative}</strong>
             <span>{eventVisits.length ? eventVisits.join("·") : "·"}</span>
           </button>;
@@ -1099,7 +1108,7 @@ function FifthsDerivation({ doMidi, showConventions, onChooseDo }: { doMidi: num
   const currentRole = CHROMATIC_SOLFEGE[current.pitchClass];
   const currentLabel = showConventions ? CONVENTIONAL_PITCH_CLASSES[currentAbsolutePitchClass] : currentRole;
   const currentIsDo = current.pitchClass === 0;
-  const description = `${stackedMoves} stacked fifth moves shown. Each displayed fifth is ${spiral.displayedFifthCents.toFixed(3)} cents. The twelve-step closure mismatch is ${closure.toFixed(2)} cents. ${temperamentPercent === 100 ? "The path closes on the equal-key circle." : "The path remains an open spiral."}`;
+  const description = `${stackedMoves} stacked fifth moves shown. Each displayed fifth is ${spiral.displayedFifthCents.toFixed(3)} cents. The twelve-step closure mismatch is ${closure.toFixed(2)} cents. ${temperamentPercent === 100 ? "The path closes on the 12-TET circle." : "The path remains an open spiral."}`;
   return <section className="hud-fifths-derivation" aria-labelledby="hud-fifths-derivation-title">
     <div className="hud-panel-heading"><span>3:2 → octave fold → keyboard circle</span><strong id="hud-fifths-derivation-title">Why the fifths circle is first a spiral</strong><small>One question: what is gained—and changed—when a pure relationship is adjusted until the keyboard cycle closes?</small></div>
     <div className="hud-fifths-derivation-body">
@@ -1119,16 +1128,16 @@ function FifthsDerivation({ doMidi, showConventions, onChooseDo }: { doMidi: num
             </g>;
           })}
           {stackedMoves === 12 ? <line x1={points[0].x} y1={points[0].y} x2={currentPoint.x} y2={currentPoint.y} className="hud-fifths-closure-gap" /> : null}
-          <text x="180" y="174" className="hud-fifths-center-label">{temperamentPercent === 0 ? "pure 3:2" : temperamentPercent === 100 ? "equal keys" : `${temperamentPercent}% corrected`}</text>
+          <text x="180" y="174" className="hud-fifths-center-label">{temperamentPercent === 0 ? "pure 3:2" : temperamentPercent === 100 ? "12-TET" : `${temperamentPercent}% corrected`}</text>
           <text x="180" y="193" className="hud-fifths-center-value">{spiral.displayedFifthCents.toFixed(3)}¢ / fifth</text>
         </svg>
-        <small>Angle carries accumulated cents beyond the equal-key position; radius separates successive moves so the open return stays visible.</small>
+        <small>Angle carries accumulated cents beyond the equal-tempered position; radius separates successive moves so the open return stays visible.</small>
         <button type="button" onClick={() => onChooseDo(currentAbsolutePitchClass)} disabled={current.step === 12 || currentIsDo} aria-label={currentIsDo ? `Spiral move ${current.step} is the current movable Do` : `Make ${currentLabel} from spiral move ${current.step} movable Do`}>{current.step === 12 ? "Return points to the same key position" : currentIsDo ? `Move ${current.step} · ${currentLabel} is current Do` : `Make move ${current.step} · ${currentLabel} the new Do`}</button>
       </div>
       <div className="hud-fifths-controls">
         <label htmlFor="hud-fifths-stack"><span>Stack pure 3:2 moves</span><strong>{stackedMoves} of 12</strong></label>
         <input id="hud-fifths-stack" type="range" min="0" max="12" step="1" value={stackedMoves} onInput={(event) => setStackedMoves(Number(event.currentTarget.value))} onChange={(event) => setStackedMoves(Number(event.target.value))} />
-        <label htmlFor="hud-fifths-temper"><span>Apply equal-key correction</span><strong>{temperamentPercent}%</strong></label>
+        <label htmlFor="hud-fifths-temper"><span>Apply equal-temperament correction</span><strong>{temperamentPercent}%</strong></label>
         <input id="hud-fifths-temper" type="range" min="0" max="100" step="1" value={temperamentPercent} onInput={(event) => setTemperamentPercent(Number(event.currentTarget.value))} onChange={(event) => setTemperamentPercent(Number(event.target.value))} />
         <div className="hud-fifths-equation" aria-live="polite">
           <span>relationship repeated</span><strong>(3/2)<sup>{current.step}</sup></strong><small>Start from 1:1 and multiply by the same physical relationship.</small>
@@ -1155,6 +1164,8 @@ function ScaleLens({ events, chordNotes, snapshots, frame, doMidi, showConventio
   const observed = new Set(events.map((event) => pitchClassFromMidi(event.note - doMidi)));
   const chordPositions = new Set(chordNotes.map((note) => pitchClassFromMidi(note - doMidi)));
   const compatibleCount = [...observed].filter((position) => positions.has(position)).length;
+  const oneSemitoneGaps = frame.scale.steps.filter((gap) => gap === 1).length;
+  const routeGapCopy = `${frame.scale.steps.join("–")} semitones`;
   const candidates = latest ? [latest.leading, ...latest.runnersUp].filter((candidate): candidate is ScaleCandidate => Boolean(candidate)) : [];
   return (
     <div className="hud-scale-panel">
@@ -1164,15 +1175,16 @@ function ScaleLens({ events, chordNotes, snapshots, frame, doMidi, showConventio
         <strong>{showConventions ? frame.scale.conventionalName : frame.scale.name}</strong>
         <small>{observed.size ? `${compatibleCount}/${observed.size} observed positions fit this route` : "Play four distinct positions before automatic reframing."}</small>
       </div>
-      <div className="hud-scale-rail" role="img" aria-label="Twelve equal key positions showing scale membership and observed positions">
+      <div className="hud-scale-rail" role="img" aria-label={`Twelve semitone positions showing scale membership and observed positions. Selected route gap loop ${routeGapCopy}; the gaps total twelve semitones.`}>
         {Array.from({ length: 12 }, (_, position) => {
           const inScale = positions.has(position);
           const seen = observed.has(position);
           const inChord = chordPositions.has(position);
           const context = noteContext(doMidi + position, doMidi, frame.scale);
-          return <div key={position} className={`${inScale ? "is-in-scale" : ""} ${seen ? "is-seen" : ""} ${inChord ? "is-chord-tone" : ""}`}><span>{showConventions ? CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi + position)] : inScale ? context.syllable : "·"}</span><i>{inChord ? "chord" : seen ? "seen" : inScale ? "route" : ""}</i></div>;
+          return <div key={position} className={`${inScale ? "is-in-scale" : ""} ${seen ? "is-seen" : ""} ${inChord ? "is-chord-tone" : ""}`} title={`${showConventions ? CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi + position)] : context.syllable}: ${position} semitone${position === 1 ? "" : "s"} above Do; ${inScale ? `route degree ${context.degreeIndex + 1}` : "outside the selected route"}${seen ? "; observed" : ""}${inChord ? "; selected chord member" : ""}`}><span>{showConventions ? CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(doMidi + position)] : inScale ? context.syllable : "·"}</span><i>{inChord ? "chord" : seen ? "seen" : inScale ? "route" : ""}</i></div>;
         })}
       </div>
+      <div className="hud-scale-gap-reading"><span>Semitone gap loop</span><strong>{routeGapCopy}</strong><small>{oneSemitoneGaps ? `${oneSemitoneGaps} one-semitone hinge${oneSemitoneGaps === 1 ? "" : "s"} make short neighboring moves available.` : "No adjacent route positions are one semitone apart."} Phrase, direction, repetition, and listening history still determine whether a move feels resolving.</small></div>
       <ol className="hud-frame-candidates" aria-label="Compatible scale frames">
         {candidates.slice(0, 3).map((candidate, index) => <li key={candidateKey(candidate)}>
           <button type="button" onClick={() => onAdopt(candidate)} aria-label={`Lock ${candidate.scale.name} with ${CONVENTIONAL_PITCH_CLASSES[candidate.rootPitchClass]} as Do`}>
@@ -1275,11 +1287,11 @@ function ScaleLandingSpectralConsequence({
 function ScaleLandingIntervalRippleView({ ripple, sourceBaseMidi, soundModelId }: { ripple: ScaleLandingIntervalRipple; sourceBaseMidi: number | null; soundModelId: PianoSoundModelId }) {
   const [selectedRetainedPosition, setSelectedRetainedPosition] = useState<number | null>(null);
   const ratio = (value: number) => `×${value.toFixed(3)}`;
-  const summary = `Landing ${ripple.sourcePosition} moved to ${ripple.attemptPosition}. ${ripple.changedRelationshipCount} normalized equal-key intervals touching that landing changed by one step; ${ripple.retainedRelationshipCount} intervals between retained landings kept their distance and ratio.`;
+  const summary = `Landing ${ripple.sourcePosition} moved to ${ripple.attemptPosition}. ${ripple.changedRelationshipCount} normalized semitone intervals touching that landing changed by one semitone; ${ripple.retainedRelationshipCount} intervals between retained landings kept their distance and ratio.`;
   const selectedRelationship = ripple.relationships.find((relationship) => relationship.retainedPosition === selectedRetainedPosition) ?? null;
   return <div className="hud-scale-ripple">
     <div className="sr-only hud-scale-ripple-summary" role="img" aria-label={summary} />
-    <div className="hud-scale-ripple-heading"><span>one moved landing · every connected interval</span><strong>{ripple.sourcePosition} → {ripple.attemptPosition}</strong><small>Each equal-key step multiplies an ascending frequency interval by 2<sup>1/12</sup>. Bar length shows normalized key distance; the ratio is the corresponding 12-TET frequency multiplier.</small></div>
+    <div className="hud-scale-ripple-heading"><span>one moved landing · every connected interval</span><strong>{ripple.sourcePosition} → {ripple.attemptPosition}</strong><small>Each semitone multiplies an ascending frequency interval by 2<sup>1/12</sup>. Bar length shows that key distance; the ratio is the corresponding 12-TET frequency multiplier.</small></div>
     <div className="hud-scale-ripple-spokes">
       {ripple.relationships.map((relationship) => <button type="button" key={relationship.retainedPosition} className="hud-scale-ripple-spoke" aria-pressed={selectedRetainedPosition === relationship.retainedPosition} aria-label={`Inspect retained position ${relationship.retainedPosition}: source distance ${relationship.sourceDistanceSteps} steps, new distance ${relationship.attemptDistanceSteps} steps, ${relationship.distanceDelta < 0 ? "shorter" : "wider"} by one step`} onClick={() => setSelectedRetainedPosition(relationship.retainedPosition)}>
         <strong>to {relationship.retainedPosition}</strong>
@@ -1287,10 +1299,10 @@ function ScaleLandingIntervalRippleView({ ripple, sourceBaseMidi, soundModelId }
           <span className="is-source"><small>source</small><i><b style={{ "--ripple-width": `${relationship.sourceDistanceSteps / 12 * 100}%` } as CSSProperties} /></i><em>{relationship.sourceDistanceSteps} · {ratio(relationship.sourceFrequencyRatio)}</em></span>
           <span className="is-attempt"><small>new</small><i><b style={{ "--ripple-width": `${relationship.attemptDistanceSteps / 12 * 100}%` } as CSSProperties} /></i><em>{relationship.attemptDistanceSteps} · {ratio(relationship.attemptFrequencyRatio)}</em></span>
         </div>
-        <small>{relationship.distanceDelta < 0 ? "shorter" : "wider"} by one key step</small>
+        <small>{relationship.distanceDelta < 0 ? "shorter" : "wider"} by one semitone</small>
       </button>)}
     </div>
-    <div className="hud-scale-ripple-reading" role="status" aria-live="polite"><span>Global consequence</span><strong>{ripple.changedRelationshipCount} changed spokes · {ripple.retainedRelationshipCount} held relationships</strong><small>Only intervals touching the moved landing changed. Every retained-to-retained interval kept its equal-key distance and 12-TET ratio; absolute frequencies may differ if the replay started elsewhere. This is not a consonance, function, emotion, or quality judgment.</small></div>
+    <div className="hud-scale-ripple-reading" role="status" aria-live="polite"><span>Global consequence</span><strong>{ripple.changedRelationshipCount} changed spokes · {ripple.retainedRelationshipCount} held relationships</strong><small>Only intervals touching the moved landing changed. Every retained-to-retained interval kept its semitone distance and 12-TET ratio; absolute frequencies may differ if the replay started elsewhere. This is not a consonance, function, emotion, or quality judgment.</small></div>
     {!selectedRelationship ? <p className="hud-scale-spectrum-prompt">Choose one changed spoke to compare its source and new partial pattern under the declared sound model.</p> : sourceBaseMidi == null ? <p className="hud-scale-spectrum-prompt">The original route register is unavailable in this restored exercise. Restart the scale experiment to inspect a register-controlled spectrum.</p> : <ScaleLandingSpectralConsequence ripple={ripple} retainedPosition={selectedRelationship.retainedPosition} sourceBaseMidi={sourceBaseMidi} soundModelId={soundModelId} />}
   </div>;
 }
@@ -1318,15 +1330,15 @@ function ScaleGapMutationResult({ comparison, sourceBaseMidi, soundModelId }: { 
           ? `Landing ${comparison.sourceOnlyPositions[0]} → ${comparison.attemptOnlyPositions[0]}`
         : `${comparison.changedPositionCount} internal landings changed`;
   const detail = comparison.kind === "one-position"
-    ? `${signed(comparison.movedSteps!)} equal-key step${Math.abs(comparison.movedSteps!) === 1 ? "" : "s"}; ${comparison.changedGapCount} neighboring gap${comparison.changedGapCount === 1 ? "" : "s"} changed while every retained landing and the octave closure stayed fixed.`
+    ? `${signed(comparison.movedSteps!)} semitone${Math.abs(comparison.movedSteps!) === 1 ? "" : "s"}; ${comparison.changedGapCount} neighboring gap${comparison.changedGapCount === 1 ? "" : "s"} changed while every retained landing and the octave closure stayed fixed.`
     : comparison.kind === "same"
       ? "The source was reproduced exactly. Restart and move one internal landing by one key while keeping all the others."
       : comparison.kind === "different-count"
         ? "A landing was added or removed, so this attempt changes the route's density as well as its spacing. Restart and keep the same number of landings."
         : comparison.kind === "wide-position"
-          ? `Only one landing moved, but it moved ${Math.abs(comparison.movedSteps!)} keys. This control asks for one key step so every changed interval can be attributed to the same minimal nudge.`
+          ? `Only one landing moved, but it moved ${Math.abs(comparison.movedSteps!)} semitones. This control asks for one semitone so every changed interval can be attributed to the same minimal nudge.`
         : "More than one landing moved, so no single-position explanation is justified. Restart and change only one internal landing.";
-  const summary = `${headline}. Source gaps ${comparison.sourceSteps.join(", ")}; new gaps ${comparison.attemptSteps.join(", ")}. Both routes total twelve equal-key steps.`;
+  const summary = `${headline}. Source gaps ${comparison.sourceSteps.join(", ")}; new gaps ${comparison.attemptSteps.join(", ")}. Both routes total twelve semitones.`;
   return <section className={`hud-scale-mutation is-${comparison.kind}`} aria-label="Scale landing mutation comparison">
     {ripple ? <div className="hud-scale-mutation-view" role="group" aria-label="Choose one consequence of the moved scale landing"><button type="button" aria-pressed={activeView === "gaps"} onClick={() => setView("gaps")}>Adjacent gaps</button><button type="button" aria-pressed={activeView === "intervals"} onClick={() => setView("intervals")}>Every connected interval</button></div> : null}
     {activeView === "gaps" ? <><div className="hud-scale-mutation-routes" role="img" aria-label={summary}>
@@ -1386,7 +1398,7 @@ function PerformedScaleFingerprintBuilder({
   const mutationComparison = mutating && progress.status === "complete" ? compareScaleGapMutation(sourceSteps, progress.steps) : null;
   const completedMoveCount = progress.steps.length;
   const heading = session.exercise === "build" ? "Build an unnamed octave route" : session.exercise === "transpose" ? "Preserve the fingerprint elsewhere" : session.exercise === "rotate" ? "Make a different gap follow home" : "Change one landing, keep the octave";
-  let cue = progress.status === "waiting" ? "Play any starting key" : progress.status === "complete" ? mutating ? mutationComparison?.kind === "one-position" ? "One changed landing isolated" : "Compare the attempted control" : "The octave loop closes" : replaying ? `Move +${progress.expectedGap} ${progress.expectedGap === 1 ? "key" : "keys"}` : mutating ? `${progress.octaveRemaining} steps remain · keep the same landing count` : `${progress.octaveRemaining} equal key steps remain`;
+  let cue = progress.status === "waiting" ? "Play any starting key" : progress.status === "complete" ? mutating ? mutationComparison?.kind === "one-position" ? "One changed landing isolated" : "Compare the attempted control" : "The octave loop closes" : replaying ? `Move +${progress.expectedGap} semitone${progress.expectedGap === 1 ? "" : "s"}` : mutating ? `${progress.octaveRemaining} semitones remain · keep the same landing count` : `${progress.octaveRemaining} semitones remain`;
   let feedback = progress.status === "waiting"
       ? replaying ? "This first key may be anywhere; it establishes a new physical and frequency origin." : mutating ? `Start anywhere. Use ${sourceSteps.join("–")} as the control, move exactly one internal landing by one key, and keep every other landing—including 0 and 12—fixed.` : "There is no correct first key. Your next upward moves will author the route."
     : progress.status === "complete"
@@ -1406,7 +1418,7 @@ function PerformedScaleFingerprintBuilder({
       <div className="hud-subheading"><span>{session.exercise === "build" ? "learner-authored route" : session.exercise === "transpose" ? "transposition test" : session.exercise === "rotate" ? "rotation test" : "one-position experiment"}</span><strong>{heading}</strong><small>{replaying ? `target gaps ${session.expectedSteps?.join("–")}` : mutating ? `source gaps ${sourceSteps.join("–")} · move one internal landing; keep 0 and 12` : "catalog scale names hidden until the octave relationship is complete"}</small></div>
       <div className="hud-builder-actions"><button type="button" onClick={onRestart}>Restart</button><button type="button" onClick={onEnd}>End</button></div>
     </div>
-    <div className="hud-builder-octave" role="img" aria-label={progress.positions.length ? `${progress.positions.length} accepted positions from 0 through ${progress.positions.at(-1)}; ${progress.octaveRemaining} equal key steps remain to the octave` : "No accepted positions yet; the first attack will become position 0 and the octave will close at position 12"}>
+    <div className="hud-builder-octave" role="img" aria-label={progress.positions.length ? `${progress.positions.length} accepted positions from 0 through ${progress.positions.at(-1)}; ${progress.octaveRemaining} semitones remain to the octave` : "No accepted positions yet; the first attack will become position 0 and the octave will close at position 12 semitones"}>
       {Array.from({ length: 13 }, (_, position) => {
         const acceptedIndex = progress.positions.indexOf(position);
         const accepted = acceptedIndex >= 0;
@@ -1485,7 +1497,7 @@ function GuidedScaleWalk({
   let cue = "Play Do in any octave";
   let feedback = "The first Do establishes the register. Only pitch relationships matter; the current frame is fixed for this walk.";
   if (progress.status === "walking" && expectedContext) {
-    cue = `Move +${nextGap} ${nextGap === 1 ? "key" : "keys"} to ${expectedContext.syllable}`;
+    cue = `Move ${formatSemitones(nextGap, 0, true)} to ${expectedContext.syllable}`;
     feedback = wrongAttempt && lastAttempt?.actualGap != null
       ? `You moved ${lastAttempt.actualGap > 0 ? "+" : ""}${lastAttempt.actualGap} from the last correct step and reached ${actualContext?.syllable ?? "another position"}. This route asks for +${lastAttempt.expectedGap}. Progress stays here—try ${expectedContext.syllable} again.`
       : lastAttempt?.kind === "restarted"
@@ -1519,7 +1531,7 @@ function GuidedScaleWalk({
     </div>
     {progress.status === "walking" && progress.expectedMidi != null && progress.baseMidi != null ? <div className="hud-walk-physics" aria-label="Physical context for the next scale step">
       <span><small>next reference frequency</small><strong>{formatHz(frequencyFromMidi(progress.expectedMidi))}</strong><em>{(2 ** (expectedOffset / 12)).toFixed(3)}× starting Do</em></span>
-      <span><small>local interval</small><strong>+{nextGap} equal {nextGap === 1 ? "key" : "keys"}</strong><em>near {nextLandmark.landmarkLabel} · {nextLandmark.relationship}</em></span>
+      <span><small>local interval</small><strong>{formatSemitones(nextGap, 0, true)}</strong><em>near {nextLandmark.landmarkLabel} · {nextLandmark.relationship}</em></span>
       <span><small>fifths coordinate</small><strong>{expectedContext?.syllable}</strong><em>{fifthsCoordinateLabel(expectedOffset)}</em></span>
     </div> : null}
     {events.length ? <p className="hud-walk-gravity">In this performed route, Do currently ranks <strong>{doGravityIndex + 1} of 12</strong> center hypotheses{gravityDrivers.length ? `; its strongest cues are ${gravityDrivers.map((driver) => driver.label).join(" and ")}` : ""}. That contextual evidence can change even though the scale fingerprint cannot.</p> : null}
@@ -1670,7 +1682,7 @@ function ResolutionLandingLens({ phraseEvents, target, evidence, doMidi, showCon
     : `${relationship.relationship} (${relationship.landmarkLabel})`;
   return <section className="hud-resolution-landing" aria-labelledby="hud-resolution-landing-title">
     <div className="hud-panel-heading"><span>{direct ? "Direct fork landing" : `Fork landing after ${evidence.interveningAttackCount} intervening attack${evidence.interveningAttackCount === 1 ? "" : "s"}`} · five lenses</span><strong id="hud-resolution-landing-title">What did this intended landing actually do?</strong><small>{target.label} selected one pitch-class destination. The performed path, frame model, and your response remain separate evidence.</small></div>
-    <svg viewBox="0 0 720 162" role="img" aria-label={`${target.label}. ${role(source.note)} to ${role(landing.note)} is ${signedSteps(evidence.sourceToLandingSteps)} equal keys over ${Math.round(evidence.sourceToLandingGapMs)} milliseconds, with ${evidence.interveningAttackCount} intervening attacks. Final approach ${signedSteps(evidence.finalApproachSteps)} keys over ${Math.round(evidence.finalApproachGapMs)} milliseconds; ${bridgeCopy}.`}>
+    <svg viewBox="0 0 720 162" role="img" aria-label={`${target.label}. ${role(source.note)} to ${role(landing.note)} is ${formatSemitones(evidence.sourceToLandingSteps, 0, true)} over ${Math.round(evidence.sourceToLandingGapMs)} milliseconds, with ${evidence.interveningAttackCount} intervening attacks. Final approach ${formatSemitones(evidence.finalApproachSteps, 0, true)} over ${Math.round(evidence.finalApproachGapMs)} milliseconds; ${bridgeCopy}.`}>
       <title>Performed pitch path from the frozen fork source to the first matching landing</title>
       <line x1="92" x2="640" y1="139" y2="139" className="hud-resolution-landing-axis" />
       <polyline points={pathPoints} className="hud-resolution-landing-path" />
@@ -1688,8 +1700,8 @@ function ResolutionLandingLens({ phraseEvents, target, evidence, doMidi, showCon
     </svg>
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the performed resolution landing">
       <article className="is-measured"><span>Sound</span><em>MIDI + derived 12-TET reference</em><strong>{sourceHz.toFixed(1)} → {landingHz.toFixed(1)} Hz · {velocityCopy}</strong><small>Key number and transmitted attack changed. The Hz coordinate assumes A4=440; MIDI supplied no acoustic pitch, loudness, spectrum, room, or heard balance.</small></article>
-      <article className="is-measured"><span>Relationships</span><em>source to intended destination</em><strong>{signedSteps(evidence.sourceToLandingSteps)} keys · ×{evidence.sourceToLandingFrequencyRatio.toFixed(3)}</strong><small>Near {landmarkCopy}. {direct ? "The fork was the next attack, so this is also the final approach." : `${evidence.interveningAttackCount} intervening attack${evidence.interveningAttackCount === 1 ? " means" : "s mean"} the fork intention was not an isolated one-move intervention.`}</small></article>
-      <article className="is-measured"><span>Motion</span><em>performed final approach</em><strong>{signedSteps(evidence.finalApproachSteps)} keys · {Math.round(evidence.finalApproachGapMs)} ms</strong><small>{role(finalApproach.note)} → {role(landing.note)} · {bridgeCopy}. Timing and release evidence do not establish meter, groove, or intended articulation.</small></article>
+      <article className="is-measured"><span>Relationships</span><em>source to intended destination</em><strong>{formatSemitones(evidence.sourceToLandingSteps, 0, true)} · ×{evidence.sourceToLandingFrequencyRatio.toFixed(3)}</strong><small>Near {landmarkCopy}. {direct ? "The fork was the next attack, so this is also the final approach." : `${evidence.interveningAttackCount} intervening attack${evidence.interveningAttackCount === 1 ? " means" : "s mean"} the fork intention was not an isolated one-move intervention.`}</small></article>
+      <article className="is-measured"><span>Motion</span><em>performed final approach</em><strong>{formatSemitones(evidence.finalApproachSteps, 0, true)} · {Math.round(evidence.finalApproachGapMs)} ms</strong><small>{role(finalApproach.note)} → {role(landing.note)} · {bridgeCopy}. Timing and release evidence do not establish meter, groove, or intended articulation.</small></article>
       <article className="is-modeled"><span>Context</span><em>selected Do + route model</em><strong>remaining pull {Math.round(sourceTendency.homePull * 100)} → {Math.round(landingTendency.homePull * 100)} · home evidence {Math.round(sourceTendency.homeEvidence * 100)} → {Math.round(landingTendency.homeEvidence * 100)}</strong><small>Pull is modeled distance still left before Do, so zero can mean arrival—not indifference. The destination is {pitchClassRoleLabel(target.pitchClass, frameDoMidi, scale, showConventions)} in the frozen frame. The fork label named an intention, not a detected function or felt resolution.</small></article>
       <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did this feel like return, continuation, opening, surprise, or something else?</strong><small>{reflectionSpecimen.length >= 3 ? `Hold this ${reflectionSpecimen.length}-attack context and answer settledness, energy, familiarity, and liking separately.` : coreSpecimen.length > 12 ? "The path exceeded the twelve-attack reflection bound; clear and try a shorter fork path." : "At least one earlier context attack is needed for a bounded three-attack reflection."}</small><button type="button" disabled={reflectionSpecimen.length < 3} onClick={() => onReflect(reflectionSpecimen)}>Reflect on this landing</button></article>
     </div>
@@ -1788,7 +1800,7 @@ function ScalePracticeField({
     .slice(0, 3);
   const forkScale = PIANO_SCALES.find((scale) => scale.id === target?.frameScaleId) ?? frame.scale;
   const forkDoMidi = target?.frameRootPitchClass == null ? doMidi : nearestMidiForPitchClass(target.frameRootPitchClass, doMidi);
-  const movementLabel = (movement: number) => movement === 0 ? "repeat" : `${movement > 0 ? "+" : ""}${movement} key step${Math.abs(movement) === 1 ? "" : "s"}`;
+  const movementLabel = (movement: number) => movement === 0 ? "repeat the same key" : `${movement > 0 ? "+" : ""}${movement} semitone${Math.abs(movement) === 1 ? "" : "s"}`;
   const landingRevealed = landingEvidence != null && landingRevealEventId === landingEvidence.landingEventId;
   return <section className="hud-scale-practice" aria-labelledby="hud-scale-practice-title">
     <div className="hud-panel-heading"><span>Author · preserve · contextualize</span><strong id="hud-scale-practice-title">Scale relationships with your hands</strong><small>First author an unnamed route. Then preserve it elsewhere or compare it with a selected frame. Tonal center remains a contextual hypothesis, never a goodness score.</small></div>
@@ -1800,7 +1812,7 @@ function ScalePracticeField({
     {!fingerprintSession && !walkSession && !gravityCounterfactualSession ? <div className="hud-scale-learning-grid">
       <div className="hud-fingerprint-field">
         <div className="hud-subheading"><span>Selected frame · derived shape</span><strong>Read the gaps before the name</strong><small>{new Set(phraseEvents.map((event) => pitchClassFromMidi(event.note))).size} measured pitch classes encountered in phrase memory</small></div>
-        <div className="hud-fingerprint" role="img" aria-label={`Cyclic scale gap fingerprint ${fingerprint.steps.join(", ")} equal-key steps`}>
+        <div className="hud-fingerprint" role="img" aria-label={`Cyclic scale gap fingerprint ${fingerprint.steps.join(", ")} semitones`}>
           {fingerprint.steps.map((step, index) => {
             const start = fingerprint.positions[index];
             const startPitchClass = pitchClassFromMidi(frame.rootPitchClass + rotationOffset + start);
@@ -1809,7 +1821,7 @@ function ScalePracticeField({
             return <span key={`${fingerprint.rotation}-${index}`} className={encountered ? "is-encountered" : ""} style={{ "--fingerprint-gap": step } as CSSProperties}><strong>{step}</strong><small>{step === 1 ? "close" : step === 2 ? "whole" : "wide"}</small></span>;
           })}
         </div>
-        <div className="hud-fingerprint-caption"><span>{fingerprint.steps.join("–")}</span><small>Totals {fingerprint.total} equal key steps: the octave loop closes. Moving Do transposes the loop without changing this string.</small></div>
+        <div className="hud-fingerprint-caption"><span>{fingerprint.steps.join("–")} semitones</span><small>Totals {fingerprint.total}: the octave loop closes. Moving Do transposes the loop without changing this string.</small></div>
         <button type="button" className="hud-rotate-fingerprint" onClick={onRotate}>Rotate the starting point</button>
         <p>Rotation keeps the same cyclic pitch set but changes which gap follows Do—a direct preview of mode-like hearing.</p>
       </div>
@@ -1855,6 +1867,8 @@ function chordLabel(candidate: ChordCandidate, doMidi: number, showConventions: 
 function RelationshipTexture({ notes, inheritedNotes, excludedInheritedNotes = [], doMidi, scale, showConventions }: { notes: number[]; inheritedNotes: number[]; excludedInheritedNotes?: number[]; doMidi: number; scale: PianoScale; showConventions: boolean }) {
   const unique = uniqueSorted(notes);
   const pairs = pairwiseIntervals(unique);
+  const semitoneProfile = semitoneFieldProfile(unique, doMidi);
+  const semitoneBins = semitoneProfile.intervalBins.map((bin) => `${bin.semitones}${bin.pairCount > 1 ? `×${bin.pairCount}` : ""}`).join(" · ");
   const xFor = (note: number) => unique.length <= 1 ? 180 : 46 + (unique.indexOf(note) / (unique.length - 1)) * 268;
   const pairScore = (semitones: number) => {
     const distance = intervalLandmark(semitones);
@@ -1862,12 +1876,12 @@ function RelationshipTexture({ notes, inheritedNotes, excludedInheritedNotes = [
   };
   return (
     <div className="hud-texture-panel">
-      <div className="hud-panel-heading"><span>Everything physically sounding</span><strong>Interval texture</strong><small>Thicker arcs sit nearer simple ratio landmarks; hollow nodes were inherited; crossed nodes are excluded only from the chord reading.</small></div>
-      <svg viewBox="0 0 360 168" role="img" aria-label={pairs.length ? `${pairs.length} pairwise interval relationships across every sounding note; ${excludedInheritedNotes.length} inherited note${excludedInheritedNotes.length === 1 ? " is" : "s are"} excluded from chord interpretation but retained here` : "Interval texture needs two simultaneous notes"}>
+      <div className="hud-panel-heading"><span>Everything physically sounding</span><strong>Interval texture</strong><small>Every arc is an exact semitone span. Thickness shows nearness to its declared reference—integer ratios except the six-semitone √2 midpoint—and is not a consonance ranking. Hollow nodes were inherited; crossed nodes are excluded only from the chord reading.</small></div>
+      <svg viewBox="0 0 360 168" role="img" aria-label={pairs.length ? `${pairs.length} pairwise interval relationships across every sounding note. Octave-folded semitone counts ${semitoneBins}. Adjacent voicing gaps ${semitoneProfile.adjacentGaps.join(", ") || "none"} semitones. ${excludedInheritedNotes.length} inherited note${excludedInheritedNotes.length === 1 ? " is" : "s are"} excluded from chord interpretation but retained here.` : "Interval texture needs two simultaneous notes"}>
         <title>Pairwise interval texture</title>
         {pairs.map((pair) => {
           const x1 = xFor(pair.lower); const x2 = xFor(pair.upper); const peak = 126 - Math.min(90, (x2 - x1) * 0.38);
-          return <path key={`${pair.lower}-${pair.upper}`} d={`M ${x1} 126 Q ${(x1 + x2) / 2} ${peak} ${x2} 126`} className="hud-texture-arc" style={{ "--arc-strength": pairScore(pair.upper - pair.lower) } as CSSProperties}><title>{pair.distance.relationship}, {pair.distance.cents} cents</title></path>;
+          return <g key={`${pair.lower}-${pair.upper}`}><path d={`M ${x1} 126 Q ${(x1 + x2) / 2} ${peak} ${x2} 126`} className="hud-texture-arc" style={{ "--arc-strength": pairScore(pair.upper - pair.lower) } as CSSProperties}><title>{pair.distance.semitones} semitone{pair.distance.semitones === 1 ? "" : "s"}; {pair.distance.relationship}; {pair.distance.cents} cents</title></path>{pairs.length <= 3 ? <text x={(x1 + x2) / 2} y={peak - 5} className="hud-texture-gap-label">{pair.distance.semitones} st</text> : null}</g>;
         })}
         {unique.map((note) => {
           const inherited = inheritedNotes.includes(note);
@@ -1877,6 +1891,7 @@ function RelationshipTexture({ notes, inheritedNotes, excludedInheritedNotes = [
         })}
         {unique.length < 2 ? <text x="180" y="78" className="hud-empty-label">Hold two notes to expose their interval</text> : null}
       </svg>
+      {pairs.length ? <div className="hud-semitone-reading"><span>Semitone ruler</span><strong>{semitoneBins} st</strong><small>Adjacent register gaps {semitoneProfile.adjacentGaps.join("–")} semitones · closest pair {semitoneProfile.closestGap}. These numbers locate the notes. Simultaneous crunch still depends on register, overlap, and the selected assumed spectrum.</small></div> : null}
     </div>
   );
 }
@@ -2093,7 +2108,7 @@ function LastAttackChange({ events, focusedId, doMidi, scale, showConventions, o
   const label = showConventions ? conventionalPitchName(event.note) : context.syllable;
   const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(Math.round(value))}`;
   const createdIntervalCopy = exactOneNoteAddition && fieldChange.changedIntervals.length
-    ? fieldChange.changedIntervals.slice(0, 3).map((item) => `${item.distance.semitones} steps · ${item.distance.relationship}`).join(" / ")
+    ? fieldChange.changedIntervals.slice(0, 3).map((item) => `${item.distance.semitones} semitone${item.distance.semitones === 1 ? "" : "s"} · ${item.distance.relationship}`).join(" / ")
     : null;
   const relationshipStrong = exactOneNoteAddition
     ? createdIntervalCopy ?? "First field position established"
@@ -2101,7 +2116,7 @@ function LastAttackChange({ events, focusedId, doMidi, scale, showConventions, o
       ? melodicMove == null ? "No earlier relationship" : `Membership unchanged · melodic move ${signed(melodicMove)}`
       : melodicMove == null
         ? "No earlier microscope snapshot"
-        : `Melodic move ${signed(melodicMove)} keys`;
+        : `Melodic move ${formatSemitones(melodicMove, 0, true)}`;
   const relationshipSmall = exactOneNoteAddition
     ? fieldChange.changedIntervals.length
       ? `${fieldChange.changedIntervals.length} pairwise relationship${fieldChange.changedIntervals.length === 1 ? "" : "s"} can be attributed to this newly entered note.`
@@ -2130,7 +2145,7 @@ function LastAttackChange({ events, focusedId, doMidi, scale, showConventions, o
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the selected attack change">
       <article className="is-measured"><span>Sound</span><em>MIDI key + derived reference</em><strong>{label} · {formatHz(context.frequencyHz)}</strong><small>Attack {event.velocity}/127{velocityDelta == null ? "" : ` · ${signed(velocityDelta)} from prior attack`} · {previous ? `field ${beforeNotes.length}→${afterNotes.length} notes` : `current field snapshot ${afterNotes.length} note${afterNotes.length === 1 ? "" : "s"}`}. Hz assumes 12-TET at A4=440; MIDI attack is not acoustic loudness.</small></article>
       <article className="is-measured"><span>Relationships</span><em>{exactOneNoteAddition ? "attributable MIDI" : "measured snapshots"}</em><strong>{relationshipStrong}</strong><small>{relationshipSmall}</small></article>
-      <article className="is-measured"><span>Motion</span><em>measured time</em><strong>{melodicMove == null ? "First visible attack" : `${signed(melodicMove)} keys · ${Math.round(onsetGapMs!)} ms later`}</strong><small>{event.releaseMs == null ? "Still sounding in the captured state." : `Sounding duration ${durationLabel(event, event.releaseMs)}.`} This describes events, not fingering or technique.</small></article>
+      <article className="is-measured"><span>Motion</span><em>measured time</em><strong>{melodicMove == null ? "First visible attack" : `${formatSemitones(melodicMove, 0, true)} · ${Math.round(onsetGapMs!)} ms later`}</strong><small>{event.releaseMs == null ? "Still sounding in the captured state." : `Sounding duration ${durationLabel(event, event.releaseMs)}.`} This describes events, not fingering or technique.</small></article>
       <article className="is-modeled"><span>Context</span><em>selected-frame model</em><strong>{previous ? `pull ${Math.round(beforeTendency.homePull * 100)}→${Math.round(afterTendency.homePull * 100)} · home ${Math.round(beforeTendency.homeEvidence * 100)}→${Math.round(afterTendency.homeEvidence * 100)}` : `current pull ${Math.round(afterTendency.homePull * 100)} · home evidence ${Math.round(afterTendency.homeEvidence * 100)}`}</strong><small>{label} is {context.inScale ? "inside" : "outside"} the selected {scale.name}. These are route-relative teaching proxies, not heard certainty.</small></article>
       <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Not inferred</strong><small>Settledness, energy, familiarity, and liking belong to your report, not to the MIDI or context model.</small><button type="button" onClick={onReflect}>Reflect on this phrase</button></article>
     </div>
@@ -2260,7 +2275,7 @@ function MotifFingerprintFigure({ id, readingTitle, comparison, sourceLabel, tar
     comparison.startShiftSemitones === 0 ? "the starting key" : null,
   ].filter(Boolean).join(" and ");
   const changed = [
-    comparison.startShiftSemitones !== 0 ? `the start moved ${motifSigned(comparison.startShiftSemitones)} keys` : null,
+    comparison.startShiftSemitones !== 0 ? `the start moved ${formatSemitones(comparison.startShiftSemitones, 0, true)}` : null,
     !comparison.rhythmWithinDetectorTolerance ? `gap ${comparison.largestTimingChangeGapIndex == null ? "timing" : comparison.largestTimingChangeGapIndex + 1} changed most` : null,
     comparison.changedIntervalIndices.length ? `move ${comparison.changedIntervalIndices.map((index) => index + 1).join(", ")} changed` : null,
   ].filter(Boolean).join("; ") || "no detector property changed";
@@ -2458,7 +2473,7 @@ function PhraseMotionField({ events, articulation, motifs, mode, motifEchoSessio
     ? leadingMotifs.map((motif) => `${rangeLabel(motif.sourceStartIndex, motif.length)} to ${rangeLabel(motif.targetStartIndex, motif.length)}: ${motifTitle(motif)}`).join(". ")
     : "No three- or four-attack motif transformation detected yet.";
   return <section className="hud-phrase-motion" aria-labelledby="hud-phrase-motion-title">
-    <div className="hud-panel-heading"><span>{mode === "touch" ? "Measured MIDI contact" : "Modeled phrase recurrence"}</span><strong id="hud-phrase-motion-title">{mode === "touch" ? "How did one touch meet the next?" : "What repeated, and what changed?"}</strong><small>{mode === "touch" ? "Finger contact, pedal extension, overlap, and silence can change while the key sequence stays fixed." : "Compare exact key-step shapes and normalized onset gaps; change one property, then return."}</small></div>
+    <div className="hud-panel-heading"><span>{mode === "touch" ? "Measured MIDI contact" : "Modeled phrase recurrence"}</span><strong id="hud-phrase-motion-title">{mode === "touch" ? "How did one touch meet the next?" : "What repeated, and what changed?"}</strong><small>{mode === "touch" ? "Finger contact, pedal extension, overlap, and silence can change while the key sequence stays fixed." : "Compare exact signed-semitone shapes and normalized onset gaps; change one property, then return."}</small></div>
     <div className="hud-motion-learning-grid is-single">
       {mode === "touch" ? <div className="hud-articulation-field">
         <div className="hud-subheading"><span>Captured MIDI timing</span><strong>Duration + articulation lane</strong><small>blue finger contact · gold pedal extension · link to the next attack</small></div>
@@ -2599,7 +2614,7 @@ function PhraseBreathField({ events, doMidi, scale, showConventions, onComparePa
       {omittedSegments ? <li className="is-omitted"><span>…</span><strong>{omittedSegments} earlier islands condensed</strong></li> : null}
       {visibleSegments.map((segment) => {
         const ending = ordered[segment.endIndex];
-        return <li key={segment.eventIds.join("-")}><span>island {breath.segments.indexOf(segment) + 1}</span><strong>{segment.attackCount} attack{segment.attackCount === 1 ? "" : "s"} · onset span {compactTiming(segment.durationMs)} · pitch span {segment.pitchSpan} keys</strong><small>step path {intervalPathCopy(segment)} · ends on {role(ending.note)} in the selected frame</small></li>;
+        return <li key={segment.eventIds.join("-")}><span>island {breath.segments.indexOf(segment) + 1}</span><strong>{segment.attackCount} attack{segment.attackCount === 1 ? "" : "s"} · onset span {compactTiming(segment.durationMs)} · pitch span {formatSemitones(segment.pitchSpan)}</strong><small>step path {intervalPathCopy(segment)} · ends on {role(ending.note)} in the selected frame</small></li>;
       })}
     </ol>
     <div className="hud-breath-next"><div><span>Next experiment · hold the keys fixed</span><strong>Can one changed pause reshape the phrase?</strong><small>Freeze this performance, replay the same absolute keys, and make one onset gap clearly shorter or longer.</small></div><button type="button" onClick={onComparePause}>Compare one pause</button></div>
@@ -2738,7 +2753,6 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
   const sourceReading = sourceProfile?.modelReadings.find((reading) => reading.id === soundModelId) ?? null;
   const attemptReading = attemptProfile?.modelReadings.find((reading) => reading.id === soundModelId) ?? null;
   const auditoryComparable = Boolean(comparison?.matched && sourceReading && attemptReading);
-  const signedSteps = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value)}`;
   const interactionLabel = (profile: LiveEarIntervalProfile | null) => profile?.interactionStatus === "overlap"
     ? `${Math.round(profile.overlapMs ?? 0)} ms overlap`
     : profile?.interactionStatus === "separate" ? "sequential" : "release unknown";
@@ -2749,14 +2763,14 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
       ? `${interactionLabel(sourceProfile)} → ${interactionLabel(attemptProfile)}`
       : "wait for a matched spacing";
   const comparisonSummary = comparison && sourceProfile && attemptProfile
-    ? `${comparison.matched ? "The equal-key spacing matched" : "The equal-key spacing did not match"}. Source ${pairLabel(comparison.sourceNotes)} and echo ${pairLabel(comparison.attemptNotes)}; hand center shift ${signedSteps(comparison.centerShiftSteps)} keys; onset gap ${Math.round(sourceProfile.second.onsetMs - sourceProfile.first.onsetMs)} to ${Math.round(attemptProfile.second.onsetMs - attemptProfile.first.onsetMs)} milliseconds; interaction ${interactionLabel(sourceProfile)} to ${interactionLabel(attemptProfile)}. ${auditoryComparable && sourceReading && attemptReading ? `Modeled roughness ${Math.round(sourceReading.roughness * 100)} to ${Math.round(attemptReading.roughness * 100)} under the ${model.shortLabel} assumed spectrum.` : "No simultaneous spectral comparison is made unless both performed pairs demonstrably overlapped."}`
+    ? `${comparison.matched ? "The semitone spacing matched" : "The semitone spacing did not match"}. Source ${pairLabel(comparison.sourceNotes)} and echo ${pairLabel(comparison.attemptNotes)}; hand center shift ${formatSemitones(comparison.centerShiftSteps, 0, true)}; onset gap ${Math.round(sourceProfile.second.onsetMs - sourceProfile.first.onsetMs)} to ${Math.round(attemptProfile.second.onsetMs - attemptProfile.first.onsetMs)} milliseconds; interaction ${interactionLabel(sourceProfile)} to ${interactionLabel(attemptProfile)}. ${auditoryComparable && sourceReading && attemptReading ? `Modeled roughness ${Math.round(sourceReading.roughness * 100)} to ${Math.round(attemptReading.roughness * 100)} under the ${model.shortLabel} assumed spectrum.` : "No simultaneous spectral comparison is made unless both performed pairs demonstrably overlapped."}`
     : "";
   return (
     <section className="hud-echo-panel" aria-labelledby="hud-echo-title">
       <div className="hud-panel-heading"><span>One relationship · two musical jobs</span><strong id="hud-echo-title">Same spacing, different context</strong><small>Replay one hand span elsewhere. Compare what the relationship preserves with what register, timing, surrounding notes, and your listening can change.</small></div>
       {sourcePair && landmark && sourceDistance != null ? <div className="hud-echo-current">
         <span>{target ? "Frozen source" : "Latest pair"} · {pairLabel(sourcePair)}</span>
-        <strong>{sourceDistance} key step{sourceDistance === 1 ? "" : "s"}</strong>
+        <strong>{sourceDistance} semitone{sourceDistance === 1 ? "" : "s"}</strong>
         <small>{landmark.relationship} · near {landmark.landmarkLabel}{sourceProfile ? ` · ${interactionLabel(sourceProfile)}` : ""}</small>
       </div> : <p className="hud-empty-copy">Play two notes to create an interval worth echoing.</p>}
       <div className="hud-echo-actions">
@@ -2764,7 +2778,7 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
         {target ? <button type="button" onClick={onClear}>End echo</button> : null}
       </div>
       {target ? <div className={`hud-echo-feedback ${comparison?.matched ? "is-match" : ""}`} aria-live="polite">
-        <span>Ghost target · {target.semitones} key step{target.semitones === 1 ? "" : "s"}</span>
+        <span>Ghost target · {target.semitones} semitone{target.semitones === 1 ? "" : "s"}</span>
         <strong>{comparison == null ? afterTarget.length % 2 ? "Starting note captured. Play the second note." : "Play a new starting note, then a second note." : comparison.matched ? "Same spacing—now inspect what changed around it." : `You moved ${comparison.attemptSemitones}. Keep the ${target.semitones}-step span and try another two-note pair.`}</strong>
       </div> : null}
       {comparison && sourceProfile && attemptProfile ? <div className={`hud-echo-comparison ${comparison.matched ? "is-match" : ""}`}>
@@ -2790,9 +2804,9 @@ function IntervalEcho({ events, target, doMidi, scale, soundModelId, showConvent
           })()}
         </svg>
         <div className="hud-echo-reading" role="group" aria-label="Five separate lenses for the source and echoed interval">
-          <p><span>Relationships · MIDI keys + derived ratio</span><strong>{comparison.sourceSemitones} steps · {comparison.equalKeyboardRatio.toFixed(3)}:1</strong><small>{comparison.matched ? `${landmark?.relationship}; 12-TET reference ratio and hand span survived.` : `Attempt was ${comparison.attemptSemitones} steps; the target relationship did not survive.`}</small></p>
+          <p><span>Relationships · MIDI + derived ratio</span><strong>{comparison.sourceSemitones} semitones · {comparison.equalKeyboardRatio.toFixed(3)}:1</strong><small>{comparison.matched ? `${landmark?.relationship}; 12-TET reference ratio and hand span survived.` : `Attempt was ${comparison.attemptSemitones} semitones; the target relationship did not survive.`}</small></p>
           <p><span>Sound · MIDI + derived reference + modeled</span><strong>{comparison.sourceFrequencyGapHz.toFixed(1)} → {comparison.attemptFrequencyGapHz.toFixed(1)} Hz · {spectralReading}</strong><small>Hz gaps use 12-TET at A4=440. Release evidence: {interactionLabel(sourceProfile)} → {interactionLabel(attemptProfile)}. {auditoryComparable && sourceReading && attemptReading ? `Assumed partial overlap ${Math.round(sourceReading.overlap * 100)} → ${Math.round(attemptReading.overlap * 100)} under ${model.shortLabel.toLowerCase()}.` : comparison.matched ? "At least one pair was sequential or release-unknown, so a simultaneous partial-interaction comparison would answer the wrong question." : "Spectral evidence waits until the performed relationship matches."} MIDI supplied no acoustic pitch, upper partials, or loudness.</small></p>
-          <p><span>Motion · measured</span><strong>{Math.round(sourceProfile.second.onsetMs - sourceProfile.first.onsetMs)} → {Math.round(attemptProfile.second.onsetMs - attemptProfile.first.onsetMs)} ms attack gap</strong><small>Hand center {signedSteps(comparison.centerShiftSteps)} keys · direction {comparison.directionPreserved ? "preserved" : "reversed"}{comparison.uniformShiftSteps == null ? " · not one uniform shift" : ` · both notes ${signedSteps(comparison.uniformShiftSteps)} keys`}.</small></p>
+          <p><span>Motion · measured</span><strong>{Math.round(sourceProfile.second.onsetMs - sourceProfile.first.onsetMs)} → {Math.round(attemptProfile.second.onsetMs - attemptProfile.first.onsetMs)} ms attack gap</strong><small>Hand center {formatSemitones(comparison.centerShiftSteps, 0, true)} · direction {comparison.directionPreserved ? "preserved" : "reversed"}{comparison.uniformShiftSteps == null ? " · not one uniform shift" : ` · both notes ${formatSemitones(comparison.uniformShiftSteps, 0, true)}`}.</small></p>
           <p><span>Context · selected Do</span><strong>{pairLabel(comparison.sourceNotes)} · versus · {pairLabel(comparison.attemptNotes)}</strong><small>{fieldSize(sourceEvents)} → {fieldSize(attemptEvents)} notes sounding at the second attack. These labels use the current movable-Do frame, not a detected function.</small></p>
           <p className="hud-echo-experience"><span>Experience · listener only</span><strong>Did the two intervals do the same thing for you?</strong><small>The HUD does not infer similarity, tension, beauty, preference, correctness, or musical quality from the matched span.</small>{comparison.matched ? <button type="button" onClick={() => onReflect([...(sourceEvents ?? []), ...(attemptEvents ?? [])].sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id))}>Reflect on source + echo</button> : null}</p>
         </div>
@@ -2809,6 +2823,118 @@ function ChordQuestionGuide({ value, onChange }: { value: ChordFocusMode; onChan
     <div className="hud-chord-question-options" role="group" aria-label="Choose one chord-learning question">
       {CHORD_FOCUS_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={value === mode.id} onClick={() => onChange(mode.id)}><strong>{mode.label}</strong><span>{mode.question}</span></button>)}
     </div>
+  </section>;
+}
+
+const CHORD_SEMITONE_ATLAS = [
+  {
+    id: "major",
+    label: "Major triad",
+    offsets: [0, 4, 7],
+    adjacentGaps: [4, 3],
+    foldedGaps: [4, 3, 5],
+    down: "middle −1 st → minor",
+    hold: "hold · no move required",
+    up: "bass +1 st → diminished rooted above",
+  },
+  {
+    id: "minor",
+    label: "Minor triad",
+    offsets: [0, 3, 7],
+    adjacentGaps: [3, 4],
+    foldedGaps: [3, 4, 5],
+    down: "top −1 st → diminished",
+    hold: "hold · no move required",
+    up: "middle +1 st → major",
+  },
+  {
+    id: "diminished",
+    label: "Diminished triad",
+    offsets: [0, 3, 6],
+    adjacentGaps: [3, 3],
+    foldedGaps: [3, 3, 6],
+    down: "bass −1 st → major rooted below",
+    hold: "hold · no move required",
+    up: "top +1 st → minor",
+  },
+] as const;
+
+function ChordSemitoneAtlas({ rootMidi, soundModelId, showConventions, activeTemplateId, anchorSource }: {
+  rootMidi: number;
+  soundModelId: PianoSoundModelId;
+  showConventions: boolean;
+  activeTemplateId: string | null;
+  anchorSource: "current exact chord root" | "selected Do";
+}) {
+  const partialProfile = pianoSoundPartialProfile(soundModelId).slice(0, 4);
+  const model = pianoSoundModel(soundModelId);
+  const rootLabel = showConventions ? conventionalPitchName(rootMidi) : "root";
+  const partialScopeCopy = partialProfile.length === 1
+    ? "the model's one available component"
+    : `the first ${partialProfile.length} available partials`;
+  const atlasMinimumHz = frequencyFromMidi(rootMidi);
+  const highestPartialMultiple = Math.max(...partialProfile.map((partial) => partial.frequencyMultiple));
+  const atlasMaximumHz = frequencyFromMidi(rootMidi + 7) * highestPartialMultiple;
+  const xForFrequency = (frequencyHz: number) => 82 + (Math.log2(frequencyHz / atlasMinimumHz) / Math.log2(atlasMaximumHz / atlasMinimumHz)) * 510;
+  return <section className="hud-chord-semitone-atlas" aria-labelledby="hud-chord-semitone-atlas-title">
+    <div className="hud-panel-heading">
+      <span>Three triads · one physical ruler</span>
+      <strong id="hud-chord-semitone-atlas-title">Each triad’s semitone shape and partial frequencies</strong>
+      <small>Root-position examples begin at {rootLabel}, {formatHz(frequencyFromMidi(rootMidi))}, from the {anchorSource}. Fundamentals use 12-TET at A4=440; every card shares one logarithmic Hz axis and shows {partialScopeCopy} from the selected {model.shortLabel.toLowerCase()} teaching spectrum, capped at four. Harmonic mode uses exact harmonics; the piano proxies bend upper partials slightly.</small>
+    </div>
+    <div className="hud-chord-atlas-grid">
+      {CHORD_SEMITONE_ATLAS.map((chord) => {
+        const voices = chord.offsets.map((offset) => {
+          const midi = rootMidi + offset;
+          const fundamentalHz = frequencyFromMidi(midi);
+          return {
+            offset,
+            midi,
+            fundamentalHz,
+            partials: partialProfile.map((partial) => ({
+              ...partial,
+              frequencyHz: fundamentalHz * partial.frequencyMultiple,
+            })),
+          };
+        });
+        const summary = `${chord.label}. Root-position semitone offsets ${chord.offsets.join(", ")}; adjacent gaps ${chord.adjacentGaps.join(", ")}; octave-folded loop ${chord.foldedGaps.join(", ")}. ${voices.map((voice) => `Voice plus ${voice.offset} semitones has fundamental ${formatHz(voice.fundamentalHz)} and assumed partials ${voice.partials.map((partial) => `${partial.partialIndex}, ${formatHz(partial.frequencyHz)}`).join("; ")}.`).join(" ")} One-semitone neighboring routes: down, ${chord.down}; hold, ${chord.hold}; up, ${chord.up}. These are available voice moves, not a predicted resolution.`;
+        return <article key={chord.id} className={activeTemplateId === chord.id ? "is-current" : ""} aria-labelledby={`hud-chord-atlas-${chord.id}-title`}>
+          <header>
+            <div><span>{activeTemplateId === chord.id ? "current exact type" : "reference type"}</span><strong id={`hud-chord-atlas-${chord.id}-title`}>{chord.label}</strong></div>
+            <p><b>{chord.offsets.join("–")} st</b><small>adjacent {chord.adjacentGaps.join(" + ")} · folded loop {chord.foldedGaps.join("–")}</small></p>
+          </header>
+          <svg viewBox="0 0 620 138" role="img" aria-label={summary}>
+            <title>{chord.label} fundamentals and {partialScopeCopy}</title>
+            <desc>{summary}</desc>
+            {voices.map((voice, voiceIndex) => {
+              const y = 27 + voiceIndex * 42;
+              return <g key={voice.offset} className={`hud-chord-atlas-voice is-voice-${voiceIndex + 1}`}>
+                <text x="2" y={y + 4}>{voice.offset === 0 ? "root" : `+${voice.offset} st`}</text>
+                <line x1="82" x2="592" y1={y} y2={y} />
+                {voice.partials.map((partial) => <g key={partial.partialIndex}>
+                  <line className="hud-chord-atlas-partial-stem" x1={xForFrequency(partial.frequencyHz)} x2={xForFrequency(partial.frequencyHz)} y1={y - 8} y2={y + 8} style={{ opacity: Math.max(0.35, partial.amplitude) }} />
+                  <circle className={partial.partialIndex === 1 ? "is-fundamental" : ""} cx={xForFrequency(partial.frequencyHz)} cy={y} r={partial.partialIndex === 1 ? 5 : 3}><title>{`${voice.offset === 0 ? "Root" : `Voice +${voice.offset} semitones`}, partial ${partial.partialIndex}: ${formatHz(partial.frequencyHz)}`}</title></circle>
+                </g>)}
+              </g>;
+            })}
+            <text className="hud-chord-atlas-axis" x="82" y="136">lower frequency</text><text className="hud-chord-atlas-axis is-end" x="592" y="136">higher · logarithmic</text>
+          </svg>
+          <ol className="hud-chord-atlas-frequencies" aria-label={`${chord.label} frequency breakout`}>
+            {voices.map((voice) => <li key={voice.offset}>
+              <span>{voice.offset === 0 ? "root" : `+${voice.offset} st`}{showConventions ? ` · ${conventionalPitchName(voice.midi)}` : ""}</span>
+              <strong>fundamental {formatHz(voice.fundamentalHz)}</strong>
+              <small>{voice.partials.slice(1).map((partial) => `partial ${partial.partialIndex} · ${formatHz(partial.frequencyHz)}`).join(" · ") || "no upper partials in this model"}</small>
+            </li>)}
+          </ol>
+          <div className="hud-chord-atlas-directions" role="group" aria-label={`${chord.label} neighboring one-semitone routes`}>
+            <div><span aria-hidden="true">↓</span><strong>down</strong><small>{chord.down}</small></div>
+            <div><span aria-hidden="true">○</span><strong>nowhere</strong><small>{chord.hold}</small></div>
+            <div><span aria-hidden="true">↑</span><strong>up</strong><small>{chord.up}</small></div>
+          </div>
+        </article>;
+      })}
+    </div>
+    <p className="hud-chord-atlas-limit"><strong>Major and minor share the same unordered pair sizes—3, 4, and 7 semitones—but order their closed octave gaps as 4–3–5 versus 3–4–5. Diminished has pair sizes and a closed loop of 3–3–6.</strong> That is why pair counts alone cannot distinguish major from minor: root, ordering, voicing, and context matter. Read the arrows as available one-voice moves among these three types, not as forces. Chord type alone does not choose up, down, or rest; bass, phrase, repetition, rhythm, style, the next chord, and your hearing turn an available move into experienced resolution. Other one-semitone destinations also exist.</p>
   </section>;
 }
 
@@ -2832,8 +2958,8 @@ function ChordGapFoldFigure({ source, attempt, sourceVoiceCount, attemptVoiceCou
     { id: "attempt", label: "new", y: 130, gaps: attemptGaps, changedPosition: mutation == null ? null : (mutation.attemptChangedPitchClass - mutation.anchorPitchClass + 12) % 12 },
   ] as const;
   const summary = mutation
-    ? `One octave position changed by ${mutation.movedSteps > 0 ? "+" : mutation.movedSteps < 0 ? "minus " : ""}${Math.abs(mutation.movedSteps)} equal-key step${Math.abs(mutation.movedSteps) === 1 ? "" : "s"}. Source gaps ${sourceGaps.join(", ")}; new gaps ${attemptGaps.join(", ")}; ${mutation.changedGapCount} adjacent gaps changed. Both closed loops total twelve.`
-    : `${sameLoop ? "Same" : "Different"} closed octave-gap loop. Source ${sourceGaps.join(", ")} equal-key steps; new voicing ${attemptGaps.join(", ")}. Register and doubling are omitted.`;
+    ? `One octave position changed by ${mutation.movedSteps > 0 ? "+" : mutation.movedSteps < 0 ? "minus " : ""}${Math.abs(mutation.movedSteps)} semitone${Math.abs(mutation.movedSteps) === 1 ? "" : "s"}. Source gaps ${sourceGaps.join(", ")}; new gaps ${attemptGaps.join(", ")}; ${mutation.changedGapCount} adjacent gaps changed. Both closed loops total twelve semitones.`
+    : `${sameLoop ? "Same" : "Different"} closed octave-gap loop. Source ${sourceGaps.join(", ")} semitones; new voicing ${attemptGaps.join(", ")}. Register and doubling are omitted.`;
   return <>
     <svg className="hud-chord-fold-figure" viewBox="0 0 720 184" role="img" aria-label={summary}>
       <title>{mutation ? "One changed chord position compared as two aligned octave-gap loops" : "Source chord and new voicing folded into normalized twelve-step octave loops"}</title>
@@ -2854,8 +2980,8 @@ function ChordGapFoldFigure({ source, attempt, sourceVoiceCount, attemptVoiceCou
           {rowPositions.slice(0, -1).map((position, index) => {
             const changed = position === row.changedPosition;
             return row.id === "source"
-            ? <circle key={`${row.id}-node-${index}`} cx={xFor(position)} cy={row.y} r="6" className={`hud-chord-fold-node ${changed ? "is-changed" : ""}`}><title>{`Source folded position ${index + 1}${changed ? ", changed in the replay" : ""}; next gap ${row.gaps[index]} equal keys`}</title></circle>
-            : <rect key={`${row.id}-node-${index}`} x={xFor(position) - 6} y={row.y - 6} width="12" height="12" className={`hud-chord-fold-node ${changed ? "is-changed" : ""}`}><title>{`New-voicing folded position ${index + 1}${changed ? ", moved from the source" : ""}; next gap ${row.gaps[index]} equal keys`}</title></rect>;
+            ? <circle key={`${row.id}-node-${index}`} cx={xFor(position)} cy={row.y} r="6" className={`hud-chord-fold-node ${changed ? "is-changed" : ""}`}><title>{`Source folded position ${index + 1}${changed ? ", changed in the replay" : ""}; next gap ${formatSemitones(row.gaps[index])}`}</title></circle>
+            : <rect key={`${row.id}-node-${index}`} x={xFor(position) - 6} y={row.y - 6} width="12" height="12" className={`hud-chord-fold-node ${changed ? "is-changed" : ""}`}><title>{`New-voicing folded position ${index + 1}${changed ? ", moved from the source" : ""}; next gap ${formatSemitones(row.gaps[index])}`}</title></rect>;
           })}
           <circle cx={xFor(12)} cy={row.y} r="4" className="hud-chord-fold-close"><title>Octave closure returns to the first position</title></circle>
         </g>;
@@ -2920,14 +3046,14 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
   const relationshipStrong = comparison.relationshipPreserved
     ? comparison.pitchClassIdentityPreserved
       ? comparison.bassRoleChanged ? "same pitch-class set · new bass role" : "same pitch-class set"
-      : `same internal relationship · shifted ${signed(comparison.transpositionSteps!)} keys`
+      : `same internal relationship · shifted ${formatSemitones(comparison.transpositionSteps!, 0, true)}`
     : "relationship changed · source remains held";
   const movementStrong = comparison.uniformPhysicalShiftSteps != null
-    ? `every voice shifted ${signed(comparison.uniformPhysicalShiftSteps)} keys`
-    : `${voice.motionClasses.join(" + ") || "nearest voices moved"} · largest leap ${voice.largestLeap}`;
+    ? `every voice shifted ${formatSemitones(comparison.uniformPhysicalShiftSteps, 0, true)}`
+    : `${voice.motionClasses.join(" + ") || "nearest voices moved"} · largest leap ${formatSemitones(voice.largestLeap)}`;
   const modelDelta = Math.round((attemptModel.roughness - sourceModel.roughness) * 100);
   const changedMoveLabel = gapMutation
-    ? `${pitchClassRoleLabel(gapMutation.sourceChangedPitchClass, doMidi, scale, showConventions)} → ${pitchClassRoleLabel(gapMutation.attemptChangedPitchClass, doMidi, scale, showConventions)} (${signed(gapMutation.movedSteps)} equal-key step${Math.abs(gapMutation.movedSteps) === 1 ? "" : "s"} around the octave)`
+    ? `${pitchClassRoleLabel(gapMutation.sourceChangedPitchClass, doMidi, scale, showConventions)} → ${pitchClassRoleLabel(gapMutation.attemptChangedPitchClass, doMidi, scale, showConventions)} (${signed(gapMutation.movedSteps)} semitone${Math.abs(gapMutation.movedSteps) === 1 ? "" : "s"} around the octave)`
     : undefined;
   const gapAnchorLabel = gapMutation ? pitchClassRoleLabel(gapMutation.anchorPitchClass, doMidi, scale, showConventions) : undefined;
   const reflectionEvents = [...sourceEvents, ...attempt.gesture.attacks]
@@ -2935,20 +3061,20 @@ function ChordVoicingEcho({ session, sourceEvents, sourceCandidate, attempt, doM
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
   return <section className="hud-chord-echo is-comparing" aria-labelledby="hud-chord-echo-title">
     <div className="hud-chord-echo-topline"><div className="hud-panel-heading"><span>{comparison.relationshipPreserved ? "Relationship matched · five lenses" : "Latest independent attempt · five lenses"}</span><strong id="hud-chord-echo-title">What survived the new voicing?</strong><small>{sourceNotes.map(label).join(" · ")} → {attemptNotes.map(label).join(" · ")} · source relationship remains frozen for another attempt</small></div><button type="button" onClick={onEnd}>End echo</button></div>
-    {canRevealGapStructure && sourceGapFingerprint && attemptGapFingerprint ? <div className="hud-chord-fold-test" aria-labelledby="hud-chord-fold-title"><div><span>{gapMutation ? "Next question · one changed position" : "Next question · interval identity"}</span><strong id="hud-chord-fold-title">{gapMutation ? "How did changing one position reshape the chord?" : "What remains if register, doubling, and starting pitch disappear?"}</strong><small>{gapMutation ? octaveFoldRevealed ? `Both fields begin at retained ${gapAnchorLabel} and close at 12. Delta labels show exactly which adjacent gaps gained or lost space.` : `Exactly one unique octave position changed while ${gapMutation.retainedPitchClasses.length} stayed. Align the retained ${gapAnchorLabel} and compare how the closed gap loop redistributed.` : octaveFoldRevealed ? "Both performed fields are folded into one twelve-step octave. Their unique positions are connected by adjacent equal-key gaps; the comparison start is normalized, not heard as root." : "Fold both performed fields into one octave and compare only the gaps between unique pitch positions. No chord name is needed."} This display-only view changes no MIDI, frequency, voicing, model, or listener report.</small></div><button type="button" aria-pressed={octaveFoldRevealed} onClick={() => setOctaveFoldSelection({ attemptId: attempt.gesture.id, revealed: !octaveFoldRevealed })}>{gapMutation ? "Compare changed gaps" : "Fold into one octave"}</button></div> : null}
-    {octaveFoldRevealed && sourceGapFingerprint && attemptGapFingerprint ? <ChordGapFoldFigure source={sourceGapFingerprint} attempt={attemptGapFingerprint} sourceVoiceCount={sourceNotes.length} attemptVoiceCount={attemptNotes.length} mutation={gapMutation} changedMoveLabel={changedMoveLabel} anchorLabel={gapAnchorLabel} /> : <svg className="hud-chord-echo-figure" viewBox="0 0 720 184" role="img" aria-label={`${relationshipStrong}. Source span ${comparison.sourceSpan} keys; new span ${comparison.attemptSpan}; center shift ${signed(comparison.centerShiftSteps)} keys; ${comparison.bassRoleChanged ? "bass role changed" : "bass role retained or unavailable"}.`}>
+    {canRevealGapStructure && sourceGapFingerprint && attemptGapFingerprint ? <div className="hud-chord-fold-test" aria-labelledby="hud-chord-fold-title"><div><span>{gapMutation ? "Next question · one changed position" : "Next question · interval identity"}</span><strong id="hud-chord-fold-title">{gapMutation ? "How did changing one position reshape the chord?" : "What remains if register, doubling, and starting pitch disappear?"}</strong><small>{gapMutation ? octaveFoldRevealed ? `Both fields begin at retained ${gapAnchorLabel} and close at 12. Delta labels show exactly which adjacent gaps gained or lost space.` : `Exactly one unique octave position changed while ${gapMutation.retainedPitchClasses.length} stayed. Align the retained ${gapAnchorLabel} and compare how the closed gap loop redistributed.` : octaveFoldRevealed ? "Both performed fields are folded into one twelve-semitone octave. Their unique positions are connected by adjacent semitone gaps; the comparison start is normalized, not heard as root." : "Fold both performed fields into one octave and compare only the gaps between unique pitch positions. No chord name is needed."} This display-only view changes no MIDI, frequency, voicing, model, or listener report.</small></div><button type="button" aria-pressed={octaveFoldRevealed} onClick={() => setOctaveFoldSelection({ attemptId: attempt.gesture.id, revealed: !octaveFoldRevealed })}>{gapMutation ? "Compare changed gaps" : "Fold into one octave"}</button></div> : null}
+    {octaveFoldRevealed && sourceGapFingerprint && attemptGapFingerprint ? <ChordGapFoldFigure source={sourceGapFingerprint} attempt={attemptGapFingerprint} sourceVoiceCount={sourceNotes.length} attemptVoiceCount={attemptNotes.length} mutation={gapMutation} changedMoveLabel={changedMoveLabel} anchorLabel={gapAnchorLabel} /> : <svg className="hud-chord-echo-figure" viewBox="0 0 720 184" role="img" aria-label={`${relationshipStrong}. Source span ${formatSemitones(comparison.sourceSpan)}; new span ${formatSemitones(comparison.attemptSpan)}; center shift ${formatSemitones(comparison.centerShiftSteps, 0, true)}; ${comparison.bassRoleChanged ? "bass role changed" : "bass role retained or unavailable"}.`}>
       <title>Source chord and latest performed voicing on one keyboard-position axis</title>
       <text x="20" y="50" className="hud-echo-row-label">source</text><text x="20" y="132" className="hud-echo-row-label">new</text>
       <line x1="80" x2="640" y1="158" y2="158" className="hud-grid-line" />
-      {voice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="54" y2="124" className={`hud-chord-echo-strand is-${strand.motion}`}><title>{`${label(strand.from!)} to ${label(strand.to!)}: ${signed(strand.semitones)} keys under one nearest-key interpretation`}</title></line>)}
+      {voice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="54" y2="124" className={`hud-chord-echo-strand is-${strand.motion}`}><title>{`${label(strand.from!)} to ${label(strand.to!)}: ${formatSemitones(strand.semitones, 0, true)} under one nearest-position interpretation`}</title></line>)}
       {sourceNotes.map((note) => <g key={`source-${note}`}><circle cx={xFor(note)} cy="50" r="7" className="hud-chord-echo-node is-source"><title>{`Source ${label(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle><text x={xFor(note)} y="31" className="hud-point-label">{label(note)}</text></g>)}
       {attemptNotes.map((note) => <g key={`attempt-${note}`}><rect x={xFor(note) - 6} y="124" width="12" height="12" className="hud-chord-echo-node is-attempt"><title>{`New voicing ${label(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect><text x={xFor(note)} y="151" className="hud-point-label">{label(note)}</text></g>)}
       <text x="80" y="177" className="hud-echo-axis-label">lower keyboard position</text><text x="640" y="177" className="hud-echo-axis-label is-end">higher</text>
     </svg>}
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the source chord and new voicing">
-      <article className="is-measured"><span>Sound</span><em>MIDI keys + derived reference + modeled spectrum</em><strong>{sourceNotes.length}→{attemptNotes.length} voices · span {comparison.sourceSpan}→{comparison.attemptSpan} keys</strong><small>Modeled roughness {signed(modelDelta)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. Key positions and register are measured; A4=440 reference frequencies, upper partials, and the acoustic result are derived or assumed.</small></article>
+      <article className="is-measured"><span>Sound</span><em>MIDI keys + derived reference + modeled spectrum</em><strong>{sourceNotes.length}→{attemptNotes.length} voices · span {comparison.sourceSpan}→{comparison.attemptSpan} semitones</strong><small>Modeled roughness {signed(modelDelta)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. Key positions and register are measured; A4=440 reference frequencies, upper partials, and the acoustic result are derived or assumed.</small></article>
       <article className="is-measured"><span>Relationships</span><em>interpreted pitch classes</em><strong>{relationshipStrong}</strong><small>Bass-relative shapes {comparison.sourceBassRelativeShape.join(" · ")} → {comparison.attemptBassRelativeShape.join(" · ")}. {gapMutation ? `One unique octave position changed while ${gapMutation.retainedPitchClasses.length} stayed; reveal the gap comparison to see how that difference redistributed the closed loop.` : "Matching means one set relationship survived exact identity or uniform transposition—not that the experiences were identical."}</small></article>
-      <article className="is-measured"><span>Motion</span><em>nearest-key interpretation</em><strong>{movementStrong}</strong><small>Hand center {signed(comparison.centerShiftSteps)} keys · bass {voice.bassMotion === 0 ? "held" : `${voice.bassMotion > 0 ? "up" : "down"} ${Math.abs(voice.bassMotion)}`} · total nearest-key travel {voice.totalMotion}. This is not intended fingering.</small></article>
+      <article className="is-measured"><span>Motion</span><em>nearest-position interpretation</em><strong>{movementStrong}</strong><small>Hand center {formatSemitones(comparison.centerShiftSteps, 0, true)} · bass {voice.bassMotion === 0 ? "held" : `${voice.bassMotion > 0 ? "up" : "down"} ${formatSemitones(Math.abs(voice.bassMotion))}`} · total nearest-position travel {formatSemitones(voice.totalMotion)}. This is not intended fingering.</small></article>
       <article className="is-modeled"><span>Context</span><em>selected Do + route</em><strong>toward Do {Math.round(sourceTendency.homePull * 100)}→{Math.round(attemptTendency.homePull * 100)} · home {Math.round(sourceTendency.homeEvidence * 100)}→{Math.round(attemptTendency.homeEvidence * 100)}</strong><small>{comparison.pitchClassIdentityPreserved ? "The selected-Do positions stayed fixed even though voicing could change." : comparison.relationshipPreserved ? "Transposition preserved the internal relationship while changing its selected-Do positions." : "The internal relationship and selected-Do positions both changed."} Context is modeled, not heard certainty.</small></article>
       <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did it still feel like the same chord relationship?</strong><small>The structural match does not answer similarity, function, emotion, preference, correctness, or goodness.</small>{comparison.relationshipPreserved ? <button type="button" disabled={reflectionEvents.length < 4} onClick={() => onReflect(reflectionEvents)}>Reflect on source + voicing</button> : null}</article>
     </div>
@@ -3042,7 +3168,7 @@ function ControlledSonorityField({
     <div className="hud-sonority-topline"><div className="hud-panel-heading"><span>One baseline · one controlled change</span><strong id="hud-sonority-title">What did this note do?</strong><small>{recipe ? `${recipe.label} · ` : "Your field · "}{baselineNotes.map(noteLabel).join(" · ")} · modeled with {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}</small></div><div className="hud-sonority-actions">{!replaying && activeNotes.length >= 2 && !sameMidiNotes(activeNotes, baselineNotes) ? <button type="button" onClick={onReplaceBaseline}>Adopt current baseline</button> : null}{recipe ? <button type="button" onClick={onRestart}>Restart field</button> : null}<button type="button" onClick={onEnd}>End</button></div></div>
     <div className={`hud-sonority-question ${!replaying && change.kind === "multiple" ? "has-error" : controlled ? "has-change" : ""}`} role="status" aria-live="polite"><span>{replaying ? "Rebuilding baseline" : !hasCurrentField ? "Waiting for field" : change.kind === "same" ? "Controlled baseline" : change.kind === "multiple" ? "Causal boundary" : "One-note consequence"}</span><strong>{prompt}</strong><small>{explanation}</small></div>
     {controlled && currentModel && currentTendency && currentCoverage ? <div className="hud-sonority-chain" aria-label={`Causal comparison for ${changedLabel}, one ${change.kind === "one-added" ? "added" : "removed"} note`}>
-      <div><span>1 · physical relationships</span><strong>{change.kind === "one-added" ? "gained" : "lost"} {intervalCopy || "no pairwise interval"}</strong><small>Outer span {signed(change.spanDelta)} equal key step{Math.abs(change.spanDelta) === 1 ? "" : "s"} · key positions and register are measured; A4=440 frequencies are derived.</small></div>
+      <div><span>1 · physical relationships</span><strong>{change.kind === "one-added" ? "gained" : "lost"} {intervalCopy || "no pairwise interval"}</strong><small>Outer span {signed(change.spanDelta)} semitone{Math.abs(change.spanDelta) === 1 ? "" : "s"} · MIDI positions and register are measured; A4=440 frequencies are derived.</small></div>
       <i aria-hidden="true">→</i>
       <div><span>2 · assumed auditory result</span><strong>roughness {signed(modelDelta("roughness"))} · fusion {signed(modelDelta("fusion"))}</strong><small>harmonic fit {signed(modelDelta("harmonicity"))} · brightness {signed(modelDelta("brightness"))} · teaching spectrum, not your DAW audio.</small></div>
       <i aria-hidden="true">→</i>
@@ -3131,9 +3257,9 @@ function ChordChangeLenses({ measures, selectedId, doMidi, scale, soundModelId, 
   return <section className="hud-chord-change-lenses" aria-labelledby="hud-chord-change-title">
     <div className="hud-panel-heading"><span>Selected before + after · five lenses</span><strong id="hud-chord-change-title">What changed between these chords?</strong><small>{previousNotes.map(noteLabel).join(" · ")} → {currentNotes.map(noteLabel).join(" · ")} · the grouped MIDI interpretation can be corrected above</small></div>
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the selected chord change">
-      <article className="is-measured"><span>Sound</span><em>MIDI keys + derived reference + modeled spectrum</em><strong>{previous.audibleNotes.length}→{current.audibleNotes.length} sounding · span {previousSpan}→{currentSpan} keys</strong><small>Modeled roughness {signed(delta(current.crunch, previous.crunch))} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. MIDI supplied key numbers and timing; A4=440 reference frequencies and the assumed spectrum are app-derived, not acoustic measurements.</small></article>
+      <article className="is-measured"><span>Sound</span><em>MIDI keys + derived reference + modeled spectrum</em><strong>{previous.audibleNotes.length}→{current.audibleNotes.length} sounding · span {previousSpan}→{currentSpan} semitones</strong><small>Modeled roughness {signed(delta(current.crunch, previous.crunch))} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. MIDI supplied key numbers and timing; A4=440 reference frequencies and the assumed spectrum are app-derived, not acoustic measurements.</small></article>
       <article className="is-measured"><span>Relationships</span><em>interpreted MIDI membership</em><strong>{entered.length ? `entered ${entered.join(" · ")}` : "entered none"} · {left.length ? `left ${left.join(" · ")}` : "left none"}</strong><small>{stayed.length ? `${stayed.join(" · ")} stayed in both readings.` : "No pitch-class position stayed."} Membership is not correctness or harmonic function.</small></article>
-      <article className="is-measured"><span>Motion</span><em>nearest-key interpretation</em><strong>{voice.motionClasses.join(" + ") || "held / repeated"} · largest leap {voice.largestLeap}</strong><small>{bassMotion} · total nearest-key travel {voice.totalMotion}. These strands describe one parsimonious mapping, not intended voices or fingering.</small></article>
+      <article className="is-measured"><span>Motion</span><em>nearest-position interpretation</em><strong>{voice.motionClasses.join(" + ") || "held / repeated"} · largest leap {formatSemitones(voice.largestLeap)}</strong><small>{bassMotion} · total nearest-position travel {formatSemitones(voice.totalMotion)}. All motion numbers are semitones; these strands describe one parsimonious mapping, not intended voices or fingering.</small></article>
       <article className="is-modeled"><span>Context</span><em>selected Do + teaching model</em><strong>toward Do {Math.round(previous.pull * 100)}→{Math.round(current.pull * 100)} · repose {Math.round(previous.arrival * 100)}→{Math.round(current.arrival * 100)}</strong><small>{current.rootTravelSteps == null ? "Root travel is unavailable under the current chord readings." : `${current.rootTravelSteps} fifths step${current.rootTravelSteps === 1 ? "" : "s"} between exact interpreted roots.`} These are contextual coordinates, not felt resolution.</small></article>
       <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did this change feel like opening, arrival, motion, or something else?</strong><small>{readyToReflect ? "The HUD will freeze these exact two grouped gestures and ask for your report without filling it from the other lenses." : "At least three attacks across the two gestures are needed for a bounded reflection."}</small><button type="button" disabled={!readyToReflect} onClick={() => onReflect(specimen)}>Reflect on chord change</button></article>
     </div>
@@ -3204,7 +3330,7 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
   const relationshipStrong = comparison.relationshipPreserved
     ? comparison.pitchClassIdentityPreserved
       ? "same two-field move · pitch classes unchanged"
-      : `same two-field move · both fields shifted ${signed(comparison.transpositionSteps!)} keys`
+      : `same two-field move · both fields shifted ${formatSemitones(comparison.transpositionSteps!, 0, true)}`
     : comparison.beforeRelationshipPreserved && comparison.afterRelationshipPreserved
       ? `both chord types returned · shifts disagree (${signed(comparison.beforeTranspositionSteps!)} then ${signed(comparison.afterTranspositionSteps!)})`
       : "one or both endpoint relationships changed";
@@ -3255,12 +3381,12 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
   };
   return <section className="hud-chord-motion-echo is-comparing" aria-labelledby="hud-chord-motion-title">
     <div className="hud-chord-echo-topline"><div className="hud-panel-heading"><span>{comparison.relationshipPreserved ? "Whole move matched · five lenses" : "Whole move changed · five lenses"}</span><strong id="hud-chord-motion-title">What survived across both chords?</strong><small>source {sourceMoveLabel} · replay {attemptMoveLabel}</small></div><div className="hud-chord-motion-actions"><button type="button" onClick={onRetry}>Try another move</button><button type="button" onClick={onEnd}>End move echo</button></div></div>
-    <svg className="hud-chord-motion-figure" viewBox="0 0 720 228" role="img" aria-label={`${relationshipStrong}. Source nearest-key travel ${sourceVoice.totalMotion}; replay travel ${attemptVoice.totalMotion}. Source bass ${bassCopy(sourceVoice)}; replay bass ${bassCopy(attemptVoice)}.`}>
+    <svg className="hud-chord-motion-figure" viewBox="0 0 720 228" role="img" aria-label={`${relationshipStrong}. Source nearest-position travel ${sourceVoice.totalMotion} semitones; replay travel ${attemptVoice.totalMotion} semitones. Source bass ${bassCopy(sourceVoice)}; replay bass ${bassCopy(attemptVoice)}.`}>
       <title>Source and replayed two-chord moves on one physical keyboard-position axis</title>
       <text x="18" y="42" className="hud-echo-row-label">source before</text><text x="18" y="87" className="hud-echo-row-label">source after</text>
       <text x="18" y="142" className="hud-echo-row-label">replay before</text><text x="18" y="187" className="hud-echo-row-label">replay after</text>
-      {sourceVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`source-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="38" y2="82" className={`hud-chord-motion-strand is-source is-${strand.motion}`}><title>{`Source voice interpretation: ${noteLabel(strand.from!)} to ${noteLabel(strand.to!)}, ${signed(strand.semitones)} keys`}</title></line>)}
-      {attemptVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`attempt-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="138" y2="182" className={`hud-chord-motion-strand is-attempt is-${strand.motion}`}><title>{`Replay voice interpretation: ${replayNoteLabel(strand.from!)} to ${replayNoteLabel(strand.to!)}, ${signed(strand.semitones)} keys`}</title></line>)}
+      {sourceVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`source-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="38" y2="82" className={`hud-chord-motion-strand is-source is-${strand.motion}`}><title>{`Source voice interpretation: ${noteLabel(strand.from!)} to ${noteLabel(strand.to!)}, ${formatSemitones(strand.semitones, 0, true)}`}</title></line>)}
+      {attemptVoice.strands.filter((strand) => strand.from != null && strand.to != null).map((strand, index) => <line key={`attempt-${strand.from}-${strand.to}-${index}`} x1={xFor(strand.from!)} x2={xFor(strand.to!)} y1="138" y2="182" className={`hud-chord-motion-strand is-attempt is-${strand.motion}`}><title>{`Replay voice interpretation: ${replayNoteLabel(strand.from!)} to ${replayNoteLabel(strand.to!)}, ${formatSemitones(strand.semitones, 0, true)}`}</title></line>)}
       {sourceBeforeNotes.map((note) => <circle key={`sb-${note}`} cx={xFor(note)} cy="38" r="6" className="hud-chord-motion-node is-source is-before"><title>{`Source before: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle>)}
       {sourceAfterNotes.map((note) => <circle key={`sa-${note}`} cx={xFor(note)} cy="82" r="6" className="hud-chord-motion-node is-source is-after"><title>{`Source after: ${noteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></circle>)}
       {attemptBeforeNotes.map((note) => <rect key={`ab-${note}`} x={xFor(note) - 6} y="132" width="12" height="12" className="hud-chord-motion-node is-attempt is-before"><title>{`Replay before: ${replayNoteLabel(note)}, ${frequencyFromMidi(note).toFixed(1)} hertz`}</title></rect>)}
@@ -3273,11 +3399,11 @@ function ChordMotionEcho({ session, sourceBeforeEvents, sourceAfterEvents, attem
       {renderGestureRow("replay", attempt.beforeGesture.attacks, attempt.afterGesture.attacks, 96)}
       <text x="116" y="133" className="hud-echo-axis-label">first attack · circles</text><text x="632" y="133" className="hud-echo-axis-label is-end">later · squares begin chord 2</text>
     </svg><div className="hud-chord-gesture-readout"><span><b>Source</b> · {timingProfileLabel(gestureTiming.source)}</span><span><b>Replay</b> · {timingProfileLabel(gestureTiming.attempt)}</span><strong>{gestureDeltaLabel}</strong><small>Lines are recorded MIDI sounding evidence; dashed lines mark pedal-ended notes. Missing releases remain unknown. Velocity is an attack control, not measured acoustic loudness. This view does not infer meter, groove, intention, feeling, preference, or quality.</small></div></div> : null}</div> : null}
-    {canMoveContextFrame ? <div className="hud-chord-frame-test" aria-labelledby="hud-chord-frame-title"><div><span>Second question · movable Do</span><strong id="hud-chord-frame-title">Does the tonal job travel when the reference frame travels?</strong><small>{contextFollowsReplay ? `Replay Do moved ${signed(comparison.transpositionSteps!)} keys with the structural replay. MIDI, frequencies, voicings, and the relationship match did not change.` : `Replay Do remains fixed at the source center. The same structural move therefore occupies new relative roles.`} This is a display-only context counterfactual and never enters or sounds a note.</small></div><div className="hud-chord-frame-options" role="group" aria-label="Choose the replay's movable Do reference frame"><button type="button" aria-pressed={!contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: false })}>Keep Do fixed</button><button type="button" aria-pressed={contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: true })}>Move Do {signed(comparison.transpositionSteps!)}</button></div></div> : null}
+    {canMoveContextFrame ? <div className="hud-chord-frame-test" aria-labelledby="hud-chord-frame-title"><div><span>Second question · movable Do</span><strong id="hud-chord-frame-title">Does the tonal job travel when the reference frame travels?</strong><small>{contextFollowsReplay ? `Replay Do moved ${formatSemitones(comparison.transpositionSteps!, 0, true)} with the structural replay. MIDI, frequencies, voicings, and the relationship match did not change.` : `Replay Do remains fixed at the source center. The same structural move therefore occupies new relative roles.`} This is a display-only context counterfactual and never enters or sounds a note.</small></div><div className="hud-chord-frame-options" role="group" aria-label="Choose the replay's movable Do reference frame"><button type="button" aria-pressed={!contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: false })}>Keep Do fixed</button><button type="button" aria-pressed={contextFollowsReplay} onClick={() => setContextFrameSelection({ attemptAnchorEventId: session.attemptAnchorEventId, followsReplay: true })}>Move Do {formatSemitones(comparison.transpositionSteps!, 0, true)}</button></div></div> : null}
     <div className="hud-last-lenses" role="group" aria-label="Five separate lenses for the source and replayed chord move">
-      <article className="is-measured"><span>Sound</span><em>MIDI keys + derived reference + modeled spectrum</em><strong>span {span(sourceBeforeNotes)}→{span(sourceAfterNotes)} vs {span(attemptBeforeNotes)}→{span(attemptAfterNotes)} keys</strong><small>Modeled roughness source {modelScore(sourceBeforeModel.roughness)}→{modelScore(sourceAfterModel.roughness)} · replay {modelScore(attemptBeforeModel.roughness)}→{modelScore(attemptAfterModel.roughness)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. Reference frequencies assume A4=440; upper partials and the acoustic result are assumed.</small></article>
+      <article className="is-measured"><span>Sound</span><em>MIDI keys + derived reference + modeled spectrum</em><strong>span {span(sourceBeforeNotes)}→{span(sourceAfterNotes)} vs {span(attemptBeforeNotes)}→{span(attemptAfterNotes)} semitones</strong><small>Modeled roughness source {modelScore(sourceBeforeModel.roughness)}→{modelScore(sourceAfterModel.roughness)} · replay {modelScore(attemptBeforeModel.roughness)}→{modelScore(attemptAfterModel.roughness)} under {pianoSoundModel(soundModelId).shortLabel.toLowerCase()}. Reference frequencies assume A4=440; upper partials and the acoustic result are assumed.</small></article>
       <article className="is-measured"><span>Relationships</span><em>interpreted pitch-class transformation</em><strong>{relationshipStrong}</strong><small>Source stayed / entered / left: {comparison.sourceCommonPitchClassCount} / {comparison.sourceEnteredPitchClassCount} / {comparison.sourceLeftPitchClassCount}. Replay: {comparison.attemptCommonPitchClassCount} / {comparison.attemptEnteredPitchClassCount} / {comparison.attemptLeftPitchClassCount}. Matching requires one shared shift across both fields.</small></article>
-      <article className="is-measured"><span>Motion</span><em>nearest-key interpretations</em><strong>travel {sourceVoice.totalMotion} vs {attemptVoice.totalMotion} · largest leap {sourceVoice.largestLeap} vs {attemptVoice.largestLeap}</strong><small>Bass source {bassCopy(sourceVoice)} · replay {bassCopy(attemptVoice)}. Revoicing may change every physical strand while the two-field relationship survives; these are not intended voices or fingering.</small></article>
+      <article className="is-measured"><span>Motion</span><em>nearest-position interpretations</em><strong>travel {sourceVoice.totalMotion} vs {attemptVoice.totalMotion} semitones · largest leap {sourceVoice.largestLeap} vs {attemptVoice.largestLeap}</strong><small>Bass source {bassCopy(sourceVoice)} · replay {bassCopy(attemptVoice)}. Every motion number is a semitone count. Revoicing may change every physical strand while the two-field relationship survives; these are not intended voices or fingering.</small></article>
       <article className="is-modeled"><span>Context</span><em>{contextFollowsReplay ? "replay Do moved + same route" : "same selected Do + route"}</em><strong>toward Do source {modelScore(sourceBeforeTendency.homePull)}→{modelScore(sourceAfterTendency.homePull)} · replay {modelScore(attemptBeforeTendency.homePull)}→{modelScore(attemptAfterTendency.homePull)}</strong><small>Home evidence source {modelScore(sourceBeforeTendency.homeEvidence)}→{modelScore(sourceAfterTendency.homeEvidence)} · replay {modelScore(attemptBeforeTendency.homeEvidence)}→{modelScore(attemptAfterTendency.homeEvidence)}. {contextFollowsReplay ? "Moving the reference frame restored the same relative-role path under this model; it did not prove the same heard function." : "A transposed relationship can occupy a different tonal context while Do stays fixed."}</small></article>
       <article className="is-unclaimed"><span>Experience</span><em>listener only</em><strong>Did the replay preserve the same sense of direction?</strong><small>A structural match does not prove the same function, tension, resolution, emotion, preference, correctness, or goodness. The display-only Do counterfactual never supplies your report.</small>{comparison.relationshipPreserved ? <button type="button" disabled={reflectionEvents.length < 8} onClick={() => onReflect(reflectionEvents)}>Reflect on source + replayed move</button> : null}</article>
     </div>
@@ -3307,7 +3433,7 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
   const label = (note: number) => showConventions ? conventionalPitchName(note) : relativeSyllable(note, doMidi, scale);
   return <section className="hud-voice-coach" aria-labelledby="hud-voice-title">
     <div className="hud-panel-heading"><span>Interpreted chord-to-chord motion</span><strong id="hud-voice-title">Voice-leading coach</strong><small>Horizontal means held · slope shows direction and size · broken ends show voices entering or leaving the reading, not necessarily key attacks or releases.</small></div>
-    <svg viewBox="0 0 720 176" role="img" aria-label={`${profile.strands.length} voice-leading strands; largest leap ${profile.largestLeap} key steps; ${profile.motionClasses.join(", ") || "no classified motion"}`}>
+    <svg viewBox="0 0 720 176" role="img" aria-label={`${profile.strands.length} voice-leading strands; largest leap ${profile.largestLeap} semitones; ${profile.motionClasses.join(", ") || "no classified motion"}`}>
       <title>Nearest voice paths between the selected chord and the chord before it</title>
       <text x="82" y="18" className="hud-axis-label">previous</text><text x="638" y="18" className="hud-axis-label">selected</text>
       {profile.strands.map((strand, strandIndex) => {
@@ -3325,7 +3451,7 @@ function VoiceLeadingCoach({ measures, selectedId, doMidi, scale, showConvention
     </svg>
     <div className="hud-voice-summary">
       <span><small>motion kind</small><strong>{profile.motionClasses.join(" + ") || "held / repeated"}</strong></span>
-      <span><small>largest leap</small><strong>{profile.largestLeap} key step{profile.largestLeap === 1 ? "" : "s"}</strong></span>
+      <span><small>largest leap</small><strong>{profile.largestLeap} semitone{profile.largestLeap === 1 ? "" : "s"}</strong></span>
       <span><small>bass motion</small><strong>{profile.bassMotion === 0 ? "held" : `${profile.bassMotion > 0 ? "up" : "down"} ${Math.abs(profile.bassMotion)}`}</strong></span>
     </div>
   </section>;
@@ -3347,9 +3473,9 @@ function LandmarkRouteFingerprintView({ fingerprint, showConventions, selectedTr
     ? (left + right) / 2
     : left + index / (fingerprint.fields.length - 1) * (right - left);
   const yFor = (offset: number) => bottom - offset / 11 * (bottom - top);
-  const summary = `${fingerprint.fields.length}-field octave-folded relationship fingerprint. ${fingerprint.fields.map((field) => `Field ${field.stepIndex + 1}, ${field.role}: root position ${field.rootOffset}; field positions ${field.pitchOffsets.join(", ")}${field.changedFromOffset == null ? "" : `; changed position ${field.changedFromOffset} to ${field.changedToOffset}`}.`).join(" ")} ${fingerprint.transitions.map((transition) => `Transition ${transition.fromStepIndex + 1} to ${transition.toStepIndex + 1}: ${transition.sharedOffsets.length} carried position${transition.sharedOffsets.length === 1 ? "" : "s"}, ${transition.totalVoiceMotion} nearest-key steps total, largest leap ${transition.largestLeap}, ${transition.rootTravelSteps ?? 0} fifths steps.`).join(" ")} Movable Do and register are factored out; this is not a sound, function, emotion, or quality score.`;
+  const summary = `${fingerprint.fields.length}-field octave-folded relationship fingerprint. ${fingerprint.fields.map((field) => `Field ${field.stepIndex + 1}, ${field.role}: root position ${field.rootOffset}; field positions ${field.pitchOffsets.join(", ")}${field.changedFromOffset == null ? "" : `; changed position ${field.changedFromOffset} to ${field.changedToOffset}`}.`).join(" ")} ${fingerprint.transitions.map((transition) => `Transition ${transition.fromStepIndex + 1} to ${transition.toStepIndex + 1}: ${transition.sharedOffsets.length} carried position${transition.sharedOffsets.length === 1 ? "" : "s"}, ${transition.totalVoiceMotion} semitones of nearest-voice motion, largest leap ${transition.largestLeap} semitones, ${transition.rootTravelSteps ?? 0} fifths steps.`).join(" ")} Movable Do and register are factored out; this is not a sound, function, emotion, or quality score.`;
   return <section className="hud-landmark-fingerprint" aria-labelledby="hud-landmark-fingerprint-title">
-    <div className="hud-landmark-fingerprint-heading"><div><span>relationship fingerprint · Do factored out</span><strong id="hud-landmark-fingerprint-title">The whole route inside one octave</strong></div><small>0–11 are equal-key distances from movable Do, not note names.</small></div>
+    <div className="hud-landmark-fingerprint-heading"><div><span>relationship fingerprint · Do factored out</span><strong id="hud-landmark-fingerprint-title">The whole route inside one octave</strong></div><small>0–11 are semitone distances from movable Do, not note names.</small></div>
     <svg className="hud-landmark-fingerprint-plot" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={summary}>
       {[0, 4, 7, 11].map((offset) => <g key={offset} className="hud-landmark-fingerprint-guide"><line x1={left - 18} x2={right + 18} y1={yFor(offset)} y2={yFor(offset)} /><text x={left - 24} y={yFor(offset) + 3} textAnchor="end">{offset === 0 ? "0 · Do" : `+${offset}`}</text></g>)}
       {fingerprint.transitions.flatMap((transition) => transition.sharedOffsets.map((offset) => <line key={`${transition.fromStepIndex}-${offset}`} className="hud-landmark-fingerprint-held" x1={xFor(transition.fromStepIndex)} x2={xFor(transition.toStepIndex)} y1={yFor(offset)} y2={yFor(offset)} />))}
@@ -3371,7 +3497,7 @@ function LandmarkRouteFingerprintView({ fingerprint, showConventions, selectedTr
     </div>
     <div className="hud-landmark-fingerprint-legend" aria-hidden="true"><span><i className="is-tone" />field position</span><span><i className="is-root" />root position</span>{fingerprint.variant === "one-key-changed" ? <><span><i className="is-source" />original position</span><span><i className="is-changed" />changed position</span></> : null}<span><i className="is-held" />carried unchanged</span></div>
     <ol className="hud-landmark-fingerprint-transitions" aria-label="Select one transition to inspect what changed">
-      {fingerprint.transitions.map((transition) => <li key={transition.toStepIndex}><button type="button" aria-pressed={selectedTransitionIndex === transition.toStepIndex} onClick={() => onSelectTransition(transition.toStepIndex)}><strong>{transition.fromStepIndex + 1} → {transition.toStepIndex + 1}</strong><span>{transition.sharedOffsets.length} carried · {transition.totalVoiceMotion} nearest-key steps · largest {transition.largestLeap} · fifths {transition.rootTravelSteps ?? "—"}</span><small>{selectedTransitionIndex === transition.toStepIndex ? "close change lens" : "inspect this move"}</small></button></li>)}
+      {fingerprint.transitions.map((transition) => <li key={transition.toStepIndex}><button type="button" aria-pressed={selectedTransitionIndex === transition.toStepIndex} onClick={() => onSelectTransition(transition.toStepIndex)}><strong>{transition.fromStepIndex + 1} → {transition.toStepIndex + 1}</strong><span>{transition.sharedOffsets.length} carried · {transition.totalVoiceMotion} semitones total · largest {transition.largestLeap} · fifths {transition.rootTravelSteps ?? "—"}</span><small>{selectedTransitionIndex === transition.toStepIndex ? "close change lens" : "inspect this move"}</small></button></li>)}
     </ol>
     <p>Transposing the whole route leaves this folded pattern unchanged. Register, timing, the assumed sound, tonal interpretation, and your experience remain separate evidence.</p>
   </section>;
@@ -3398,7 +3524,7 @@ function LandmarkTransitionChangeView({ change, doMidi, scale, soundModelId, sho
   const afterRole = showConventions ? `${change.toField.conventionalName} · ${change.toField.role}` : change.toField.role;
   const beforeSpan = Math.max(...change.beforeNotes) - Math.min(...change.beforeNotes);
   const afterSpan = Math.max(...change.afterNotes) - Math.min(...change.afterNotes);
-  const summary = `Selected generated route move from ${beforeRole} to ${afterRole}. Folded positions held ${offsetList(change.stayedOffsets)}, entered ${offsetList(change.enteredOffsets)}, and left ${offsetList(change.leftOffsets)}. The stable reference voicing moves ${change.voiceLeading.totalMotion} nearest-key steps in total, with largest leap ${change.voiceLeading.largestLeap}. Under the selected ${pianoSoundModel(soundModelId).shortLabel} teaching spectrum, modeled crunch changes ${signedPhraseValue((afterPerception.roughness - beforePerception.roughness) * 100)} and spectral repose changes ${signedPhraseValue((afterPerception.repose - beforePerception.repose) * 100)}. In the selected Do context, pull changes ${signedPhraseValue((afterTendency.homePull - beforeTendency.homePull) * 100)} and home evidence changes ${signedPhraseValue((afterTendency.homeEvidence - beforeTendency.homeEvidence) * 100)}. Listener experience is unclaimed.`;
+  const summary = `Selected generated route move from ${beforeRole} to ${afterRole}. Folded positions held ${offsetList(change.stayedOffsets)}, entered ${offsetList(change.enteredOffsets)}, and left ${offsetList(change.leftOffsets)}. The stable reference voicing moves ${change.voiceLeading.totalMotion} semitones in total, with largest leap ${change.voiceLeading.largestLeap} semitones. Under the selected ${pianoSoundModel(soundModelId).shortLabel} teaching spectrum, modeled crunch changes ${signedPhraseValue((afterPerception.roughness - beforePerception.roughness) * 100)} and spectral repose changes ${signedPhraseValue((afterPerception.repose - beforePerception.repose) * 100)}. In the selected Do context, pull changes ${signedPhraseValue((afterTendency.homePull - beforeTendency.homePull) * 100)} and home evidence changes ${signedPhraseValue((afterTendency.homeEvidence - beforeTendency.homeEvidence) * 100)}. Listener experience is unclaimed.`;
   return <section className="hud-landmark-change" aria-labelledby="hud-landmark-change-title">
     <div className="hud-landmark-fingerprint-heading"><div><span>one move · five lenses</span><strong id="hud-landmark-change-title">What did field {change.toField.stepIndex + 1} change?</strong></div><small>{beforeRole} → {afterRole}</small></div>
     <svg className="hud-landmark-change-plot" viewBox="0 0 640 190" role="img" aria-label={summary}>
@@ -3406,7 +3532,7 @@ function LandmarkTransitionChangeView({ change, doMidi, scale, soundModelId, sho
       <text x="18" y="126" className="hud-landmark-change-row">after · {change.toField.stepIndex + 1}</text>
       <line x1="132" x2="606" y1="156" y2="156" className="hud-landmark-change-axis" />
       {change.voiceLeading.strands.map((strand, index) => {
-        if (strand.from != null && strand.to != null) return <line key={`strand-${index}`} x1={xFor(strand.from)} x2={xFor(strand.to)} y1="48" y2="123" className={`hud-landmark-change-strand is-${strand.motion}`}><title>{`${noteLabel(strand.from)} to ${noteLabel(strand.to)}: ${signedPhraseValue(strand.semitones)} keys, ${strand.motion}`}</title></line>;
+        if (strand.from != null && strand.to != null) return <line key={`strand-${index}`} x1={xFor(strand.from)} x2={xFor(strand.to)} y1="48" y2="123" className={`hud-landmark-change-strand is-${strand.motion}`}><title>{`${noteLabel(strand.from)} to ${noteLabel(strand.to)}: ${formatSemitones(strand.semitones, 0, true)}, ${strand.motion}`}</title></line>;
         if (strand.from != null) return <line key={`strand-${index}`} x1={xFor(strand.from)} x2={xFor(strand.from)} y1="48" y2="86" className="hud-landmark-change-strand is-released"><title>{`${noteLabel(strand.from)} leaves the compact reference voicing`}</title></line>;
         if (strand.to != null) return <line key={`strand-${index}`} x1={xFor(strand.to)} x2={xFor(strand.to)} y1="86" y2="123" className="hud-landmark-change-strand is-added"><title>{`${noteLabel(strand.to)} enters the compact reference voicing`}</title></line>;
         return null;
@@ -3416,7 +3542,7 @@ function LandmarkTransitionChangeView({ change, doMidi, scale, soundModelId, sho
       <text x="132" y="174" className="hud-landmark-change-axis-label">lower reference key</text><text x="606" y="174" textAnchor="end" className="hud-landmark-change-axis-label">higher</text>
     </svg>
     <ol className="hud-landmark-change-lenses" aria-label="Five evidence lenses for the selected route transition">
-      <li><span>Sound · authored + modeled</span><strong>span {beforeSpan} → {afterSpan} keys</strong><small>{pianoSoundModel(soundModelId).shortLabel} proxy: crunch {signedPhraseValue((afterPerception.roughness - beforePerception.roughness) * 100)} · repose {signedPhraseValue((afterPerception.repose - beforePerception.repose) * 100)}</small></li>
+      <li><span>Sound · authored + modeled</span><strong>span {beforeSpan} → {afterSpan} semitones</strong><small>{pianoSoundModel(soundModelId).shortLabel} proxy: crunch {signedPhraseValue((afterPerception.roughness - beforePerception.roughness) * 100)} · repose {signedPhraseValue((afterPerception.repose - beforePerception.repose) * 100)}</small></li>
       <li><span>Relationships · authored</span><strong>{change.stayedOffsets.length} stayed · {change.enteredOffsets.length} entered · {change.leftOffsets.length} left</strong><small>held {offsetList(change.stayedOffsets)} · in {offsetList(change.enteredOffsets)} · out {offsetList(change.leftOffsets)}</small></li>
       <li><span>Motion · derived</span><strong>{change.voiceLeading.totalMotion} steps total · largest {change.voiceLeading.largestLeap}</strong><small>{change.voiceLeading.motionClasses.join(" · ") || "no moving-motion class"} · bass {signedPhraseValue(change.voiceLeading.bassMotion)}</small></li>
       <li><span>Context · modeled</span><strong>toward Do {signedPhraseValue((afterTendency.homePull - beforeTendency.homePull) * 100)}</strong><small>home evidence {signedPhraseValue((afterTendency.homeEvidence - beforeTendency.homeEvidence) * 100)} · root travel {change.rootTravelSteps ?? "—"} fifths steps</small></li>
@@ -3576,7 +3702,7 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
     {routeComparisonSourcePath ? <div className="hud-landmark-compare-status" role="status"><span>route A held · now perform B</span><strong>{routeComparisonSourcePath.family} <i aria-hidden="true">→</i> {path.family}</strong><small>The first route stays frozen as a structural fingerprint. B must be completed before the comparison appears; no notes are entered or sounded for you.</small></div> : null}
     <div className="hud-landmark-question"><span>one listening question</span><strong>{listeningQuestion}</strong><small>{path.provenance}</small></div>
     {transposeProfile ? <div className="hud-landmark-transpose" role="status" aria-label={`Transposition comparison from ${doLabel(transposeProfile.sourceDoPitchClass)} to ${doLabel(transposeProfile.targetDoPitchClass)}`}>
-      <div><span>same path, new center</span><strong>{doLabel(transposeProfile.sourceDoPitchClass)} <i aria-hidden="true">→</i> {doLabel(transposeProfile.targetDoPitchClass)}</strong><small>Every target pitch class rotated {transposeProfile.semitoneShift} equal-key step{transposeProfile.semitoneShift === 1 ? "" : "s"} around the octave; compact voicings may move individual keys differently. Begin again at field 1.</small></div>
+      <div><span>same path, new center</span><strong>{doLabel(transposeProfile.sourceDoPitchClass)} <i aria-hidden="true">→</i> {doLabel(transposeProfile.targetDoPitchClass)}</strong><small>Every target pitch class rotated {transposeProfile.semitoneShift} semitone{transposeProfile.semitoneShift === 1 ? "" : "s"} around the octave; compact voicings may move individual keys differently. Begin again at field 1.</small></div>
       <p><span>changed</span><strong>Do and every physical target frequency</strong></p>
       <p><span>held constant</span><strong>field order, roles, root offsets, and internal pitch-class shapes</strong></p>
       <p><span>listen for</span><strong>Does the route still feel directed when its register and center move?</strong></p>
@@ -3606,14 +3732,14 @@ function LandmarkPathCoach({ path, pathVoicings, stepIndex, targetNotes, reflect
       : null}
     {!complete ? <div className="hud-landmark-evidence" aria-label="Current landmark transition evidence">
       <span><small>carried tones</small><strong>{transition ? transition.commonPitchClassCount : "—"}</strong><em>{transition ? "same pitch classes" : "first-field baseline"}</em></span>
-      <span><small>nearest voices</small><strong>{transition ? transition.totalVoiceMotion : "—"}</strong><em>{transition ? `key steps total · largest ${transition.largestLeap}` : "motion begins next"}</em></span>
+      <span><small>nearest voices</small><strong>{transition ? transition.totalVoiceMotion : "—"}</strong><em>{transition ? `semitones total · largest ${transition.largestLeap}` : "motion begins next"}</em></span>
       <span><small>root around fifths</small><strong>{transition?.rootTravelSteps ?? "—"}</strong><em>{transition?.rootTravelSteps == null ? "baseline" : transition.rootTravelSteps === 1 ? "one neighbor" : "circle steps"}</em></span>
       <span><small>modeled field</small><strong>{perception ? `${Math.round(perception.roughness * 100)} / ${Math.round(perception.repose * 100)}` : "—"}</strong><em>crunch / repose proxy</em></span>
       <span><small>toward Do</small><strong>{tendency ? Math.round(tendency.homePull * 100) : "—"}</strong><em>{tendency?.hasHome ? "Do is present" : "Do is absent"}</em></span>
     </div> : null}
     {counterfactualProfile && sourcePerception && changedPerception && sourceTendency && changedTendency ? <div className="hud-landmark-counterfactual" aria-label="Original versus one-key path comparison across five lenses">
-      <div><span>physical intervention</span><strong>{noteLabel(counterfactualProfile.sourceNote)} → {noteLabel(counterfactualProfile.targetNote)}</strong><small>{signedPhraseValue(counterfactualProfile.keyShift)} key step at field {counterfactualProfile.stepIndex + 1} · {counterfactualProfile.retainedNotes.length} tones retained</small></div>
-      <div><span>relationships</span><strong>{counterfactualProfile.sourceIntervals.join(" · ")} → {counterfactualProfile.targetIntervals.join(" · ")}</strong><small>key-step distances from changed tone to retained tones</small></div>
+      <div><span>physical intervention</span><strong>{noteLabel(counterfactualProfile.sourceNote)} → {noteLabel(counterfactualProfile.targetNote)}</strong><small>{signedPhraseValue(counterfactualProfile.keyShift)} semitone at field {counterfactualProfile.stepIndex + 1} · {counterfactualProfile.retainedNotes.length} tones retained</small></div>
+      <div><span>relationships</span><strong>{counterfactualProfile.sourceIntervals.join(" · ")} → {counterfactualProfile.targetIntervals.join(" · ")}</strong><small>semitone distances from changed tone to retained tones</small></div>
       <div><span>assumed spectrum</span><strong>crunch {signedPhraseValue((changedPerception.roughness - sourcePerception.roughness) * 100)}</strong><small>repose proxy {signedPhraseValue((changedPerception.repose - sourcePerception.repose) * 100)} · model, not heard audio</small></div>
       <div><span>selected context</span><strong>pull {signedPhraseValue((changedTendency.homePull - sourceTendency.homePull) * 100)}</strong><small>home evidence {signedPhraseValue((changedTendency.homeEvidence - sourceTendency.homeEvidence) * 100)} · selected Do model</small></div>
       <div className="hud-landmark-counterfactual-report"><span>your experience</span><strong>{complete ? "Which path felt more directed?" : "Complete the changed route first"}</strong>{complete ? <div role="group" aria-label="Report which landmark path felt more directed"><button type="button" aria-pressed={counterfactualSession?.report === "source"} onClick={() => onCounterfactualReport("source")}>Original</button><button type="button" aria-pressed={counterfactualSession?.report === "same"} onClick={() => onCounterfactualReport("same")}>About same</button><button type="button" aria-pressed={counterfactualSession?.report === "changed"} onClick={() => onCounterfactualReport("changed")}>Changed</button></div> : <small>No modeled lane fills this answer.</small>}</div>
@@ -3648,14 +3774,14 @@ function PhraseEndingRippleView({ ripple, comparison, doMidi, scale, showConvent
   const endingBLabel = pitchClassRoleLabel(comparison.context.endingPitchClassB, doMidi, scale, showConventions);
   const centerALabel = pitchClassRoleLabel(comparison.context.leadingCenterA, doMidi, scale, showConventions);
   const centerBLabel = pitchClassRoleLabel(comparison.context.leadingCenterB, doMidi, scale, showConventions);
-  const summary = `The replay preserved ${ripple.sourcePositions.length - 1} earlier normalized attack positions and moved only the ending from position ${ripple.sourceEndingPosition} to ${ripple.attemptEndingPosition}. ${ripple.changedRelationshipCount} signed intervals touching the ending changed; ${ripple.retainedRelationshipCount} earlier-to-earlier intervals stayed invariant. The final approach changed from ${ripple.sourceFinalApproachSteps} to ${ripple.attemptFinalApproachSteps} equal-key steps.`;
+  const summary = `The replay preserved ${ripple.sourcePositions.length - 1} earlier normalized attack positions and moved only the ending from position ${ripple.sourceEndingPosition} to ${ripple.attemptEndingPosition}. ${ripple.changedRelationshipCount} signed intervals touching the ending changed; ${ripple.retainedRelationshipCount} earlier-to-earlier intervals stayed invariant. The final approach changed from ${ripple.sourceFinalApproachSteps} to ${ripple.attemptFinalApproachSteps} semitones.`;
   const effect = (relationship: PhraseEndingRipple["relationships"][number]) => relationship.distanceDelta === 0
     ? "same span · direction changed"
-    : `${relationship.distanceDelta < 0 ? "shorter" : "wider"} by ${Math.abs(relationship.distanceDelta)} key step${Math.abs(relationship.distanceDelta) === 1 ? "" : "s"}`;
+    : `${relationship.distanceDelta < 0 ? "shorter" : "wider"} by ${Math.abs(relationship.distanceDelta)} semitone${Math.abs(relationship.distanceDelta) === 1 ? "" : "s"}`;
   return <div className="hud-ending-ripple" aria-label="Ending relationship ripple">
     <div className="sr-only hud-ending-ripple-summary" role="img" aria-label={summary} />
-    <div className="hud-ending-ripple-heading"><span>one changed ending · every connected relationship</span><strong>Ending {signed(ripple.sourceEndingPosition)} → {signed(ripple.attemptEndingPosition)}</strong><small>Positions are measured from each phrase’s first attack, so a whole-phrase transposition of {signed(ripple.replayTranspositionSteps)} keys is removed before comparison. Bar length shows interval size relative to this specimen; ratios use 12-TET.</small></div>
-    <div className="hud-ending-ripple-approach"><span>final approach</span><strong>{signed(ripple.sourceFinalApproachSteps)} → {signed(ripple.attemptFinalApproachSteps)} equal-key steps</strong><small>The last melodic move is one spoke. The changed ending also forms a new signed interval with every earlier attack.</small></div>
+    <div className="hud-ending-ripple-heading"><span>one changed ending · every connected relationship</span><strong>Ending {formatSemitones(ripple.sourceEndingPosition, 0, true)} → {formatSemitones(ripple.attemptEndingPosition, 0, true)}</strong><small>Positions are measured from each phrase’s first attack, so a whole-phrase transposition of {formatSemitones(ripple.replayTranspositionSteps, 0, true)} is removed before comparison. Bar length shows interval size relative to this specimen; ratios use 12-TET.</small></div>
+    <div className="hud-ending-ripple-approach"><span>final approach</span><strong>{signed(ripple.sourceFinalApproachSteps)} → {signed(ripple.attemptFinalApproachSteps)} semitones</strong><small>The last melodic move is one spoke. The changed ending also forms a new signed interval with every earlier attack.</small></div>
     <div className="hud-ending-ripple-spokes">
       {ripple.relationships.map((relationship) => <div key={relationship.eventIndex} className="hud-ending-ripple-spoke">
         <strong>attack {relationship.eventIndex + 1}<small>position {signed(relationship.retainedPosition)}</small></strong>
@@ -3756,7 +3882,7 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
   const relationshipCopy = comparison.relationships.sameIntervalPath
     ? comparison.relationships.uniformTransposition === 0
       ? "Every signed interval and every absolute key stayed the same."
-      : `Every pitch moved ${signedPhraseValue(comparison.relationships.uniformTransposition ?? 0)} keys; the signed interval path stayed invariant.`
+      : `Every pitch moved ${formatSemitones(comparison.relationships.uniformTransposition ?? 0, 0, true)}; the signed interval path stayed invariant.`
     : `${comparison.relationships.changedMoveCount} of ${Math.max(comparison.relationships.intervalPathA.length, comparison.relationships.intervalPathB.length)} signed moves changed.`;
   const timingCopy = comparison.motion.sameTimingShape
     ? comparison.motion.tempoRatio == null
@@ -3790,7 +3916,7 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
   const pauseRevealed = pauseKey != null && pauseRevealKey === pauseKey;
   const lensLabel = (lens: "sound" | "relationships" | "motion" | "context") => lens === "context" ? "modeled context" : lens;
   const intendedEvidence = !changeProfile || !activeChoice ? "No declared change was stored with this comparison."
-    : session.intention === "transpose" ? `Register center moved ${signedPhraseValue(registerDelta, 1)} keys.`
+    : session.intention === "transpose" ? `Register center moved ${formatSemitones(registerDelta, 1, true)}.`
       : session.intention === "timing" ? timingCopy
         : session.intention === "touch" ? `Mean MIDI attack moved ${signedPhraseValue(velocityDelta)}.`
           : session.intention === "articulation" ? `Sounding-overlap share moved ${signedPhraseValue(overlapDelta * 100)} points.`
@@ -3809,7 +3935,7 @@ function PhraseCompareField({ session, liveReplayCount, comparison, availableAtt
     {pauseMutation ? <div className={`hud-pause-entry is-${pauseMutation.kind}`} role="status" aria-live="polite"><div><span>Next question · same absolute pitch path</span><strong>{pauseMutation.kind === "one-gap" ? "Exactly one pause moved beyond performance tolerance" : pauseMutation.kind === "same" ? "No one pause moved clearly" : `${pauseMutation.changedGapIndices.length} onset gaps moved clearly`}</strong><small>{pauseMutation.kind === "one-gap" ? `${pauseMutation.controlGapCount} other gaps stayed near their source durations. Open the microscope to separate onset spacing from actual quiet.` : pauseMutation.kind === "same" ? "Small replay variation stayed inside the local 12% or 45 ms tolerance. Try again with one clearly shorter or longer pause." : "The broad timing comparison remains valid. The one-pause microscope opens only when one gap changes and the others remain near their source durations."}</small></div>{pauseMutation.kind === "one-gap" && pauseKey ? <button type="button" aria-expanded={pauseRevealed} aria-controls="hud-pause-mutation-detail" onClick={() => setPauseRevealKey(pauseRevealed ? null : pauseKey)}>{pauseRevealed ? "Hide changed pause" : "Trace the changed pause"}</button> : null}</div> : null}
     {pauseMutation?.kind === "one-gap" && pauseRevealed ? <div id="hud-pause-mutation-detail"><PhrasePauseMutationView mutation={pauseMutation} /></div> : null}
     <div className="hud-phrase-lens-profile" role="group" aria-label="Five separate phrase comparison lenses">
-      <article className={soundChanged ? "has-change" : "is-invariant"}><header><span>1 · sound</span><em>measured MIDI</em><strong>{soundChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> center {comparison.sound.meanMidiA.toFixed(1)} · span {comparison.sound.pitchSpanA} · attack {Math.round(comparison.sound.meanVelocityA)}</p><i aria-hidden="true">→</i><p><b>B</b> center {comparison.sound.meanMidiB.toFixed(1)} · span {comparison.sound.pitchSpanB} · attack {Math.round(comparison.sound.meanVelocityB)}</p></div><small>Register center {signedPhraseValue(registerDelta, 1)} keys · span {signedPhraseValue(spanDelta)} · mean MIDI attack {signedPhraseValue(velocityDelta)}. This is not acoustic loudness or timbre.</small></article>
+      <article className={soundChanged ? "has-change" : "is-invariant"}><header><span>1 · sound</span><em>measured MIDI</em><strong>{soundChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> center {comparison.sound.meanMidiA.toFixed(1)} · span {comparison.sound.pitchSpanA} semitones · attack {Math.round(comparison.sound.meanVelocityA)}</p><i aria-hidden="true">→</i><p><b>B</b> center {comparison.sound.meanMidiB.toFixed(1)} · span {comparison.sound.pitchSpanB} semitones · attack {Math.round(comparison.sound.meanVelocityB)}</p></div><small>Register center {formatSemitones(registerDelta, 1, true)} · span {formatSemitones(spanDelta, 0, true)} · mean MIDI attack {signedPhraseValue(velocityDelta)}. This is not acoustic loudness or timbre.</small></article>
       <article className={comparison.relationships.sameIntervalPath ? "is-invariant" : "has-change"}><header><span>2 · relationships</span><em>measured intervals</em><strong>{comparison.relationships.sameIntervalPath ? "invariant" : "changed"}</strong></header><div><p><b>A</b> {phraseMovePath(comparison.relationships.intervalPathA)}</p><i aria-hidden="true">→</i><p><b>B</b> {phraseMovePath(comparison.relationships.intervalPathB)}</p></div><small>{relationshipCopy}</small></article>
       <article className={motionChanged ? "has-change" : "is-invariant"}><header><span>3 · motion</span><em>measured timing</em><strong>{motionChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> {(comparison.motion.phraseMsA / 1_000).toFixed(2)} s · {Math.round(comparison.motion.overlapShareA * 100)}% overlapping links</p><i aria-hidden="true">→</i><p><b>B</b> {(comparison.motion.phraseMsB / 1_000).toFixed(2)} s · {Math.round(comparison.motion.overlapShareB * 100)}% overlapping links</p></div><small>{timingCopy} Sounding-overlap share changed {signedPhraseValue(overlapDelta * 100)} points.</small></article>
       <article className={contextChanged ? "has-change" : "is-invariant"}><header><span>4 · context</span><em>modeled hypothesis</em><strong>{contextChanged ? "changed" : "invariant"}</strong></header><div><p><b>A</b> {labelPitchClass(comparison.context.leadingCenterA)} leads · ends {labelPitchClass(comparison.context.endingPitchClassA)} · gap {Math.round(comparison.context.clarityA * 100)}</p><i aria-hidden="true">→</i><p><b>B</b> {labelPitchClass(comparison.context.leadingCenterB)} leads · ends {labelPitchClass(comparison.context.endingPitchClassB)} · gap {Math.round(comparison.context.clarityB * 100)}</p></div><small>Twelve center-and-route hypotheses were reranked from performed evidence. The gap is model separation, not confidence or heard key.</small></article>
@@ -4491,6 +4617,16 @@ export function PianoLab() {
   const fieldIsLive = activeNoteNumbers.length > 0;
   const analysisNotes = selectedChordMeasure?.interpretedNotes ?? fieldNotes;
   const soundingAnalysisNotes = selectedChordMeasure?.audibleNotes ?? analysisNotes;
+  const soundingSemitoneProfile = semitoneFieldProfile(soundingAnalysisNotes, doMidi);
+  const liveFieldMatchesDisplayed = fieldIsLive && sameMidiNotes(activeNoteNumbers, soundingAnalysisNotes);
+  const liveHeldPerception = selectedChordMeasure?.crunch == null
+    && liveFieldMatchesDisplayed
+    && soundingAnalysisNotes.length >= 2
+    && soundingAnalysisNotes.length <= IMMERSION_MAX_FIELD_NOTES
+    ? sonorityPerceptionModel(soundingAnalysisNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)))
+    : null;
+  const chordCrunchReading = selectedChordMeasure?.crunch ?? liveHeldPerception?.roughness ?? null;
+  const chordCrunchPaused = selectedChordMeasure?.crunch == null && liveFieldMatchesDisplayed && soundingAnalysisNotes.length > IMMERSION_MAX_FIELD_NOTES;
   const inheritedAnalysisNotes = selectedGesture?.inheritedNotes ?? [];
   const excludedInheritedNotes = selectedChordMeasure?.excludedInheritedNotes ?? [];
   const fieldPitchClassCount = new Set(analysisNotes.map((note) => pitchClassFromMidi(note))).size;
@@ -5271,14 +5407,14 @@ export function PianoLab() {
       : !chordVoicingEchoAttempt || !chordVoicingEchoComparison
         ? "The source relationship is frozen. Release it, then play one new grouped chord without following a ghost target."
         : chordVoicingEchoComparison.relationshipPreserved
-          ? `${chordVoicingEchoComparison.pitchClassIdentityPreserved ? "The pitch-class set survived" : `The internal relationship survived a ${chordVoicingEchoComparison.transpositionSteps! > 0 ? "+" : ""}${chordVoicingEchoComparison.transpositionSteps}-key transposition`}; register, bass role, spacing, doubling, modeled spectrum, context, and experience remain separate questions.`
+          ? `${chordVoicingEchoComparison.pitchClassIdentityPreserved ? "The pitch-class set survived" : `The internal relationship survived a ${formatSemitones(chordVoicingEchoComparison.transpositionSteps!, 0, true)} transposition`}; register, bass role, spacing, doubling, modeled spectrum, context, and experience remain separate questions.`
           : "The latest grouped attempt changed the internal pitch-class relationship. The source remains frozen so you can try another voicing."
     : focusLens === "chords" && chordFocusMode === "change"
       ? chordMotionEchoSession
         ? !chordMotionEchoAttempt || !chordMotionEchoComparison
           ? `${chordMotionEchoCandidates.length}/2 replay fields captured. The two-chord source remains frozen until both new grouped fields are performed.`
           : chordMotionEchoComparison.relationshipPreserved
-            ? `${chordMotionEchoComparison.pitchClassIdentityPreserved ? "The complete two-field pitch-class move survived" : `The complete move survived a ${chordMotionEchoComparison.transpositionSteps! > 0 ? "+" : ""}${chordMotionEchoComparison.transpositionSteps}-key transposition`}; physical voice motion, spectrum, context, and experience remain separate.`
+            ? `${chordMotionEchoComparison.pitchClassIdentityPreserved ? "The complete two-field pitch-class move survived" : `The complete move survived a ${formatSemitones(chordMotionEchoComparison.transpositionSteps!, 0, true)} transposition`}; physical voice motion, spectrum, context, and experience remain separate.`
             : chordMotionEchoComparison.beforeRelationshipPreserved && chordMotionEchoComparison.afterRelationshipPreserved
               ? "Both chord types returned, but they did not share one transposition, so the complete move changed."
               : "One or both endpoint relationships changed. The source move remains frozen for an explicit retry."
@@ -5302,7 +5438,7 @@ export function PianoLab() {
       ? scaleFingerprintSession?.exercise === "build" ? `You authored ${performedScaleFingerprint.steps.join("–")}; its gaps total 12 and the octave closes at 2:1.` : scaleFingerprintSession?.exercise === "mutate" ? "The changed route closes at 2:1; compare its landing positions to see whether one cause was isolated." : `You preserved ${performedScaleFingerprint.steps.join("–")} while the absolute starting frequency and hand position changed.`
       : performedScaleFingerprint.lastAttempt?.kind === "try-again"
         ? "The last move did not satisfy the current gap relationship. Valid earlier gaps were preserved so you can repair only that move."
-        : `${performedScaleFingerprint.steps.length} gaps authored; ${performedScaleFingerprint.octaveRemaining} equal key steps remain before the frequency doubles.`
+        : `${performedScaleFingerprint.steps.length} gaps authored; ${performedScaleFingerprint.octaveRemaining} semitones remain before the frequency doubles.`
     : focusLens === "scales" && gravityCounterfactualResult && gravityCounterfactualCue
       ? `${gravityCounterfactualTargetLabel} moves from center rank ${gravityCounterfactualResult.baselineRank + 1} to ${gravityCounterfactualResult.counterfactualRank + 1} when only the ${gravityCounterfactualCue.shortLabel} evidence lane is reassigned. The frozen MIDI phrase and every other model component stay fixed.`
     : focusLens === "scales" && scaleWalkProgress ? scaleWalkProgress.status === "waiting-do"
@@ -5402,6 +5538,15 @@ export function PianoLab() {
 
   const exactChord = chordCandidates.find((candidate) => candidate.exact);
   const leadingChord = fieldPitchClassCount <= 5 ? selectedChordMeasure?.candidate ?? exactChord ?? chordCandidates[0] : undefined;
+  const chordSemitoneBins = soundingSemitoneProfile.intervalBins.map((bin) => `${bin.semitones}${bin.pairCount > 1 ? `×${bin.pairCount}` : ""}`).join(" · ");
+  const chordHomeCue = soundingSemitoneProfile.strongestHomewardCue;
+  const chordHomeCueLabel = chordHomeCue
+    ? `${showConventions ? conventionalPitchName(chordHomeCue.note) : relativeSyllable(chordHomeCue.note, doMidi, scale)} → Do ${chordHomeCue.movement > 0 ? "+" : ""}${chordHomeCue.movement} semitone${Math.abs(chordHomeCue.movement) === 1 ? "" : "s"}${chordHomeCue.directNeighbor ? " · direct neighbor" : ""}`
+    : soundingAnalysisNotes.length ? "Do is present without another homeward voice" : "no field";
+  const exactChordForAtlas = selectedChordMeasure?.candidate?.exact ? selectedChordMeasure.candidate : exactChord?.exact ? exactChord : null;
+  const chordAtlasRootMidi = exactChordForAtlas
+    ? nearestMidiForPitchClass(exactChordForAtlas.rootPitchClass, doMidi)
+    : doMidi;
 
   return (
     <section className="advanced-lab piano-lab piano-hud" aria-labelledby="piano-hud-title">
@@ -5453,6 +5598,7 @@ export function PianoLab() {
       {focusLens !== "immersion" ? <PhraseRibbon events={phraseEvents} nowMs={nowMs || phraseEvents.at(-1)?.onsetMs || 0} doMidi={doMidi} scale={scale} focusedId={focusedEvent?.id ?? null} showConventions={showConventions} /> : null}
 
       {focusLens === "chords" ? <ChordQuestionGuide value={chordFocusMode} onChange={selectChordMode} /> : null}
+      {focusLens === "chords" ? <ChordSemitoneAtlas rootMidi={chordAtlasRootMidi} soundModelId={soundModelId} showConventions={showConventions} activeTemplateId={exactChordForAtlas?.template.id ?? null} anchorSource={exactChordForAtlas ? "current exact chord root" : "selected Do"} /> : null}
 
       {focusLens !== "immersion" ? <div className="hud-event-selector" aria-label="Select an event across every view">{events.map((event, index) => <button key={event.id} type="button" aria-pressed={focusedEvent?.id === event.id} onClick={() => { setFocusedId(event.id); const containing = chordGestures.find((gesture) => gesture.attacks.some((attack) => attack.id === event.id)); if (containing) setSelectedChordId(containing.id); }}><strong>{index + 1}</strong><span>{showConventions ? conventionalPitchName(event.note) : relativeSyllable(event.note, doMidi, scale)}</span><small>{durationLabel(event, nowMs || event.onsetMs)}{event.releaseReason === "pedal" ? " · pedal" : ""}</small></button>)}</div> : null}
 
@@ -5505,6 +5651,11 @@ export function PianoLab() {
             <span><small>pitch change</small><strong>{selectedChordMeasure.hasPreviousChord ? Math.round(selectedChordMeasure.novelty * 100) : "—"}</strong><em>{selectedChordMeasure.hasPreviousChord ? evidenceWord(selectedChordMeasure.novelty) : "baseline"}</em></span>
             <span><small>voice motion</small><strong>{selectedChordMeasure.hasPreviousChord ? Math.round(selectedChordMeasure.motion * 100) : "—"}</strong><em>{selectedChordMeasure.hasPreviousChord ? evidenceWord(selectedChordMeasure.motion) : "baseline"}</em></span>
             <span><small>fifths move</small><strong>{selectedChordMeasure.rootTravelSteps == null ? "—" : selectedChordMeasure.rootTravelSteps}</strong><em>{selectedChordMeasure.rootTravelSteps == null ? selectedChordMeasure.hasPreviousChord ? "root uncertain" : "baseline" : selectedChordMeasure.rootTravelSteps === 1 ? "neighbor" : "steps"}</em></span>
+          </div> : null}
+          {soundingSemitoneProfile.pairCount ? <div className="hud-chord-semitone-reading" aria-label={`Chord semitone reading. Adjacent voicing gaps ${soundingSemitoneProfile.adjacentGaps.join(", ")} semitones. Octave-folded pair spans ${chordSemitoneBins}. Selected-Do cue ${chordHomeCueLabel}. ${chordCrunchPaused ? `Modeled crunch paused above ${IMMERSION_MAX_FIELD_NOTES} positions.` : chordCrunchReading == null ? "Modeled crunch unavailable." : `Modeled crunch ${Math.round(chordCrunchReading * 100)}.`}`}>
+            <div><span>Physical spacing</span><strong>{soundingSemitoneProfile.adjacentGaps.join("–")} semitone adjacent gaps</strong><small>All pair classes {chordSemitoneBins} st · closest realized pair {soundingSemitoneProfile.closestGap} semitone{soundingSemitoneProfile.closestGap === 1 ? "" : "s"}.</small></div>
+            <div><span>Selected-Do heuristic</span><strong>{chordHomeCueLabel}</strong><small>A short move makes one destination physically available; phrase, bass, repetition, style, and listening determine whether it feels resolving.</small></div>
+            <div><span>Assumed sound</span><strong>{chordCrunchPaused ? `Crunch paused above ${IMMERSION_MAX_FIELD_NOTES} positions` : chordCrunchReading == null ? "Crunch unavailable" : `${Math.round(chordCrunchReading * 100)} modeled crunch`}</strong><small>Semitone spacing locates the pairs. Register and the selected assumed partials determine this bounded model; MIDI contains no acoustic spectrum.</small></div>
           </div> : null}
           <div className="hud-field-notes" aria-label="Correct inherited chord membership">{soundingAnalysisNotes.map((note) => {
             const inherited = inheritedAnalysisNotes.includes(note);

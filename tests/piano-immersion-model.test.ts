@@ -65,6 +65,22 @@ test("bounds trail and dense interval fields deterministically", () => {
   assert.equal(field.omittedLinkCount, 178);
 });
 
+test("keeps the latest attack visible and puts its nearest semitone relationship first", () => {
+  const dense = immersionIntervalField(Array.from({ length: 20 }, (_, index) => 40 + index), 60, 50);
+  assert.equal(dense.notes.includes(50), true);
+  assert.equal(dense.notes[0], 40);
+  assert.equal(dense.notes.at(-1), 59);
+  assert.deepEqual([dense.links[0].lower, dense.links[0].upper, dense.links[0].semitones], [48, 50, 2]);
+
+  const compact = immersionIntervalField([60, 61, 67], 60, 67);
+  assert.deepEqual(compact.links.map((link) => [link.lower, link.upper, link.semitones]), [
+    [61, 67, 6],
+    [60, 61, 1],
+    [60, 67, 7],
+  ]);
+  assert.equal(compact.links[0].referenceKind, "geometric-midpoint");
+});
+
 test("keeps newness local to the retained phrase rather than the seven-attack microscope", () => {
   const phrase = [60, 61, 62, 63, 64, 65, 66, 67, 68, 60].map((note) => ({ note }));
   assert.ok(immersionPhraseNewness(phrase) <= 0.35);

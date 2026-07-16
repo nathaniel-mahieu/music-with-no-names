@@ -41,6 +41,9 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
   assert.match(immersion, /preserveAspectRatio="xMidYMid slice"/);
   assert.match(immersion, /Pitch bend, keyboard or DAW tuning, acoustic pitch, audio spectrum, and acoustic loudness are not captured/);
   assert.match(immersion, /modeled crunch pauses above/);
+  assert.match(immersion, /Semitone horizon\. Octave-folded field pair counts/);
+  assert.match(immersion, /selected-Do pull heuristic/);
+  assert.match(immersion, /contextual, not a physical force or felt-resolution prediction/);
   assert.doesNotMatch(immersion, /feGaussianBlur|<filter /);
   assert.doesNotMatch(immersion, /tabIndex=\{?[1-9]/);
   assert.match(model, /IMMERSION_MAX_TRAIL_EVENTS = 28/);
@@ -85,6 +88,14 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /Select an event across every view/);
   assert.match(piano, /Chord gestures grouped by attack timing/);
   assert.match(piano, /aria-label="Selected chord evidence"/);
+  assert.match(piano, /aria-labelledby="hud-chord-semitone-atlas-title"/);
+  assert.match(piano, /Root-position examples begin at/);
+  assert.match(piano, /every card shares one logarithmic Hz axis and shows \{partialScopeCopy\}/);
+  assert.match(piano, /Major and minor share the same unordered pair sizes/);
+  assert.match(piano, /Read the arrows as available one-voice moves among these three types, not as forces/);
+  assert.match(piano, /bass \+1 st → diminished rooted above/);
+  assert.match(piano, /Chord type alone does not choose up, down, or rest/);
+  assert.match(piano, /chordCrunchReading = selectedChordMeasure\?\.crunch \?\? liveHeldPerception\?\.roughness/);
   assert.match(piano, /aria-label="Correct inherited chord membership"/);
   assert.match(piano, /Restore.*Exclude.*inherited/);
   assert.match(piano, /id="hud-chord-window"/);
@@ -357,7 +368,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /aria-label="Choose the replay's movable Do reference frame"/);
   assert.match(piano, />Does the tonal job travel when the reference frame travels\?</);
   assert.match(piano, />Keep Do fixed<\/button>/);
-  assert.match(piano, />Move Do \{signed\(comparison\.transpositionSteps!\)\}<\/button>/);
+  assert.match(piano, />Move Do \{formatSemitones\(comparison\.transpositionSteps!, 0, true\)\}<\/button>/);
   assert.match(piano, /This is a display-only context counterfactual and never enters or sounds a note/);
   assert.match(piano, /replay Do moved \+ same route/);
   assert.match(piano, /restored the same relative-role path under this model; it did not prove the same heard function/);

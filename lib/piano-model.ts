@@ -35,6 +35,35 @@ export type TonalTendency = {
   fifthPresent: boolean;
 };
 
+export type SemitoneIntervalBin = {
+  semitones: number;
+  pairCount: number;
+  exactDistances: number[];
+};
+
+export type HomewardSemitoneCue = {
+  note: number;
+  pitchClass: number;
+  positionFromDo: number;
+  movement: number;
+  distance: number;
+  directNeighbor: boolean;
+  selectedFramePullWeight: number;
+};
+
+export type SemitoneFieldProfile = {
+  notes: number[];
+  adjacentGaps: number[];
+  span: number;
+  pairCount: number;
+  intervalBins: SemitoneIntervalBin[];
+  closestGap: number | null;
+  oneSemitonePairCount: number;
+  twoSemitonePairCount: number;
+  homewardCues: HomewardSemitoneCue[];
+  strongestHomewardCue: HomewardSemitoneCue | null;
+};
+
 export type RollingNoteEvent = {
   note: number;
 };
@@ -806,7 +835,7 @@ export const PIANO_SCALES: PianoScale[] = [
 ];
 
 /**
- * Silent, equal-key starting fields for one-change MIDI experiments. They are
+ * Silent, semitone-spaced starting fields for one-change MIDI experiments. They are
  * physical comparison recipes, not emotion buttons or aesthetic rankings.
  */
 export const CONTROLLED_SONORITY_FIELDS: ControlledSonorityField[] = [
@@ -835,7 +864,7 @@ export const CONTROLLED_SONORITY_FIELDS: ControlledSonorityField[] = [
     id: "close-cluster",
     label: "Close cluster",
     offsets: [0, 1, 2],
-    relationship: "two adjacent equal-key gaps",
+    relationship: "two adjacent 1-semitone gaps",
     instruction: "Build three neighboring keys, then widen or thin the field once.",
   },
 ];
@@ -917,7 +946,7 @@ export const LANDMARK_PATHS: LandmarkPath[] = [
     invariant: "Do remains present in every field while the upper intervals supply the motion.",
     characteristic: "A fixed bass can make changing upper structures feel connected, suspended, or returning.",
     provenance: "Generated from a common pedal-point technique; no composition or performance is reproduced.",
-    counterfactual: { stepIndex: 2, fromPitchOffset: 2, toPitchOffset: 4, label: "fill the suspended gap", question: "How does widening one upper interval change the sky while pedal Do stays physically fixed?", hypothesis: "The pedal and outer fifth remain; one upper key moves two steps before the unchanged return." },
+    counterfactual: { stepIndex: 2, fromPitchOffset: 2, toPitchOffset: 4, label: "fill the suspended gap", question: "How does widening one upper interval change the sky while pedal Do stays physically fixed?", hypothesis: "The pedal and outer fifth remain; one upper pitch moves 2 semitones before the unchanged return." },
     steps: [
       { id: "pedal-home", role: "clear home", conventionalName: "I", rootOffset: 0, pitchOffsets: [0, 4, 7], prompt: "Establish Do as the fixed floor." },
       { id: "pedal-side", role: "side over Do", conventionalName: "IV/Do", rootOffset: 5, pitchOffsets: [0, 5, 9], prompt: "Keep Do and replace the upper interval field." },
@@ -929,8 +958,8 @@ export const LANDMARK_PATHS: LandmarkPath[] = [
 
 const INTERVAL_LANDMARKS = [
   { relationship: "same cycle", conventionalName: "unison", ratio: 1, label: "1:1" },
-  { relationship: "closest equal-key step", conventionalName: "minor second", ratio: 16 / 15, label: "16:15" },
-  { relationship: "two equal-key steps", conventionalName: "major second", ratio: 9 / 8, label: "9:8" },
+  { relationship: "1-semitone step", conventionalName: "minor second", ratio: 16 / 15, label: "16:15" },
+  { relationship: "2-semitone step", conventionalName: "major second", ratio: 9 / 8, label: "9:8" },
   { relationship: "compact 6:5 region", conventionalName: "minor third", ratio: 6 / 5, label: "6:5" },
   { relationship: "compact 5:4 region", conventionalName: "major third", ratio: 5 / 4, label: "5:4" },
   { relationship: "4:3 region", conventionalName: "perfect fourth", ratio: 4 / 3, label: "4:3" },
@@ -1040,7 +1069,7 @@ export function sharedCycleCandidates(notesInput: number[], maximumHarmonic = 16
 }
 
 /**
- * Separates an interval's equal-key relationship from the absolute physical
+ * Separates an interval's semitone relationship from the absolute physical
  * coordinates changed by replaying it elsewhere. This compares performed MIDI
  * positions only; it does not judge intonation, fingering, or listening.
  */
@@ -1449,7 +1478,7 @@ export function evaluateAscendingScaleWalk(notes: number[], doPitchClass: number
 /**
  * Builds an unnamed, strictly ascending route from performed key attacks. The
  * first attack establishes an arbitrary origin; reaching exactly twelve equal
- * key steps closes the octave. When expectedSteps is supplied, only the next
+ * semitones closes the octave. When expectedSteps is supplied, only the next
  * required gap advances, so one wrong move can be repaired without erasing the
  * relationships already performed.
  */
@@ -1575,7 +1604,7 @@ export function compareScaleGapMutation(sourceInput: number[], attemptInput: num
 
 /**
  * Expands an exactly one-key scale-landing intervention into every normalized
- * equal-key interval that contains the moved landing. Relationships among retained
+ * semitone interval that contains the moved landing. Relationships among retained
  * positions are counted as controls. Equal-key ratios describe 12-TET only;
  * they do not estimate consonance, function, emotion, preference, or quality.
  */
@@ -2617,7 +2646,7 @@ export function detectMotifTransformations(events: MotifNoteEvent[], limit = 3):
 
 /**
  * Exposes the relational fingerprint behind one detected motif match. Absolute
- * note names and elapsed duration are intentionally removed: signed key steps
+ * note names and elapsed duration are intentionally removed: signed semitones
  * show pitch shape, while each onset gap is shown as a share of the statement's
  * total span. This explains the detector without claiming intention or form.
  */
@@ -3351,7 +3380,7 @@ function chordMoveInstruction(current: number[], target: number[], common: numbe
     const downward = modulo(currentOnly[0] - targetOnly[0], 12);
     const direction = upward <= downward ? "up" : "down";
     const distance = Math.min(upward, downward);
-    return `keep ${common.length} · move ${CONVENTIONAL_PITCH_CLASSES[currentOnly[0]]} ${direction} ${distance} key${distance === 1 ? "" : "s"}`;
+    return `keep ${common.length} · move ${CONVENTIONAL_PITCH_CLASSES[currentOnly[0]]} ${direction} ${distance} semitone${distance === 1 ? "" : "s"}`;
   }
   if (currentOnly.length === 0 && targetOnly.length === 1) {
     return `keep ${common.length} · add ${CONVENTIONAL_PITCH_CLASSES[targetOnly[0]]}`;
@@ -3395,6 +3424,82 @@ export function nearbyScaleChords(notes: number[], doMidi: number, scale: PianoS
 }
 
 const HOME_PULL_BY_POSITION = [0, 1, 0.58, 0.38, 0.32, 0.48, 0.42, 0.75, 0.38, 0.32, 0.52, 1] as const;
+
+/**
+ * Exposes equal-tempered key distance without treating distance as a verdict.
+ * Pair bins fold compound intervals into one octave only for a compact display;
+ * exact register distances remain in `exactDistances`. Homeward moves use the
+ * shortest signed path to the selected Do pitch class. The pull weight is the
+ * declared selected-frame heuristic used by tonalTendency, not a probability or
+ * a property of the semitone count by itself.
+ */
+export function semitoneFieldProfile(notesInput: number[], doMidi: number): SemitoneFieldProfile {
+  const notes = [...new Set(notesInput
+    .filter(Number.isFinite)
+    .map(Math.round)
+    .filter((note) => note >= 0 && note <= 127))]
+    .sort((first, second) => first - second);
+  const adjacentGaps = notes.slice(1).map((note, index) => note - notes[index]);
+  const intervalCounts = new Map<number, { pairCount: number; exactDistances: Set<number> }>();
+  let pairCount = 0;
+  let closestGap: number | null = null;
+  for (let lowerIndex = 0; lowerIndex < notes.length; lowerIndex += 1) {
+    for (let upperIndex = lowerIndex + 1; upperIndex < notes.length; upperIndex += 1) {
+      const exactDistance = notes[upperIndex] - notes[lowerIndex];
+      const semitones = exactDistance % 12 || 12;
+      const bin = intervalCounts.get(semitones) ?? { pairCount: 0, exactDistances: new Set<number>() };
+      bin.pairCount += 1;
+      bin.exactDistances.add(exactDistance);
+      intervalCounts.set(semitones, bin);
+      pairCount += 1;
+      closestGap = closestGap == null ? exactDistance : Math.min(closestGap, exactDistance);
+    }
+  }
+  const intervalBins = [...intervalCounts.entries()]
+    .sort(([first], [second]) => first - second)
+    .map(([semitones, bin]) => ({ semitones, pairCount: bin.pairCount, exactDistances: [...bin.exactDistances].sort((first, second) => first - second) }));
+  const doPitchClass = pitchClassFromMidi(doMidi);
+  const representativeByPitchClass = new Map<number, number>();
+  notes.forEach((note) => {
+    const pitchClass = pitchClassFromMidi(note);
+    const current = representativeByPitchClass.get(pitchClass);
+    if (current == null || Math.abs(note - doMidi) < Math.abs(current - doMidi)) representativeByPitchClass.set(pitchClass, note);
+  });
+  const homewardCues = [...representativeByPitchClass.entries()].map(([pitchClass, note]) => {
+    const positionFromDo = modulo(pitchClass - doPitchClass, 12);
+    const upward = modulo(doPitchClass - pitchClass, 12);
+    const downward = upward - 12;
+    const movement = Math.abs(upward) < Math.abs(downward)
+      ? upward
+      : Math.abs(downward) < Math.abs(upward)
+        ? downward
+        : note >= doMidi ? downward : upward;
+    return {
+      note,
+      pitchClass,
+      positionFromDo,
+      movement,
+      distance: Math.abs(movement),
+      directNeighbor: Math.abs(movement) === 1,
+      selectedFramePullWeight: HOME_PULL_BY_POSITION[positionFromDo],
+    };
+  }).sort((first, second) => first.positionFromDo - second.positionFromDo);
+  const strongestHomewardCue = [...homewardCues]
+    .filter((cue) => cue.distance > 0)
+    .sort((first, second) => second.selectedFramePullWeight - first.selectedFramePullWeight || first.distance - second.distance || first.pitchClass - second.pitchClass)[0] ?? null;
+  return {
+    notes,
+    adjacentGaps,
+    span: notes.length < 2 ? 0 : notes.at(-1)! - notes[0],
+    pairCount,
+    intervalBins,
+    closestGap,
+    oneSemitonePairCount: intervalCounts.get(1)?.pairCount ?? 0,
+    twoSemitonePairCount: intervalCounts.get(2)?.pairCount ?? 0,
+    homewardCues,
+    strongestHomewardCue,
+  };
+}
 
 export function tonalTendency(notes: number[], doMidi: number, scale: PianoScale): TonalTendency {
   const positions = [...new Set(notes.map((note) => noteContext(note, doMidi, scale).stepsWithinOctave))];

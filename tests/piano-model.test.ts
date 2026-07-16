@@ -62,6 +62,7 @@ import {
   resolutionLandingEvidence,
   resolutionDirection,
   scaleFingerprint,
+  semitoneFieldProfile,
   sharedCycleCandidates,
   tonalTendency,
   tonalGravityCandidates,
@@ -1387,6 +1388,47 @@ test("separates pull toward Do from evidence that Do has arrived", () => {
   assert.equal(resolutionDirection(null, 0.5).label, "first field · building a baseline");
   assert.equal(resolutionDirection(0.4, 0.52).label, "tending toward repose");
   assert.equal(resolutionDirection(0.6, 0.49).label, "moving away from repose");
+});
+
+test("keeps exact semitone spacing separate from the selected-Do heuristic", () => {
+  const neighbors = semitoneFieldProfile([59, 60, 61], 60);
+  assert.deepEqual(neighbors.notes, [59, 60, 61]);
+  assert.deepEqual(neighbors.adjacentGaps, [1, 1]);
+  assert.equal(neighbors.span, 2);
+  assert.equal(neighbors.pairCount, 3);
+  assert.deepEqual(neighbors.intervalBins, [
+    { semitones: 1, pairCount: 2, exactDistances: [1] },
+    { semitones: 2, pairCount: 1, exactDistances: [2] },
+  ]);
+  assert.equal(neighbors.oneSemitonePairCount, 2);
+  assert.equal(neighbors.twoSemitonePairCount, 1);
+  assert.deepEqual(neighbors.homewardCues.filter((cue) => cue.directNeighbor).map((cue) => [cue.positionFromDo, cue.movement]), [[1, -1], [11, 1]]);
+  assert.equal(neighbors.strongestHomewardCue?.note, 61);
+  assert.equal(neighbors.strongestHomewardCue?.selectedFramePullWeight, 1);
+});
+
+test("shows how inversion changes realized semitone gaps while triad pitch classes stay related", () => {
+  const rootPosition = semitoneFieldProfile([60, 64, 67], 60);
+  const inversion = semitoneFieldProfile([64, 67, 72], 60);
+  assert.deepEqual(rootPosition.adjacentGaps, [4, 3]);
+  assert.deepEqual(rootPosition.intervalBins.map((bin) => bin.semitones), [3, 4, 7]);
+  assert.deepEqual(inversion.adjacentGaps, [3, 5]);
+  assert.deepEqual(inversion.intervalBins.map((bin) => bin.semitones), [3, 5, 8]);
+});
+
+test("preserves semitone structure and selected-frame positions under transposition", () => {
+  const source = semitoneFieldProfile([60, 64, 67], 60);
+  const shifted = semitoneFieldProfile([67, 71, 74], 67);
+  assert.deepEqual(shifted.adjacentGaps, source.adjacentGaps);
+  assert.deepEqual(shifted.intervalBins, source.intervalBins);
+  assert.deepEqual(shifted.homewardCues.map((cue) => [cue.positionFromDo, cue.distance, cue.selectedFramePullWeight]), source.homewardCues.map((cue) => [cue.positionFromDo, cue.distance, cue.selectedFramePullWeight]));
+
+  const octaveCopies = semitoneFieldProfile([60, 72, 84], 60);
+  assert.deepEqual(octaveCopies.intervalBins, [{ semitones: 12, pairCount: 3, exactDistances: [12, 24] }]);
+  assert.deepEqual(semitoneFieldProfile([Number.NaN, -1, 128], 60), {
+    notes: [], adjacentGaps: [], span: 0, pairCount: 0, intervalBins: [], closestGap: null,
+    oneSemitonePairCount: 0, twoSemitonePairCount: 0, homewardCues: [], strongestHomewardCue: null,
+  });
 });
 
 test("derives the circle from stacked fifths and exposes its closure mismatch", () => {

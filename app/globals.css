@@ -8592,6 +8592,24 @@ footer a {
 .immersion-interval-filaments g.is-near path { stroke-dasharray: 10 5; }
 .immersion-interval-filaments g.is-offset path { stroke-dasharray: 2 7; }
 
+.immersion-semitone-horizon > text {
+  fill: rgba(194, 205, 226, .58);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-anchor: middle;
+}
+.immersion-semitone-horizon .immersion-semitone-baseline { fill: none; stroke: rgba(181, 195, 220, .16); stroke-width: 1.2; }
+.immersion-semitone-horizon g line { stroke: rgba(201, 212, 232, .25); stroke-width: 1; }
+.immersion-semitone-horizon g circle { fill: rgba(201, 212, 232, .24); stroke: #070a12; stroke-width: 1; }
+.immersion-semitone-horizon g.is-present circle { fill: #7de1e5; stroke: rgba(239, 249, 250, .86); stroke-width: 1.5; }
+.immersion-semitone-horizon g rect { fill: rgba(198, 156, 255, .72); stroke: #070a12; stroke-width: 1; }
+.immersion-semitone-horizon .immersion-semitone-home-cue { fill: var(--piano-gold); stroke: #070a12; stroke-width: 1; }
+.immersion-semitone-horizon g text { fill: rgba(194, 205, 226, .58); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; }
+.immersion-semitone-horizon g.is-present text,
+.immersion-semitone-horizon g.is-route-gap text,
+.immersion-semitone-horizon g.is-home-cue text { fill: #f4f0e8; }
+
 .immersion-newness-bloom {
   fill: none;
   stroke: var(--immersion-violet);
@@ -8714,6 +8732,7 @@ footer a {
 .piano-immersion-legend .is-route i { border-color: var(--piano-blue); box-shadow: 0 0 0 5px rgba(112, 213, 223, .12); }
 .piano-immersion-legend .is-tide i { border-color: #d3c1ee; border-style: double; box-shadow: 0 0 0 4px rgba(211, 193, 238, .09), 0 0 0 8px rgba(211, 193, 238, .05); }
 .piano-immersion-legend .is-interval i { width: 17px; height: 0; border: 0; border-top: 3px solid var(--piano-blue); border-radius: 0; }
+.piano-immersion-legend .is-semitone i { width: 17px; height: 8px; border: 0; border-top: 2px solid var(--piano-blue); border-bottom: 2px dotted var(--immersion-violet); border-radius: 0; box-shadow: 7px -4px 0 -3px var(--piano-gold); }
 .piano-immersion-legend .is-chord i { border-color: var(--immersion-violet); border-style: dashed; border-radius: 48% 52% 60% 40%; }
 .piano-immersion-legend .is-context i { border-color: var(--piano-gold); border-right-color: var(--piano-coral); border-bottom-color: var(--immersion-violet); border-style: dashed; }
 .piano-immersion-legend .is-time i { width: 17px; height: 0; border: 0; border-top: 2px dashed #dfe8f7; border-radius: 0; }
@@ -8777,6 +8796,46 @@ footer a {
 .hud-chord-question-options strong { font-size: .74rem; font-weight: 650; }
 .hud-chord-question-options span { color: var(--muted); font-size: .66rem; line-height: 1.35; }
 .hud-chord-question-options button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
+
+.hud-chord-semitone-atlas { min-width: 0; padding: 16px clamp(18px, 4vw, 52px) 18px; border-bottom: 1px solid var(--line); }
+.hud-chord-atlas-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border: 1px solid var(--line); }
+.hud-chord-atlas-grid > article { min-width: 0; padding: 12px; border-right: 1px solid var(--line); }
+.hud-chord-atlas-grid > article:last-child { border-right: 0; }
+.hud-chord-atlas-grid > article.is-current { box-shadow: inset 0 3px var(--piano-gold); background: color-mix(in srgb, var(--piano-gold) 5%, transparent); }
+.hud-chord-atlas-grid header { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.hud-chord-atlas-grid header > div { display: grid; gap: 2px; }
+.hud-chord-atlas-grid header span,
+.hud-chord-atlas-grid header small { color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.hud-chord-atlas-grid header strong { font-family: var(--font-display), Georgia, serif; font-size: 1.02rem; font-weight: 400; }
+.hud-chord-atlas-grid header p { display: grid; flex: 0 0 auto; gap: 2px; margin: 0; text-align: right; }
+.hud-chord-atlas-grid header b { font-family: var(--font-mono), monospace; font-size: .73rem; font-weight: 500; }
+.hud-chord-atlas-grid svg { display: block; width: 100%; height: auto; margin-top: 9px; overflow: visible; }
+.hud-chord-atlas-voice > text,
+.hud-chord-atlas-axis { fill: var(--muted); font-family: var(--font-mono), monospace; font-size: 11px; }
+.hud-chord-atlas-axis.is-end { text-anchor: end; }
+.hud-chord-atlas-voice > line { stroke: var(--line-strong); stroke-width: 1; }
+.hud-chord-atlas-partial-stem { stroke: var(--piano-blue); stroke-width: 2; }
+.hud-chord-atlas-voice circle { fill: var(--surface-raised); stroke: var(--piano-blue); stroke-width: 1.5; }
+.hud-chord-atlas-voice.is-voice-2 .hud-chord-atlas-partial-stem,
+.hud-chord-atlas-voice.is-voice-2 circle { stroke: var(--piano-coral); }
+.hud-chord-atlas-voice.is-voice-3 .hud-chord-atlas-partial-stem,
+.hud-chord-atlas-voice.is-voice-3 circle { stroke: var(--piano-gold); }
+.hud-chord-atlas-voice circle.is-fundamental { fill: currentColor; stroke-width: 2; }
+.hud-chord-atlas-voice.is-voice-1 { color: var(--piano-blue); }
+.hud-chord-atlas-voice.is-voice-2 { color: var(--piano-coral); }
+.hud-chord-atlas-voice.is-voice-3 { color: var(--piano-gold); }
+.hud-chord-atlas-frequencies { display: grid; gap: 0; margin: 3px 0 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+.hud-chord-atlas-frequencies li { display: grid; grid-template-columns: minmax(54px, .65fr) minmax(94px, .9fr) minmax(0, 1.75fr); gap: 6px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.hud-chord-atlas-frequencies span,
+.hud-chord-atlas-frequencies small { overflow-wrap: anywhere; color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.hud-chord-atlas-frequencies strong { font-family: var(--font-mono), monospace; font-size: .7rem; font-weight: 500; }
+.hud-chord-atlas-directions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 9px; }
+.hud-chord-atlas-directions > div { display: grid; min-width: 0; gap: 2px; align-content: start; padding: 5px; text-align: center; }
+.hud-chord-atlas-directions span { color: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: .8rem; }
+.hud-chord-atlas-directions strong { font-size: .7rem; font-weight: 650; }
+.hud-chord-atlas-directions small { color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.hud-chord-atlas-limit { margin: 11px 0 0; color: var(--muted); font-size: .7rem; line-height: 1.48; }
+.hud-chord-atlas-limit strong { color: var(--foreground); font-weight: 650; }
 
 .piano-focus-grid {
   display: grid;
@@ -9334,6 +9393,14 @@ footer a {
 .hud-scale-rail .is-seen { box-shadow: inset 0 -3px var(--piano-gold); }
 .hud-scale-rail .is-seen span { font-weight: 700; }
 .hud-scale-rail .is-chord-tone { outline: 2px solid var(--piano-gold); outline-offset: -3px; }
+.hud-scale-gap-reading,
+.hud-semitone-reading { display: grid; gap: 3px; margin-top: 10px; padding: 9px 0 0 10px; border-left: 2px solid var(--piano-blue); }
+.hud-scale-gap-reading span,
+.hud-scale-gap-reading small,
+.hud-semitone-reading span,
+.hud-semitone-reading small { color: var(--muted); font-size: .64rem; line-height: 1.42; }
+.hud-scale-gap-reading strong,
+.hud-semitone-reading strong { font-family: var(--font-mono), monospace; font-size: .73rem; font-weight: 500; }
 .hud-frame-candidates { display: grid; gap: 4px; margin: 10px 0; padding: 0; list-style: none; }
 .hud-frame-candidates button,
 .hud-nearby-panel button { display: grid; width: 100%; gap: 2px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 2px; color: var(--foreground); background: transparent; text-align: left; cursor: pointer; }
@@ -10286,6 +10353,12 @@ footer a {
 .hud-chord-metrics small { color: var(--muted); font-size: .59rem; }
 .hud-chord-metrics strong { margin-top: 2px; font-family: var(--font-mono), monospace; font-size: .76rem; }
 .hud-chord-metrics em { margin-top: 2px; color: var(--muted); font-size: .55rem; font-style: normal; }
+.hud-chord-semitone-reading { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hud-chord-semitone-reading > div { display: grid; min-width: 0; gap: 3px; padding: 9px; border-right: 1px solid var(--line); }
+.hud-chord-semitone-reading > div:last-child { border-right: 0; }
+.hud-chord-semitone-reading span,
+.hud-chord-semitone-reading small { color: var(--muted); font-size: .62rem; line-height: 1.4; }
+.hud-chord-semitone-reading strong { font-size: .72rem; font-weight: 500; line-height: 1.4; }
 .hud-field-notes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .hud-field-notes span,
 .hud-field-notes button { min-width: 54px; padding: 6px; border: 0; border-top: 1px solid var(--line); color: var(--foreground); background: transparent; font: inherit; text-align: center; }
@@ -10302,6 +10375,7 @@ footer a {
 .hud-membership-effect strong { font-size: .68rem; font-weight: 500; }
 .hud-nearby-panel ol { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .hud-texture-arc { fill: none; stroke: var(--piano-blue); stroke-width: calc(1px + var(--arc-strength) * 4px); opacity: calc(.2 + var(--arc-strength) * .65); }
+.hud-texture-gap-label { fill: var(--foreground); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .hud-texture-node { fill: var(--surface-raised); stroke: var(--foreground); stroke-width: 2; }
 .hud-texture-node.is-inherited { fill: transparent; stroke: var(--piano-blue); stroke-dasharray: 2 2; }
 .hud-texture-node.is-excluded { stroke: var(--muted); opacity: .75; }
@@ -10476,6 +10550,13 @@ footer a {
   .hud-chord-question-options { grid-template-columns: 1fr; }
   .hud-chord-question-options button { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-chord-question-options button:last-child { border-bottom: 0; }
+  .hud-chord-atlas-grid { grid-template-columns: 1fr; }
+  .hud-chord-atlas-grid > article { border-right: 0; border-bottom: 1px solid var(--line); }
+  .hud-chord-atlas-grid > article:last-child { border-bottom: 0; }
+  .hud-chord-atlas-frequencies li { grid-template-columns: minmax(54px, .55fr) minmax(94px, .8fr) minmax(0, 1.7fr); }
+  .hud-chord-semitone-reading { grid-template-columns: 1fr; }
+  .hud-chord-semitone-reading > div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .hud-chord-semitone-reading > div:last-child { border-bottom: 0; }
   .hud-chord-echo-arm { align-items: stretch; flex-direction: column; }
   .hud-chord-echo-arm > div { flex-basis: auto; }
   .hud-chord-echo-arm > button,
@@ -10760,6 +10841,22 @@ footer a {
   .immersion-motif-bridge circle { fill: none; stroke: Highlight; opacity: 1; }
   .immersion-voice-wake path,
   .immersion-interval-filaments path { stroke: LinkText; opacity: 1; }
+  .immersion-semitone-horizon > text,
+  .immersion-semitone-horizon g text { fill: CanvasText; }
+  .immersion-semitone-horizon path,
+  .immersion-semitone-horizon line { stroke: CanvasText; opacity: 1; }
+  .immersion-semitone-horizon circle { fill: Canvas; stroke: CanvasText; }
+  .immersion-semitone-horizon g.is-present circle { fill: LinkText; stroke: CanvasText; }
+  .immersion-semitone-horizon rect { fill: Canvas; stroke: LinkText; }
+  .immersion-semitone-horizon .immersion-semitone-home-cue { fill: Highlight; stroke: CanvasText; }
+  .hud-chord-atlas-grid > article.is-current { background: Canvas; box-shadow: inset 0 3px Highlight; }
+  .hud-chord-atlas-voice > text,
+  .hud-chord-atlas-axis { fill: CanvasText; }
+  .hud-chord-atlas-voice > line { stroke: GrayText; }
+  .hud-chord-atlas-partial-stem,
+  .hud-chord-atlas-voice circle { stroke: LinkText !important; }
+  .hud-chord-atlas-voice circle { fill: Canvas; }
+  .hud-chord-atlas-voice circle.is-fundamental { fill: Highlight; stroke: CanvasText !important; }
   .immersion-memory-wake,
   .immersion-attack-gaps path { stroke: CanvasText; opacity: 1; }
   .immersion-attack-contour path,

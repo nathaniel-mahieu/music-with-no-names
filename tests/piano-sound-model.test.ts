@@ -9,6 +9,7 @@ import {
   pianoSoundVoice,
 } from "../lib/piano-sound-model.ts";
 import { sonorityPerceptionModel } from "../lib/sonority-model.ts";
+import { frequencyFromMidi } from "../lib/piano-model.ts";
 
 test("declares bounded, inspectable teaching spectra", () => {
   assert.deepEqual(PIANO_SOUND_MODELS.map((model) => model.id), ["sine", "harmonic", "mellow-piano", "bright-piano"]);
@@ -35,6 +36,15 @@ test("changes the assumed spectrum without changing played fundamentals", () => 
   const bright = sonorityPerceptionModel(brightVoices);
   assert.notEqual(Math.round(sine.roughness * 10_000), Math.round(bright.roughness * 10_000));
   assert.notEqual(Math.round(sine.brightness * 10_000), Math.round(bright.brightness * 10_000));
+});
+
+test("does not mistake semitone count for a register-independent crunch value", () => {
+  const modeledPair = (notes: [number, number]) => sonorityPerceptionModel(notes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, "bright-piano")));
+  const lowSevenSemitones = modeledPair([36, 43]);
+  const highSevenSemitones = modeledPair([72, 79]);
+  assert.equal(43 - 36, 79 - 72);
+  assert.ok(lowSevenSemitones.roughness > highSevenSemitones.roughness);
+  assert.notEqual(Math.round(lowSevenSemitones.repose * 10_000), Math.round(highSevenSemitones.repose * 10_000));
 });
 
 test("exposes aligned partials separately from near interaction zones", () => {

@@ -110,7 +110,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /MIDI itself contains no partials or instrument audio/);
   assert.match(pianoLab, /Neither output measures musical goodness/);
   assert.match(pianoLab, /No overall goodness score/);
-  assert.match(pianoLab, /near-3:2 relation/);
+  assert.match(pianoLab, /near 3:2/);
   assert.match(pianoLab, /Chord grouping/);
   assert.match(pianoLab, /maximum span/);
   assert.match(pianoLab, /diamonds summarize grouped chords/);
@@ -195,7 +195,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /Why the fifths circle is first a spiral/);
   assert.match(pianoLab, /what is gained—and changed—when a pure relationship is adjusted/);
   assert.match(pianoLab, /Stack pure 3:2 moves/);
-  assert.match(pianoLab, /Apply equal-key correction/);
+  assert.match(pianoLab, /Apply equal-temperament correction/);
   assert.match(pianoLab, /Make .* movable Do/);
   assert.match(pianoLab, /pianoDo/);
   assert.match(pianoLab, /Resolution forks/);

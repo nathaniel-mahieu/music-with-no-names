@@ -522,11 +522,18 @@ export function immersionCurve(points: Array<{ x: number; y: number }>) {
   return path;
 }
 
-export function immersionIntervalField(notesInput: number[], doMidi: number) {
+export function immersionIntervalField(notesInput: number[], doMidi: number, primaryNoteInput: number | null = null) {
   const unique = [...new Set(notesInput.filter(Number.isFinite).map(safeMidi))].sort((first, second) => first - second);
-  const visibleNotes = unique.length <= IMMERSION_MAX_FIELD_NOTES
+  let visibleNotes = unique.length <= IMMERSION_MAX_FIELD_NOTES
     ? unique
     : Array.from({ length: IMMERSION_MAX_FIELD_NOTES }, (_, index) => unique[Math.round(index * (unique.length - 1) / (IMMERSION_MAX_FIELD_NOTES - 1))]);
+  const primaryNote = primaryNoteInput == null || !Number.isFinite(primaryNoteInput) ? null : safeMidi(primaryNoteInput);
+  if (primaryNote != null && unique.includes(primaryNote) && !visibleNotes.includes(primaryNote) && visibleNotes.length > 2) {
+    const replacementIndex = visibleNotes.slice(1, -1)
+      .map((note, index) => ({ index: index + 1, distance: Math.abs(note - primaryNote) }))
+      .sort((first, second) => first.distance - second.distance || first.index - second.index)[0].index;
+    visibleNotes = visibleNotes.map((note, index) => index === replacementIndex ? primaryNote : note).sort((first, second) => first - second);
+  }
   const allPairs: ImmersionIntervalLink[] = [];
   for (let lowerIndex = 0; lowerIndex < visibleNotes.length; lowerIndex += 1) {
     for (let upperIndex = lowerIndex + 1; upperIndex < visibleNotes.length; upperIndex += 1) {
@@ -545,6 +552,14 @@ export function immersionIntervalField(notesInput: number[], doMidi: number) {
         errorCents: landmark.errorCents,
       });
     }
+  }
+  if (primaryNote != null && visibleNotes.includes(primaryNote) && visibleNotes.length > 1) {
+    const nearest = visibleNotes
+      .filter((note) => note !== primaryNote)
+      .sort((first, second) => Math.abs(first - primaryNote) - Math.abs(second - primaryNote) || first - second)[0];
+    const primaryLower = Math.min(primaryNote, nearest);
+    const primaryUpper = Math.max(primaryNote, nearest);
+    allPairs.sort((first, second) => Number(!(first.lower === primaryLower && first.upper === primaryUpper)) - Number(!(second.lower === primaryLower && second.upper === primaryUpper)));
   }
   const links = allPairs.length <= IMMERSION_MAX_INTERVAL_LINKS
     ? allPairs

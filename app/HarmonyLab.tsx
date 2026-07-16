@@ -185,7 +185,7 @@ function liveFieldShape(field: LiveHarmonyField) {
 }
 
 function liveFieldIntervals(field: LiveHarmonyField) {
-  return field.intervals.map((pair) => `${pair.distance.semitones} keys ≈ ${pair.distance.landmarkLabel}`).join(" · ");
+  return field.intervals.map((pair) => `${pair.distance.semitones} semitone${pair.distance.semitones === 1 ? "" : "s"} ≈ ${pair.distance.landmarkLabel}`).join(" · ");
 }
 
 function affordanceAvailability(affordance: { delta: number; direction: string }) {
@@ -219,7 +219,7 @@ function LiveHarmonyBridge({
     ? [...transition.affordanceDelta].sort((first, second) => Math.abs(second.delta) - Math.abs(first.delta))[0]
     : null;
   const accessibleSummary = previous && current && transition
-    ? `Previous attacked field shape ${liveFieldShape(previous)}. Current attacked field shape ${liveFieldShape(current)}. Nearest voices moved ${transition.voiceLeading.totalMotion} equal-key ${transition.voiceLeading.totalMotion === 1 ? "step" : "steps"} in total; largest move ${transition.voiceLeading.largestLeap}. Under the fixed harmonic teaching spectrum, roughness changed ${signedPoint(transition.sensoryDelta.roughness)} points and fusion changed ${signedPoint(transition.sensoryDelta.fusion)} points. Listener experience is not inferred.`
+    ? `Previous attacked field semitone shape ${liveFieldShape(previous)}. Current attacked field semitone shape ${liveFieldShape(current)}. Nearest voices moved ${transition.voiceLeading.totalMotion} semitone${transition.voiceLeading.totalMotion === 1 ? "" : "s"} in total; largest move ${transition.voiceLeading.largestLeap} semitone${transition.voiceLeading.largestLeap === 1 ? "" : "s"}. Under the fixed harmonic teaching spectrum, roughness changed ${signedPoint(transition.sensoryDelta.roughness)} points and fusion changed ${signedPoint(transition.sensoryDelta.fusion)} points. Listener experience is not inferred.`
     : "A second compact attacked field is needed before a chord change can be compared.";
 
   return (
@@ -254,7 +254,7 @@ function LiveHarmonyBridge({
               <text className="live-harmony-field-label" x="428" y="252" textAnchor="middle">current · square</text>
             </svg>
             <div className="live-harmony-relationship">
-              <span>Interval structure above each bass</span>
+              <span>Semitone structure above each bass</span>
               <strong>{liveFieldShape(previous)} <i aria-hidden="true">→</i> {liveFieldShape(current)}</strong>
               <small>{liveFieldIntervals(previous)}<br />{liveFieldIntervals(current)}</small>
             </div>
@@ -274,8 +274,8 @@ function LiveHarmonyBridge({
 
           <div className="live-harmony-lenses" aria-label="Five separate evidence lenses for the chord change">
             <article><span>Sound</span><em>measured MIDI</em><strong>{previous.notes.length} → {current.notes.length} attacked keys</strong><small>{previous.kind} {previous.spreadMs.toFixed(0)} ms → {current.kind} {current.spreadMs.toFixed(0)} ms. Velocity is not treated as acoustic loudness.</small></article>
-            <article><span>Relationships</span><em>derived from keys</em><strong>{liveFieldShape(previous)} → {liveFieldShape(current)}</strong><small>Equal-key offsets above each field’s bass; register-independent, unlike the physical spectrum.</small></article>
-            <article><span>Motion</span><em>nearest-voice model</em><strong>{transition.voiceLeading.totalMotion} key {transition.voiceLeading.totalMotion === 1 ? "step" : "steps"} total</strong><small>Largest {transition.voiceLeading.largestLeap} {transition.voiceLeading.largestLeap === 1 ? "step" : "steps"}; {transition.voiceLeading.motionClasses.join(" + ") || "held or single-direction motion"}. Not fingering or voice identity.</small></article>
+            <article><span>Relationships</span><em>derived from MIDI</em><strong>{liveFieldShape(previous)} → {liveFieldShape(current)} semitones above bass</strong><small>One semitone is one equal-tempered key step; this shape is register-independent, unlike the physical spectrum.</small></article>
+            <article><span>Motion</span><em>nearest-voice model</em><strong>{transition.voiceLeading.totalMotion} semitone{transition.voiceLeading.totalMotion === 1 ? "" : "s"} total</strong><small>Largest {transition.voiceLeading.largestLeap} semitone{transition.voiceLeading.largestLeap === 1 ? "" : "s"}; {transition.voiceLeading.motionClasses.join(" + ") || "held or single-direction motion"}. Not fingering, voice identity, or a predicted resolution.</small></article>
             <article><span>Auditory</span><em>assumed spectrum</em><strong>friction {signedPoint(transition.sensoryDelta.roughness)} · fusion {signedPoint(transition.sensoryDelta.fusion)}</strong><small>Exact harmonic stack, nine partials, 7 dB/octave. The keyboard and DAW audio were not analyzed.</small></article>
             <article><span>Experience</span><em>listener only</em><strong>Not inferred</strong><small>{mostChangedAffordance ? `${affordanceAvailability(mostChangedAffordance)}; the model does not say you felt it.` : "The modeled possibilities do not determine your response."} Context, memory, style, purpose, and hearing can change the result.</small></article>
           </div>

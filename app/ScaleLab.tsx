@@ -180,6 +180,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
   const degree = degrees[Math.min(selectedDegree, degrees.length - 1)];
   const evidence = useMemo(() => degreeEvidence(referenceHz, degree), [referenceHz, degree]);
   const recipe = useMemo(() => intervalStepRecipe(preset.steps, degree.index), [preset.steps, degree.index]);
+  const recipeSemitones = recipe.reduce((sum, segment) => sum + segment.step, 0);
   const ascending = degrees.map((_, index) => index);
   const descending = [...ascending].reverse();
   const fullOrbit = [...ascending, highDoIndex, ...descending];
@@ -218,16 +219,16 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
 
   const renderFingerprint = (highlightCount = -1) => (
     <div className="fingerprint-wrap">
-      <ol className="step-fingerprint" aria-label={`Gap pattern from Do: ${fingerprint.map((segment, index) => `${segment.width} from ${preset.syllables[index]} to ${preset.syllables[(index + 1) % preset.syllables.length]}`).join("; ")}`}>
+      <ol className="step-fingerprint" aria-label={`Twelve-semitone octave gap pattern from Do: ${fingerprint.map((segment, index) => `${segment.step} semitone${segment.step === 1 ? "" : "s"} from ${preset.syllables[index]} to ${preset.syllables[(index + 1) % preset.syllables.length]}`).join("; ")}`}>
         {fingerprint.map((segment, index) => (
-          <li key={`${segment.step}-${index}`} className={highlightCount >= 0 && index < highlightCount ? "is-on-path" : ""} style={{ flexGrow: segment.step }} aria-label={`${preset.syllables[index]} to ${preset.syllables[(index + 1) % preset.syllables.length]}: ${segment.width} gap, frequency multiplied by ${stepFrequencyRatio(segment.step).toFixed(3)}`}>
-            <span>{segment.width}</span>
+          <li key={`${segment.step}-${index}`} className={highlightCount >= 0 && index < highlightCount ? "is-on-path" : ""} style={{ flexGrow: segment.step }} aria-label={`${preset.syllables[index]} to ${preset.syllables[(index + 1) % preset.syllables.length]}: ${segment.step} semitone${segment.step === 1 ? "" : "s"}, described as ${segment.width}, frequency multiplied by ${stepFrequencyRatio(segment.step).toFixed(3)}`}>
+            <span>{segment.step} st</span>
             <i aria-hidden="true" />
-            <small>{preset.syllables[index]} → {preset.syllables[(index + 1) % preset.syllables.length]}</small>
+            <small>{segment.width} · {preset.syllables[index]} → {preset.syllables[(index + 1) % preset.syllables.length]}</small>
           </li>
         ))}
       </ol>
-      <p className="fingerprint-summary"><strong>Gap route:</strong> {fingerprint.map((segment) => segment.width).join(" · ")}</p>
+      <p className="fingerprint-summary"><strong>Gap route:</strong> {fingerprint.map((segment) => segment.step).join("–")} semitones · totals 12</p>
     </div>
   );
 
@@ -237,7 +238,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
         <div>
           <p className="section-kicker">Guided lesson · hear first, explain second</p>
           <h2 id="scale-title">Hear home. Build intervals. Predict what comes next.</h2>
-          <p>A scale is a repeating path through pitch space. Each path starts on Do and reaches the next Do—twice the frequency—through its own pattern of gaps. Do means home in this path, not one fixed pitch. The syllables are a movable memory aid; the gaps are the physical map.</p>
+          <p>A scale is a repeating path through pitch space. Here one semitone means one equal-tempered piano-key step, and twelve reach the next Do at twice the frequency. Do means home in this path, not one fixed pitch. The syllables are a movable memory aid; the semitone gaps are the physical map.</p>
         </div>
         <div className="scale-rule" role="note">
           <span>Keep three questions separate</span>
@@ -279,7 +280,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
               </div>
               <div className="home-playhead"><span>{audio.isPlaying ? "Now sounding" : "Route ready"}</span><strong>{audio.activeDegrees.length ? degrees[audio.activeDegrees[0]]?.syllable ?? "Do" : "Do"}</strong></div>
               {renderFingerprint()}
-              <p>Longer bars mean larger pitch jumps. The full row spans one octave, from Do to the next Do.</p>
+              <p>Each bar gives the exact semitone jump; its length carries the same number. The full row totals twelve semitones, from Do to the next Do.</p>
               <div className="primary-listen-actions">
                 <button type="button" onClick={() => void audio.playSequence(fullOrbit, { label: "the scale ending on low Do" })}>Hear it end on low Do</button>
                 <button type="button" onClick={() => void audio.playSequence(unfinishedOrbit, { label: "the scale stopping one gap above Do" })}>Hear it stop one gap above Do</button>
@@ -338,7 +339,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
                           if (event.key === "ArrowRight" || event.key === "ArrowDown") { event.preventDefault(); moveDegreeSelection(item.index, 1); }
                         }}
                       />
-                      <strong>{item.syllable}</strong><span>{item.index === 0 ? "home" : `${Math.round(item.cents)}¢`}</span>
+                      <strong>{item.syllable}</strong><span>{item.index === 0 ? "home · 0 st" : `+${item.stepsFromDo} st · ${Math.round(item.cents)}¢`}</span>
                     </label>
                   );
                 })}
@@ -346,7 +347,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
               {renderFingerprint(degree.index)}
               <div className="interval-recipe">
                 <span>From Do to {degree.syllable}</span>
-                <strong>{recipe.length === 0 ? "same pitch" : recipe.map((segment) => segment.width).join(" + ")}</strong>
+                <strong>{recipe.length === 0 ? "same pitch · 0 semitones" : `${recipe.map((segment) => segment.step).join(" + ")} = ${recipeSemitones} semitones`}</strong>
               </div>
             </div>
 
@@ -361,13 +362,13 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
 
               <div className="neighbor-geometry">
                 <span>A nearby gap does not decide what comes next</span>
-                <p><strong>Into {degree.syllable}:</strong> {degree.index === 0 ? "the path returns from the last pitch" : fingerprint[degree.index - 1].width} gap. <strong>Forward:</strong> {fingerprint[degree.index].width} gap toward {degrees[(degree.index + 1) % degrees.length].syllable}. A smaller next gap makes a shorter move available. The phrase decides whether it feels expected.</p>
+                <p><strong>Into {degree.syllable}:</strong> {degree.index === 0 ? `${closingSegment.step} semitones from the last pitch` : `${fingerprint[degree.index - 1].step} semitone${fingerprint[degree.index - 1].step === 1 ? "" : "s"}`}. <strong>Forward:</strong> {fingerprint[degree.index].step} semitone{fingerprint[degree.index].step === 1 ? "" : "s"} toward {degrees[(degree.index + 1) % degrees.length].syllable}. A smaller next gap makes a shorter move available. The phrase decides whether it feels expected.</p>
               </div>
 
               <details className="physics-details">
                 <summary>Show the numbers and sound model</summary>
                 <dl>
-                  <div><dt>pitch distance</dt><dd><strong>{Math.round(degree.cents)} cents</strong><span>ratio {degree.ratio.toFixed(4)} : 1</span></dd></div>
+                  <div><dt>pitch distance</dt><dd><strong>{degree.stepsFromDo} semitones · {Math.round(degree.cents)} cents</strong><span>ratio {degree.ratio.toFixed(4)} : 1</span></dd></div>
                   <div><dt>frequencies played</dt><dd><strong>{referenceHz} → {evidence.targetHz.toFixed(1)} Hz</strong><span>changes when transposed</span></dd></div>
                   <div><dt>nearest simple ratio</dt><dd><strong>{evidence.approximation.numerator}:{evidence.approximation.denominator}</strong><span>{Math.abs(evidence.approximation.errorCents).toFixed(1)} cents away</span></dd></div>
                   <div><dt>overtone-interaction model</dt><dd><strong>crowding {Math.round(evidence.roughness * 100)}% · alignment {Math.round(evidence.overlap * 100)}%</strong><span>not a quality or tension score</span></dd></div>
@@ -400,7 +401,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
                 <button type="button" aria-pressed={pullResponse === "elsewhere"} onClick={() => setPullResponse("elsewhere")}>Somewhere else</button>
                 <button type="button" aria-pressed={pullResponse === "unclear"} onClick={() => setPullResponse("unclear")}>No clear pull</button>
               </div>
-              {pullResponse ? <p className="response-feedback">{pullResponse === "home" ? `Do is only one ${closingSegment.width} gap away, but distance alone does not create the pull. Repetition and learned phrase patterns help make Do feel expected.` : pullResponse === "elsewhere" ? "You expected another route. A pitch has no fixed destination; the phrase, style, and your listening history shape what feels likely." : "No clear pull is informative. Repetition, bass, duration, rhythm, style, and attention can make a center clearer."}</p> : null}
+              {pullResponse ? <p className="response-feedback">{pullResponse === "home" ? `Do is ${closingSegment.step} semitone${closingSegment.step === 1 ? "" : "s"} away in this route, but distance alone does not create the pull. Repetition and learned phrase patterns help make Do feel expected.` : pullResponse === "elsewhere" ? "You expected another route. A pitch has no fixed destination; the phrase, style, and your listening history shape what feels likely." : "No clear pull is informative. Repetition, bass, duration, rhythm, style, and attention can make a center clearer."}</p> : null}
             </div>
           </div>
 
