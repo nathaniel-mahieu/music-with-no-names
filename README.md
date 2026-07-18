@@ -4,7 +4,9 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Quick HUD Scale Reset v2.02**. It provides:
+The current milestone is **Register-Aware Scale Fingering v2.03**. It provides:
+
+- An unobtrusive ascending fingering strip inside the Immersion Scale Lens. The recent played octave selects a left-hand suggestion below middle C or a right-hand suggestion at and above it; each route position and octave closure receives a visible 1–5 finger number, and the crossing point is written. Seven-, six-, and five-position routes use compact route-count drills while the panel states that black-key layout, direction, hand size, and surrounding music can require another choice.
 
 - Two direct actions inside the Immersion Scale Lens. `Reset Do · next note` arms exactly one new MIDI or on-screen attack as movable Do, retains the current route, and locks the frame. `Reset frame · play scale` starts a fresh evidence window at the current attack, removes the pinned frame from the URL, and counts only subsequently played pitch classes; the panel shows progress toward the four-distinct-note minimum and can restart the window with one click. Arming Do cancels frame learning so the two actions cannot silently compete.
 

@@ -12,6 +12,7 @@ import {
   scaleSemitones,
   semitoneFieldProfile,
   suggestChordFingering,
+  suggestScaleFingering,
   tonalTendency,
   voiceLeadingProfile,
   type ChordCandidate,
@@ -19,6 +20,7 @@ import {
   type MotifTransformation,
   type PianoScale,
   type ScaleCandidate,
+  type ScaleFingeringSuggestion,
   type ScaleFrameSnapshot,
   type TonalGravityCandidate,
 } from "@/lib/piano-model";
@@ -274,6 +276,46 @@ function ChordFingeringGraphic({
       })}
     </svg>
     <small>Register guide: center below middle C suggests left hand; center at or above it suggests right. Hand size, black keys, crossing, accompaniment, and the next chord may favor another choice.</small>
+  </div>;
+}
+
+function ScaleFingeringCue({
+  suggestion,
+  scale,
+  showConventions,
+}: {
+  suggestion: ScaleFingeringSuggestion;
+  scale: PianoScale;
+  showConventions: boolean;
+}) {
+  const handLabel = suggestion.hand === "left" ? "left" : "right";
+  const registerLabel = suggestion.registerRule === "below-middle-c"
+    ? "octave centered below middle C"
+    : "octave centered at or above middle C";
+  const routeLabels = [...scale.solfege, scale.solfege[0]];
+  const visibleRange = showConventions
+    ? `${conventionalPitchName(suggestion.notes[0])}–${conventionalPitchName(suggestion.notes.at(-1)!)}`
+    : registerLabel;
+  const crossingCopy = suggestion.hand === "right"
+    ? `thumb under after route degree ${suggestion.crossingAfterDegree}`
+    : `cross finger ${suggestion.fingers[suggestion.crossingAfterDegree]} over after route degree ${suggestion.crossingAfterDegree}`;
+  const spokenGuide = routeLabels
+    .map((label, index) => `${index === routeLabels.length - 1 ? "octave Do" : label}, finger ${suggestion.fingers[index]}`)
+    .join(", ");
+
+  return <div
+    className="piano-immersion-scale-fingering"
+    role="img"
+    aria-label={`Suggested ${handLabel}-hand ascending octave fingering for ${visibleRange}: ${spokenGuide}. ${crossingCopy}.`}
+  >
+    <div><span>Suggested {handLabel} hand · ascending</span><strong>{visibleRange}</strong></div>
+    <ol aria-hidden="true">
+      {suggestion.fingers.map((finger, index) => <li key={`${routeLabels[index]}-${index}`}>
+        <span>{index === suggestion.fingers.length - 1 ? "Do′" : routeLabels[index]}</span>
+        <b>{finger}</b>
+      </li>)}
+    </ol>
+    <small>{crossingCopy} · 1 thumb · 5 pinky. One compact route-count drill; black-key layout, direction, hand size, and the surrounding passage can favor another fingering.</small>
   </div>;
 }
 
@@ -720,6 +762,7 @@ export const PianoImmersion = memo(function PianoImmersion({
   const activeScalePositions = new Set(activeNotes.map((active) => (pitchClassFromMidi(active.note) - selectedRootPitchClass + 12) % 12));
   const latestScalePosition = latestEvent ? (pitchClassFromMidi(latestEvent.note) - selectedRootPitchClass + 12) % 12 : null;
   const latestScaleDegree = latestScalePosition == null ? -1 : selectedScalePositions.indexOf(latestScalePosition);
+  const scaleFingering = suggestScaleFingering(recentPath.events.map((event) => event.note), doMidi, scale);
   const selectedScaleName = showConventions
     ? `${CONVENTIONAL_PITCH_CLASSES[selectedRootPitchClass]} ${scale.conventionalName}`
     : `Do + ${scale.name}`;
@@ -733,7 +776,7 @@ export const PianoImmersion = memo(function PianoImmersion({
         ? `${frameLearningDistinctPitchClasses}/4 distinct notes since reset · play ${4 - frameLearningDistinctPitchClasses} more distinct scale note${4 - frameLearningDistinctPitchClasses === 1 ? "" : "s"}.`
         : `${frameLearningDistinctPitchClasses} distinct notes since reset · the frame can now stabilize from only this new played evidence.`
       : "Reset Do from one note, or reset the frame and play a scale as fresh evidence.";
-  const scaleLensSummary = `${selectedScaleName}. Twelve equal cells run from selected Do through the eleven higher pitch classes; each cell is one semitone. Selected route positions are ${selectedScalePositions.join(", ")} semitones from Do with cyclic gaps ${scale.steps.join(", ")}. ${recentPath.events.length ? `Recent five-attack window occupies ${[...recentScalePositions].sort((first, second) => first - second).join(", ")} semitones from Do.` : "No recent attacks."} ${latestEvent ? `Latest attack: ${latestScaleCopy}.` : ""} ${activeScalePositions.size ? `${activeScalePositions.size} positions are currently sounding.` : "No positions are currently sounding."}`;
+  const scaleLensSummary = `${selectedScaleName}. Twelve equal cells run from selected Do through the eleven higher pitch classes; each cell is one semitone. Selected route positions are ${selectedScalePositions.join(", ")} semitones from Do with cyclic gaps ${scale.steps.join(", ")}. ${recentPath.events.length ? `Recent five-attack window occupies ${[...recentScalePositions].sort((first, second) => first - second).join(", ")} semitones from Do.` : "No recent attacks."} ${latestEvent ? `Latest attack: ${latestScaleCopy}.` : ""} ${activeScalePositions.size ? `${activeScalePositions.size} positions are currently sounding.` : "No positions are currently sounding."} ${scaleFingering ? `The recent register suggests the ${scaleFingering.hand} hand for one ascending octave drill.` : "Play one note to reveal a register-based fingering cue."}`;
   const latestTransitionSpoken = !latestTransition
     ? "A second isolated attack will reveal the exact signed MIDI-key difference"
     : latestTransition.direction === "up"
@@ -1277,6 +1320,7 @@ export const PianoImmersion = memo(function PianoImmersion({
               })}
             </div>
             <div className="piano-immersion-scale-axis" aria-hidden="true"><span>Do · 0</span><span>each cell = 1 semitone</span><span>12 · octave</span></div>
+            {scaleFingering ? <ScaleFingeringCue suggestion={scaleFingering} scale={scale} showConventions={showConventions} /> : null}
             <p className="piano-immersion-scale-reading"><span>Latest position</span><strong>{latestScaleCopy}</strong></p>
             <p className="piano-immersion-scale-reading"><span>Route gap loop</span><strong>{scale.steps.join("–")} st</strong><small>{selectedCoveredCount}/{routePitchClasses.size} route positions visited in retained memory</small></p>
             <small>Filled cell = selected route degree · dot = recent five-attack position · double dot = latest · outline = sounding. This is the chosen scale coordinate, not a detected key.</small>

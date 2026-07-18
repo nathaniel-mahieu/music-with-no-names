@@ -57,6 +57,7 @@ import {
   scaleFrameTimeline,
   scaleSemitones,
   suggestChordFingering,
+  suggestScaleFingering,
   pushPhraseEvent,
   pushRollingNoteEvent,
   resolutionForks,
@@ -1414,6 +1415,27 @@ test("suggests left hand below middle C and uses the voicing center for crossing
 
   assert.equal(suggestChordFingering([57, 60, 64], crossingRight)?.hand, "right");
   assert.deepEqual(suggestChordFingering([43, 47, 50, 53], lowSeventh)?.fingers, [5, 3, 2, 1]);
+});
+
+test("suggests an octave-scale hand and compact fingering from the recent register", () => {
+  const bright = PIANO_SCALES[0];
+  const low = suggestScaleFingering([48, 50, 52, 53, 55], 60, bright);
+  assert.equal(low?.hand, "left");
+  assert.equal(low?.registerRule, "below-middle-c");
+  assert.deepEqual(low?.notes, [48, 50, 52, 53, 55, 57, 59, 60]);
+  assert.deepEqual(low?.fingers, [5, 4, 3, 2, 1, 3, 2, 1]);
+  assert.equal(low?.crossingAfterDegree, 5);
+
+  const high = suggestScaleFingering([60, 62, 64, 65, 67], 60, bright);
+  assert.equal(high?.hand, "right");
+  assert.equal(high?.registerRule, "middle-c-or-above");
+  assert.deepEqual(high?.fingers, [1, 2, 3, 1, 2, 3, 4, 5]);
+  assert.equal(high?.crossingAfterDegree, 3);
+
+  assert.deepEqual(suggestScaleFingering([60], 60, PIANO_SCALES[2])?.fingers, [1, 2, 3, 1, 2, 3]);
+  assert.deepEqual(suggestScaleFingering([60], 60, PIANO_SCALES[3])?.fingers, [1, 2, 3, 1, 2, 3, 4]);
+  assert.equal(suggestScaleFingering([], 60, bright), null);
+  assert.throws(() => suggestScaleFingering([Number.NaN], 60, bright), RangeError);
 });
 
 test("ranks nearby scale chords by retained tones and names the concrete move", () => {

@@ -767,6 +767,16 @@ export type ChordFingeringSuggestion = {
   basis: "triad-inversion" | "four-note-chord" | "even-spread";
 };
 
+export type ScaleFingeringSuggestion = {
+  hand: "left" | "right";
+  notes: number[];
+  fingers: number[];
+  registerCenterMidi: number;
+  registerRule: "below-middle-c" | "middle-c-or-above";
+  crossingAfterDegree: number;
+  basis: "seven-position" | "six-position" | "five-position";
+};
+
 export type NearbyChord = {
   rootPitchClass: number;
   pitchClasses: number[];
@@ -3433,6 +3443,54 @@ export function suggestChordFingering(notes: number[], candidate: ChordCandidate
     registerCenterMidi,
     registerRule,
     basis: "even-spread",
+  };
+}
+
+/**
+ * Suggests one compact ascending octave drill for the selected route. The
+ * octave nearest the recent played register determines the realized notes;
+ * routes centered below middle C use the left-hand pattern and higher routes
+ * use the right. These are route-count patterns, not a claim that every key,
+ * hand, articulation, direction, or surrounding passage should use them.
+ */
+export function suggestScaleFingering(playedNotes: number[], doMidi: number, scale: PianoScale): ScaleFingeringSuggestion | null {
+  if (!playedNotes.length) return null;
+  if (playedNotes.some((note) => !Number.isFinite(note) || note < 0 || note > 127)) {
+    throw new RangeError("Scale-fingering notes must be finite MIDI positions from 0 through 127.");
+  }
+  const recentNotes = playedNotes.slice(-5).map(Math.round);
+  const playedCenter = recentNotes.reduce((sum, note) => sum + note, 0) / recentNotes.length;
+  const rootPitchClass = pitchClassFromMidi(doMidi);
+  let octaveRoot = Math.round((playedCenter - 6 - rootPitchClass) / 12) * 12 + rootPitchClass;
+  while (octaveRoot < 0) octaveRoot += 12;
+  while (octaveRoot + 12 > 127) octaveRoot -= 12;
+  const positions = [...scaleSemitones(scale), 12];
+  const routeCount = scale.solfege.length;
+  const registerCenterMidi = octaveRoot + 6;
+  const hand = registerCenterMidi < 60 ? "left" : "right";
+  const registerRule = hand === "left" ? "below-middle-c" : "middle-c-or-above";
+  const patterns = routeCount === 7
+    ? { right: [1, 2, 3, 1, 2, 3, 4, 5], left: [5, 4, 3, 2, 1, 3, 2, 1], basis: "seven-position" as const }
+    : routeCount === 6
+      ? { right: [1, 2, 3, 1, 2, 3, 4], left: [4, 3, 2, 1, 3, 2, 1], basis: "six-position" as const }
+      : routeCount === 5
+        ? { right: [1, 2, 3, 1, 2, 3], left: [3, 2, 1, 3, 2, 1], basis: "five-position" as const }
+        : null;
+  if (!patterns || positions.length !== patterns[hand].length) return null;
+  const fingers = patterns[hand];
+  const crossingIndex = fingers.findIndex((finger, index) => {
+    const next = fingers[index + 1];
+    return next != null && (hand === "right" ? next < finger : next > finger);
+  });
+  if (crossingIndex < 0) return null;
+  return {
+    hand,
+    notes: positions.map((position) => octaveRoot + position),
+    fingers,
+    registerCenterMidi,
+    registerRule,
+    crossingAfterDegree: crossingIndex + 1,
+    basis: patterns.basis,
   };
 }
 

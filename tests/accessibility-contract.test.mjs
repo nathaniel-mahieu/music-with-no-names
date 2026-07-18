@@ -118,6 +118,13 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(immersion, /center below middle C suggests left hand/);
   assert.match(immersion, /center at or above it suggests right/);
   assert.match(immersion, /Hand size, black keys, crossing, accompaniment, and the next chord may favor another choice/);
+  assert.match(immersion, /function ScaleFingeringCue/);
+  assert.match(immersion, /Suggested \{handLabel\} hand · ascending/);
+  assert.match(immersion, /role="img"[\s\S]*Suggested \$\{handLabel\}-hand ascending octave fingering/);
+  assert.match(immersion, /octave centered below middle C/);
+  assert.match(immersion, /octave centered at or above middle C/);
+  assert.match(immersion, /thumb under after route degree/);
+  assert.match(immersion, /black-key layout, direction, hand size, and the surrounding passage can favor another fingering/);
   assert.match(immersion, /melody and accompaniment are not isolated/);
   assert.match(immersion, /planImmersionAnnotations\(annotationInputs, 1/);
   assert.match(immersion, /<select id="immersion-sound-model"/);
@@ -184,6 +191,8 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(css, /\.piano-immersion-scale-grid > span\.is-active/);
   assert.match(css, /\.piano-immersion-scale-actions \{[\s\S]*pointer-events: auto/);
   assert.match(css, /\.piano-immersion-scale-actions button\[aria-pressed="true"\]/);
+  assert.match(css, /\.piano-immersion-scale-fingering ol \{[\s\S]*grid-template-columns: repeat\(auto-fit, minmax\(22px, 1fr\)\)/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-scale-fingering/);
   assert.match(css, /\.piano-immersion-fingering \.is-finger-marker circle/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-reading \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-voice-controls,[\s\S]*\.piano-voice-reading/);
