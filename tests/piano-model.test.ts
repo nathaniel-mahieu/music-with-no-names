@@ -56,6 +56,7 @@ import {
   scaleCoverage,
   scaleFrameTimeline,
   scaleSemitones,
+  suggestChordFingering,
   pushPhraseEvent,
   pushRollingNoteEvent,
   resolutionForks,
@@ -1366,6 +1367,33 @@ test("separates exact chord identity, inversion, and incomplete outlines", () =>
   assert.equal(candidates[0].inversion, 1);
   assert.equal(candidates[1].exact, false);
   assert.ok(candidates[1].missingPitchClasses.length > 0);
+
+  const fRoot = identifyChordCandidates([53, 57, 60], 1)[0];
+  const fFirstInversion = identifyChordCandidates([57, 60, 65], 1)[0];
+  const fSecondInversion = identifyChordCandidates([60, 65, 69], 1)[0];
+  const g7ThirdInversion = identifyChordCandidates([65, 67, 71, 74], 1)[0];
+  assert.deepEqual(
+    [fRoot, fFirstInversion, fSecondInversion].map((candidate) => [candidate.rootPitchClass, candidate.inversion]),
+    [[5, 0], [5, 1], [5, 2]],
+  );
+  assert.equal(g7ThirdInversion.rootPitchClass, 7);
+  assert.equal(g7ThirdInversion.inversion, 3);
+});
+
+test("suggests compact right-hand fingerings without presenting them as universal", () => {
+  const rootTriad = identifyChordCandidates([60, 64, 67], 1)[0];
+  const firstInversion = identifyChordCandidates([64, 67, 72], 1)[0];
+  const secondInversion = identifyChordCandidates([67, 72, 76], 1)[0];
+  const rootSeventh = identifyChordCandidates([55, 59, 62, 65], 1)[0];
+  const firstInversionSeventh = identifyChordCandidates([59, 62, 65, 67], 1)[0];
+
+  assert.deepEqual(suggestChordFingering([60, 64, 67], rootTriad)?.fingers, [1, 3, 5]);
+  assert.deepEqual(suggestChordFingering([64, 67, 72], firstInversion)?.fingers, [1, 2, 5]);
+  assert.deepEqual(suggestChordFingering([67, 72, 76], secondInversion)?.fingers, [1, 3, 5]);
+  assert.deepEqual(suggestChordFingering([55, 59, 62, 65], rootSeventh)?.fingers, [1, 2, 3, 5]);
+  assert.deepEqual(suggestChordFingering([59, 62, 65, 67], firstInversionSeventh)?.fingers, [1, 2, 4, 5]);
+  assert.equal(suggestChordFingering([48, 60, 67], rootTriad), null);
+  assert.equal(suggestChordFingering([60, 64, 67], null), null);
 });
 
 test("ranks nearby scale chords by retained tones and names the concrete move", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useId, useState, type CSSProperties } from "react";
+import { memo, useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   CONVENTIONAL_PITCH_CLASSES,
   conventionalPitchName,
@@ -11,9 +11,11 @@ import {
   pitchClassFromMidi,
   scaleSemitones,
   semitoneFieldProfile,
+  suggestChordFingering,
   tonalTendency,
   voiceLeadingProfile,
   type ChordCandidate,
+  type ChordFingeringSuggestion,
   type MotifTransformation,
   type PianoScale,
   type ScaleCandidate,
@@ -39,8 +41,8 @@ import {
   immersionCloudBounds,
   immersionCurve,
   immersionDirectionPoint,
-  immersionFifthsTide,
   immersionIntervalField,
+  immersionMeterGrid,
   immersionPhraseNewness,
   immersionPitchPoint,
   immersionRecentPath,
@@ -180,11 +182,97 @@ function pitchClassLabel(pitchClass: number, doMidi: number, scale: PianoScale, 
   return noteContext(nearestMidiForPitchClass(pitchClass, doMidi), doMidi, scale).syllable;
 }
 
+function chordInversionLabel(candidate: ChordCandidate) {
+  if (candidate.inversion === 0) return "root position";
+  if (candidate.inversion === 1) return "first inversion";
+  if (candidate.inversion === 2) return "second inversion";
+  if (candidate.inversion === 3) return "third inversion";
+  return "bass position unavailable";
+}
+
+const BLACK_KEY_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
+
+function isBlackKey(note: number) {
+  return BLACK_KEY_PITCH_CLASSES.has(pitchClassFromMidi(note));
+}
+
+function ChordFingeringGraphic({
+  suggestion,
+  chordName,
+  doMidi,
+  scale,
+  showConventions,
+}: {
+  suggestion: ChordFingeringSuggestion;
+  chordName: string;
+  doMidi: number;
+  scale: PianoScale;
+  showConventions: boolean;
+}) {
+  const firstNote = suggestion.notes[0];
+  const lastNote = suggestion.notes.at(-1) ?? firstNote;
+  let rangeStart = firstNote - 1;
+  let rangeEnd = lastNote + 1;
+  while (isBlackKey(rangeStart)) rangeStart -= 1;
+  while (isBlackKey(rangeEnd)) rangeEnd += 1;
+  const rangeNotes = Array.from({ length: rangeEnd - rangeStart + 1 }, (_, index) => rangeStart + index);
+  const whiteNotes = rangeNotes.filter((note) => !isBlackKey(note));
+  const whiteIndex = new Map(whiteNotes.map((note, index) => [note, index]));
+  const fingerByNote = new Map(suggestion.notes.map((note, index) => [note, suggestion.fingers[index]]));
+  const keyWidth = 24;
+  const blackWidth = 14;
+  const keyboardWidth = whiteNotes.length * keyWidth;
+  const spokenGuide = suggestion.notes
+    .map((note, index) => `${noteLabel(note, doMidi, scale, showConventions)} finger ${suggestion.fingers[index]}`)
+    .join(", ");
+  const markerPosition = (note: number) => {
+    if (!isBlackKey(note)) return { x: (whiteIndex.get(note) ?? 0) * keyWidth + keyWidth / 2, y: 52 };
+    let precedingWhite = note - 1;
+    while (isBlackKey(precedingWhite)) precedingWhite -= 1;
+    return { x: (whiteIndex.get(precedingWhite) ?? 0) * keyWidth + keyWidth, y: 27 };
+  };
+
+  return <div className="piano-immersion-fingering">
+    <div><span>Suggested right hand</span><small>1 thumb · 5 pinky</small></div>
+    <svg viewBox={`0 0 ${keyboardWidth} 66`} role="img" aria-label={`One common right-hand fingering for ${chordName}: ${spokenGuide}.`}>
+      {whiteNotes.map((note, index) => <rect
+        key={`white-${note}`}
+        className={`is-white${fingerByNote.has(note) ? " is-chord-key" : ""}`}
+        x={index * keyWidth + .5}
+        y={.5}
+        width={keyWidth - 1}
+        height={62}
+      />)}
+      {rangeNotes.filter(isBlackKey).map((note) => {
+        let precedingWhite = note - 1;
+        while (isBlackKey(precedingWhite)) precedingWhite -= 1;
+        const x = (whiteIndex.get(precedingWhite) ?? 0) * keyWidth + keyWidth - blackWidth / 2;
+        return <rect
+          key={`black-${note}`}
+          className={`is-black${fingerByNote.has(note) ? " is-chord-key" : ""}`}
+          x={x}
+          y={0}
+          width={blackWidth}
+          height={38}
+        />;
+      })}
+      {suggestion.notes.map((note) => {
+        const marker = markerPosition(note);
+        return <g key={`finger-${note}`} className="is-finger-marker">
+          <circle cx={marker.x} cy={marker.y} r={8.5} />
+          <text x={marker.x} y={marker.y + 3.4}>{fingerByNote.get(note)}</text>
+        </g>;
+      })}
+    </svg>
+    <small>One common compact-voicing choice; hand size, black keys, register, and the next chord may favor another fingering.</small>
+  </div>;
+}
+
 function shortScaleLabel(candidate: ScaleCandidate, doMidi: number, selectedScale: PianoScale, showConventions: boolean) {
   const root = pitchClassLabel(candidate.rootPitchClass, doMidi, selectedScale, showConventions);
   return showConventions
     ? `${root} ${candidate.scale.conventionalName}`
-    : `${root}-centered ${candidate.scale.name.replace(" route", "")}`;
+    : `${root}-centered ${candidate.scale.name.replace(" route", "")} (${candidate.scale.conventionalName})`;
 }
 
 function strongestContextCues(candidate: TonalGravityCandidate | null) {
@@ -201,23 +289,6 @@ function strongestContextCues(candidate: TonalGravityCandidate | null) {
     .sort((first, second) => second[1] - first[1])
     .slice(0, 2)
     .map(([cue]) => labels[cue]);
-}
-
-function centroid(points: Array<{ x: number; y: number }>) {
-  if (!points.length) return null;
-  return {
-    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
-  };
-}
-
-function fourPointStarPath(x: number, y: number, outer: number, inner: number) {
-  return [0, 1, 2, 3, 4, 5, 6, 7].map((index) => {
-    const radius = index % 2 === 0 ? outer : inner;
-    const angle = -Math.PI / 2 + index * Math.PI / 4;
-    const point = `${(x + Math.cos(angle) * radius).toFixed(2)} ${(y + Math.sin(angle) * radius).toFixed(2)}`;
-    return `${index === 0 ? "M" : "L"} ${point}`;
-  }).join(" ") + " Z";
 }
 
 function orbitArcPath(radius: number, startDegrees: number, endDegrees: number) {
@@ -258,6 +329,20 @@ function signedPercentDelta(value: number | null) {
 function signedSemitone(value: number) {
   if (value === 0) return "0";
   return `${value > 0 ? "+" : "−"}${Math.abs(value)}`;
+}
+
+function playMetronomeClick(context: AudioContext, downbeat: boolean) {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const now = context.currentTime;
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(downbeat ? 1320 : 880, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(downbeat ? 0.032 : 0.024, now + 0.004);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.042);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.05);
 }
 
 function nearbyPossibilityLabel(
@@ -303,6 +388,15 @@ export const PianoImmersion = memo(function PianoImmersion({
   onSoundModelChange,
 }: PianoImmersionProps) {
   const instanceId = useId().replace(/:/g, "");
+  const metronomeContextRef = useRef<AudioContext | null>(null);
+  const metronomeTimerRef = useRef<number | null>(null);
+  const [meterLocked, setMeterLocked] = useState(false);
+  const [meterBpm, setMeterBpm] = useState(120);
+  const [meterBeatsPerBar, setMeterBeatsPerBar] = useState(4);
+  const [meterAnchorMs, setMeterAnchorMs] = useState<number | null>(null);
+  const [meterPulseIndex, setMeterPulseIndex] = useState(0);
+  const [metronomeRunning, setMetronomeRunning] = useState(false);
+  const [metronomeNotice, setMetronomeNotice] = useState("Click is off; starting it captures a new downbeat.");
   const selectedRootPitchClass = pitchClassFromMidi(doMidi);
   const selectedSectors = immersionScaleSectors(scale, selectedRootPitchClass);
   const routePitchClasses = new Set(selectedSectors.filter((sector) => sector.inRoute).map((sector) => sector.pitchClass));
@@ -386,10 +480,26 @@ export const PianoImmersion = memo(function PianoImmersion({
     ])
     : null;
   const phraseNewness = immersionPhraseNewness(phraseEvents);
-  const fifthsTide = immersionFifthsTide(phraseEvents, events, chordWindowMs);
-  const fifthsDrift = fifthsTide.flatMap((scope) => scope.centerPoint ? [scope.centerPoint] : []);
   const attackKnowledge = immersionAttackKnowledge(phraseEvents, doMidi, scale);
   const contour = immersionAttackContour(phraseEvents.slice(-5), chordWindowMs);
+  const rhythmContour = immersionAttackContour(phraseEvents.slice(-12), chordWindowMs);
+  const unlockedRhythmGroups = [...new Set(rhythmContour.points.map((point) => point.groupIndex))].map((groupIndex) => {
+    const points = rhythmContour.points.filter((point) => point.groupIndex === groupIndex);
+    return {
+      id: points.map((point) => point.event.id).join("-"),
+      attackCount: points.length,
+      position: points.length ? Math.max(0, Math.min(1, (points[0].x - 350) / 500)) : 0,
+    };
+  });
+  const meterBeatMs = 60_000 / meterBpm;
+  const meterNowMs = meterAnchorMs == null
+    ? latestEvent?.onsetMs ?? 0
+    : metronomeRunning
+      ? meterAnchorMs + meterPulseIndex * meterBeatMs
+      : Math.max(meterAnchorMs, latestEvent?.onsetMs ?? meterAnchorMs);
+  const meterGrid = meterLocked && meterAnchorMs != null
+    ? immersionMeterGrid(phraseEvents.slice(-48), meterAnchorMs, meterNowMs, meterBpm, meterBeatsPerBar, chordWindowMs)
+    : null;
   const contourGroups = [...new Set(contour.points.map((point) => point.groupIndex))].map((groupIndex) => {
     const points = contour.points.filter((point) => point.groupIndex === groupIndex);
     return {
@@ -401,12 +511,6 @@ export const PianoImmersion = memo(function PianoImmersion({
       radiusY: Math.max(12, (Math.max(...points.map((point) => point.y)) - Math.min(...points.map((point) => point.y))) / 2 + 10),
     };
   });
-  const exactChordRoots = visibleClouds
-    .filter(({ measure }) => measure.candidate?.exact)
-    .map(({ measure }, index, selected) => ({
-      measure,
-      point: immersionDirectionPoint(measure.candidate!.rootPitchClass, 242 + index * (selected.length > 1 ? 4 : 0)),
-    }));
   const currentChordShape = matchingChord ? immersionChordShape(matchingChord.interpretedNotes) : null;
   const semitoneBinByDistance = new Map(semitoneProfile.intervalBins.map((bin) => [bin.semitones, bin]));
   const routeGapCounts = scale.steps.reduce((counts, gap) => counts.set(gap, (counts.get(gap) ?? 0) + 1), new Map<number, number>());
@@ -428,20 +532,9 @@ export const PianoImmersion = memo(function PianoImmersion({
       : frameSnapshot?.evidenceLabel === "several compatible frames" || (leadingCandidate && runnerCandidate && leadingCandidate.fit - runnerCandidate.fit < 0.08)
         ? "ambiguous"
         : "leading";
-  const leadingGhostSectors = scaleEvidenceState !== "gathering" && scaleEvidenceState !== "selected" && leadingCandidate
-    ? immersionScaleSectors(leadingCandidate.scale, leadingCandidate.rootPitchClass)
-    : [];
-  const runnerGhostSectors = scaleEvidenceState === "ambiguous" && runnerCandidate
-    ? immersionScaleSectors(runnerCandidate.scale, runnerCandidate.rootPitchClass)
-    : [];
   const retainedPitchClasses = [...seenPitchCounts.keys()];
   const selectedInScaleCount = retainedPitchClasses.filter((pitchClass) => routePitchClasses.has(pitchClass)).length;
   const selectedCoveredCount = [...routePitchClasses].filter((pitchClass) => seenPitchCounts.has(pitchClass)).length;
-  const routeEvidencePoint = scaleEvidenceState === "selected"
-    ? immersionDirectionPoint(selectedRootPitchClass, 333)
-    : leadingCandidate
-    ? immersionDirectionPoint(leadingCandidate.rootPitchClass, 333)
-    : doDirection;
   const routeEvidenceDetail = scaleEvidenceState === "selected"
     ? `${selectedInScaleCount}/${retainedPitchClasses.length || 0} played classes fit · ${selectedCoveredCount}/${routePitchClasses.size} route positions visited`
     : leadingCandidate
@@ -458,7 +551,6 @@ export const PianoImmersion = memo(function PianoImmersion({
           : "No catalog route evidence yet.";
   const contextCandidate = (frameSnapshot?.distinctPitchClasses ?? 0) >= 4 ? gravityCandidates[0] ?? null : null;
   const contextCues = strongestContextCues(contextCandidate);
-  const contextPoint = contextCandidate ? immersionDirectionPoint(contextCandidate.rootPitchClass, 224) : null;
   const contextName = contextCandidate
     ? pitchClassLabel(contextCandidate.rootPitchClass, doMidi, scale, showConventions)
     : "—";
@@ -467,20 +559,6 @@ export const PianoImmersion = memo(function PianoImmersion({
     ? `${routeCenterForAlignment === contextCandidate.rootPitchClass ? `Route membership and contextual-center cues currently align on ${contextName}` : `Contextual-center model leans toward ${contextName}`}${contextCues.length ? ` through ${contextCues.join(" + ")}` : ""}. This is a heuristic clue, not a detected key.`
     : "Contextual-center cues wait for at least four distinct pitch classes.";
   const newestMotif = motifs[0] ?? null;
-  const trailPointById = new Map(trail.map((entry) => [entry.event.id, entry.point]));
-  const motifSource = newestMotif ? centroid(newestMotif.sourceEventIds.flatMap((id) => {
-    const point = trailPointById.get(id);
-    return point ? [point] : [];
-  })) : null;
-  const motifTarget = newestMotif ? centroid(newestMotif.targetEventIds.flatMap((id) => {
-    const point = trailPointById.get(id);
-    return point ? [point] : [];
-  })) : null;
-  const motifBridge = newestMotif && motifSource && motifTarget ? {
-    source: motifSource,
-    target: motifTarget,
-    anchor: { x: (motifSource.x + motifTarget.x) / 2, y: (motifSource.y + motifTarget.y) / 2 },
-  } : null;
   const motifCopy = newestMotif?.kind === "exact-repeat"
     ? `A ${newestMotif.length}-attack relationship window returned with the same pitch and timing shape.`
     : newestMotif?.kind === "transposed-repeat"
@@ -519,8 +597,27 @@ export const PianoImmersion = memo(function PianoImmersion({
   const latestRecurrence = attackKnowledge
     ? `${attackKnowledge.pitchClassOccurrenceCount === 1 ? "first pitch-class visit" : `pitch-class return #${attackKnowledge.pitchClassOccurrenceCount}`}${attackKnowledge.attacksSincePreviousPitchClass != null ? ` · ${attackKnowledge.attacksSincePreviousPitchClass} intervening attacks` : ""} · ${formatHz(attackKnowledge.context.frequencyHz)} ref`
     : "";
+  const chordRootName = matchingChord?.candidate?.exact
+    ? pitchClassLabel(matchingChord.candidate.rootPitchClass, doMidi, scale, showConventions)
+    : null;
+  const chordQualityName = matchingChord?.candidate?.exact
+    ? matchingChord.candidate.template.name.toLowerCase().replace(" triad", "")
+    : null;
+  const chordBassName = matchingChord?.candidate?.exact
+    ? pitchClassLabel(matchingChord.candidate.bassPitchClass, doMidi, scale, showConventions)
+    : null;
+  const chordInversionName = matchingChord?.candidate?.exact
+    ? chordInversionLabel(matchingChord.candidate)
+    : null;
+  const chordBaseName = chordRootName && chordQualityName ? `${chordRootName} ${chordQualityName}` : null;
+  const chordDisplayName = chordBaseName && matchingChord?.candidate?.inversion != null && matchingChord.candidate.inversion > 0
+    ? `${chordBaseName} · ${chordInversionName}`
+    : chordBaseName;
+  const chordFingering = matchingChord?.candidate?.exact
+    ? suggestChordFingering(matchingChord.interpretedNotes, matchingChord.candidate)
+    : null;
   const chordIdentity = matchingChord?.candidate?.exact
-    ? `${pitchClassLabel(matchingChord.candidate.rootPitchClass, doMidi, scale, showConventions)} ${matchingChord.candidate.template.name.toLowerCase()} · exact catalog shape`
+    ? `${chordBaseName} · ${chordInversionName} · exact catalog shape`
     : matchingChord
       ? `${matchingChord.interpretedNotes.length}-position interpretation · no exact catalog label`
       : null;
@@ -573,6 +670,12 @@ export const PianoImmersion = memo(function PianoImmersion({
     : rhythmLens.repeatedGapShare != null
       ? `${Math.round(rhythmLens.repeatedGapShare * 100)}% of recent gap shapes recur`
       : "No beat, bar, or meter is inferred";
+  const meterStatusCopy = meterLocked
+    ? `${meterBpm} BPM · ${meterBeatsPerBar} pulses per bar${metronomeRunning ? ` · click running on pulse ${(meterPulseIndex % meterBeatsPerBar) + 1}` : " · click stopped"}`
+    : "Unlocked · recent onset spacing only";
+  const meterGridSummary = meterGrid
+    ? `Two-bar declared meter grid at ${meterGrid.bpm} beats per minute with ${meterGrid.beatsPerBar} pulses per bar. ${meterGrid.marks.length} onset groups are visible. Current pulse is ${meterGrid.currentBeatIndex + 1}. ${meterGrid.marks.map((mark) => `${mark.attackCount} attack${mark.attackCount === 1 ? "" : "s"} ${Math.abs(mark.offsetMs) < 1 ? "on" : `${Math.abs(Math.round(mark.offsetMs))} milliseconds ${mark.offsetMs > 0 ? "after" : "before"}`} its nearest pulse`).join("; ")}`
+    : `Recent chronological onset strip with ${unlockedRhythmGroups.length} groups; no beat or bar grid is asserted.`;
   const recentPathTitle = recentPath.completeFive && recentPath.monophonic
     ? "Recent five-note line"
     : recentPath.events.length
@@ -590,6 +693,9 @@ export const PianoImmersion = memo(function PianoImmersion({
   const recentCatalogCopy = recentPath.catalogCandidates.length
     ? recentPath.catalogCandidates.map((candidate) => `${shortScaleLabel(candidate, doMidi, scale, showConventions)} ${candidate.inScaleCount}/${candidate.uniqueNoteCount}`).join(" / ")
     : "At least three distinct pitch classes are needed for a useful catalog comparison";
+  const recentScaleNameCopy = recentPath.catalogCandidates.length
+    ? recentPath.catalogCandidates.map((candidate) => shortScaleLabel(candidate, doMidi, scale, showConventions)).join(" · ")
+    : "More distinct pitch classes are needed before naming compatible scale frames";
   const recentBoundaryCopy = !recentPath.events.length
     ? "Waiting for attacks"
     : recentPath.monophonic
@@ -679,52 +785,15 @@ export const PianoImmersion = memo(function PianoImmersion({
     ? `Resonance Sky contains ${Math.min(28, phraseEvents.length)} recent attack marks and ${events.length} bright microscope attacks. Latest: ${latestRole}; ${latestMove}; ${latestRecurrence}. The ${fieldProvenance} contains ${fieldNotes.length} positions and ${intervalField.totalPairCount} possible pairwise intervals; ${intervalField.links.length} bounded filaments are shown${sampleIntervalCopy ? `, led by ${sampleIntervalCopy}` : ""}. Field spacing: ${adjacentGapCopy}; octave-folded pair counts ${semitonePairCopy}. Selected route gaps: ${routeGapCopy}. ${chordCopy} ${routeEvidenceCopy} ${contextCopy} ${motifCopy ?? "No relationship-window return is currently drawn."} ${metricReading} Musical quality and listener feeling are not inferred.`
     : "Empty Resonance Sky. Direction follows the circle of fifths, depth follows semitone register, and the outer aurora shows the selected movable-Do route.";
   const liveSummary = latestEvent
-    ? `Latest keyboard interval: ${latestTransitionSpoken}${latestTransition ? `; ${latestTransition.character.spacingLabel}` : ""}. ${latestSequenceBoundary} Rhythm: ${rhythmSourceLabel}; ${rhythmDeviationCopy}. Harmony: ${chordPanelIdentity}; ${voiceMotionCopy}; modeled roughness ${percentage(currentPerception?.roughness ?? null)} and fusion ${percentage(fusion)}.`
+    ? `Latest keyboard interval: ${latestTransitionSpoken}${latestTransition ? `; ${latestTransition.character.spacingLabel}` : ""}. ${latestSequenceBoundary} Rhythm: ${meterStatusCopy}; ${rhythmDeviationCopy}. Harmony: ${chordDisplayName ?? chordPanelIdentity}; ${voiceMotionCopy}; modeled roughness ${percentage(currentPerception?.roughness ?? null)} and fusion ${percentage(fusion)}.${recentPath.completeFive && recentPath.monophonic ? ` Compatible five-note scale frames: ${recentScaleNameCopy}.` : ""}`
     : "Resonance Sky is ready. Play one key to place a pitch, then add attacks to reveal rhythm, harmony, and a recent path.";
-  const annotationInputs = [
-    ...(newestPoint ? [{
-      id: "latest-note",
-      anchorX: newestPoint.x,
-      anchorY: newestPoint.y,
-      lines: [latestRole],
-      priority: 100,
-    }] : []),
-    ...(matchingChord && visibleClouds.at(-1)?.interpretedHull ? [{
-      id: "current-chord",
-      anchorX: visibleClouds.at(-1)!.interpretedHull!.centerX,
-      anchorY: visibleClouds.at(-1)!.interpretedHull!.centerY,
-      lines: [`${matchingChord.gesture.attacks.length} attacks · ${matchingChord.gesture.kind} · ${Math.round(matchingChord.gesture.spreadMs)} ms`, chordIdentity ?? "unclassified onset field", chordStructure ?? "shape still forming"],
-      priority: 92,
-    }] : []),
-    ...(motifBridge && motifCopy ? [{
-      id: "motif",
-      anchorX: motifBridge.anchor.x,
-      anchorY: motifBridge.anchor.y,
-      lines: ["relationship-window echo", newestMotif?.kind === "transposed-repeat" ? `${newestMotif.length} attacks · same shape · ${keyMove(newestMotif.transpositionSemitones)}` : newestMotif?.kind === "rhythmic-variation" ? `${newestMotif.length} attacks · pitch shape kept · timing changed` : newestMotif?.kind === "altered-ending" ? `${newestMotif.length} attacks · opening kept · ending changed` : `${newestMotif?.length ?? 0} attacks · pitch + timing shape returned`],
-      priority: 80,
-    }] : []),
-    ...((scaleEvidenceState !== "gathering" || phraseEvents.length >= 4) ? [{
-      id: "route-evidence",
-      anchorX: routeEvidencePoint.x,
-      anchorY: routeEvidencePoint.y,
-      lines: [scaleEvidenceState === "ambiguous" ? "several catalog routes fit" : scaleEvidenceState === "selected" ? "selected working frame" : "leading catalog fit", scaleEvidenceState === "selected" ? `${selectedInScaleCount}/${retainedPitchClasses.length || 0} fit · ${selectedCoveredCount}/${routePitchClasses.size} route positions` : leadingCandidate ? `${leadingCandidate.inScaleCount}/${leadingCandidate.uniqueNoteCount} fit · ${leadingCandidate.routeCoveredCount}/${scaleSemitones(leadingCandidate.scale).length} route positions` : `${frameSnapshot?.distinctPitchClasses ?? 0} distinct positions`],
-      priority: 76,
-    }] : []),
-    ...(contextPoint ? [{
-      id: "context-center",
-      anchorX: contextPoint.x,
-      anchorY: contextPoint.y,
-      lines: ["contextual-center model", `${contextName} · ${contextCues.join(" + ") || "mixed cues"}`],
-      priority: 70,
-    }] : []),
-    ...(sampleInterval ? [{
-      id: "field-interval",
-      anchorX: (sampleInterval.lowerPoint.x + sampleInterval.upperPoint.x) / 2,
-      anchorY: (sampleInterval.lowerPoint.y + sampleInterval.upperPoint.y) / 2,
-      lines: [`${noteLabel(sampleInterval.lower, doMidi, scale, showConventions)} ↔ ${noteLabel(sampleInterval.upper, doMidi, scale, showConventions)} · ${sampleInterval.semitones} st`, `${sampleInterval.relationship} · near ${sampleInterval.landmarkLabel} · ${Math.round(Math.abs(sampleInterval.errorCents))}¢ offset`],
-      priority: 62,
-    }] : []),
-  ];
+  const annotationInputs = newestPoint ? [{
+    id: "latest-note",
+    anchorX: newestPoint.x,
+    anchorY: newestPoint.y,
+    lines: [latestRole],
+    priority: 100,
+  }] : [];
   const reservedAnnotationBounds = [
     { left: doDirection.x - 78, right: doDirection.x + 78, top: doDirection.y - 28, bottom: doDirection.y + 31 },
     { left: 704, right: 868, top: 56, bottom: 129 },
@@ -751,13 +820,88 @@ export const PianoImmersion = memo(function PianoImmersion({
     return () => window.clearTimeout(timer);
   }, [liveSummary]);
 
+  const stopMetronome = () => {
+    setMetronomeRunning(false);
+    setMetronomeNotice("Metronome click stopped.");
+    if (metronomeTimerRef.current != null) window.clearTimeout(metronomeTimerRef.current);
+    metronomeTimerRef.current = null;
+    const context = metronomeContextRef.current;
+    metronomeContextRef.current = null;
+    if (context && context.state !== "closed") void context.close();
+  };
+
+  const toggleMeterLock = () => {
+    if (meterLocked) {
+      stopMetronome();
+      setMeterLocked(false);
+      setMeterAnchorMs(null);
+      setMeterPulseIndex(0);
+      return;
+    }
+    setMeterAnchorMs(latestEvent?.onsetMs ?? performance.now());
+    setMeterPulseIndex(0);
+    setMeterLocked(true);
+  };
+
+  const toggleMetronome = async () => {
+    if (metronomeRunning) {
+      stopMetronome();
+      return;
+    }
+    try {
+      const anchorMs = performance.now();
+      const context = metronomeContextRef.current?.state === "closed"
+        ? null
+        : metronomeContextRef.current;
+      const nextContext = context ?? new window.AudioContext();
+      metronomeContextRef.current = nextContext;
+      await nextContext.resume();
+      setMeterAnchorMs(anchorMs);
+      setMeterPulseIndex(0);
+      setMeterLocked(true);
+      playMetronomeClick(nextContext, true);
+      setMetronomeNotice("Metronome click is running; the higher click marks the downbeat.");
+      setMetronomeRunning(true);
+    } catch {
+      setMetronomeNotice("The browser could not start audio. The visual meter remains available.");
+      setMetronomeRunning(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!metronomeRunning || meterAnchorMs == null) return;
+    let nextPulseIndex = 1;
+    const scheduleNext = () => {
+      const targetMs = meterAnchorMs + nextPulseIndex * (60_000 / meterBpm);
+      const delayMs = Math.max(0, targetMs - performance.now());
+      metronomeTimerRef.current = window.setTimeout(() => {
+        const context = metronomeContextRef.current;
+        if (context?.state === "running") playMetronomeClick(context, nextPulseIndex % meterBeatsPerBar === 0);
+        setMeterPulseIndex(nextPulseIndex);
+        nextPulseIndex += 1;
+        scheduleNext();
+      }, delayMs);
+    };
+    scheduleNext();
+    return () => {
+      if (metronomeTimerRef.current != null) window.clearTimeout(metronomeTimerRef.current);
+      metronomeTimerRef.current = null;
+    };
+  }, [meterAnchorMs, meterBeatsPerBar, meterBpm, metronomeRunning]);
+
+  useEffect(() => () => {
+    if (metronomeTimerRef.current != null) window.clearTimeout(metronomeTimerRef.current);
+    const context = metronomeContextRef.current;
+    if (context && context.state !== "closed") void context.close();
+  }, []);
+
   return (
     <section className="piano-immersion" aria-labelledby="piano-immersion-title">
       <div className="piano-immersion-intro">
         <div>
           <span>Immersion · analysis only</span>
           <h3 id="piano-immersion-title">Resonance Sky</h3>
-          <p>The exact signed semitone move now leads the recent path: first the physical key distance, then its acoustic coordinate, selected-frame context, and possible listening words. The center keeps fifths direction, register depth, simultaneity, and motion while rhythm and harmony remain separate edge questions.</p>
+          <p>The center now uses one fifths crown and simple attack circles: direction is pitch-class motion by fifths, depth is semitone register, and only sounding state adds an outer ring. Meter, chord identity, and five-note scale possibilities stay in the edge panels where their meaning can be stated directly.</p>
         </div>
         <label className="piano-immersion-model" htmlFor="immersion-sound-model">
           <span>Assumed spectrum</span>
@@ -809,28 +953,9 @@ export const PianoImmersion = memo(function PianoImmersion({
             </g>)}
           </g>
 
-          <g className="immersion-fifths-tide" aria-label="Circle-of-fifths attack density in the latest onset window, latest seven attacks, and retained phrase scopes">
-            {fifthsTide.map((scope) => <g key={scope.id} className={`is-${scope.id}`}>
-              {scope.eventCount ? <path className="immersion-tide-envelope" d={scope.densityPath}><title>{scope.label}: {scope.eventCount} attacks across {scope.uniquePitchClassCount} pitch classes</title></path> : null}
-              {scope.countsByFifthStep.map((count, fifthStep) => {
-                if (!count) return null;
-                const sector = selectedSectors[fifthStep];
-                const strength = count / Math.max(1, scope.maximumCount);
-                return <path key={fifthStep} className="immersion-tide-visit" d={immersionArcPath(sector.pitchClass, scope.radius, 6 + strength * 14)} style={{ "--immersion-tide": strength } as CSSProperties}><title>{scope.label}: {count} attack{count === 1 ? "" : "s"} at {pitchClassLabel(sector.pitchClass, doMidi, scale, showConventions)}</title></path>;
-              })}
-            </g>)}
-            {fifthsDrift.length > 1 ? <path className="immersion-fifths-drift" d={immersionCurve(fifthsDrift)}><title>Attack-density center drift across the three displayed scopes; diffuse scopes have no center</title></path> : null}
-          </g>
-
-          <g className="immersion-route-hypotheses" aria-label={routeEvidenceCopy}>
-            {leadingGhostSectors.filter((sector) => sector.inRoute).map((sector) => <path key={`leading-${sector.pitchClass}`} className="is-leading" d={immersionArcPath(sector.pitchClass, 335, 18)} />)}
-            {runnerGhostSectors.filter((sector) => sector.inRoute).map((sector) => <path key={`runner-${sector.pitchClass}`} className="is-runner" d={immersionArcPath(sector.pitchClass, 342, 13)} />)}
-          </g>
-
           <g className="immersion-scale-aurora" aria-label={`${scale.name} selected route across all twelve fifths positions`}>
             {selectedSectors.map((sector) => {
               const point = immersionPitchPoint(nearestMidiForPitchClass(sector.pitchClass, doMidi), doMidi);
-              const seed = immersionDirectionPoint(sector.pitchClass, 315);
               const labelPoint = immersionDirectionPoint(sector.pitchClass, 344);
               const seenCount = seenPitchCounts.get(sector.pitchClass) ?? 0;
               const label = sector.inRoute
@@ -838,7 +963,6 @@ export const PianoImmersion = memo(function PianoImmersion({
                 : "";
               return <g key={sector.pitchClass} className={`${sector.inRoute ? "is-route" : "is-outside-route"} ${seenCount ? "is-seen" : ""} ${sector.degreeIndex === 0 ? "is-home" : ""}`} style={{ "--immersion-pitch": immersionRoleColor(point, sector.inRoute) } as CSSProperties}>
                 <path d={immersionArcPath(sector.pitchClass, 326, sector.inRoute ? 22 : 13)}><title>{label || pitchClassLabel(sector.pitchClass, doMidi, scale, showConventions)} · {sector.inRoute ? `selected route degree ${sector.degreeIndex + 1}` : "outside the selected route"} · {seenCount || "no"} retained attack{seenCount === 1 ? "" : "s"}</title></path>
-                {seenCount ? <circle className="immersion-route-seed" cx={seed.x} cy={seed.y} r={Math.min(7, 2.5 + Math.sqrt(seenCount) * 1.4)} /> : null}
                 {label ? <text x={labelPoint.x} y={labelPoint.y + 4}>{label}</text> : null}
               </g>;
             })}
@@ -851,19 +975,6 @@ export const PianoImmersion = memo(function PianoImmersion({
             <text x={doDirection.x} y={doDirection.y + (doDirection.y < 350 ? 27 : -17)}>Do · {frameMode === "locked" ? "selected frame" : "working frame"}</text>
           </g>
 
-          {contextCandidate && contextPoint ? <g className="immersion-context-rosette" aria-label={contextCopy}>
-            <path d={fourPointStarPath(contextPoint.x, contextPoint.y, 13, 5)} />
-            {Object.entries(contextCandidate.components).filter(([cue]) => cue !== "routeFit").map(([cue, value], index, entries) => {
-              const angle = index / entries.length * Math.PI * 2 - Math.PI / 2;
-              return <circle key={cue} cx={contextPoint.x + Math.cos(angle) * 20} cy={contextPoint.y + Math.sin(angle) * 20} r={2.4 + value * 4} style={{ "--immersion-cue": value } as CSSProperties}><title>{cue}: one input to the contextual-center model</title></circle>;
-            })}
-          </g> : null}
-
-          <g className="immersion-chord-root-wake" aria-label={`${exactChordRoots.length} recent exact catalog chord roots folded onto fifths space`}>
-            {exactChordRoots.length > 1 ? <path className="immersion-root-curve" d={immersionCurve(exactChordRoots.map(({ point }) => point))} /> : null}
-            {exactChordRoots.map(({ measure, point }, index) => <path key={measure.gesture.id} className={index === exactChordRoots.length - 1 ? "is-latest" : ""} d={fourPointStarPath(point.x, point.y, 9, 4)}><title>{pitchClassLabel(measure.candidate!.rootPitchClass, doMidi, scale, showConventions)} exact catalog root; {measure.rootTravelSteps == null ? "no preceding exact root comparison" : `${measure.rootTravelSteps} fifth step${measure.rootTravelSteps === 1 ? "" : "s"} from the prior exact root; shortest circular distance, direction not retained`}</title></path>)}
-          </g>
-
           <g className="immersion-chord-clouds" aria-label={`${visibleClouds.length} recent timing-group membranes using the ${chordWindowMs} millisecond chord window`}>
             {visibleClouds.map(({ measure, interpretedHull, audibleHull, gradientId }) => interpretedHull ? <g key={measure.gesture.id} className={`${measure.gesture.kind === "rolled" ? "is-rolled" : "is-together"} ${measure.candidate?.exact ? "is-exact" : "is-incomplete"} ${measure === matchingChord ? "is-current" : "is-history"}`} style={measure === matchingChord && fusion != null ? { "--immersion-fusion": fusion } as CSSProperties : undefined}>
               {audibleHull ? <path className="immersion-audible-hull" d={audibleHull.path}><title>Outer edge: everything sounding at the timing-group close, including tones excluded from the chord interpretation</title></path> : null}
@@ -873,29 +984,6 @@ export const PianoImmersion = memo(function PianoImmersion({
           </g>
 
           {fieldCloud && currentCrunch != null ? <ellipse className="immersion-crunch-haze" cx={fieldCloud.centerX} cy={fieldCloud.centerY} rx={fieldCloud.radiusX + 10 + currentCrunch * 30} ry={fieldCloud.radiusY + 8 + currentCrunch * 24} style={{ "--immersion-crunch": currentCrunch } as CSSProperties}><title>Coral haze: modeled crunch for the {fieldProvenance} under {currentModel.shortLabel}</title></ellipse> : null}
-
-          {nearbyOptions.length ? <g className="immersion-nearby-fields" aria-label="Nearby in-route field possibilities, not predictions">
-            {nearbyOptions.map((option, index) => {
-              const center = immersionDirectionPoint(option.rootPitchClass, 172 + index * 24);
-              const copy = nearbyPossibilityLabel(matchingChord!.interpretedNotes, option.pitchClasses, doMidi, scale, showConventions);
-              return <g key={`${option.rootPitchClass}-${index}`}>
-                <circle className="immersion-nearby-orbit" cx={center.x} cy={center.y} r="17" />
-                {option.pitchClasses.map((pitchClass) => {
-                  const offset = immersionDirectionPoint(pitchClass, 10.5);
-                  return <circle key={pitchClass} className={option.commonPitchClasses.includes(pitchClass) ? "is-retained" : "is-entering"} cx={center.x + offset.x - 600} cy={center.y + offset.y - 350} r="3.2" />;
-                })}
-                <text x={center.x + 21} y={center.y + 4}>{option.syllable}</text>
-                <title>{option.syllable} possibility, not prediction: {copy}</title>
-              </g>;
-            })}
-          </g> : null}
-
-          {motifBridge && motifCopy ? <g className="immersion-motif-bridge" aria-label={motifCopy}>
-            <circle cx={motifBridge.source.x} cy={motifBridge.source.y} r="10" />
-            <path d={filamentPath(motifBridge.source, motifBridge.target)} />
-            <circle cx={motifBridge.target.x} cy={motifBridge.target.y} r="13" />
-            <title>{motifCopy} This is a detector relationship-window match, not a claim about intended melody or form.</title>
-          </g> : null}
 
           {voiceProfile ? <g className="immersion-voice-wake" aria-label={`${voiceProfile.strands.length} nearest-key voice paths from the previous grouped field`}>
             {voiceProfile.strands.map((strand, index) => {
@@ -948,40 +1036,25 @@ export const PianoImmersion = memo(function PianoImmersion({
               return <g key={semitones} className={`${bin ? "is-present" : ""} ${routeCount ? "is-route-gap" : ""} ${isHomeCue ? "is-home-cue" : ""}`}>
                 <line x1={point.x} y1={point.y - 4} x2={point.x} y2={point.y + 4} />
                 <circle cx={point.x} cy={point.y} r={bin ? Math.min(8, 3.2 + Math.sqrt(bin.pairCount) * 1.8) : 1.6} />
-                {routeCount ? <rect x={point.x - 3.5} y={point.y + 10} width="7" height="7" transform={`rotate(45 ${point.x} ${point.y + 13.5})`}><title>The selected route uses {routeCount} gap{routeCount === 1 ? "" : "s"} of {semitones} semitone{semitones === 1 ? "" : "s"}</title></rect> : null}
-                {isHomeCue ? <path className="immersion-semitone-home-cue" d={`M ${point.x - 5} ${point.y - 13} L ${point.x + 5} ${point.y - 13} L ${point.x} ${point.y - 6} Z`}><title>{homeCueCopy}</title></path> : null}
                 {bin || routeCount || isHomeCue ? <text x={point.x} y={point.y + 29}>{semitones}</text> : null}
-                {bin ? <title>{bin.pairCount} sounding pair{bin.pairCount === 1 ? "" : "s"} fold to {semitones} semitone{semitones === 1 ? "" : "s"} within an octave; exact register distance{bin.exactDistances.length === 1 ? "" : "s"} {bin.exactDistances.join(", ")}</title> : null}
+                {bin ? <title>{bin.pairCount} sounding pair{bin.pairCount === 1 ? "" : "s"} fold to {semitones} semitone{semitones === 1 ? "" : "s"} within an octave; exact register distance{bin.exactDistances.length === 1 ? "" : "s"} {bin.exactDistances.join(", ")}.{routeCount ? ` The selected route also uses ${routeCount} gap${routeCount === 1 ? "" : "s"} of this size.` : ""}{isHomeCue ? ` ${homeCueCopy}.` : ""}</title> : null}
               </g>;
             })}
           </g>
 
-          {latestEvent ? (() => {
-            const point = immersionPitchPoint(latestEvent.note, doMidi);
-            return <circle className="immersion-newness-bloom" cx={point.x} cy={point.y} r={22 + phraseNewness * 30} style={{ "--immersion-newness": phraseNewness } as CSSProperties} />;
-          })() : null}
-
           {latestEvent && tendency.homePull >= 0.04 ? <path className="immersion-pull-current" d={filamentPath(fieldPoint, homeAtField)} markerEnd={`url(#${instanceId}-pull-arrow)`} style={{ "--immersion-pull": tendency.homePull } as CSSProperties}><title>Selected-Do pull heuristic is {evidenceWord(tendency.homePull)}. {homeCueCopy}. This arrow is contextual, not a physical force or felt-resolution prediction.</title></path> : null}
 
-          <g className="immersion-phrase-stars" aria-label={`${trail.length} recent attack stars; latest seven carry compact order marks`}>
+          <g className="immersion-phrase-stars" aria-label={`${trail.length} recent attack circles; the latest attack has a stronger outline and the latest seven carry compact order marks`}>
             {trail.map(({ event, point, recency }) => {
               const recentIndex = events.findIndex((recent) => recent.id === event.id);
               const inScale = routePitchClasses.has(point.pitchClass);
               const color = immersionRoleColor(point, inScale);
               const size = 4.5 + Math.max(0, Math.min(127, event.velocity)) / 127 * 8.5;
               const isLatest = event.id === latestEvent?.id;
-              const outwardX = point.radius > 0 ? (point.x - 600) / point.radius : 0;
-              const outwardY = point.radius > 0 ? (point.y - 350) / point.radius : -1;
               const recurrenceCount = seenPitchCounts.get(point.pitchClass) ?? 1;
               return <g key={event.id} className={`piano-immersion-note ${recentIndex >= 0 ? "is-microscope" : "is-memory"} ${recentIndex >= 0 && recentIndex < Math.max(0, events.length - 5) ? "is-older-label" : ""} ${isLatest ? "is-latest" : ""}`} style={{ "--immersion-pitch": color, "--immersion-recency": 0.18 + recency * 0.82 } as CSSProperties}>
                 <title>{noteLabel(event.note, doMidi, scale, showConventions)} · MIDI key {event.note} · {inScale ? "inside" : "outside"} selected route · pitch class appears {recurrenceCount} time{recurrenceCount === 1 ? "" : "s"} in retained memory</title>
-                <circle className="cosmos-node-bloom" cx={point.x} cy={point.y} r={size + 10} />
-                {isLatest
-                  ? <path className={inScale ? "cosmos-node is-route" : "cosmos-node is-outside-route"} d={fourPointStarPath(point.x, point.y, size + 3, Math.max(3.5, size * 0.42))} />
-                  : <circle className={inScale ? "cosmos-node is-route" : "cosmos-node is-outside-route"} cx={point.x} cy={point.y} r={size} />}
-                <circle className="cosmos-node-specular" cx={point.x - size * 0.22} cy={point.y - size * 0.28} r={isLatest ? 2.2 : 1.3} />
-                {isLatest && recurrenceCount > 1 ? <circle className="cosmos-node-echo" cx={point.x} cy={point.y} r={size + 17} /> : null}
-                {!inScale ? <line className="cosmos-route-notch" x1={point.x + outwardX * (size + 3)} y1={point.y + outwardY * (size + 3)} x2={point.x + outwardX * (size + 12)} y2={point.y + outwardY * (size + 12)} /> : null}
+                <circle className={inScale ? "cosmos-node is-route" : "cosmos-node is-outside-route"} cx={point.x} cy={point.y} r={size} />
                 {recentIndex >= 0 && !isLatest && recurrenceCount === 1 ? <text x={point.x + 11} y={point.y - 10}>{recentIndex + 1}</text> : null}
               </g>;
             })}
@@ -1023,18 +1096,57 @@ export const PianoImmersion = memo(function PianoImmersion({
               <span>Rhythm</span>
               <strong id={`${instanceId}-rhythm-lens-title`}>{rhythmSourceLabel}</strong>
             </header>
+            <div className="piano-immersion-meter-controls" aria-label="Declared meter and metronome controls">
+              <label>
+                <span>BPM</span>
+                <input type="number" min="40" max="220" step="1" value={meterBpm} disabled={meterLocked} onChange={(event) => setMeterBpm(Math.max(40, Math.min(220, Number(event.target.value) || 120)))} />
+              </label>
+              <label>
+                <span>Pulses / bar</span>
+                <select value={meterBeatsPerBar} disabled={meterLocked} onChange={(event) => setMeterBeatsPerBar(Number(event.target.value))}>
+                  {[2, 3, 4, 5, 6, 7].map((count) => <option key={count} value={count}>{count}</option>)}
+                </select>
+              </label>
+              <div>
+                <button type="button" aria-pressed={meterLocked} onClick={toggleMeterLock}>{meterLocked ? "Unlock meter" : "Lock meter now"}</button>
+                <button type="button" aria-pressed={metronomeRunning} onClick={() => void toggleMetronome()}>{metronomeRunning ? "Stop click" : "Start metronome"}</button>
+              </div>
+            </div>
+            <div className={`piano-immersion-rhythm-track ${meterGrid ? "is-meter" : "is-free"}`} role="img" aria-label={meterGridSummary}>
+              {meterGrid ? <>
+                {Array.from({ length: meterGrid.beatsPerBar * 2 + 1 }, (_, index) => <i key={index} className={index % meterGrid.beatsPerBar === 0 ? "is-downbeat" : ""} style={{ "--rhythm-position": `${index / (meterGrid.beatsPerBar * 2) * 100}%` } as CSSProperties} />)}
+                <em style={{ "--rhythm-position": `${meterGrid.currentPosition * 100}%` } as CSSProperties} aria-hidden="true" />
+                {meterGrid.marks.map((mark) => <span key={mark.eventIds.join("-")} style={{ "--rhythm-position": `${mark.position * 100}%` } as CSSProperties} aria-label={`${mark.attackCount} attack${mark.attackCount === 1 ? "" : "s"}; ${Math.abs(Math.round(mark.offsetMs))} milliseconds ${mark.offsetMs >= 0 ? "after" : "before"} nearest pulse`}><b>{mark.attackCount > 1 ? `×${mark.attackCount}` : ""}</b></span>)}
+                <small className="is-previous-bar">previous bar</small><small className="is-current-bar">current bar</small>
+              </> : <>
+                {unlockedRhythmGroups.map((group) => <span key={group.id} style={{ "--rhythm-position": `${group.position * 100}%` } as CSSProperties} aria-label={`${group.attackCount} attack${group.attackCount === 1 ? "" : "s"} in one onset group`}><b>{group.attackCount > 1 ? `×${group.attackCount}` : ""}</b></span>)}
+                <small className="is-free-label">chronological onset strip · no beat grid</small>
+              </>}
+            </div>
             <p className="piano-immersion-lens-value">{rhythmRulerCopy}</p>
             <p className="piano-immersion-ratio-reading"><span>Closest gap shape</span><strong>{rhythmDeviationCopy}</strong></p>
             <p className="piano-immersion-lens-cue">{rhythmPhaseCopy}</p>
-            <p className="piano-immersion-lens-boundary"><span>Beat / measure</span><strong>—</strong><small>needs a declared downbeat and pulses per measure</small></p>
-            <small>Deviation is distance from the nearest ratio or pulse landmark—not performance accuracy.</small>
+            <p className="piano-immersion-lens-boundary"><span>Meter</span><strong>{meterStatusCopy}</strong><small>{metronomeNotice}</small></p>
+            <small>Lock captures the downbeat you supplied. Grid distance is descriptive—not timing accuracy, groove quality, or inferred meter.</small>
           </section>
 
           <section className="piano-immersion-lens is-harmony" aria-labelledby={`${instanceId}-harmony-lens-title`}>
             <header>
               <span>Harmony field</span>
-              <strong id={`${instanceId}-harmony-lens-title`} className={fusion != null && fusion >= 0.6 ? "is-fused" : ""}>{chordPanelIdentity}</strong>
+              <strong id={`${instanceId}-harmony-lens-title`}>Current chord</strong>
             </header>
+            <div className={`piano-immersion-chord-name ${chordDisplayName ? "is-exact" : "is-field"}`}>
+              <span>{chordDisplayName ? matchingChord?.candidate?.inversion ? "Exact catalog name · inversion" : "Exact catalog name" : "Current field"}</span>
+              <strong>{chordDisplayName ?? chordPanelIdentity}</strong>
+              <small>{chordDisplayName ? matchingChord?.candidate?.inversion ? `${chordBassName} is the bass over ${chordRootName} root · ${chordInversionName} · ${chordQualityName} quality` : `${chordRootName} is both root and bass · root position · ${chordQualityName} quality` : "A chord name appears only when the grouped pitch classes match an exact catalog shape."}</small>
+            </div>
+            {chordFingering && chordDisplayName ? <ChordFingeringGraphic
+              suggestion={chordFingering}
+              chordName={chordDisplayName}
+              doMidi={doMidi}
+              scale={scale}
+              showConventions={showConventions}
+            /> : null}
             <div className="piano-immersion-interval-strip" aria-label={`Octave-folded pair intervals: ${semitonePairCopy}`}>
               {semitoneProfile.intervalBins.length
                 ? semitoneProfile.intervalBins.map((bin) => <span key={bin.semitones}>{bin.semitones}{bin.pairCount > 1 ? `×${bin.pairCount}` : ""}</span>)
@@ -1066,7 +1178,7 @@ export const PianoImmersion = memo(function PianoImmersion({
               <small>roughness {signedPercentDelta(roughnessDelta)} · model repose {signedPercentDelta(reposeDelta)} · selected-Do pull {signedPercentDelta(pullDelta)}</small>
             </div>
             <p className="piano-immersion-felt"><span>Felt character</span><strong>listener only · unreported</strong></p>
-            <small>Chord-name emphasis and the current membrane weight follow modeled fusion under the assumed spectrum; onset togetherness and catalog fit stay separate.</small>
+            <small>The chord name comes from exact pitch-class structure. Current membrane weight follows modeled fusion under the assumed spectrum; onset togetherness stays separate.</small>
           </section>
 
           <section className="piano-immersion-lens is-melody" aria-labelledby={`${instanceId}-melody-lens-title`}>
@@ -1094,14 +1206,25 @@ export const PianoImmersion = memo(function PianoImmersion({
             </p> : <>
               <p className="piano-immersion-degree-path">{recentDegreeCopy}</p>
               <p className="piano-immersion-step-path"><span>Recent signed key intervals</span><strong>{recentStepCopy}</strong><small>{recentLandmarkCopy} · exact attack-to-attack MIDI-key differences</small></p>
+              {recentPath.completeFive ? <p className="piano-immersion-scale-pulls">
+                <span>Scale frames this five-note span may fit</span>
+                <strong>{recentScaleNameCopy}</strong>
+                <small>{recentCatalogCopy} · compatible pitch containers, not proof of key, origin, harmony, or intention.</small>
+              </p> : null}
               <p className="piano-immersion-recent-summary">
                 <strong>{recentBoundaryCopy} · selected route {recentPath.selectedRouteCount}/{recentPath.events.length || 0} · repeated-size moves {recentPath.repeatedIntervalCount}/{recentPath.steps.length || 0}</strong>
-                <small>Compatible catalog routes: {recentCatalogCopy} · compatibility, not scale origin, harmony, or cohesion.</small>
+                <small>{recentPath.completeFive ? "Five-note catalog names are shown above; they remain compatibility matches." : `Complete five-note span to name the strongest compatible scale frames. Current evidence: ${recentCatalogCopy}.`}</small>
               </p>
             </>}
           </section>
         </div>
       </div>
+
+      <section className="piano-immersion-map-key" aria-label="Persistent circle-of-fifths visual key">
+        <span className="is-crown"><i aria-hidden="true" /><strong>One fifths crown</strong><small>solid labeled arc = selected scale position · thin unlabeled arc = another pitch class · no attack-density bars</small></span>
+        <span className="is-attack"><i aria-hidden="true" /><strong>Attack circle</strong><small>filled = inside selected route · hollow dashed = outside · stronger outline = latest attack</small></span>
+        <span className="is-sounding"><i aria-hidden="true" /><strong>Sounding outline</strong><small>solid outer ring = key down · dashed outer ring = pedal-sustained; attack order and timing live in the Rhythm and Semitone Path panels</small></span>
+      </section>
 
       <section className="piano-immersion-interval-context-bar" aria-labelledby={`${instanceId}-interval-context-title`}>
         <header>
@@ -1134,15 +1257,13 @@ export const PianoImmersion = memo(function PianoImmersion({
       <details className="piano-immersion-guide">
         <summary>Read the sky · open the visual key</summary>
         <div className="piano-immersion-legend" aria-label="How to read Resonance Sky">
-          <span className="is-pitch"><i aria-hidden="true" /><strong>Pitch star</strong><small>direction = fifths · depth = semitone register · hue = role around Do · size = MIDI attack velocity, not acoustic loudness</small></span>
-          <span className="is-route"><i aria-hidden="true" /><strong>Route crown</strong><small>solid arcs are the selected route · thin dashed arcs sit outside it · seeds mark visits · ghost arcs are catalog fits</small></span>
-          <span className="is-tide"><i aria-hidden="true" /><strong>Fifths tide</strong><small>inner = latest onset window · middle = last seven attacks · outer = retained phrase; bulges show attack density, not a key</small></span>
+          <span className="is-pitch"><i aria-hidden="true" /><strong>Attack circle</strong><small>direction = fifths · depth = semitone register · hue = role around Do · size = MIDI attack velocity, not acoustic loudness</small></span>
+          <span className="is-route"><i aria-hidden="true" /><strong>Single route crown</strong><small>solid labeled arcs are the selected route · thin dashed unlabeled arcs are the other five pitch classes; the crown does not count attacks</small></span>
           <span className="is-interval"><i aria-hidden="true" /><strong>Interval fiber</strong><small>dash density shows 12-TET mismatch to the named reference; √2 is a geometric midpoint, not an integer ratio</small></span>
-          <span className="is-semitone"><i aria-hidden="true" /><strong>Semitone horizon</strong><small>numbered circles count sounding pair spans folded into one octave · diamonds mark scale-gap sizes · gold pointer marks one concrete move to Do</small></span>
+          <span className="is-semitone"><i aria-hidden="true" /><strong>Semitone horizon</strong><small>numbered circles show the sounding pair spans folded into one octave; size counts how many pairs share that spacing</small></span>
           <span className="is-chord"><i aria-hidden="true" /><strong>Chord membrane</strong><small>inner hull = interpreted members · faint outer hull = everything sounding · long dash = incomplete catalog fit · dotted overtrace = rolled timing</small></span>
-          <span className="is-context"><i aria-hidden="true" /><strong>Musical weather</strong><small>gold = selected-Do pull · coral = assumed-spectrum crunch · violet = first/return bloom · small rosette = contextual-center cues</small></span>
+          <span className="is-context"><i aria-hidden="true" /><strong>Selected-Do pull + crunch</strong><small>gold arrow = selected-frame pull heuristic · coral haze = modeled field roughness under the chosen spectrum</small></span>
           <span className="is-time"><i aria-hidden="true" /><strong>Memory + contour</strong><small>cosmic wake preserves fifths/register geography; the lower horizon shows attack time and physical rise/fall; broken wake needs release-proven silence</small></span>
-          <span className="is-echo"><i aria-hidden="true" /><strong>Echo + possibilities</strong><small>dotted bridge = detected relationship-window return · hollow satellites = low-change in-route fields, never predictions</small></span>
         </div>
       </details>
 

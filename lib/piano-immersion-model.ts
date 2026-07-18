@@ -92,6 +92,26 @@ export type ImmersionRhythmLens = {
   repeatedGapShare: number | null;
 };
 
+export type ImmersionMeterGrid = {
+  bpm: number;
+  beatsPerBar: number;
+  beatMs: number;
+  barMs: number;
+  windowStartMs: number;
+  windowEndMs: number;
+  currentBeatIndex: number;
+  currentPosition: number;
+  marks: Array<{
+    eventIds: number[];
+    onsetMs: number;
+    attackCount: number;
+    position: number;
+    beatPosition: number;
+    nearestBeatIndex: number;
+    offsetMs: number;
+  }>;
+};
+
 export type ImmersionRecentPath<T extends { id: number; note: number; onsetMs: number }> = {
   events: T[];
   latestTransition: ImmersionLatestTransition<T> | null;
@@ -453,6 +473,75 @@ export function immersionRhythmLens<T extends LiveRhythmPhraseEvent>(
     phaseLabel: null,
     phaseDistanceMs: null,
     repeatedGapShare: profile.repeatedGapShare,
+  };
+}
+
+/**
+ * Places recent onset groups on two bars of a learner-declared meter. This is
+ * a coordinate against an explicit BPM/downbeat choice, not inferred meter or
+ * a performance score. Close attacks share one mark so chords do not appear as
+ * artificially fast rhythm.
+ */
+export function immersionMeterGrid<T extends { id: number; onsetMs: number }>(
+  eventsInput: T[],
+  anchorMsInput: number,
+  nowMsInput: number,
+  bpmInput: number,
+  beatsPerBarInput: number,
+  groupingWindowMsInput: number,
+): ImmersionMeterGrid {
+  const bpm = clamp(Number.isFinite(bpmInput) ? bpmInput : 120, 30, 300);
+  const beatsPerBar = clamp(Number.isFinite(beatsPerBarInput) ? Math.round(beatsPerBarInput) : 4, 2, 12);
+  const beatMs = 60_000 / bpm;
+  const barMs = beatMs * beatsPerBar;
+  const usable = eventsInput
+    .filter((event) => Number.isInteger(event.id) && Number.isFinite(event.onsetMs))
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  const fallbackAnchor = usable.at(-1)?.onsetMs ?? 0;
+  const anchorMs = Number.isFinite(anchorMsInput) ? anchorMsInput : fallbackAnchor;
+  const nowMs = Number.isFinite(nowMsInput) ? Math.max(anchorMs, nowMsInput) : Math.max(anchorMs, fallbackAnchor);
+  const currentBarIndex = Math.floor((nowMs - anchorMs) / barMs);
+  const currentBarStartMs = anchorMs + currentBarIndex * barMs;
+  const windowStartMs = currentBarStartMs - barMs;
+  const windowEndMs = currentBarStartMs + barMs;
+  const groupingWindowMs = clamp(
+    Number.isFinite(groupingWindowMsInput) ? groupingWindowMsInput : 160,
+    20,
+    Math.min(1000, beatMs * 0.8),
+  );
+  const grouped: T[][] = [];
+  usable.forEach((event) => {
+    const group = grouped.at(-1);
+    if (group && event.onsetMs - group[0].onsetMs <= groupingWindowMs) group.push(event);
+    else grouped.push([event]);
+  });
+  const marks = grouped
+    .filter((group) => group[0].onsetMs >= windowStartMs && group[0].onsetMs < windowEndMs)
+    .map((group) => {
+      const onsetMs = group[0].onsetMs;
+      const beatPosition = (onsetMs - anchorMs) / beatMs;
+      const nearestBeatIndex = Math.round(beatPosition);
+      return {
+        eventIds: group.map((event) => event.id),
+        onsetMs,
+        attackCount: group.length,
+        position: clamp((onsetMs - windowStartMs) / (barMs * 2), 0, 1),
+        beatPosition,
+        nearestBeatIndex,
+        offsetMs: onsetMs - (anchorMs + nearestBeatIndex * beatMs),
+      };
+    });
+  const phaseMs = ((nowMs - anchorMs) % barMs + barMs) % barMs;
+  return {
+    bpm,
+    beatsPerBar,
+    beatMs,
+    barMs,
+    windowStartMs,
+    windowEndMs,
+    currentBeatIndex: Math.min(beatsPerBar - 1, Math.floor(phaseMs / beatMs)),
+    currentPosition: clamp((nowMs - windowStartMs) / (barMs * 2), 0, 1),
+    marks,
   };
 }
 

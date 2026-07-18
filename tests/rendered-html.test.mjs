@@ -92,7 +92,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
-  assert.match(ratioLab, /v1\.92/);
+  assert.match(ratioLab, /v1\.98/);
   assert.match(scaleLab, /Hear home\. Build intervals\. Generate scales\. Predict what comes next/);
   assert.match(scaleLab, /Transposition moves every pitch together/);
   assert.match(scaleLab, /hear it in your mind first/i);
@@ -140,9 +140,11 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /membershipCorrections/);
   assert.match(pianoModel, /interpretedChordNotes/);
   assert.match(pianoLab, /sustain/);
-  assert.match(pianoLab, /no sound, recording, or upload/i);
+  assert.match(pianoLab, /nothing is recorded or uploaded/i);
   assert.match(pianoLab, /No sound is generated or recorded/);
   assert.match(pianoLab, /Scale lens/);
+  assert.match(pianoLab, /How to select a route/);
+  assert.match(pianoLab, /Choose a new route/);
   assert.match(pianoLab, /Assumed spectrum/);
   assert.match(pianoSoundModel, /Sine · one partial/);
   assert.match(pianoSoundModel, /alignedPairs/);

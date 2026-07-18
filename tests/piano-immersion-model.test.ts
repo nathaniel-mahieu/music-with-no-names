@@ -17,6 +17,7 @@ import {
   immersionIntervalCharacter,
   immersionIntervalField,
   immersionLatestTransition,
+  immersionMeterGrid,
   immersionPhraseNewness,
   immersionPitchPoint,
   immersionRecentPath,
@@ -280,6 +281,29 @@ test("uses exact learner-declared pulse landmarks when a four-tap mirror is acti
   assert.equal(lens.deviationPercent, 0);
   assert.equal(lens.phaseLabel, "pulse line");
   assert.ok(lens.phaseDistanceMs != null && Math.abs(lens.phaseDistanceMs - 10) < 1e-9);
+});
+
+test("projects grouped attacks onto a learner-declared two-bar meter without manufacturing accuracy", () => {
+  const grid = immersionMeterGrid([
+    { id: 1, onsetMs: 1000 },
+    { id: 2, onsetMs: 1030 },
+    { id: 3, onsetMs: 1510 },
+    { id: 4, onsetMs: 2010 },
+    { id: 5, onsetMs: 2990 },
+  ], 1000, 3100, 120, 4, 80);
+  assert.equal(grid.bpm, 120);
+  assert.equal(grid.beatsPerBar, 4);
+  assert.equal(grid.beatMs, 500);
+  assert.equal(grid.barMs, 2000);
+  assert.equal(grid.currentBeatIndex, 0);
+  assert.deepEqual(grid.marks.map((mark) => mark.attackCount), [2, 1, 1, 1]);
+  assert.deepEqual(grid.marks.map((mark) => Math.round(mark.offsetMs)), [0, 10, 10, -10]);
+  assert.ok(grid.marks.every((mark) => mark.position >= 0 && mark.position <= 1));
+
+  const bounded = immersionMeterGrid([], Number.NaN, Number.NaN, 999, 99, 9999);
+  assert.equal(bounded.bpm, 300);
+  assert.equal(bounded.beatsPerBar, 12);
+  assert.equal(bounded.marks.length, 0);
 });
 
 test("names every one-octave semitone spacing without replacing the exact key count", () => {

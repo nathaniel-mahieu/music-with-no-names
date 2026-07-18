@@ -141,6 +141,7 @@ import { livePulseMirror, type LivePulseMirror } from "@/lib/rhythm-model";
 import { PIANO_SESSION_KEY } from "@/lib/piano-session";
 import { liveEarPairProfile, type LiveEarIntervalProfile } from "@/lib/live-ear";
 import { PianoImmersion } from "@/app/PianoImmersion";
+import { VocalPitchCoach } from "@/app/VocalPitchCoach";
 import { IMMERSION_MAX_FIELD_NOTES } from "@/lib/piano-immersion-model";
 
 type MidiInputLike = {
@@ -1200,6 +1201,46 @@ function ScaleLens({ events, chordNotes, snapshots, frame, doMidi, showConventio
       </div>
     </div>
   );
+}
+
+function RouteSelector({ scale, doMidi, frameMode, showConventions, doCaptureArmed, onSelect, onToggleDoCapture }: {
+  scale: PianoScale;
+  doMidi: number;
+  frameMode: FrameMode;
+  showConventions: boolean;
+  doCaptureArmed: boolean;
+  onSelect: (scaleId: PianoScale["id"]) => void;
+  onToggleDoCapture: () => void;
+}) {
+  const positions = scaleSemitones(scale);
+  const doLabel = showConventions ? conventionalPitchName(doMidi) : "movable Do";
+  return <section className="piano-route-selector" aria-labelledby="piano-route-selector-title">
+    <div className="piano-route-selected">
+      <span>{frameMode === "locked" ? "Selected route · locked" : "Selected route · following evidence"}</span>
+      <strong id="piano-route-selector-title">{showConventions ? scale.conventionalName : scale.name}</strong>
+      <small>{scale.steps.join("–")} st gaps · positions {positions.join(" · ")} from {doLabel}</small>
+      <div className="piano-do-capture">
+        <button type="button" aria-pressed={doCaptureArmed} onClick={onToggleDoCapture}>{doCaptureArmed ? "Cancel · waiting for Do" : "Set Do from next note"}</button>
+        <small role="status" aria-live="polite">{doCaptureArmed ? "Play one new MIDI or on-screen attack. That pitch becomes Do and the current route locks." : "Available in every Piano focus; the next-note action retains the current route."}</small>
+      </div>
+    </div>
+    <label htmlFor="piano-route-choice">
+      <span>Choose a new route</span>
+      <select id="piano-route-choice" value={scale.id} onChange={(event) => onSelect(event.target.value as PianoScale["id"])}>
+        {PIANO_SCALES.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.steps.join("–")}</option>)}
+      </select>
+      <small>A direct choice keeps the current Do and locks this route.</small>
+    </label>
+    <div className="piano-route-methods">
+      <span>How to select a route</span>
+      <ol>
+        <li><strong>Choose here</strong><small>Locks the menu route at the current Do.</small></li>
+        <li><strong>Play while discovering</strong><small>Unlock the frame, then play four distinct positions so evidence can move Do and route.</small></li>
+        <li><strong>Adopt a candidate</strong><small>In Explore or Scales, choose a compatible frame to lock its proposed Do and route.</small></li>
+      </ol>
+      <small>Set Do from next note works across every Piano focus. The fifths compass changes Do while retaining the selected route. Both are explicit learner choices, not detected key.</small>
+    </div>
+  </section>;
 }
 
 function pitchClassRoleLabel(pitchClass: number, doMidi: number, scale: PianoScale, showConventions: boolean) {
@@ -4138,8 +4179,11 @@ export function PianoLab() {
   const [frameMode, setFrameMode] = useState<FrameMode>("discover");
   const [lockedScaleId, setLockedScaleId] = useState<PianoScale["id"]>(DEFAULT_SCALE.id);
   const [lockedDoMidi, setLockedDoMidi] = useState(60);
+  const [doCaptureArmed, setDoCaptureArmed] = useState(false);
   const nextIdRef = useRef(1);
   const frozenRef = useRef(false);
+  const doCaptureArmedRef = useRef(false);
+  const applyCapturedDoRef = useRef<(pitchClass: number) => void>(() => {});
   const eventsRef = useRef<HudNoteEvent[]>([]);
   const phraseEventsRef = useRef<HudNoteEvent[]>([]);
   const landmarkLastMatchIdRef = useRef(0);
@@ -4366,10 +4410,18 @@ export function PianoLab() {
     setNowMs(atMs);
   }, []);
 
+  const captureArmedDoAttack = useCallback((note: number) => {
+    if (!doCaptureArmedRef.current) return;
+    doCaptureArmedRef.current = false;
+    setDoCaptureArmed(false);
+    applyCapturedDoRef.current(pitchClassFromMidi(note));
+  }, []);
+
   const midiAttack = useCallback((note: number, velocity: number, channel: number, midiField: number[], atMs: number) => {
+    captureArmedDoAttack(note);
     const combined = new Set([...latchedNotes.keys(), ...midiField]);
     addEvent(note, velocity, channel, "midi", Array.from(combined), atMs);
-  }, [addEvent, latchedNotes]);
+  }, [addEvent, captureArmedDoAttack, latchedNotes]);
   const midiRelease = useCallback((note: number, channel: number, atMs: number, heldByPedal: boolean) => releaseEvent(note, channel, "midi", atMs, heldByPedal), [releaseEvent]);
   const midiSustain = useCallback((down: boolean, channel: number, atMs: number, releasedNotes: number[]) => { if (!down) releasePedalEvents(releasedNotes, channel, atMs); }, [releasePedalEvents]);
   const midi = useMidiKeyboard({ onAttack: midiAttack, onRelease: midiRelease, onSustain: midiSustain });
@@ -4673,6 +4725,7 @@ export function PianoLab() {
       releaseEvent(note, 0, "screen", currentHudTime(), false);
     }
     else {
+      captureArmedDoAttack(note);
       next.set(note, 104);
       const combined = new Set([...next.keys(), ...midi.notes.keys()]);
       addEvent(note, 104, 0, "screen", Array.from(combined));
@@ -4681,6 +4734,8 @@ export function PianoLab() {
   };
 
   const clearAll = () => {
+    doCaptureArmedRef.current = false;
+    setDoCaptureArmed(false);
     phraseEventsRef.current = [];
     setPhraseEvents([]);
     eventsRef.current = [];
@@ -4746,6 +4801,8 @@ export function PianoLab() {
   };
 
   const lockCandidate = (candidate: ScaleCandidate) => {
+    doCaptureArmedRef.current = false;
+    setDoCaptureArmed(false);
     setScaleWalkSession(null);
     setControlledSonoritySession(null);
     setChordVoicingEchoSession(null);
@@ -4761,9 +4818,21 @@ export function PianoLab() {
     window.history.replaceState(null, "", url);
   };
 
-  const chooseDoFromFifths = (rootPitchClass: number) => {
+  const selectScaleRoute = (scaleId: PianoScale["id"]) => {
+    const nextScale = PIANO_SCALES.find((candidate) => candidate.id === scaleId);
+    if (!nextScale) return;
+    lockCandidate({
+      ...frame,
+      scale: nextScale,
+      rootPitchClass: pitchClassFromMidi(doMidi),
+    });
+  };
+
+  const chooseDoFromFifths = useCallback((rootPitchClass: number) => {
     const pitchClass = pitchClassFromMidi(rootPitchClass);
     const currentPitchClass = pitchClassFromMidi(doMidi);
+    doCaptureArmedRef.current = false;
+    setDoCaptureArmed(false);
     setScaleWalkSession(null);
     setControlledSonoritySession(null);
     setChordVoicingEchoSession(null);
@@ -4785,6 +4854,22 @@ export function PianoLab() {
     url.searchParams.set("pianoDo", String(pitchClass));
     url.searchParams.set("pianoScale", scale.id);
     window.history.replaceState(null, "", url);
+  }, [doMidi, focusLens, landmarkPath.id, phraseEvents, scale.id]);
+
+  const applyCapturedDo = useCallback((pitchClass: number) => {
+    setScaleFingerprintSession(null);
+    setGravityCounterfactualSession(null);
+    setPhraseCompareSession(null);
+    setLandmarkRouteCompareSession(null);
+    chooseDoFromFifths(pitchClass);
+  }, [chooseDoFromFifths]);
+
+  useEffect(() => { applyCapturedDoRef.current = applyCapturedDo; }, [applyCapturedDo]);
+
+  const toggleDoCapture = () => {
+    const next = !doCaptureArmedRef.current;
+    doCaptureArmedRef.current = next;
+    setDoCaptureArmed(next);
   };
 
   const toggleFrameMode = () => {
@@ -5551,13 +5636,13 @@ export function PianoLab() {
   return (
     <section className="advanced-lab piano-lab piano-hud" aria-labelledby="piano-hud-title">
       <header className="piano-hud-header">
-        <div><p className="section-kicker">Silent MIDI piano companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} MIDI sends note data only—there is no sound, recording, or upload.</p></div>
+        <div><p className="section-kicker">MIDI + optional voice companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play and voice moves.</h2><p>{focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} MIDI sends note data only. Voice analysis and quiet reference tones start only when you choose them; nothing is recorded or uploaded.</p></div>
         <div className="piano-hud-controls" aria-label="HUD controls">
           <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{midi.status}</strong></div></div>
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
           <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label>
           <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{phraseCompareSession ? "Trace live for A/B" : frozen ? "Resume trace" : "Freeze trace"}</button>
-          <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Do fixed for A/B" : focusLens === "paths" ? "Do fixed for path" : frameMode === "locked" ? "Unlock Do" : "Lock Do"}</button>
+          <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button>
           <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>Theory names</span></label>
           <button type="button" onClick={clearAll}>Clear</button>
         </div>
@@ -5570,11 +5655,21 @@ export function PianoLab() {
         <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
       </div>
 
+      <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} />
+
       {focusLens !== "immersion" ? <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} /> : null}
 
       <nav className="piano-focus-lenses" aria-label="Learning focus">
         {FOCUS_LENSES.map((lens) => <button key={lens.id} type="button" aria-pressed={focusLens === lens.id} onClick={() => selectFocusLens(lens.id)}><strong>{lens.label}</strong><span>{lens.description}</span></button>)}
       </nav>
+
+      <VocalPitchCoach
+        anchorMidi={phraseEvents.at(-1)?.note ?? doMidi}
+        anchorSource={phraseEvents.length ? "latest-piano-attack" : "selected-do"}
+        doMidi={doMidi}
+        scale={scale}
+        showConventions={showConventions}
+      />
 
       {focusLens === "immersion" ? <PianoImmersion
         events={events}
@@ -5697,7 +5792,7 @@ export function PianoLab() {
 
       {focusLens === "immersion" ? null : focusLens === "explore" && !phraseCompareSession
         ? <LastAttackChange events={events} focusedId={focusedEvent?.id ?? null} doMidi={doMidi} scale={scale} showConventions={showConventions} onReflect={() => selectFocusLens("experience")} />
-        : <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Displayed Hz values assume 12-TET at A4=440; pitch bend, instrument tuning, and audio pitch are not read. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>}
+        : <footer className="piano-hud-insight" aria-live="polite"><span>What changed?</span><strong>{newestInsight}</strong><small>The ribbon retains sixty seconds while the coordinated views magnify the latest seven attacks. Piano Hz values assume 12-TET at A4=440; pitch bend, instrument tuning, and connected piano or DAW audio pitch are not read. The optional voice panel labels its separate microphone fundamental estimate explicitly. Crunch and the spectral share of repose use the selected {soundModel.shortLabel.toLowerCase()} teaching spectrum; pull toward Do does not. Musical goodness still depends on timing, style, memory, intention, timbre, and your response.</small></footer>}
     </section>
   );
 }

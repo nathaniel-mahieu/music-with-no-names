@@ -13,6 +13,8 @@
 | Generator window | A finite consecutive selection from a generator orbit, interpreted only after its size and a position for Do are declared; sorting its positions around the octave yields a cyclic gap pattern. | The full orbit, a uniquely implied tonic, or a scale name guaranteed by the generator alone. |
 | Partial | One frequency component of a source spectrum. | Necessarily an exact harmonic. |
 | Fundamental reference | The A4=440 12-TET frequency derived from a MIDI key number and used as a teaching coordinate. | Measured acoustic pitch from the keyboard, DAW, microphone, or room. |
+| Vocal fundamental estimate | One microphone waveform window's strongest supported monophonic periodic repetition, expressed in hertz. | A recording, note-name certainty, vocal quality, singer identity, words, timbre analysis, or proof of the intended pitch. |
+| Cent | One hundredth of a 12-TET semitone on a logarithmic frequency axis; `1200 × log2(f₂/f₁)` measures the signed distance. | A universal threshold of audible difference, correctness, singing quality, or musical value. |
 | Harmonicity | Fit between observed components and one or more harmonic templates. | Smoothness, stability, liking. |
 | Periodicity | Evidence that a waveform or event pattern repeats after a duration. | Musical meter, closure, pleasure. |
 | Roughness | A sensory-interaction hypothesis for nearby components within auditory frequency selectivity. | Dissonance in every musical sense. |
@@ -24,6 +26,8 @@
 | Pulse | A periodic timing hypothesis that organizes events. | A fixed meter name or exact clock grid. |
 | Local onset ruler | The median spacing among recent grouped attacks, used only to compare the phrase's own gap shapes. | A detected beat, intended tempo, meter, bar position, groove, or performance-accuracy score. |
 | Grid deviation | Signed or absolute distance from the closest declared pulse/ratio landmark. | Proof that the performer intended that landmark, or a correctness score. |
+| Declared meter | A learner-set BPM, pulses-per-bar count, and captured downbeat used to draw a repeatable timing coordinate. | Inferred meter, detected groove, notation, or a performance score. |
+| Metronome click | An optional local reference pulse whose stronger first click marks the declared bar boundary. | A claim that the performance follows the click or that the chosen meter is musically correct. |
 | Groove | Embodied urge and timing relationship involving pulse, microtiming, pattern, and listener. | Syncopation or pulse confidence alone. |
 | Recurrence | Reappearance of an event pattern, exactly or after an allowed transformation. | Repetition without perceptual relevance. |
 | Uncertainty | Spread among plausible next events before an event occurs. | Surprise. |

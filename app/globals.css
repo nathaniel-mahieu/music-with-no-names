@@ -8609,6 +8609,52 @@ footer a {
 .piano-hud-statebar strong { color: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: .74rem; }
 .piano-hud-statebar small { color: var(--muted); font-size: .69rem; }
 
+.piano-route-selector {
+  display: grid;
+  grid-template-columns: minmax(220px, .9fr) minmax(230px, .8fr) minmax(360px, 1.45fr);
+  gap: 14px 26px;
+  align-items: start;
+  padding: 13px clamp(20px, 4vw, 52px);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--piano-blue) 5%, var(--surface-soft));
+}
+
+.piano-route-selected,
+.piano-route-selector > label,
+.piano-route-methods { display: grid; min-width: 0; gap: 4px; }
+.piano-route-selector span { color: var(--muted); font-size: .63rem; letter-spacing: .06em; text-transform: uppercase; }
+.piano-route-selected strong { font-family: var(--font-display), Georgia, serif; font-size: 1rem; font-weight: 400; line-height: 1.25; }
+.piano-route-selector small { color: var(--muted); font-size: .64rem; line-height: 1.42; }
+.piano-route-selector select {
+  width: 100%;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  color: var(--foreground);
+  background: var(--surface-raised);
+  font: inherit;
+  font-size: .68rem;
+}
+.piano-do-capture { display: grid; gap: 4px; margin-top: 4px; padding-top: 7px; border-top: 1px solid var(--line); }
+.piano-do-capture button {
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid var(--line-strong);
+  color: var(--foreground);
+  background: var(--surface-raised);
+  font: inherit;
+  font-size: .68rem;
+  cursor: pointer;
+}
+.piano-do-capture button[aria-pressed="true"] { color: var(--background); border-color: var(--piano-gold); background: var(--piano-gold); }
+.piano-route-methods { padding-left: 20px; border-left: 1px solid var(--line); }
+.piano-route-methods ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 1px 0 0; padding-left: 18px; }
+.piano-route-methods li { min-width: 0; padding-left: 2px; color: var(--piano-gold); font-size: .63rem; }
+.piano-route-methods li strong,
+.piano-route-methods li small { display: block; }
+.piano-route-methods li strong { color: var(--foreground); font-size: .66rem; font-weight: 500; }
+
 .piano-model-disclosure {
   display: grid;
   grid-template-columns: minmax(210px, .72fr) 180px minmax(320px, 1.5fr) auto;
@@ -8677,7 +8723,76 @@ footer a {
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
 
-/* Piano HUD v1.92: semitone-first sequential interval context within three bounded edge lenses. */
+/* Piano HUD v1.98: play-to-set movable Do, compact chord fingering, inversion-aware names, explicit routes, voice matching, and simplified live lenses. */
+.piano-voice-coach {
+  --voice-position-color: var(--piano-blue);
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  padding: 17px clamp(20px, 4vw, 52px) 18px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--piano-blue) 3%, var(--surface-soft));
+}
+
+.piano-voice-coach.is-centered { --voice-position-color: var(--piano-gold); }
+.piano-voice-coach.is-flat { --voice-position-color: var(--piano-blue); }
+.piano-voice-coach.is-sharp { --voice-position-color: var(--piano-coral); }
+.piano-voice-coach > header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+.piano-voice-coach > header > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.piano-voice-coach > header span,
+.piano-voice-controls span,
+.piano-voice-reading span {
+  color: var(--muted);
+  font-size: .64rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.piano-voice-coach > header strong { font-family: var(--font-display), Georgia, serif; font-size: 1.15rem; font-weight: 400; }
+.piano-voice-coach > header small,
+.piano-voice-controls small,
+.piano-voice-reading small,
+.piano-voice-coach > footer small { color: var(--muted); font-size: .65rem; line-height: 1.45; }
+.piano-voice-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.piano-voice-actions button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  color: var(--foreground);
+  background: transparent;
+  font: inherit;
+  font-size: .7rem;
+  cursor: pointer;
+}
+.piano-voice-actions button[aria-pressed="true"] { color: var(--background); border-color: var(--foreground); background: var(--foreground); }
+.piano-voice-actions button:disabled { opacity: .55; cursor: wait; }
+.piano-voice-controls { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(250px, 1.2fr) minmax(200px, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.piano-voice-controls > * { display: grid; min-width: 0; gap: 3px; margin: 0; padding: 9px 12px; }
+.piano-voice-controls > * + * { border-left: 1px solid var(--line); }
+.piano-voice-controls strong { font-size: .74rem; font-weight: 500; line-height: 1.35; }
+.piano-voice-controls select { width: 100%; min-height: 33px; padding: 4px 8px; border: 1px solid var(--line-strong); color: var(--foreground); background: var(--surface-raised); font: inherit; font-size: .7rem; }
+.piano-voice-controls .is-target { border-top: 2px solid var(--piano-gold); }
+.piano-voice-reading { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(230px, 1fr) minmax(320px, 1.5fr); gap: 16px 24px; align-items: center; }
+.piano-voice-detected,
+.piano-voice-distance { display: grid; min-width: 0; gap: 3px; }
+.piano-voice-detected strong,
+.piano-voice-distance strong { font-size: .82rem; font-weight: 500; line-height: 1.35; }
+.piano-voice-distance strong { color: var(--voice-position-color); }
+.piano-voice-rail { display: grid; min-width: 0; gap: 4px; }
+.piano-voice-rail > div { position: relative; height: 26px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); background: linear-gradient(90deg, color-mix(in srgb, var(--piano-blue) 7%, transparent), transparent 48%, color-mix(in srgb, var(--piano-coral) 7%, transparent)); }
+.piano-voice-rail i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-strong); }
+.piano-voice-rail i:nth-child(1) { left: 10%; }
+.piano-voice-rail i:nth-child(2) { left: 30%; }
+.piano-voice-rail i:nth-child(3) { left: 50%; }
+.piano-voice-rail i:nth-child(4) { left: 70%; }
+.piano-voice-rail i:nth-child(5) { left: 90%; }
+.piano-voice-rail i.is-target { width: 2px; background: var(--piano-gold); }
+.piano-voice-rail b { position: absolute; top: 50%; left: var(--voice-position); width: 12px; height: 12px; border: 2px solid var(--surface-soft); border-radius: 50%; background: var(--voice-position-color); transform: translate(-50%, -50%); }
+.piano-voice-rail ol { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0; padding: 0; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .6rem; list-style: none; text-align: center; }
+.piano-voice-coach > footer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 22px; align-items: start; }
+.piano-voice-coach > footer p { display: grid; gap: 2px; margin: 0; }
+.piano-voice-coach > footer p strong { font-size: .68rem; font-weight: 500; line-height: 1.4; }
+.piano-voice-coach > footer > small { grid-column: 1 / -1; }
+
 .piano-immersion {
   --immersion-violet: #c69cff;
   position: relative;
@@ -8747,7 +8862,7 @@ footer a {
 }
 
 .piano-immersion-model small { color: #909bad; font-size: .61rem; line-height: 1.4; }
-.piano-immersion-stage { position: relative; z-index: 1; min-width: 0; contain: layout paint; }
+.piano-immersion-stage { position: relative; z-index: 1; min-width: 0; min-height: 880px; contain: layout paint; }
 .piano-immersion-stage > svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 .piano-immersion-edge-hud {
@@ -8835,6 +8950,140 @@ footer a {
 .piano-immersion-lens-cue { margin: 0; color: #c2cad8; font-size: .66rem; line-height: 1.4; }
 .piano-immersion-lens-boundary { grid-template-columns: auto auto; align-items: baseline; column-gap: 7px; padding-top: 4px; }
 .piano-immersion-lens-boundary small { grid-column: 1 / -1; }
+
+.piano-immersion-meter-controls {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  gap: 5px;
+  pointer-events: auto;
+}
+.piano-immersion-meter-controls label { display: grid; gap: 2px; min-width: 0; }
+.piano-immersion-meter-controls label > span {
+  color: #8f9bb0;
+  font-family: var(--font-mono), monospace;
+  font-size: .64rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.piano-immersion-meter-controls input,
+.piano-immersion-meter-controls select,
+.piano-immersion-meter-controls button {
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid rgba(225, 232, 246, .24);
+  color: #f4f0e8;
+  background: rgba(7, 10, 18, .86);
+  font: inherit;
+  font-size: .68rem;
+}
+.piano-immersion-meter-controls input,
+.piano-immersion-meter-controls select { width: 100%; padding: 4px 6px; }
+.piano-immersion-meter-controls input:disabled,
+.piano-immersion-meter-controls select:disabled { color: #9aa5b7; opacity: .7; }
+.piano-immersion-meter-controls > div { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.piano-immersion-meter-controls button { padding: 4px 6px; cursor: pointer; }
+.piano-immersion-meter-controls button[aria-pressed="true"] { border-color: var(--piano-gold); color: #090b10; background: var(--piano-gold); }
+
+.piano-immersion-rhythm-track {
+  position: relative;
+  min-height: 56px;
+  margin-top: 1px;
+  border-top: 1px solid rgba(225, 232, 246, .14);
+  border-bottom: 1px solid rgba(225, 232, 246, .14);
+  background: linear-gradient(180deg, rgba(125, 225, 229, .04), transparent);
+}
+.piano-immersion-rhythm-track i {
+  position: absolute;
+  top: 8px;
+  bottom: 15px;
+  left: var(--rhythm-position);
+  width: 1px;
+  background: rgba(225, 232, 246, .18);
+}
+.piano-immersion-rhythm-track i.is-downbeat { width: 2px; background: rgba(236, 199, 109, .62); }
+.piano-immersion-rhythm-track > em {
+  position: absolute;
+  top: 5px;
+  bottom: 12px;
+  left: var(--rhythm-position);
+  width: 2px;
+  background: #fff8e9;
+  box-shadow: 0 0 8px rgba(255, 248, 233, .42);
+}
+.piano-immersion-rhythm-track > span {
+  position: absolute;
+  top: 23px;
+  left: var(--rhythm-position);
+  display: grid;
+  place-items: center;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #070a12;
+  border-radius: 50%;
+  background: var(--piano-blue);
+  transform: translate(-50%, -50%);
+}
+.piano-immersion-rhythm-track > span b { position: absolute; top: 9px; color: #e5ebf4; font-family: var(--font-mono), monospace; font-size: .62rem; font-weight: 500; }
+.piano-immersion-rhythm-track > small { position: absolute; bottom: 2px; color: #7f8a9e; font-size: .62rem; }
+.piano-immersion-rhythm-track .is-previous-bar { left: 2px; }
+.piano-immersion-rhythm-track .is-current-bar { left: 52%; }
+.piano-immersion-rhythm-track .is-free-label { left: 2px; }
+.piano-immersion-rhythm-track.is-free::before { position: absolute; top: 23px; right: 0; left: 0; height: 1px; content: ""; background: rgba(225, 232, 246, .18); }
+
+.piano-immersion-chord-name {
+  display: grid;
+  gap: 2px;
+  padding: 8px 0 9px;
+  border-top: 1px solid rgba(225, 232, 246, .13);
+  border-bottom: 1px solid rgba(225, 232, 246, .13);
+}
+.piano-immersion-chord-name > span,
+.piano-immersion-scale-pulls > span {
+  color: #8f9bb0;
+  font-family: var(--font-mono), monospace;
+  font-size: .62rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.piano-immersion-chord-name > strong {
+  color: #fff8e9;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.15rem, 2vw, 1.6rem);
+  font-weight: 500;
+  line-height: 1.05;
+}
+.piano-immersion-chord-name.is-field > strong { color: #cbd3df; font-size: 1rem; }
+.piano-immersion-chord-name > small { color: #9ca7b8; font-size: .62rem; line-height: 1.4; }
+
+.piano-immersion-fingering {
+  display: grid;
+  gap: 4px;
+  padding: 3px 0 7px;
+  border-bottom: 1px solid rgba(225, 232, 246, .13);
+}
+.piano-immersion-fingering > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 8px; align-items: baseline; }
+.piano-immersion-fingering > div > span {
+  color: #cbd3df;
+  font-family: var(--font-mono), monospace;
+  font-size: .62rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.piano-immersion-fingering > div > small,
+.piano-immersion-fingering > small { color: #909bad; font-size: .59rem; line-height: 1.35; }
+.piano-immersion-fingering svg { display: block; width: 100%; max-width: 220px; height: auto; overflow: visible; }
+.piano-immersion-fingering .is-white { fill: #e8e4dc; stroke: #767c87; stroke-width: 1; }
+.piano-immersion-fingering .is-white.is-chord-key { fill: #fff3c9; }
+.piano-immersion-fingering .is-black { fill: #151923; stroke: #070910; stroke-width: 1; }
+.piano-immersion-fingering .is-black.is-chord-key { fill: #36565c; stroke: #7de1e5; }
+.piano-immersion-fingering .is-finger-marker circle { fill: var(--piano-gold); stroke: #070910; stroke-width: 1.5; }
+.piano-immersion-fingering .is-finger-marker text {
+  fill: #080a0f;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+}
 
 .piano-immersion-interval-strip { display: flex; flex-wrap: wrap; gap: 4px; }
 .piano-immersion-interval-strip span {
@@ -8937,6 +9186,9 @@ footer a {
 .piano-immersion-step-path { display: grid; gap: 2px; margin: 0; }
 .piano-immersion-step-path > span { margin-bottom: 1px; }
 .piano-immersion-step-path strong { color: #fff8e9; font-family: var(--font-mono), monospace; font-size: .76rem; font-weight: 500; }
+.piano-immersion-scale-pulls { display: grid; gap: 2px; min-width: 0; margin: 0; padding: 5px 0; border-top: 1px solid rgba(125, 225, 229, .18); border-bottom: 1px solid rgba(125, 225, 229, .12); }
+.piano-immersion-scale-pulls strong { color: #dff6f7; font-size: .68rem; font-weight: 500; line-height: 1.4; }
+.piano-immersion-scale-pulls small { color: #91a3b4; font-size: .59rem; line-height: 1.38; }
 .piano-immersion-recent-summary { display: grid; gap: 2px; min-width: 0; margin: 0; padding-top: 5px; border-top: 1px solid rgba(225, 232, 246, .08); }
 .piano-immersion-recent-summary strong { color: #d6dce7; font-size: .62rem; font-weight: 500; line-height: 1.38; }
 .piano-immersion-recent-summary small { color: #8f9aab; font-size: .59rem; line-height: 1.38; }
@@ -8947,6 +9199,25 @@ footer a {
 .piano-immersion-path-facts dt { color: #8f9bb0; }
 .piano-immersion-path-facts dd { color: #d6dce7; }
 .piano-immersion-catalog-fit { padding-top: 4px; }
+
+.piano-immersion-map-key {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 11px clamp(20px, 4vw, 52px) 12px;
+  border-top: 1px solid rgba(225, 232, 246, .1);
+  color: #f4f0e8;
+  background: rgba(5, 7, 12, .92);
+}
+.piano-immersion-map-key > span { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 7px; align-items: center; min-width: 0; }
+.piano-immersion-map-key i { grid-row: 1 / 3; display: block; width: 14px; height: 14px; border: 2px solid #dfe8f7; border-radius: 50%; }
+.piano-immersion-map-key strong { font-size: .68rem; font-weight: 500; }
+.piano-immersion-map-key small { color: #8f9aab; font-size: .61rem; line-height: 1.42; }
+.piano-immersion-map-key .is-crown i { border-color: var(--piano-blue); border-right-style: dashed; box-shadow: 0 0 0 3px rgba(125, 225, 229, .08); }
+.piano-immersion-map-key .is-attack i { border-color: #f4f0e8; background: var(--piano-blue); }
+.piano-immersion-map-key .is-sounding i { border-color: var(--piano-gold); border-style: dashed; box-shadow: inset 0 0 0 3px #070a12; }
 .immersion-dust circle { fill: #c9d8f4; }
 
 .immersion-register-beacons path {
@@ -8965,50 +9236,13 @@ footer a {
   stroke-width: 3px;
 }
 
-.immersion-fifths-tide .immersion-tide-envelope {
-  fill: none;
-  stroke: rgba(208, 220, 244, .12);
-  stroke-width: 1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.immersion-fifths-tide .is-microscope .immersion-tide-envelope { stroke: rgba(165, 185, 234, .16); }
-.immersion-fifths-tide .is-cluster .immersion-tide-envelope { stroke: rgba(212, 190, 244, .2); }
-.immersion-fifths-tide .immersion-tide-visit {
-  fill: none;
-  stroke: rgba(226, 233, 249, calc(.18 + var(--immersion-tide) * .42));
-  stroke-width: calc(1px + var(--immersion-tide) * 3px);
-  stroke-linecap: round;
-}
-.immersion-fifths-tide .is-cluster .immersion-tide-visit { stroke: rgba(215, 185, 255, calc(.22 + var(--immersion-tide) * .5)); }
-.immersion-fifths-tide text {
-  fill: rgba(196, 208, 231, .5);
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  letter-spacing: .04em;
-  text-anchor: end;
-}
-.immersion-fifths-drift {
-  fill: none;
-  stroke: rgba(239, 243, 251, .28);
-  stroke-width: 1.2;
-  stroke-dasharray: 1 6;
-}
-
-.immersion-route-hypotheses path { fill: none; stroke-linecap: round; }
-.immersion-route-hypotheses .is-leading { stroke: rgba(142, 223, 230, .42); stroke-width: 2.2; stroke-dasharray: 7 5; }
-.immersion-route-hypotheses .is-runner { stroke: rgba(198, 156, 255, .3); stroke-width: 1.5; stroke-dasharray: 2 6; }
-
 .immersion-scale-aurora path {
   fill: none;
   stroke: var(--immersion-pitch);
   stroke-linecap: round;
 }
 .immersion-scale-aurora g.is-route path { stroke-width: 8; opacity: .22; }
-.immersion-scale-aurora g.is-route.is-seen path { opacity: .52; }
 .immersion-scale-aurora g.is-outside-route path { stroke-width: 1.6; stroke-dasharray: 2 5; opacity: .24; }
-.immersion-scale-aurora g.is-outside-route.is-seen path { stroke-width: 2.5; opacity: .5; }
-.immersion-scale-aurora .immersion-route-seed { fill: var(--immersion-pitch); opacity: .82; }
 .immersion-scale-aurora g.is-home path { stroke: var(--piano-gold); opacity: .72; }
 .immersion-scale-aurora text {
   fill: #aab5ca;
@@ -9016,7 +9250,6 @@ footer a {
   font-size: 11px;
   text-anchor: middle;
 }
-.immersion-scale-aurora g.is-seen text,
 .immersion-scale-aurora g.is-home text { fill: #f5f2ec; }
 .immersion-scale-aurora g.is-home text { display: none; }
 
@@ -9027,13 +9260,6 @@ footer a {
 }
 .immersion-do-meridian > circle:last-of-type { fill: #070a12; stroke: var(--piano-gold); stroke-width: 3; }
 .immersion-do-meridian text { fill: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: 11px; text-anchor: middle; }
-
-.immersion-context-rosette > path { fill: rgba(237, 232, 216, .16); stroke: rgba(246, 237, 214, .74); stroke-width: 1.4; }
-.immersion-context-rosette circle { fill: rgba(246, 237, 214, calc(.2 + var(--immersion-cue) * .68)); stroke: #070a12; stroke-width: 1; }
-
-.immersion-chord-root-wake > .immersion-root-curve { fill: none; stroke: rgba(202, 176, 245, .24); stroke-width: 1.5; stroke-dasharray: 3 6; }
-.immersion-chord-root-wake > path:not(.immersion-root-curve) { fill: #070a12; stroke: rgba(215, 190, 255, .56); stroke-width: 1.5; stroke-dasharray: none; }
-.immersion-chord-root-wake > path.is-latest { fill: rgba(198, 156, 255, .28); stroke: #e7d5ff; stroke-width: 2; stroke-dasharray: none; }
 
 .immersion-chord-clouds .immersion-interpreted-hull,
 .immersion-chord-clouds .immersion-audible-hull,
@@ -9063,14 +9289,6 @@ footer a {
   stroke-dasharray: 2 8;
   opacity: calc(.14 + var(--immersion-crunch) * .5);
 }
-
-.immersion-nearby-fields .immersion-nearby-orbit { fill: rgba(9, 13, 23, .68); stroke: rgba(225, 232, 246, .35); stroke-width: 1.2; stroke-dasharray: 2 5; }
-.immersion-nearby-fields circle.is-retained { fill: rgba(232, 239, 251, .72); }
-.immersion-nearby-fields circle.is-entering { fill: #070a12; stroke: rgba(143, 216, 224, .78); stroke-width: 1.4; }
-.immersion-nearby-fields text { fill: #c5cfdf; font-family: var(--font-mono), monospace; font-size: 11px; paint-order: stroke; stroke: #070a12; stroke-width: 3px; }
-
-.immersion-motif-bridge path { fill: none; stroke: rgba(223, 229, 243, .42); stroke-width: 2; stroke-dasharray: 2 8; }
-.immersion-motif-bridge circle { fill: none; stroke: rgba(223, 229, 243, .48); stroke-width: 1.5; stroke-dasharray: 3 4; }
 
 .immersion-voice-wake path {
   fill: none;
@@ -9130,20 +9348,10 @@ footer a {
 .immersion-semitone-horizon g line { stroke: rgba(201, 212, 232, .25); stroke-width: 1; }
 .immersion-semitone-horizon g circle { fill: rgba(201, 212, 232, .24); stroke: #070a12; stroke-width: 1; }
 .immersion-semitone-horizon g.is-present circle { fill: #7de1e5; stroke: rgba(239, 249, 250, .86); stroke-width: 1.5; }
-.immersion-semitone-horizon g rect { fill: rgba(198, 156, 255, .72); stroke: #070a12; stroke-width: 1; }
-.immersion-semitone-horizon .immersion-semitone-home-cue { fill: var(--piano-gold); stroke: #070a12; stroke-width: 1; }
 .immersion-semitone-horizon g text { fill: rgba(194, 205, 226, .58); font-family: var(--font-mono), monospace; font-size: 10px; text-anchor: middle; }
 .immersion-semitone-horizon g.is-present text,
 .immersion-semitone-horizon g.is-route-gap text,
 .immersion-semitone-horizon g.is-home-cue text { fill: #f4f0e8; }
-
-.immersion-newness-bloom {
-  fill: none;
-  stroke: var(--immersion-violet);
-  stroke-width: calc(1px + var(--immersion-newness) * 3px);
-  stroke-dasharray: 2 7;
-  opacity: calc(.18 + var(--immersion-newness) * .58);
-}
 
 .immersion-pull-current {
   fill: none;
@@ -9155,10 +9363,6 @@ footer a {
 .piano-immersion-stage marker path { fill: var(--piano-gold); }
 
 .piano-immersion-note { opacity: var(--immersion-recency); }
-.piano-immersion-note .cosmos-node-bloom {
-  fill: var(--immersion-pitch);
-  opacity: .14;
-}
 .piano-immersion-note .cosmos-node {
   fill: var(--immersion-pitch);
   stroke: rgba(255, 255, 255, .75);
@@ -9167,10 +9371,6 @@ footer a {
 .piano-immersion-note .cosmos-node.is-outside-route { fill: #070a12; stroke: var(--immersion-pitch); stroke-width: 2.4; stroke-dasharray: 3 3; }
 .piano-immersion-note.is-microscope { opacity: 1; }
 .piano-immersion-note.is-latest .cosmos-node { stroke: #fffaf0; stroke-width: 3; }
-.piano-immersion-note.is-latest .cosmos-node-bloom { animation: immersion-note-bloom 520ms ease-out both; transform-box: fill-box; transform-origin: center; }
-.piano-immersion-note .cosmos-node-specular { fill: rgba(255, 255, 255, .8); pointer-events: none; }
-.piano-immersion-note .cosmos-node-echo { fill: none; stroke: var(--immersion-pitch); stroke-width: 1.4; stroke-dasharray: 2 5; opacity: .58; }
-.piano-immersion-note .cosmos-route-notch { stroke: #f0f3fa; stroke-width: 2; stroke-linecap: round; }
 .piano-immersion-note text {
   fill: #f4f0e7;
   font-family: var(--font-mono), monospace;
@@ -9206,11 +9406,6 @@ footer a {
 .immersion-empty-reading text:first-child { fill: var(--piano-gold); font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
 .immersion-empty-reading text:nth-child(2) { font-size: 25px; }
 .immersion-empty-reading text:nth-child(3) { fill: #7f8a9e; font-size: 15px; }
-
-@keyframes immersion-note-bloom {
-  from { opacity: .58; transform: scale(.42); transform-origin: center; transform-box: fill-box; }
-  to { opacity: .17; transform: scale(1); transform-origin: center; transform-box: fill-box; }
-}
 
 .piano-immersion-evidence {
   position: relative;
@@ -9311,10 +9506,6 @@ footer a {
 .piano-immersion-keyboard > summary span { font-size: .71rem; font-weight: 650; }
 .piano-immersion-keyboard > summary small { color: #8792a5; font-size: .62rem; }
 .piano-immersion-keyboard .hud-keyboard { opacity: .72; }
-
-@media (prefers-reduced-motion: reduce) {
-  .piano-immersion-note.is-latest .cosmos-node-bloom { animation: none; }
-}
 
 .hud-phrase-ribbon {
   min-width: 0;
@@ -10984,8 +11175,13 @@ footer a {
 }
 
 @media (max-width: 900px) {
+  .piano-voice-controls { grid-template-columns: 1fr 1fr; }
+  .piano-voice-controls > *:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0; }
+  .piano-voice-reading { grid-template-columns: 1fr 1fr; }
+  .piano-voice-rail { grid-column: 1 / -1; }
   .piano-immersion-intro { align-items: start; flex-direction: column; padding-top: 22px; }
   .piano-immersion-model { flex: 0 0 auto; width: min(100%, 300px); min-width: 0; }
+  .piano-immersion-stage { min-height: 0; }
   .piano-immersion-interval-context-bar { grid-template-columns: 1fr; }
   .piano-immersion-edge-hud {
     position: relative;
@@ -11007,6 +11203,8 @@ footer a {
   .piano-hud-controls { justify-content: flex-start; }
   .piano-hud-statebar { grid-template-columns: auto 1fr; }
   .piano-hud-statebar em { justify-self: end; }
+  .piano-route-selector { grid-template-columns: 1fr 1fr; }
+  .piano-route-methods { grid-column: 1 / -1; padding-top: 12px; padding-left: 0; border-top: 1px solid var(--line); border-left: 0; }
   .piano-hud-main { grid-template-columns: 1fr; }
   .hud-phrase-stack { border-right: 0; border-bottom: 1px solid var(--line); }
   .hud-context-stack { grid-template-columns: 1fr 1fr; }
@@ -11070,6 +11268,16 @@ footer a {
 }
 
 @media (max-width: 620px) {
+  .piano-voice-coach { padding-inline: 18px; }
+  .piano-voice-coach > header { align-items: stretch; flex-direction: column; }
+  .piano-voice-actions { display: grid; grid-template-columns: 1fr; }
+  .piano-voice-controls,
+  .piano-voice-reading,
+  .piano-voice-coach > footer { grid-template-columns: 1fr; }
+  .piano-voice-controls > * + * { border-top: 1px solid var(--line); border-left: 0; }
+  .piano-voice-controls > *:nth-child(3),
+  .piano-voice-rail,
+  .piano-voice-coach > footer > small { grid-column: 1; }
   .piano-immersion-intro { gap: 17px; padding-inline: 18px; }
   .piano-immersion-intro p { font-size: .69rem; }
   .piano-immersion-stage { margin-inline: -3px; }
@@ -11079,6 +11287,7 @@ footer a {
   .piano-immersion-lens.is-harmony,
   .piano-immersion-lens.is-melody { grid-column: 1; grid-row: auto; padding: 13px 0; }
   .piano-immersion-lens.is-melody { order: -1; }
+  .piano-immersion-map-key { grid-template-columns: 1fr; gap: 9px; padding-inline: 18px; }
   .piano-immersion-interval-context-bar { gap: 12px; padding-inline: 18px; }
   .piano-immersion-interval-context-bar > div { grid-template-columns: 1fr; }
   .piano-immersion-interval-context-bar p { padding: 8px 0; border-top: 1px solid rgba(225, 232, 246, .1); border-left: 0; }
@@ -11099,6 +11308,9 @@ footer a {
   .piano-hud-controls > label:not(.piano-convention-toggle) { flex-basis: 100%; }
   .piano-hud-statebar { grid-template-columns: 1fr; }
   .piano-hud-statebar em { justify-self: start; }
+  .piano-route-selector { grid-template-columns: 1fr; padding-inline: 18px; }
+  .piano-route-methods { grid-column: 1; }
+  .piano-route-methods ol { grid-template-columns: 1fr; gap: 7px; }
   .hud-interval-tools > summary { align-items: flex-start; flex-direction: column; }
   .hud-shared-cycle-prompt,
   .hud-shared-cycle-topline { align-items: stretch; flex-direction: column; }
@@ -11363,16 +11575,33 @@ footer a {
 }
 
 @media (forced-colors: active) {
+  .piano-voice-coach,
+  .piano-voice-controls select,
+  .piano-voice-actions button { color: CanvasText; border-color: CanvasText; background: Canvas; }
+  .piano-voice-actions button[aria-pressed="true"] { color: HighlightText; border-color: Highlight; background: Highlight; }
+  .piano-voice-rail > div,
+  .piano-voice-rail i { border-color: CanvasText; background: Canvas; }
+  .piano-voice-rail i.is-target { background: Highlight; }
+  .piano-voice-rail b { border-color: Canvas; background: Highlight; }
+  .piano-route-selector,
+  .piano-route-selector select,
+  .piano-do-capture button { color: CanvasText; border-color: CanvasText; background: Canvas; }
+  .piano-do-capture button[aria-pressed="true"] { color: HighlightText; border-color: Highlight; background: Highlight; }
   .piano-immersion,
   .piano-immersion-edge-hud,
   .piano-immersion-lens,
+  .piano-immersion-map-key,
   .piano-immersion-interval-context-bar,
   .piano-immersion-evidence,
   .piano-immersion-orienting,
   .piano-immersion-guide,
   .piano-immersion-reading,
   .piano-immersion-keyboard { color: CanvasText; background: Canvas; }
-  .piano-immersion-model select { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
+  .piano-immersion-model select,
+  .piano-immersion-meter-controls input,
+  .piano-immersion-meter-controls select,
+  .piano-immersion-meter-controls button { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
+  .piano-immersion-meter-controls button[aria-pressed="true"] { color: HighlightText; border-color: Highlight; background: Highlight; }
   .piano-immersion-lens { color: CanvasText; border-color: CanvasText; background: Canvas !important; text-shadow: none; }
   .piano-immersion-interval-strip span { color: CanvasText; border-color: CanvasText; }
   .piano-immersion-latest-transition { color: CanvasText; border-color: CanvasText; }
@@ -11385,7 +11614,21 @@ footer a {
   .piano-immersion-interval-context-bar small { color: CanvasText; }
   .piano-immersion-interval-context-bar,
   .piano-immersion-interval-context-bar p,
-  .piano-immersion-bouquet-summary { border-color: CanvasText; }
+  .piano-immersion-bouquet-summary,
+  .piano-immersion-chord-name,
+  .piano-immersion-fingering,
+  .piano-immersion-scale-pulls,
+  .piano-immersion-rhythm-track { border-color: CanvasText; }
+  .piano-immersion-fingering .is-white,
+  .piano-immersion-fingering .is-black { fill: Canvas; stroke: CanvasText; }
+  .piano-immersion-fingering .is-white.is-chord-key,
+  .piano-immersion-fingering .is-black.is-chord-key { fill: Highlight; stroke: HighlightText; }
+  .piano-immersion-fingering .is-finger-marker circle { fill: Canvas; stroke: CanvasText; }
+  .piano-immersion-fingering .is-finger-marker text { fill: CanvasText; }
+  .piano-immersion-rhythm-track i,
+  .piano-immersion-rhythm-track > em { background: CanvasText; }
+  .piano-immersion-rhythm-track i.is-downbeat { background: Highlight; }
+  .piano-immersion-rhythm-track > span { border-color: CanvasText; background: LinkText; }
   .piano-immersion-character .is-guide,
   .piano-immersion-character path { stroke: CanvasText; }
   .piano-immersion-character text { fill: CanvasText; }
@@ -11398,35 +11641,22 @@ footer a {
   .immersion-register-beacons path,
   .immersion-register-beacons circle { stroke: GrayText; }
   .immersion-register-beacons text,
-  .immersion-fifths-tide text,
   .immersion-scale-aurora text,
   .immersion-do-meridian text,
-  .immersion-nearby-fields text,
   .immersion-attack-contour text,
   .piano-immersion-note text,
   .immersion-annotations text,
   .immersion-empty-reading text { fill: CanvasText; stroke: Canvas; }
-  .immersion-fifths-tide path { fill: none; stroke: GrayText; opacity: 1; }
-  .immersion-route-hypotheses path { fill: none; stroke: LinkText; opacity: 1; }
-  .immersion-route-hypotheses .is-runner { stroke: Highlight; }
   .immersion-scale-aurora path { fill: none; stroke: LinkText; stroke-width: 3; opacity: 1; }
   .immersion-scale-aurora g.is-outside-route path { stroke: CanvasText; stroke-dasharray: 2 5; }
-  .immersion-scale-aurora .immersion-route-seed { fill: LinkText; stroke: CanvasText; opacity: 1; }
   .immersion-scale-aurora g.is-home path { stroke: Highlight; }
   .immersion-do-meridian line,
   .immersion-pull-current { stroke: Highlight; opacity: 1; }
   .immersion-do-meridian circle { fill: Canvas !important; stroke: Highlight !important; }
-  .immersion-context-rosette path,
-  .immersion-context-rosette circle { fill: Canvas; stroke: Highlight; opacity: 1; }
-  .immersion-chord-root-wake path { fill: Canvas !important; stroke: LinkText !important; opacity: 1; }
   .immersion-chord-clouds path { fill: none !important; stroke: CanvasText !important; opacity: 1; }
   .immersion-chord-clouds g.is-incomplete .immersion-interpreted-hull { stroke-dasharray: 8 6; }
   .immersion-chord-clouds g.is-rolled .immersion-timing-hull { stroke: Highlight !important; stroke-dasharray: 1 9; }
   .immersion-crunch-haze { fill: none; stroke: CanvasText; opacity: 1; stroke-dasharray: 2 7; }
-  .immersion-nearby-fields circle { fill: Canvas; stroke: LinkText; opacity: 1; }
-  .immersion-nearby-fields circle.is-retained { fill: LinkText; stroke: CanvasText; }
-  .immersion-motif-bridge path,
-  .immersion-motif-bridge circle { fill: none; stroke: Highlight; opacity: 1; }
   .immersion-voice-wake path,
   .immersion-interval-filaments path { stroke: LinkText; opacity: 1; }
   .immersion-semitone-horizon > text,
@@ -11435,8 +11665,6 @@ footer a {
   .immersion-semitone-horizon line { stroke: CanvasText; opacity: 1; }
   .immersion-semitone-horizon circle { fill: Canvas; stroke: CanvasText; }
   .immersion-semitone-horizon g.is-present circle { fill: LinkText; stroke: CanvasText; }
-  .immersion-semitone-horizon rect { fill: Canvas; stroke: LinkText; }
-  .immersion-semitone-horizon .immersion-semitone-home-cue { fill: Highlight; stroke: CanvasText; }
   .hud-chord-atlas-grid > article.is-current { background: Canvas; box-shadow: inset 0 3px Highlight; }
   .hud-chord-atlas-voice > text,
   .hud-chord-atlas-axis { fill: CanvasText; }
@@ -11450,15 +11678,11 @@ footer a {
   .immersion-attack-contour path,
   .immersion-attack-contour ellipse { fill: none; stroke: CanvasText; opacity: 1; }
   .immersion-attack-contour circle { fill: Canvas; stroke: CanvasText; }
-  .immersion-newness-bloom { stroke: Highlight; opacity: 1; stroke-dasharray: 2 6; }
   .piano-immersion-note .cosmos-node,
   .immersion-active-core { fill: Canvas; stroke: CanvasText; }
   .piano-immersion-note .cosmos-node.is-route,
   .immersion-active-stars .is-pressed .immersion-active-core { fill: LinkText; stroke: CanvasText; }
   .piano-immersion-note .cosmos-node.is-outside-route { fill: Canvas; stroke: CanvasText; stroke-dasharray: 3 3; }
-  .piano-immersion-note .cosmos-node-specular { fill: CanvasText; }
-  .piano-immersion-note .cosmos-node-echo,
-  .piano-immersion-note .cosmos-route-notch { fill: none; stroke: Highlight; opacity: 1; }
   .piano-immersion-note,
   .immersion-chord-clouds g.is-history { opacity: 1; }
   .immersion-active-core,
@@ -11467,7 +11691,8 @@ footer a {
   .immersion-pedal-ring { stroke: Highlight; }
   .immersion-annotations line { stroke: CanvasText; }
   .immersion-annotations circle { fill: Canvas; stroke: CanvasText; }
-  .piano-immersion-legend i { forced-color-adjust: auto; border-color: CanvasText !important; background: Canvas !important; box-shadow: none !important; }
+  .piano-immersion-legend i,
+  .piano-immersion-map-key i { forced-color-adjust: auto; border-color: CanvasText !important; background: Canvas !important; box-shadow: none !important; }
   .hud-note-head,
   .hud-frequency-dot,
   .hud-texture-node { fill: Canvas; stroke: CanvasText; }

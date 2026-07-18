@@ -758,6 +758,13 @@ export type ChordCandidate = {
   inversion: number;
 };
 
+export type ChordFingeringSuggestion = {
+  hand: "right";
+  notes: number[];
+  fingers: number[];
+  basis: "triad-inversion" | "four-note-chord" | "even-spread";
+};
+
 export type NearbyChord = {
   rootPitchClass: number;
   pitchClasses: number[];
@@ -3337,7 +3344,8 @@ export function identifyChordCandidates(notes: number[], limit = 3): ChordCandid
 
   for (let rootPitchClass = 0; rootPitchClass < 12; rootPitchClass += 1) {
     for (const template of CHORD_TEMPLATES) {
-      const target = template.offsets.map((offset) => modulo(rootPitchClass + offset, 12)).sort((first, second) => first - second);
+      const targetInChordOrder = template.offsets.map((offset) => modulo(rootPitchClass + offset, 12));
+      const target = [...targetInChordOrder].sort((first, second) => first - second);
       const targetSet = new Set(target);
       const commonPitchClasses = active.filter((pitchClass) => targetSet.has(pitchClass));
       const missingPitchClasses = target.filter((pitchClass) => !activeSet.has(pitchClass));
@@ -3345,7 +3353,7 @@ export function identifyChordCandidates(notes: number[], limit = 3): ChordCandid
       const templateCoverage = commonPitchClasses.length / target.length;
       const activePurity = commonPitchClasses.length / active.length;
       const exact = missingPitchClasses.length === 0 && extraPitchClasses.length === 0;
-      const inversion = target.indexOf(bassPitchClass);
+      const inversion = targetInChordOrder.indexOf(bassPitchClass);
       candidates.push({
         rootPitchClass,
         template,
@@ -3370,6 +3378,43 @@ export function identifyChordCandidates(notes: number[], limit = 3): ChordCandid
       || first.rootPitchClass - second.rootPitchClass
     ))
     .slice(0, limit);
+}
+
+/**
+ * Returns one common right-hand fingering for a compact realized voicing.
+ * This is deliberately advisory: black-key layout, hand size, register, and
+ * the surrounding passage can all make a different fingering preferable.
+ */
+export function suggestChordFingering(notes: number[], candidate: ChordCandidate | null): ChordFingeringSuggestion | null {
+  if (!candidate?.exact) return null;
+  const physicalNotes = [...new Set(notes)].sort((first, second) => first - second);
+  if (physicalNotes.length < 2 || physicalNotes.length > 5) return null;
+  if ((physicalNotes.at(-1) ?? 0) - physicalNotes[0] > 12) return null;
+
+  if (physicalNotes.length === 3) {
+    return {
+      hand: "right",
+      notes: physicalNotes,
+      fingers: candidate.inversion === 1 ? [1, 2, 5] : [1, 3, 5],
+      basis: "triad-inversion",
+    };
+  }
+
+  if (physicalNotes.length === 4) {
+    return {
+      hand: "right",
+      notes: physicalNotes,
+      fingers: candidate.inversion === 1 || candidate.inversion === 2 ? [1, 2, 4, 5] : [1, 2, 3, 5],
+      basis: "four-note-chord",
+    };
+  }
+
+  return {
+    hand: "right",
+    notes: physicalNotes,
+    fingers: physicalNotes.length === 2 ? [1, 5] : [1, 2, 3, 4, 5],
+    basis: "even-spread",
+  };
 }
 
 function chordMoveInstruction(current: number[], target: number[], common: number[]) {
