@@ -33,6 +33,7 @@ import {
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
 import type { LivePulseMirror } from "@/lib/rhythm-model";
 import {
+  IMMERSION_HISTORY_ATTACKS,
   IMMERSION_MAX_FIELD_NOTES,
   IMMERSION_VIEWBOX,
   immersionArcPath,
@@ -858,7 +859,7 @@ export const PianoImmersion = memo(function PianoImmersion({
     ? `For the ${fieldProvenance}, ${pullReading}; home evidence is ${evidenceWord(tendency.homeEvidence)}; the latest first/return bloom is ${evidenceWord(phraseNewness)}; ${crunchReading}. Semitone spacing is the ruler; register and the assumed spectrum determine coral crunch, while phrase context and listening shape felt resolution.${samplingReading}`
     : "Hue, size, trails, filaments, and mist remain separate visual channels; none is a goodness or emotion score.";
   const visualSummary = latestEvent
-    ? `Resonance Sky contains ${Math.min(28, phraseEvents.length)} recent attack marks and ${events.length} bright microscope attacks. Latest: ${latestRole}; ${latestMove}; ${latestRecurrence}. The ${fieldProvenance} contains ${fieldNotes.length} positions and ${intervalField.totalPairCount} possible pairwise intervals; ${intervalField.links.length} bounded filaments are shown${sampleIntervalCopy ? `, led by ${sampleIntervalCopy}` : ""}. Field spacing: ${adjacentGapCopy}; octave-folded pair counts ${semitonePairCopy}. Selected route gaps: ${routeGapCopy}. ${chordCopy} ${routeEvidenceCopy} ${contextCopy} ${motifCopy ?? "No relationship-window return is currently drawn."} ${metricReading} Musical quality and listener feeling are not inferred.`
+    ? `Resonance Sky contains ${Math.min(IMMERSION_HISTORY_ATTACKS, phraseEvents.length)} recent attack marks from the same ${IMMERSION_HISTORY_ATTACKS}-attack history used for chord groups, plus ${events.length} bright microscope attacks. Latest: ${latestRole}; ${latestMove}; ${latestRecurrence}. The ${fieldProvenance} contains ${fieldNotes.length} positions and ${intervalField.totalPairCount} possible pairwise intervals; ${intervalField.links.length} bounded filaments are shown${sampleIntervalCopy ? `, led by ${sampleIntervalCopy}` : ""}. Field spacing: ${adjacentGapCopy}; octave-folded pair counts ${semitonePairCopy}. Selected route gaps: ${routeGapCopy}. ${chordCopy} ${routeEvidenceCopy} ${contextCopy} ${motifCopy ?? "No relationship-window return is currently drawn."} ${metricReading} Musical quality and listener feeling are not inferred.`
     : "Empty Resonance Sky. Direction follows the circle of fifths, depth follows semitone register, and the outer aurora shows the selected movable-Do route.";
   const liveSummary = latestEvent
     ? `Latest keyboard interval: ${latestTransitionSpoken}${latestTransition ? `; ${latestTransition.character.spacingLabel}` : ""}. ${latestSequenceBoundary} Rhythm: ${meterStatusCopy}; ${rhythmDeviationCopy}. Harmony: ${chordDisplayName ?? chordPanelIdentity}; ${voiceMotionCopy}; modeled roughness ${percentage(currentPerception?.roughness ?? null)} and fusion ${percentage(fusion)}.${recentPath.completeFive && recentPath.monophonic ? ` Compatible five-note scale frames: ${recentScaleNameCopy}.` : ""}`
@@ -977,7 +978,7 @@ export const PianoImmersion = memo(function PianoImmersion({
         <div>
           <span>Immersion · analysis only</span>
           <h3 id="piano-immersion-title">Resonance Sky</h3>
-          <p>The center now uses one fifths crown and simple attack circles: direction is pitch-class motion by fifths, depth is semitone register, and only sounding state adds an outer ring. Meter, chord identity, and five-note scale possibilities stay in the edge panels where their meaning can be stated directly.</p>
+          <p>The center now uses one fifths crown and simple attack circles: direction is pitch-class motion by fifths, depth is semitone register, and only sounding state adds an outer ring. Notes and chord groups now share the newest {IMMERSION_HISTORY_ATTACKS} attacks, so both histories age out together. Meter, chord identity, and five-note scale possibilities stay in the edge panels where their meaning can be stated directly.</p>
         </div>
         <label className="piano-immersion-model" htmlFor="immersion-sound-model">
           <span>Assumed spectrum</span>

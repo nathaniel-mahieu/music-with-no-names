@@ -15,11 +15,15 @@ import {
 } from "./rhythm-model.ts";
 
 export const IMMERSION_VIEWBOX = { width: 1200, height: 700, centerX: 600, centerY: 350 } as const;
-export const IMMERSION_MAX_TRAIL_EVENTS = 28;
+export const IMMERSION_HISTORY_ATTACKS = 12;
 export const IMMERSION_MAX_FIELD_NOTES = 8;
 export const IMMERSION_MAX_INTERVAL_LINKS = 12;
 export const IMMERSION_MAX_ANNOTATIONS = 5;
 export const IMMERSION_MAX_CONTOUR_EVENTS = 12;
+
+export function immersionHistory<T>(events: T[]) {
+  return events.slice(-IMMERSION_HISTORY_ATTACKS);
+}
 
 export type ImmersionPitchPoint = {
   note: number;
@@ -867,9 +871,8 @@ export function planImmersionAnnotations(
 }
 
 export function immersionTrail<T extends { id: number; note: number }>(events: T[], doMidi: number) {
-  return events
-    .filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note))
-    .slice(-IMMERSION_MAX_TRAIL_EVENTS)
+  return immersionHistory(events
+    .filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note)))
     .map((event, index, selected) => ({
       event,
       point: immersionPitchPoint(event.note, doMidi),

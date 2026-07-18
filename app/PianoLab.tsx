@@ -141,7 +141,7 @@ import { livePulseMirror, type LivePulseMirror } from "@/lib/rhythm-model";
 import { PIANO_SESSION_KEY } from "@/lib/piano-session";
 import { liveEarPairProfile, type LiveEarIntervalProfile } from "@/lib/live-ear";
 import { PianoImmersion } from "@/app/PianoImmersion";
-import { IMMERSION_MAX_FIELD_NOTES } from "@/lib/piano-immersion-model";
+import { IMMERSION_HISTORY_ATTACKS, IMMERSION_MAX_FIELD_NOTES, immersionHistory } from "@/lib/piano-immersion-model";
 
 type MidiInputLike = {
   id: string;
@@ -4519,6 +4519,8 @@ export function PianoLab() {
     ? articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0)
     : [], [focusLens, nowMs, phraseEvents]);
   const motifTransformations = useMemo(() => detectMotifTransformations(phraseEvents, 3), [phraseEvents]);
+  const immersionHistoryEvents = useMemo(() => immersionHistory(phraseEvents), [phraseEvents]);
+  const immersionMotifs = useMemo(() => detectMotifTransformations(immersionHistoryEvents, 3), [immersionHistoryEvents]);
   const motifEchoAttempt = useMemo(() => motifEchoSession
     ? phraseEvents.filter((event) => event.id > motifEchoSession.anchorEventId).slice(0, motifEchoSession.sourceEvents.length)
     : [], [motifEchoSession, phraseEvents]);
@@ -4542,9 +4544,8 @@ export function PianoLab() {
     soundModelId,
     focusLens === "immersion" ? IMMERSION_MAX_FIELD_NOTES : Number.POSITIVE_INFINITY,
   ), [chordGestures, doMidi, focusLens, membershipCorrections, scale, soundModelId]);
-  const immersionChordGestures = useMemo(() => groupChordGestures(phraseEvents, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, phraseEvents]);
-  const immersionChordMeasureGestures = useMemo(() => immersionChordGestures.slice(-5), [immersionChordGestures]);
-  const immersionChordMeasures = useMemo(() => measureChordGestures(immersionChordMeasureGestures, membershipCorrections, doMidi, scale, soundModelId, IMMERSION_MAX_FIELD_NOTES).slice(-4), [doMidi, immersionChordMeasureGestures, membershipCorrections, scale, soundModelId]);
+  const immersionChordGestures = useMemo(() => groupChordGestures(immersionHistoryEvents, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, immersionHistoryEvents]);
+  const immersionChordMeasures = useMemo(() => measureChordGestures(immersionChordGestures, membershipCorrections, doMidi, scale, soundModelId, IMMERSION_MAX_FIELD_NOTES).slice(-4), [doMidi, immersionChordGestures, membershipCorrections, scale, soundModelId]);
   const selectedChordMeasure = chordMeasures.find((measure) => measure.gesture.id === selectedChordId) ?? chordMeasures.at(-1) ?? null;
   const effectiveSelectedChordId = selectedChordMeasure?.gesture.id ?? null;
   const selectedGesture = selectedChordMeasure?.gesture ?? null;
@@ -4602,10 +4603,10 @@ export function PianoLab() {
   const activeNoteNumbers = useMemo(() => uniqueSorted(Array.from(activeNotesMap.keys())), [activeNotesMap]);
   const immersionTimeBucket = activeNoteNumbers.length ? Math.floor(nowMs / 500) : 0;
   const immersionGravityCandidates = useMemo(() => {
-    const latestEvidenceMs = phraseEvents.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), phraseEvents.at(-1)?.onsetMs ?? 0);
+    const latestEvidenceMs = immersionHistoryEvents.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), immersionHistoryEvents.at(-1)?.onsetMs ?? 0);
     const observationMs = immersionTimeBucket ? Math.max(latestEvidenceMs, immersionTimeBucket * 500) : latestEvidenceMs;
-    return tonalGravityCandidates(phraseEvents, observationMs, 3);
-  }, [immersionTimeBucket, phraseEvents]);
+    return tonalGravityCandidates(immersionHistoryEvents, observationMs, 3);
+  }, [immersionHistoryEvents, immersionTimeBucket]);
   const immersionActiveNotes = useMemo(() => activeNoteNumbers.map((note) => ({
     note,
     velocity: activeNotesMap.get(note) ?? 0,
@@ -5692,7 +5693,7 @@ export function PianoLab() {
         <span className={frameMode === "locked" ? "is-locked" : ""}>{frameMode === "locked" ? "Locked frame" : "Discovering frame"}</span>
         <strong>Do reference · {formatHz(frequencyFromMidi(doMidi))}{showConventions ? ` · ${conventionalPitchName(doMidi)}` : ""}</strong>
         <small>{latestSnapshot?.evidenceLabel ?? "Play four distinct positions before the frame can move."} · group gaps up to {chordWindowMs} ms ({chordWindowMs * 2} ms maximum span)</small>
-        <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
+        <em>{frozen ? "Trace frozen; held keys still show below." : focusLens === "immersion" ? `${immersionHistoryEvents.length}/${IMMERSION_HISTORY_ATTACKS} shared HUD history · notes + chords` : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
       </div>
 
       <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} />
@@ -5705,7 +5706,7 @@ export function PianoLab() {
 
       {focusLens === "immersion" ? <PianoImmersion
         events={events}
-        phraseEvents={phraseEvents}
+        phraseEvents={immersionHistoryEvents}
         measures={measures}
         chordMeasures={immersionChordMeasures}
         activeNotes={immersionActiveNotes}
@@ -5717,7 +5718,7 @@ export function PianoLab() {
         frameLearningDistinctPitchClasses={frameLearningDistinctPitchClasses}
         frameSnapshot={latestSnapshot ?? null}
         gravityCandidates={immersionGravityCandidates}
-        motifs={motifTransformations}
+        motifs={immersionMotifs}
         nearbyReady={immersionNearbyReady}
         pulseMirror={pulseMirrorModel}
         chordWindowMs={chordWindowMs}

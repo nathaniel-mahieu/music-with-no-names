@@ -8723,7 +8723,7 @@ footer a {
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
 
-/* Piano HUD v2.03: register-aware scale fingering inside the semitone-first Immersion Scale Lens. */
+/* Piano HUD v2.04: one short shared note-and-chord history plus register-aware scale fingering. */
 .voice-lab { display: grid; min-width: 0; }
 .voice-lab-intro { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .7fr); gap: clamp(28px, 6vw, 86px); align-items: end; padding: clamp(28px, 4vw, 58px); border-bottom: 1px solid var(--line); }
 .voice-lab-intro > div { display: grid; gap: 11px; min-width: 0; }

@@ -94,7 +94,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
-  assert.match(ratioLab, /v2\.03/);
+  assert.match(ratioLab, /v2\.04/);
   assert.match(scaleLab, /Hear home\. Build intervals\. Generate scales\. Predict what comes next/);
   assert.match(scaleLab, /Transposition moves every pitch together/);
   assert.match(scaleLab, /hear it in your mind first/i);

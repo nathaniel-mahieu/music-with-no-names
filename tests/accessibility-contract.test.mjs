@@ -56,8 +56,11 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(piano, /Adopt a candidate/);
   assert.match(piano, /The fifths compass changes Do while retaining the selected route/);
   assert.match(piano, /const selectScaleRoute/);
-  assert.match(piano, /immersionChordGestures\.slice\(-5\)/);
-  assert.match(piano, /measureChordGestures\(immersionChordMeasureGestures[\s\S]*IMMERSION_MAX_FIELD_NOTES\)\.slice\(-4\)/);
+  assert.doesNotMatch(piano, /immersionChordGestures\.slice\(-5\)/);
+  assert.match(piano, /const immersionHistoryEvents = useMemo\(\(\) => immersionHistory\(phraseEvents\)/);
+  assert.match(piano, /groupChordGestures\(immersionHistoryEvents[\s\S]*measureChordGestures\(immersionChordGestures[\s\S]*IMMERSION_MAX_FIELD_NOTES\)\.slice\(-4\)/);
+  assert.match(piano, /phraseEvents=\{immersionHistoryEvents\}/);
+  assert.match(piano, /shared HUD history · notes \+ chords/);
   assert.match(piano, /focusLens !== "immersion"[\s\S]*window\.setInterval\(\(\) => setNowMs\(currentHudTime\(\)\), 120\)/);
   assert.match(piano, /window\.setTimeout\(\(\) => setNowMs\(currentHudTime\(\)\), remainingMs\)/);
   assert.match(immersion, /<section className="piano-immersion" aria-labelledby="piano-immersion-title">/);
@@ -146,7 +149,8 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(immersion, /Attack circle/);
   assert.doesNotMatch(immersion, /feGaussianBlur|<filter /);
   assert.doesNotMatch(immersion, /tabIndex=\{?[1-9]/);
-  assert.match(model, /IMMERSION_MAX_TRAIL_EVENTS = 28/);
+  assert.match(model, /IMMERSION_HISTORY_ATTACKS = 12/);
+  assert.match(model, /export function immersionHistory[\s\S]*slice\(-IMMERSION_HISTORY_ATTACKS\)/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
   assert.match(model, /IMMERSION_MAX_INTERVAL_LINKS = 12/);
   assert.match(model, /IMMERSION_MAX_ANNOTATIONS = 5/);

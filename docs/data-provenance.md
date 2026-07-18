@@ -112,6 +112,8 @@ The v2.02 quick reset controls add one tab-local event-boundary state and no new
 
 The v2.03 scale-fingering cue adds no input, persistence, network, audio, corpus, fitted model, or hand tracking. It averages at most the five recent retained MIDI note numbers, realizes the selected authored route in the nearest octave, and compares that octave's midpoint with middle C. A fixed route-count table supplies one ascending pattern for each existing seven-, six-, or five-position route and exposes the crossing. The result is a transparent register-based practice suggestion—not evidence of the hand or fingers used, anatomy, comfort, ergonomic safety, pianistic correctness, intended direction, tempo suitability, or learning effect.
 
+The v2.04 shared Immersion history adds no input, persistence, catalog, inference, network, or audio behavior. It takes the newest twelve attacks from the existing sixty-second local phrase and supplies that single slice to the Resonance Sky note trail, pitch-class visits, local center and recurrence evidence, relationship-window detector, and chord grouping. Only four recent chord membranes remain visible as a rendering cap, but they are no longer drawn from a longer evidence history than the note marks. The other Piano focuses retain the full bounded phrase. Twelve is a presentation and local-evidence budget—not a phrase boundary, musical unit, importance ranking, memory model, meter, harmony, or salience claim.
+
 ## Listener data
 
 Ear observations, Journey responses, and Personal Lens ratings are created by the current listener and stored only in that browser. No cohort data, identity, account, or backend aggregation exists. Export occurs only through an explicit local JSON action.

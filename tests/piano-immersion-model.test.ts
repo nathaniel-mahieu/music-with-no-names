@@ -5,7 +5,8 @@ import {
   IMMERSION_MAX_CONTOUR_EVENTS,
   IMMERSION_MAX_FIELD_NOTES,
   IMMERSION_MAX_INTERVAL_LINKS,
-  IMMERSION_MAX_TRAIL_EVENTS,
+  IMMERSION_HISTORY_ATTACKS,
+  immersionHistory,
   immersionAttackContour,
   immersionAttackKnowledge,
   immersionChordShape,
@@ -55,11 +56,12 @@ test("octave copies share fifths direction and add equal register depth", () => 
 
 test("bounds trail and dense interval fields deterministically", () => {
   const events = Array.from({ length: 80 }, (_, index) => ({ id: index + 1, note: 40 + index % 36 }));
+  assert.deepEqual(immersionHistory(events).map((event) => event.id), Array.from({ length: 12 }, (_, index) => index + 69));
   const first = immersionTrail(events, 60);
   const second = immersionTrail(events, 60);
-  assert.equal(first.length, IMMERSION_MAX_TRAIL_EVENTS);
+  assert.equal(first.length, IMMERSION_HISTORY_ATTACKS);
   assert.deepEqual(first, second);
-  assert.equal(first[0].event.id, 53);
+  assert.equal(first[0].event.id, 69);
 
   const field = immersionIntervalField(Array.from({ length: 20 }, (_, index) => 40 + index), 60);
   assert.equal(field.notes.length, IMMERSION_MAX_FIELD_NOTES);
