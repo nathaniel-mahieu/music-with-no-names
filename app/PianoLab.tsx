@@ -5589,6 +5589,7 @@ export function PianoLab() {
         gravityCandidates={immersionGravityCandidates}
         motifs={motifTransformations}
         nearbyReady={immersionNearbyReady}
+        pulseMirror={pulseMirrorModel}
         chordWindowMs={chordWindowMs}
         soundModelId={soundModelId}
         showConventions={showConventions}

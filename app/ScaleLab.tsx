@@ -18,8 +18,9 @@ import {
   equalPowerMixGains,
   rmsMatchedHarmonicCoefficients,
 } from "@/lib/audio-level";
+import { ScaleGeneratorExplainer } from "./ScaleGeneratorExplainer";
 
-type LessonId = "home" | "interval" | "pull";
+type LessonId = "home" | "interval" | "generator" | "pull";
 type PresetId = (typeof SCALE_PRESETS)[number]["id"];
 type EndingResponse = "finished" | "open" | "unclear";
 type PullResponse = "home" | "elsewhere" | "unclear";
@@ -27,8 +28,11 @@ type PullResponse = "home" | "elsewhere" | "unclear";
 const LESSONS: { id: LessonId; number: string; title: string; promise: string }[] = [
   { id: "home", number: "01", title: "Find home", promise: "compare two endings" },
   { id: "interval", number: "02", title: "Build an interval", promise: "join the gaps between two pitches" },
-  { id: "pull", number: "03", title: "Hear what comes next", promise: "practice expectation and inner hearing" },
+  { id: "generator", number: "03", title: "Generate scales", promise: "move home by a fifth; change the rule" },
+  { id: "pull", number: "04", title: "Hear what comes next", promise: "practice expectation and inner hearing" },
 ];
+
+const CHROMATIC_PLAYBACK_RATIOS = Array.from({ length: 13 }, (_, semitone) => 2 ** (semitone / 12));
 
 const CONTEXT_PATHS: Record<PresetId, number[]> = {
   seven: [0, 2, 4, 3, 6],
@@ -201,6 +205,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
   const fingerprint = useMemo(() => scaleFingerprint(preset.steps), [preset]);
   const playbackRatios = useMemo(() => [...degrees.map((item) => item.ratio), 2], [degrees]);
   const audio = useScaleAudio(referenceHz, playbackRatios);
+  const generatorAudio = useScaleAudio(referenceHz, CHROMATIC_PLAYBACK_RATIOS);
   const highDoIndex = degrees.length;
   const degree = degrees[Math.min(selectedDegree, degrees.length - 1)];
   const degreeField = degreeFields[Math.min(selectedDegree, degreeFields.length - 1)];
@@ -229,11 +234,13 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
     setGuess(null);
     setRevealed(false);
     audio.stop();
+    generatorAudio.stop();
   };
 
   const chooseLesson = (id: LessonId) => {
     setLesson(id);
     audio.stop();
+    generatorAudio.stop();
   };
 
   const moveDegreeSelection = (current: number, direction: -1 | 1) => {
@@ -263,7 +270,7 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
       <div className="scale-intro">
         <div>
           <p className="section-kicker">Guided lesson · hear first, explain second</p>
-          <h2 id="scale-title">Hear home. Build intervals. Predict what comes next.</h2>
+          <h2 id="scale-title">Hear home. Build intervals. Generate scales. Predict what comes next.</h2>
           <p>A scale is a repeating path through pitch space. Here one semitone means one equal-tempered piano-key step, and twelve reach the next Do at twice the frequency. Do means home in this path, not one fixed pitch. The syllables are a movable memory aid; the semitone gaps are the physical map.</p>
         </div>
         <div className="scale-rule" role="note">
@@ -534,11 +541,19 @@ export function ScaleLab({ onNavigate }: { onNavigate?: (destination: "piano") =
             </div>
           </section>
 
-          <div className="lesson-next"><span>Can you hear the difference between pitches in sequence and pitches together?</span><button type="button" onClick={() => chooseLesson("pull")}>Next: hear what comes next</button></div>
+          <div className="lesson-next"><span>Can you hear the difference between pitches in sequence and pitches together?</span><button type="button" onClick={() => chooseLesson("generator")}>Next: generate scales</button></div>
         </section>
+      ) : lesson === "generator" ? (
+        <ScaleGeneratorExplainer
+          audioPlaying={generatorAudio.isPlaying}
+          audioStatus={generatorAudio.message}
+          onPlayRoute={(positions, octaveOffsets, label) => void generatorAudio.playSequence(positions, { octaveOffsets, label })}
+          onStopAudio={generatorAudio.stop}
+          onNext={() => chooseLesson("pull")}
+        />
       ) : (
         <section className="scale-lesson pull-lesson" aria-labelledby="pull-lesson-title">
-          <div className="lesson-heading"><span>03 · Hear what comes next</span><h3 id="pull-lesson-title">A pitch gets its musical role from what comes before and after.</h3><p>Hear the same pitch alone, at the end of a phrase, and with one possible continuation. Then report what you expected.</p></div>
+          <div className="lesson-heading"><span>04 · Hear what comes next</span><h3 id="pull-lesson-title">A pitch gets its musical role from what comes before and after.</h3><p>Hear the same pitch alone, at the end of a phrase, and with one possible continuation. Then report what you expected.</p></div>
 
           <div className="context-experiment">
             <div className="context-path" aria-label={`Context path ${contextPath.map((index) => degrees[index].syllable).join(", ")}, optionally continuing to upper Do`}>

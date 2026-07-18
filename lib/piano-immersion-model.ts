@@ -1,11 +1,18 @@
 import {
   fifthStepForPitchClass,
+  inferScaleCandidates,
   intervalLandmark,
   noteContext,
   pitchClassFromMidi,
   scaleSemitones,
   type PianoScale,
+  type ScaleCandidate,
 } from "./piano-model.ts";
+import {
+  liveRhythmPhraseProfile,
+  type LivePulseMirror,
+  type LiveRhythmPhraseEvent,
+} from "./rhythm-model.ts";
 
 export const IMMERSION_VIEWBOX = { width: 1200, height: 700, centerX: 600, centerY: 350 } as const;
 export const IMMERSION_MAX_TRAIL_EVENTS = 28;
@@ -70,6 +77,90 @@ export type ImmersionFifthsScope = {
   centerPoint: { x: number; y: number } | null;
   densityPath: string;
 };
+
+export type ImmersionRhythmLens = {
+  source: "learner-pulse" | "local-ruler" | "waiting";
+  rulerMs: number | null;
+  pulsesPerMinute: number | null;
+  clusterCount: number;
+  latestGapMs: number | null;
+  latestMultiple: number | null;
+  nearestRatioLabel: string | null;
+  deviationPercent: number | null;
+  phaseLabel: string | null;
+  phaseDistanceMs: number | null;
+  repeatedGapShare: number | null;
+};
+
+export type ImmersionRecentPath<T extends { id: number; note: number; onsetMs: number }> = {
+  events: T[];
+  latestTransition: ImmersionLatestTransition<T> | null;
+  completeFive: boolean;
+  monophonic: boolean;
+  groupCount: number;
+  steps: Array<{
+    semitones: number;
+    landmarkLabel: string;
+    sameGroup: boolean;
+  }>;
+  direction: "rising" | "falling" | "level" | "mixed";
+  pitchSpan: number;
+  directionTurns: number;
+  repeatedIntervalCount: number;
+  selectedRouteCount: number;
+  catalogCandidates: ScaleCandidate[];
+};
+
+export type ImmersionIntervalCharacter = {
+  spacingLabel: string;
+  listeningPrompt: string;
+};
+
+export type ImmersionLatestTransition<T extends { id: number; note: number; onsetMs: number }> = {
+  from: T;
+  to: T;
+  signedSemitones: number;
+  absoluteSemitones: number;
+  direction: "up" | "down" | "same";
+  onsetGapMs: number;
+  landmark: ReturnType<typeof intervalLandmark>;
+  directionalFrequencyRatio: number;
+  spanFrequencyRatio: number;
+  octaveCount: number;
+  remainderSemitones: number;
+  pitchClassDistance: number;
+  samePitchClass: boolean;
+  context: "between-singletons" | "inside-bouquet" | "after-bouquet";
+  sourceGroupAttackCount: number;
+  targetGroupAttackCount: number;
+  connection: {
+    kind: "overlap" | "silence" | "touching" | "unknown";
+    durationMs: number | null;
+    pedalExtended: boolean;
+    basis: "release-time" | "attack-snapshot" | "missing";
+  };
+  fromRole: ReturnType<typeof noteContext>;
+  toRole: ReturnType<typeof noteContext>;
+  fromDoPitchClassDistance: number;
+  toDoPitchClassDistance: number;
+  character: ImmersionIntervalCharacter;
+};
+
+const IMMERSION_INTERVAL_CHARACTERS: readonly ImmersionIntervalCharacter[] = [
+  { spacingLabel: "same-key repeat", listeningPrompt: "identity · insistence · pulse" },
+  { spacingLabel: "nearest-key · tight", listeningPrompt: "closeness · rub · lean" },
+  { spacingLabel: "two-semitone · close", listeningPrompt: "connected motion · glide · suspension" },
+  { spacingLabel: "third-sized · compact", listeningPrompt: "contained reach · rounded turn · inward color" },
+  { spacingLabel: "third-sized · broader", listeningPrompt: "clear color · contrast · opening" },
+  { spacingLabel: "fourth-sized · open mid-span", listeningPrompt: "space · suspension · declaration" },
+  { spacingLabel: "half-octave · split", listeningPrompt: "symmetry · edge · ambiguity" },
+  { spacingLabel: "fifth-sized · open mid-span", listeningPrompt: "breadth · frame · reinforcement" },
+  { spacingLabel: "sixth-sized · broad", listeningPrompt: "reach · yearning · dramatic span" },
+  { spacingLabel: "sixth-sized · broader", listeningPrompt: "lyric reach · warmth · openness" },
+  { spacingLabel: "seventh-sized · near octave", listeningPrompt: "distance · openness · unfinished edge" },
+  { spacingLabel: "octave-edge · one key short", listeningPrompt: "friction · strong lean · almost-return" },
+  { spacingLabel: "octave · register echo", listeningPrompt: "identity · expansion · return in a new register" },
+] as const;
 
 function modulo(value: number, divisor: number) {
   return ((value % divisor) + divisor) % divisor;
@@ -302,6 +393,236 @@ export function immersionAttackContour<T extends { id: number; note: number; ons
     segments,
     groupCount: groupSizes.size,
     monophonic: [...groupSizes.values()].every((size) => size === 1),
+  };
+}
+
+/**
+ * Summarizes live timing against either a learner-declared four-tap pulse or,
+ * when no such pulse is active, the recent phrase's own median onset gap. The
+ * fallback ruler is deliberately not promoted to a beat, meter, or accuracy
+ * judgment because no intended grid has been supplied.
+ */
+export function immersionRhythmLens<T extends LiveRhythmPhraseEvent>(
+  eventsInput: T[],
+  pulseMirror: LivePulseMirror | null,
+): ImmersionRhythmLens {
+  if (pulseMirror?.status === "tracking" && pulseMirror.pulseMs != null) {
+    const latestGap = pulseMirror.gaps.at(-1) ?? null;
+    const latestPlacement = pulseMirror.placements.at(-1) ?? null;
+    return {
+      source: "learner-pulse",
+      rulerMs: pulseMirror.pulseMs,
+      pulsesPerMinute: pulseMirror.pulsesPerMinute,
+      clusterCount: pulseMirror.placements.length,
+      latestGapMs: latestGap?.gapMs ?? null,
+      latestMultiple: latestGap?.pulseMultiple ?? null,
+      nearestRatioLabel: latestGap?.ratioLabel ?? null,
+      deviationPercent: latestGap?.errorPercent ?? null,
+      phaseLabel: latestPlacement?.phaseLabel ?? null,
+      phaseDistanceMs: latestPlacement ? latestPlacement.phaseError * pulseMirror.pulseMs : null,
+      repeatedGapShare: null,
+    };
+  }
+
+  const profile = liveRhythmPhraseProfile(eventsInput.slice(-16));
+  const latestGap = profile?.gaps.at(-1) ?? null;
+  if (!profile) {
+    return {
+      source: "waiting",
+      rulerMs: null,
+      pulsesPerMinute: null,
+      clusterCount: 0,
+      latestGapMs: null,
+      latestMultiple: null,
+      nearestRatioLabel: null,
+      deviationPercent: null,
+      phaseLabel: null,
+      phaseDistanceMs: null,
+      repeatedGapShare: null,
+    };
+  }
+  return {
+    source: "local-ruler",
+    rulerMs: profile.localUnitMs,
+    pulsesPerMinute: null,
+    clusterCount: profile.clusterCount,
+    latestGapMs: latestGap?.gapMs ?? null,
+    latestMultiple: latestGap?.localMultiple ?? null,
+    nearestRatioLabel: latestGap?.ratioLabel ?? null,
+    deviationPercent: latestGap?.errorPercent ?? null,
+    phaseLabel: null,
+    phaseDistanceMs: null,
+    repeatedGapShare: profile.repeatedGapShare,
+  };
+}
+
+export function immersionIntervalCharacter(semitonesInput: number): ImmersionIntervalCharacter {
+  const distance = Math.abs(Number.isFinite(semitonesInput) ? Math.round(semitonesInput) : 0);
+  if (distance <= 12) return IMMERSION_INTERVAL_CHARACTERS[distance];
+  const octaveCount = Math.floor(distance / 12);
+  const remainderSemitones = distance % 12;
+  if (remainderSemitones === 0) {
+    return {
+      spacingLabel: `${octaveCount} octaves · register echo`,
+      listeningPrompt: "identity · expansion · compound register reach",
+    };
+  }
+  const base = IMMERSION_INTERVAL_CHARACTERS[remainderSemitones];
+  return {
+    spacingLabel: `${octaveCount} octave${octaveCount === 1 ? "" : "s"} + ${base.spacingLabel}`,
+    listeningPrompt: `compound reach · ${base.listeningPrompt}`,
+  };
+}
+
+/**
+ * Promotes the newest exact MIDI-key subtraction without mistaking packet order
+ * inside a close-time bouquet for an isolated melody. Frequency ratios are
+ * A4=440 12-TET coordinates; overlap is claimed only from note-off timing or a
+ * later attack-time sounding snapshot that still contains the earlier key.
+ */
+export function immersionLatestTransition<T extends {
+  id: number;
+  note: number;
+  onsetMs: number;
+  releaseMs?: number | null;
+  releaseReason?: "key" | "pedal" | null;
+  fieldNotes?: number[];
+}>(
+  eventsInput: T[],
+  chordWindowMs: number,
+  doMidi: number,
+  scale: PianoScale,
+): ImmersionLatestTransition<T> | null {
+  const events = eventsInput
+    .filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note) && Number.isFinite(event.onsetMs))
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id);
+  if (events.length < 2) return null;
+
+  const contour = immersionAttackContour(events, chordWindowMs);
+  const fromPoint = contour.points.at(-2);
+  const toPoint = contour.points.at(-1);
+  const segment = contour.segments.at(-1);
+  if (!fromPoint || !toPoint || !segment) return null;
+
+  const from = fromPoint.event as T;
+  const to = toPoint.event as T;
+  const groupSizes = contour.points.reduce((sizes, point) => {
+    sizes.set(point.groupIndex, (sizes.get(point.groupIndex) ?? 0) + 1);
+    return sizes;
+  }, new Map<number, number>());
+  const sourceGroupAttackCount = groupSizes.get(fromPoint.groupIndex) ?? 1;
+  const targetGroupAttackCount = groupSizes.get(toPoint.groupIndex) ?? 1;
+  const context = segment.sameGroup
+    ? "inside-bouquet"
+    : sourceGroupAttackCount > 1 || targetGroupAttackCount > 1
+      ? "after-bouquet"
+      : "between-singletons";
+
+  const signedSemitones = safeMidi(to.note) - safeMidi(from.note);
+  const absoluteSemitones = Math.abs(signedSemitones);
+  const direction = signedSemitones > 0 ? "up" : signedSemitones < 0 ? "down" : "same";
+  const fromPitchClass = pitchClassFromMidi(from.note);
+  const toPitchClass = pitchClassFromMidi(to.note);
+  const forwardPitchClassDistance = modulo(toPitchClass - fromPitchClass, 12);
+  const pitchClassDistance = Math.min(forwardPitchClassDistance, 12 - forwardPitchClassDistance);
+  const doPitchClass = pitchClassFromMidi(doMidi);
+  const pitchClassDistanceToDo = (note: number) => {
+    const forward = modulo(pitchClassFromMidi(note) - doPitchClass, 12);
+    return Math.min(forward, 12 - forward);
+  };
+
+  const knownRelease = Number.isFinite(from.releaseMs) ? Number(from.releaseMs) : null;
+  const snapshotOverlap = knownRelease == null
+    && from.note !== to.note
+    && Array.isArray(to.fieldNotes)
+    && to.fieldNotes.some((note) => safeMidi(note) === safeMidi(from.note));
+  const connection: ImmersionLatestTransition<T>["connection"] = knownRelease == null
+    ? snapshotOverlap
+      ? { kind: "overlap", durationMs: null, pedalExtended: false, basis: "attack-snapshot" }
+      : { kind: "unknown", durationMs: null, pedalExtended: false, basis: "missing" }
+    : knownRelease > to.onsetMs
+      ? { kind: "overlap", durationMs: knownRelease - to.onsetMs, pedalExtended: from.releaseReason === "pedal", basis: "release-time" }
+      : knownRelease === to.onsetMs
+        ? { kind: "touching", durationMs: 0, pedalExtended: false, basis: "release-time" }
+        : { kind: "silence", durationMs: to.onsetMs - knownRelease, pedalExtended: false, basis: "release-time" };
+
+  return {
+    from,
+    to,
+    signedSemitones,
+    absoluteSemitones,
+    direction,
+    onsetGapMs: Math.max(0, to.onsetMs - from.onsetMs),
+    landmark: intervalLandmark(signedSemitones),
+    directionalFrequencyRatio: 2 ** (signedSemitones / 12),
+    spanFrequencyRatio: 2 ** (absoluteSemitones / 12),
+    octaveCount: Math.floor(absoluteSemitones / 12),
+    remainderSemitones: absoluteSemitones % 12,
+    pitchClassDistance,
+    samePitchClass: fromPitchClass === toPitchClass,
+    context,
+    sourceGroupAttackCount,
+    targetGroupAttackCount,
+    connection,
+    fromRole: noteContext(from.note, doMidi, scale),
+    toRole: noteContext(to.note, doMidi, scale),
+    fromDoPitchClassDistance: pitchClassDistanceToDo(from.note),
+    toDoPitchClassDistance: pitchClassDistanceToDo(to.note),
+    character: immersionIntervalCharacter(signedSemitones),
+  };
+}
+
+/**
+ * Keeps a five-attack window inspectable without silently treating close-time
+ * chord bouquets as one isolated melody. Catalog results are compatibility
+ * matches over pitch classes, not claims about origin, key, or harmony.
+ */
+export function immersionRecentPath<T extends { id: number; note: number; onsetMs: number }>(
+  eventsInput: T[],
+  chordWindowMs: number,
+  doMidi: number,
+  scale: PianoScale,
+): ImmersionRecentPath<T> {
+  const events = eventsInput
+    .filter((event) => Number.isFinite(event.id) && Number.isFinite(event.note) && Number.isFinite(event.onsetMs))
+    .slice(-5);
+  const contour = immersionAttackContour(events, chordWindowMs);
+  const steps = events.slice(1).map((event, index) => {
+    const semitones = event.note - events[index].note;
+    const segment = contour.segments[index];
+    return {
+      semitones,
+      landmarkLabel: intervalLandmark(semitones).landmarkLabel,
+      sameGroup: segment?.sameGroup ?? false,
+    };
+  });
+  const nonzeroDirections = steps.map((step) => Math.sign(step.semitones)).filter((direction) => direction !== 0);
+  const direction = nonzeroDirections.length === 0
+    ? "level"
+    : nonzeroDirections.every((value) => value > 0)
+      ? "rising"
+      : nonzeroDirections.every((value) => value < 0)
+        ? "falling"
+        : "mixed";
+  const directionTurns = nonzeroDirections.slice(1).filter((directionValue, index) => directionValue !== nonzeroDirections[index]).length;
+  const intervalSizes = steps.map((step) => Math.abs(step.semitones));
+  const repeatedIntervalCount = intervalSizes.filter((size, index) => intervalSizes.some((other, otherIndex) => otherIndex !== index && other === size)).length;
+  const selectedRouteCount = events.filter((event) => noteContext(event.note, doMidi, scale).inScale).length;
+  const notes = events.map((event) => event.note);
+
+  return {
+    events,
+    latestTransition: immersionLatestTransition(eventsInput, chordWindowMs, doMidi, scale),
+    completeFive: events.length === 5,
+    monophonic: contour.monophonic,
+    groupCount: contour.groupCount,
+    steps,
+    direction,
+    pitchSpan: notes.length ? Math.max(...notes) - Math.min(...notes) : 0,
+    directionTurns,
+    repeatedIntervalCount,
+    selectedRouteCount,
+    catalogCandidates: new Set(notes.map(pitchClassFromMidi)).size >= 3 ? inferScaleCandidates(notes, 2) : [],
   };
 }
 

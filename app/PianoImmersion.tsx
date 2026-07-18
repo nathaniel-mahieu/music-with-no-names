@@ -23,8 +23,11 @@ import {
 import {
   PIANO_SOUND_MODELS,
   pianoSoundModel,
+  pianoSoundVoice,
   type PianoSoundModelId,
 } from "@/lib/piano-sound-model";
+import { sonorityPerceptionModel } from "@/lib/sonority-model";
+import type { LivePulseMirror } from "@/lib/rhythm-model";
 import {
   IMMERSION_MAX_FIELD_NOTES,
   IMMERSION_VIEWBOX,
@@ -40,7 +43,9 @@ import {
   immersionIntervalField,
   immersionPhraseNewness,
   immersionPitchPoint,
+  immersionRecentPath,
   immersionReleaseProvenSilence,
+  immersionRhythmLens,
   immersionRoleColor,
   immersionSameNoteField,
   immersionScaleSectors,
@@ -75,16 +80,20 @@ type ImmersionChordMeasure = {
     attackedNotes: number[];
     inheritedNotes: number[];
     spreadMs: number;
+    temporalCompactness: number;
     kind: "together" | "rolled";
   };
   interpretedNotes: number[];
   audibleNotes: number[];
   excludedInheritedNotes: number[];
   candidate: ChordCandidate | null;
+  hasPreviousChord: boolean;
   crunch: number | null;
   pull: number;
+  arrival: number;
   novelty: number;
   motion: number;
+  rootTravel: number;
   rootTravelSteps: number | null;
   commonPitchClassCount: number;
 };
@@ -109,6 +118,7 @@ type PianoImmersionProps = {
   gravityCandidates: TonalGravityCandidate[];
   motifs: MotifTransformation[];
   nearbyReady: boolean;
+  pulseMirror: LivePulseMirror | null;
   chordWindowMs: number;
   soundModelId: PianoSoundModelId;
   showConventions: boolean;
@@ -221,6 +231,35 @@ function orbitArcPath(radius: number, startDegrees: number, endDegrees: number) 
   return `M ${startX.toFixed(2)} ${startY.toFixed(2)} A ${radius.toFixed(2)} ${radius.toFixed(2)} 0 ${largeArc} 1 ${endX.toFixed(2)} ${endY.toFixed(2)}`;
 }
 
+function characterArcPath(value: number | null, startDegrees: number) {
+  if (value == null || value <= 0) return "";
+  const bounded = Math.max(0, Math.min(1, value));
+  const endDegrees = startDegrees + bounded * 76;
+  const radius = 43;
+  const point = (degrees: number) => ({
+    x: 56 + Math.cos(degrees * Math.PI / 180) * radius,
+    y: 56 + Math.sin(degrees * Math.PI / 180) * radius,
+  });
+  const start = point(startDegrees);
+  const end = point(endDegrees);
+  return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${radius} ${radius} 0 0 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
+}
+
+function percentage(value: number | null) {
+  return value == null ? "—" : `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+}
+
+function signedPercentDelta(value: number | null) {
+  if (value == null) return "—";
+  if (Math.abs(value) < 0.025) return "held";
+  return `${value > 0 ? "↑" : "↓"}${Math.round(Math.abs(value) * 100)}%`;
+}
+
+function signedSemitone(value: number) {
+  if (value === 0) return "0";
+  return `${value > 0 ? "+" : "−"}${Math.abs(value)}`;
+}
+
 function nearbyPossibilityLabel(
   currentNotes: number[],
   targetPitchClasses: number[],
@@ -257,6 +296,7 @@ export const PianoImmersion = memo(function PianoImmersion({
   gravityCandidates,
   motifs,
   nearbyReady,
+  pulseMirror,
   chordWindowMs,
   soundModelId,
   showConventions,
@@ -313,11 +353,43 @@ export const PianoImmersion = memo(function PianoImmersion({
   const matchingMeasure = latestMeasure && immersionSameNoteField(latestMeasure.event.fieldNotes, fieldNotes) ? latestMeasure : null;
   const currentCrunch = matchingChord?.crunch ?? matchingMeasure?.crunch ?? null;
   const crunchLimitReached = fieldNotes.length > IMMERSION_MAX_FIELD_NOTES;
+  const currentPerception = fieldNotes.length >= 2 && fieldNotes.length <= IMMERSION_MAX_FIELD_NOTES
+    ? sonorityPerceptionModel(fieldNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)))
+    : null;
+  const comparablePreviousChord = matchingChord === latestChord ? previousChord : null;
+  const previousPerception = comparablePreviousChord
+    && comparablePreviousChord.audibleNotes.length >= 2
+    && comparablePreviousChord.audibleNotes.length <= IMMERSION_MAX_FIELD_NOTES
+    ? sonorityPerceptionModel(comparablePreviousChord.audibleNotes.map((note) => pianoSoundVoice(frequencyFromMidi(note), 0.72, soundModelId)))
+    : null;
+  const comparableVoiceProfile = comparablePreviousChord ? voiceProfile : null;
+  const upSteps = comparableVoiceProfile?.strands.reduce((sum, strand) => sum + Math.max(0, strand.semitones), 0) ?? 0;
+  const downSteps = comparableVoiceProfile?.strands.reduce((sum, strand) => sum + Math.max(0, -strand.semitones), 0) ?? 0;
+  const heldVoices = comparableVoiceProfile?.strands.filter((strand) => strand.motion === "held").length ?? 0;
+  const addedVoices = comparableVoiceProfile?.strands.filter((strand) => strand.motion === "added").length ?? 0;
+  const releasedVoices = comparableVoiceProfile?.strands.filter((strand) => strand.motion === "released").length ?? 0;
+  const directionalMotion = upSteps + downSteps;
+  const riseShare = comparableVoiceProfile && directionalMotion > 0 ? upSteps / directionalMotion : comparableVoiceProfile ? 0 : null;
+  const fallShare = comparableVoiceProfile && directionalMotion > 0 ? downSteps / directionalMotion : comparableVoiceProfile ? 0 : null;
+  const roughnessDelta = currentPerception && previousPerception ? currentPerception.roughness - previousPerception.roughness : null;
+  const reposeDelta = currentPerception && previousPerception ? currentPerception.repose - previousPerception.repose : null;
+  const pullDelta = matchingChord && comparablePreviousChord ? matchingChord.pull - comparablePreviousChord.pull : null;
+  const rhythmLens = immersionRhythmLens(phraseEvents, pulseMirror);
+  const recentPath = immersionRecentPath(phraseEvents, chordWindowMs, doMidi, scale);
+  const latestTransition = recentPath.latestTransition;
+  const latestTransitionPerception = latestTransition
+    && latestTransition.absoluteSemitones > 0
+    && latestTransition.connection.kind === "overlap"
+    ? sonorityPerceptionModel([
+      pianoSoundVoice(frequencyFromMidi(latestTransition.from.note), 0.72, soundModelId),
+      pianoSoundVoice(frequencyFromMidi(latestTransition.to.note), 0.72, soundModelId),
+    ])
+    : null;
   const phraseNewness = immersionPhraseNewness(phraseEvents);
   const fifthsTide = immersionFifthsTide(phraseEvents, events, chordWindowMs);
   const fifthsDrift = fifthsTide.flatMap((scope) => scope.centerPoint ? [scope.centerPoint] : []);
   const attackKnowledge = immersionAttackKnowledge(phraseEvents, doMidi, scale);
-  const contour = immersionAttackContour(phraseEvents, chordWindowMs);
+  const contour = immersionAttackContour(phraseEvents.slice(-5), chordWindowMs);
   const contourGroups = [...new Set(contour.points.map((point) => point.groupIndex))].map((groupIndex) => {
     const points = contour.points.filter((point) => point.groupIndex === groupIndex);
     return {
@@ -431,7 +503,7 @@ export const PianoImmersion = memo(function PianoImmersion({
     : "no pair yet";
   const adjacentGapCopy = semitoneProfile.adjacentGaps.length
     ? `adjacent voicing gaps ${semitoneProfile.adjacentGaps.join("–")} semitones`
-    : "one position";
+    : fieldNotes.length ? "one position" : "no sounding field yet";
   const strongestHomeCue = semitoneProfile.strongestHomewardCue;
   const homeCueCopy = strongestHomeCue
     ? `${noteLabel(strongestHomeCue.note, doMidi, scale, showConventions)} → Do ${keyMove(strongestHomeCue.movement)}${strongestHomeCue.directNeighbor ? " · direct one-semitone neighbor" : " · selected-Do heuristic cue"}`
@@ -444,14 +516,8 @@ export const PianoImmersion = memo(function PianoImmersion({
   const latestMove = attackKnowledge?.moveSteps == null
     ? "first attack in retained memory"
     : `attack-to-attack ${keyMove(attackKnowledge.moveSteps)} · near ${attackKnowledge.moveLandmark?.landmarkLabel}${attackKnowledge.onsetGapMs != null ? ` · ${Math.round(attackKnowledge.onsetGapMs)} ms` : ""}`;
-  const latestMoveShort = attackKnowledge?.moveSteps == null
-    ? "first retained attack"
-    : `${attackKnowledge.moveSteps === 0 ? "same-key attack" : `attack move ${keyMove(attackKnowledge.moveSteps)}`} · near ${attackKnowledge.moveLandmark?.landmarkLabel}${attackKnowledge.onsetGapMs != null ? ` · ${Math.round(attackKnowledge.onsetGapMs)} ms` : ""}`;
   const latestRecurrence = attackKnowledge
     ? `${attackKnowledge.pitchClassOccurrenceCount === 1 ? "first pitch-class visit" : `pitch-class return #${attackKnowledge.pitchClassOccurrenceCount}`}${attackKnowledge.attacksSincePreviousPitchClass != null ? ` · ${attackKnowledge.attacksSincePreviousPitchClass} intervening attacks` : ""} · ${formatHz(attackKnowledge.context.frequencyHz)} ref`
-    : "";
-  const latestRecurrenceShort = attackKnowledge
-    ? `${attackKnowledge.pitchClassOccurrenceCount === 1 ? "first pitch-class visit" : `return #${attackKnowledge.pitchClassOccurrenceCount}`}${attackKnowledge.attacksSincePreviousPitchClass != null ? ` · ${attackKnowledge.attacksSincePreviousPitchClass} between` : ""} · ${formatHz(attackKnowledge.context.frequencyHz)} ref`
     : "";
   const chordIdentity = matchingChord?.candidate?.exact
     ? `${pitchClassLabel(matchingChord.candidate.rootPitchClass, doMidi, scale, showConventions)} ${matchingChord.candidate.template.name.toLowerCase()} · exact catalog shape`
@@ -467,6 +533,133 @@ export const PianoImmersion = memo(function PianoImmersion({
   const nearbyCopy = nearbyOptions.length
     ? nearbyOptions.map((option) => `${option.syllable}: ${nearbyPossibilityLabel(matchingChord!.interpretedNotes, option.pitchClasses, doMidi, scale, showConventions)}`).join(" · ")
     : null;
+  const fusion = currentPerception?.fusion ?? null;
+  const chordPanelIdentity = matchingChord
+    ? chordIdentity ?? `${matchingChord.interpretedNotes.length}-position onset field`
+    : fieldNotes.length >= 2
+      ? `${fieldNotes.length}-position sounding field`
+      : fieldNotes.length === 1
+        ? "One sounding position"
+        : "Waiting for a sounding field";
+  const voiceMotionCopy = comparableVoiceProfile
+    ? `↑${upSteps} st · ↓${downSteps} st · ${heldVoices} held${addedVoices || releasedVoices ? ` · +${addedVoices}/−${releasedVoices} voices` : ""}`
+    : "Play a second grouped field to compare nearest-key motion";
+  const ringSummary = `Independent modeled field cues: roughness ${percentage(currentPerception?.roughness ?? null)}, fusion ${percentage(fusion)}, upward share ${percentage(riseShare)}, downward share ${percentage(fallShare)}. Felt character is listener-only and unreported.`;
+  const rhythmSourceLabel = pulseMirror?.status === "capturing"
+    ? `Learner pulse · ${pulseMirror.tapEvents.length}/4 anchor taps`
+    : pulseMirror?.status === "invalid"
+      ? "Learner pulse · anchor needs retry"
+      : pulseMirror?.status === "waiting"
+        ? "Learner pulse · waiting for anchor"
+        : rhythmLens.source === "learner-pulse"
+          ? "Learner-declared pulse"
+          : rhythmLens.source === "local-ruler"
+            ? "Local onset ruler · not a beat"
+            : "Timing evidence gathering";
+  const rhythmRulerCopy = pulseMirror?.status === "capturing"
+    ? `${pulseMirror.tapsNeeded} more same-key tap${pulseMirror.tapsNeeded === 1 ? "" : "s"} to declare the pulse`
+    : pulseMirror?.status === "invalid"
+      ? pulseMirror.invalidReason ?? "The four anchor gaps did not form a usable pulse"
+      : rhythmLens.rulerMs == null
+        ? "Play four attacks across three onset groups"
+        : rhythmLens.source === "learner-pulse" && rhythmLens.pulsesPerMinute != null
+          ? `${Math.round(rhythmLens.rulerMs)} ms · ${Math.round(rhythmLens.pulsesPerMinute)} pulses/min`
+          : `${Math.round(rhythmLens.rulerMs)} ms median gap`;
+  const rhythmDeviationCopy = rhythmLens.latestMultiple == null || rhythmLens.nearestRatioLabel == null || rhythmLens.deviationPercent == null
+    ? "A later gap will reveal the nearest ratio landmark"
+    : `${rhythmLens.latestMultiple.toFixed(2)}× ruler · nearest ${rhythmLens.nearestRatioLabel} · ${rhythmLens.deviationPercent >= 0 ? "+" : "−"}${Math.abs(rhythmLens.deviationPercent).toFixed(1)}%`;
+  const rhythmPhaseCopy = rhythmLens.source === "learner-pulse" && rhythmLens.phaseLabel && rhythmLens.phaseDistanceMs != null
+    ? `${Math.round(rhythmLens.phaseDistanceMs)} ms from ${rhythmLens.phaseLabel}`
+    : rhythmLens.repeatedGapShare != null
+      ? `${Math.round(rhythmLens.repeatedGapShare * 100)}% of recent gap shapes recur`
+      : "No beat, bar, or meter is inferred";
+  const recentPathTitle = recentPath.completeFive && recentPath.monophonic
+    ? "Recent five-note line"
+    : recentPath.events.length
+      ? `Recent ${recentPath.events.length}-attack path${recentPath.monophonic ? "" : " · bouquet included"}`
+      : "Recent attack path";
+  const recentDegreeCopy = recentPath.events.length
+    ? recentPath.events.map((event) => noteLabel(event.note, doMidi, scale, showConventions)).join(" → ")
+    : "Play to begin the path";
+  const recentStepCopy = recentPath.steps.length
+    ? recentPath.steps.map((step) => signedSemitone(step.semitones)).join(" · ") + " st"
+    : "A second attack will reveal direction";
+  const recentLandmarkCopy = recentPath.steps.length
+    ? recentPath.steps.map((step) => step.landmarkLabel).join(" · ")
+    : "";
+  const recentCatalogCopy = recentPath.catalogCandidates.length
+    ? recentPath.catalogCandidates.map((candidate) => `${shortScaleLabel(candidate, doMidi, scale, showConventions)} ${candidate.inScaleCount}/${candidate.uniqueNoteCount}`).join(" / ")
+    : "At least three distinct pitch classes are needed for a useful catalog comparison";
+  const recentBoundaryCopy = !recentPath.events.length
+    ? "Waiting for attacks"
+    : recentPath.monophonic
+      ? `${recentPath.direction} · ${recentPath.pitchSpan} st span · ${recentPath.directionTurns} turn${recentPath.directionTurns === 1 ? "" : "s"}`
+      : `${recentPath.groupCount} onset groups · melody and accompaniment are not isolated`;
+  const latestTransitionSpoken = !latestTransition
+    ? "A second isolated attack will reveal the exact signed MIDI-key difference"
+    : latestTransition.direction === "up"
+      ? `up ${latestTransition.absoluteSemitones} semitone${latestTransition.absoluteSemitones === 1 ? "" : "s"}`
+      : latestTransition.direction === "down"
+        ? `down ${latestTransition.absoluteSemitones} semitone${latestTransition.absoluteSemitones === 1 ? "" : "s"}`
+        : "same key, zero semitones";
+  const latestTransitionKindLabel = latestTransition?.context === "between-singletons"
+    ? "Latest sequential key interval"
+    : latestTransition
+      ? "Latest chronological key spacing"
+      : "Latest sequential key interval";
+  const latestTransitionMark = !latestTransition
+    ? "—"
+    : latestTransition.direction === "up"
+      ? `↑${latestTransition.absoluteSemitones}`
+      : latestTransition.direction === "down"
+        ? `↓${latestTransition.absoluteSemitones}`
+        : "0";
+  const latestTransitionNotes = latestTransition
+    ? `${noteLabel(latestTransition.from.note, doMidi, scale, showConventions)} → ${noteLabel(latestTransition.to.note, doMidi, scale, showConventions)} · MIDI ${latestTransition.from.note} → ${latestTransition.to.note} · ${Math.round(latestTransition.onsetGapMs)} ms`
+    : "Play two attacks to expose a physical keyboard interval";
+  const latestReferenceCopy = latestTransition
+    ? latestTransition.absoluteSemitones === 0
+      ? "A4=440 12-TET reference ×1.000 · repeated pitch coordinate"
+      : `next reference ×${latestTransition.directionalFrequencyRatio.toFixed(3)} · unordered span ×${latestTransition.spanFrequencyRatio.toFixed(3)} · near ${latestTransition.landmark.landmarkLabel}${Math.abs(latestTransition.landmark.errorCents) < 0.05 ? " exactly" : ` · 12-TET is ${Math.abs(latestTransition.landmark.errorCents).toFixed(1)}¢ ${latestTransition.landmark.errorCents > 0 ? "wider" : "narrower"}`}`
+    : "Every ascending semitone multiplies the A4=440 reference frequency by 2^(1/12)";
+  const latestRouteMovement = latestTransition
+    ? latestTransition.fromRole.inScale && latestTransition.toRole.inScale
+      ? "both positions fit the selected route"
+      : !latestTransition.fromRole.inScale && latestTransition.toRole.inScale
+        ? "enters the selected route"
+        : latestTransition.fromRole.inScale && !latestTransition.toRole.inScale
+          ? "leaves the selected route"
+          : "both positions sit outside the selected route"
+    : "selected-frame context waits for a transition";
+  const latestDoMovement = latestTransition
+    ? pitchClassFromMidi(latestTransition.to.note) === selectedRootPitchClass
+      ? "lands on selected Do"
+      : pitchClassFromMidi(latestTransition.from.note) === selectedRootPitchClass
+        ? "leaves selected Do"
+        : `shortest selected-Do class distance ${latestTransition.fromDoPitchClassDistance} → ${latestTransition.toDoPitchClassDistance} st`
+    : "";
+  const latestTonalCopy = latestTransition
+    ? `${latestRouteMovement} · ${latestDoMovement}`
+    : latestRouteMovement;
+  const latestConnectionCopy = !latestTransition
+    ? "No acoustic interaction is inferred before a pair exists"
+    : latestTransition.connection.kind === "overlap"
+      ? `${latestTransition.connection.basis === "release-time" && latestTransition.connection.durationMs != null ? `${Math.round(latestTransition.connection.durationMs)} ms MIDI-release overlap${latestTransition.connection.pedalExtended ? " · pedal-ended" : ""}` : "MIDI-state overlap at the later attack"}${latestTransitionPerception ? ` · ${currentModel.shortLabel} pair model: roughness ${percentage(latestTransitionPerception.roughness)}, fusion ${percentage(latestTransitionPerception.fusion)}` : " · same-key spectral interaction withheld"}`
+      : latestTransition.connection.kind === "silence"
+        ? `${Math.round(latestTransition.connection.durationMs ?? 0)} ms release-proven separation · simultaneous roughness withheld`
+        : latestTransition.connection.kind === "touching"
+          ? "Earlier release meets the next attack · no positive overlap; simultaneous roughness withheld"
+          : "Release timing is incomplete · overlap and simultaneous roughness stay unknown";
+  const latestSequenceBoundary = !latestTransition
+    ? "Waiting for a second attack"
+    : latestTransition.context === "inside-bouquet"
+      ? "Inside one close-time onset bouquet: exact chronological attack spacing, not an isolated melody interval."
+      : latestTransition.context === "after-bouquet"
+        ? `From the prior bouquet's last chronological attack (${latestTransition.sourceGroupAttackCount} attacks): not whole-field voice leading.`
+        : "Two singleton onset groups: an isolated note-to-note keyboard interval.";
+  const latestTransitionSummary = latestTransition
+    ? `${latestTransitionKindLabel}: ${latestTransitionSpoken}. ${latestTransition.character.spacingLabel}. ${latestTransitionNotes}. ${latestReferenceCopy}. Selected frame: ${latestTonalCopy}. Acoustic evidence: ${latestConnectionCopy}. Listening prompts: ${latestTransition.character.listeningPrompt}; associations only, not an emotion prediction. ${latestSequenceBoundary}`
+    : latestTransitionSpoken;
   const samplingReading = intervalField.omittedLinkCount
     ? ` ${intervalField.links.length} of ${intervalField.totalPairCount} possible interval fibers are drawn${intervalField.omittedNoteCount ? ` from ${intervalField.notes.length} positions sampled across the register` : ""}.`
     : "";
@@ -485,12 +678,15 @@ export const PianoImmersion = memo(function PianoImmersion({
   const visualSummary = latestEvent
     ? `Resonance Sky contains ${Math.min(28, phraseEvents.length)} recent attack marks and ${events.length} bright microscope attacks. Latest: ${latestRole}; ${latestMove}; ${latestRecurrence}. The ${fieldProvenance} contains ${fieldNotes.length} positions and ${intervalField.totalPairCount} possible pairwise intervals; ${intervalField.links.length} bounded filaments are shown${sampleIntervalCopy ? `, led by ${sampleIntervalCopy}` : ""}. Field spacing: ${adjacentGapCopy}; octave-folded pair counts ${semitonePairCopy}. Selected route gaps: ${routeGapCopy}. ${chordCopy} ${routeEvidenceCopy} ${contextCopy} ${motifCopy ?? "No relationship-window return is currently drawn."} ${metricReading} Musical quality and listener feeling are not inferred.`
     : "Empty Resonance Sky. Direction follows the circle of fifths, depth follows semitone register, and the outer aurora shows the selected movable-Do route.";
+  const liveSummary = latestEvent
+    ? `Latest keyboard interval: ${latestTransitionSpoken}${latestTransition ? `; ${latestTransition.character.spacingLabel}` : ""}. ${latestSequenceBoundary} Rhythm: ${rhythmSourceLabel}; ${rhythmDeviationCopy}. Harmony: ${chordPanelIdentity}; ${voiceMotionCopy}; modeled roughness ${percentage(currentPerception?.roughness ?? null)} and fusion ${percentage(fusion)}.`
+    : "Resonance Sky is ready. Play one key to place a pitch, then add attacks to reveal rhythm, harmony, and a recent path.";
   const annotationInputs = [
     ...(newestPoint ? [{
       id: "latest-note",
       anchorX: newestPoint.x,
       anchorY: newestPoint.y,
-      lines: [latestRole, latestMoveShort, latestRecurrenceShort],
+      lines: [latestRole],
       priority: 100,
     }] : []),
     ...(matchingChord && visibleClouds.at(-1)?.interpretedHull ? [{
@@ -538,7 +734,7 @@ export const PianoImmersion = memo(function PianoImmersion({
       return { left: labelPoint.x - 24, right: labelPoint.x + 24, top: labelPoint.y - 12, bottom: labelPoint.y + 12 };
     }),
   ];
-  const annotations = planImmersionAnnotations(annotationInputs, 5, reservedAnnotationBounds);
+  const annotations = planImmersionAnnotations(annotationInputs, 1, reservedAnnotationBounds);
   const registerBeacons = [36, 60, 84].map((note, index) => ({
     note,
     radius: immersionPitchPoint(note, doMidi).radius,
@@ -548,12 +744,12 @@ export const PianoImmersion = memo(function PianoImmersion({
       y: IMMERSION_VIEWBOX.centerY + Math.sin((218 - index * 4) * Math.PI / 180) * immersionPitchPoint(note, doMidi).radius,
     },
   }));
-  const [announcedSummary, setAnnouncedSummary] = useState(visualSummary);
+  const [announcedSummary, setAnnouncedSummary] = useState(liveSummary);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setAnnouncedSummary(visualSummary), 280);
+    const timer = window.setTimeout(() => setAnnouncedSummary(liveSummary), 280);
     return () => window.clearTimeout(timer);
-  }, [visualSummary]);
+  }, [liveSummary]);
 
   return (
     <section className="piano-immersion" aria-labelledby="piano-immersion-title">
@@ -561,14 +757,14 @@ export const PianoImmersion = memo(function PianoImmersion({
         <div>
           <span>Immersion · analysis only</span>
           <h3 id="piano-immersion-title">Resonance Sky</h3>
-          <p>Direction follows fifths. Depth follows register. Hue follows pitch role around the current Do. Three outer tides hold the latest onset window, last seven attacks, and retained phrase at once; chord membranes and a contour horizon keep simultaneity distinct from sequence.</p>
+          <p>The exact signed semitone move now leads the recent path: first the physical key distance, then its acoustic coordinate, selected-frame context, and possible listening words. The center keeps fifths direction, register depth, simultaneity, and motion while rhythm and harmony remain separate edge questions.</p>
         </div>
         <label className="piano-immersion-model" htmlFor="immersion-sound-model">
           <span>Assumed spectrum</span>
           <select id="immersion-sound-model" value={soundModelId} onChange={(event) => onSoundModelChange(event.target.value as PianoSoundModelId)}>
             {PIANO_SOUND_MODELS.map((model) => <option key={model.id} value={model.id}>{model.shortLabel}</option>)}
           </select>
-          <small>Only coral modeled crunch responds; no keyboard audio is read. Dense fields above {IMMERSION_MAX_FIELD_NOTES} positions pause this one model.</small>
+          <small>Coral field crunch and release-gated pair evidence respond; no keyboard audio is read. Dense fields above {IMMERSION_MAX_FIELD_NOTES} positions pause the field model.</small>
         </label>
       </div>
 
@@ -614,7 +810,7 @@ export const PianoImmersion = memo(function PianoImmersion({
           </g>
 
           <g className="immersion-fifths-tide" aria-label="Circle-of-fifths attack density in the latest onset window, latest seven attacks, and retained phrase scopes">
-            {fifthsTide.map((scope, scopeIndex) => <g key={scope.id} className={`is-${scope.id}`}>
+            {fifthsTide.map((scope) => <g key={scope.id} className={`is-${scope.id}`}>
               {scope.eventCount ? <path className="immersion-tide-envelope" d={scope.densityPath}><title>{scope.label}: {scope.eventCount} attacks across {scope.uniquePitchClassCount} pitch classes</title></path> : null}
               {scope.countsByFifthStep.map((count, fifthStep) => {
                 if (!count) return null;
@@ -622,7 +818,6 @@ export const PianoImmersion = memo(function PianoImmersion({
                 const strength = count / Math.max(1, scope.maximumCount);
                 return <path key={fifthStep} className="immersion-tide-visit" d={immersionArcPath(sector.pitchClass, scope.radius, 6 + strength * 14)} style={{ "--immersion-tide": strength } as CSSProperties}><title>{scope.label}: {count} attack{count === 1 ? "" : "s"} at {pitchClassLabel(sector.pitchClass, doMidi, scale, showConventions)}</title></path>;
               })}
-              <text x="858" y={74 + scopeIndex * 17}>{scope.label}</text>
             </g>)}
             {fifthsDrift.length > 1 ? <path className="immersion-fifths-drift" d={immersionCurve(fifthsDrift)}><title>Attack-density center drift across the three displayed scopes; diffuse scopes have no center</title></path> : null}
           </g>
@@ -670,7 +865,7 @@ export const PianoImmersion = memo(function PianoImmersion({
           </g>
 
           <g className="immersion-chord-clouds" aria-label={`${visibleClouds.length} recent timing-group membranes using the ${chordWindowMs} millisecond chord window`}>
-            {visibleClouds.map(({ measure, interpretedHull, audibleHull, gradientId }) => interpretedHull ? <g key={measure.gesture.id} className={`${measure.gesture.kind === "rolled" ? "is-rolled" : "is-together"} ${measure.candidate?.exact ? "is-exact" : "is-incomplete"} ${measure === matchingChord ? "is-current" : "is-history"}`}>
+            {visibleClouds.map(({ measure, interpretedHull, audibleHull, gradientId }) => interpretedHull ? <g key={measure.gesture.id} className={`${measure.gesture.kind === "rolled" ? "is-rolled" : "is-together"} ${measure.candidate?.exact ? "is-exact" : "is-incomplete"} ${measure === matchingChord ? "is-current" : "is-history"}`} style={measure === matchingChord && fusion != null ? { "--immersion-fusion": fusion } as CSSProperties : undefined}>
               {audibleHull ? <path className="immersion-audible-hull" d={audibleHull.path}><title>Outer edge: everything sounding at the timing-group close, including tones excluded from the chord interpretation</title></path> : null}
               <path className="immersion-interpreted-hull" d={interpretedHull.path} fill={`url(#${gradientId})`}><title>{measure.gesture.kind} group: {measure.gesture.attacks.length} attacks across {Math.round(measure.gesture.spreadMs)} milliseconds; inner membrane follows interpreted membership; {measure.candidate?.exact ? `exact ${measure.candidate.template.name} catalog shape` : "no exact catalog shape"}</title></path>
               <path className="immersion-timing-hull" d={interpretedHull.path}><title>{measure.gesture.kind === "rolled" ? "Dotted overtrace: attacks were rolled across the grouping window" : "No dotted overtrace: attacks arrived together"}</title></path>
@@ -716,12 +911,10 @@ export const PianoImmersion = memo(function PianoImmersion({
           {memoryTrail.length > 1 ? <path className="immersion-memory-wake" d={immersionCurve(memoryTrail.map(({ point }) => point))} /> : null}
 
           {contour.points.length ? <g className="immersion-attack-contour" aria-label={`Attack contour for ${contour.points.length} recent attacks; ${contour.monophonic ? "each onset group contains one attack" : "close-time multi-attack groups are preserved"}`}>
-            <text x="348" y="502">attack contour · {contour.monophonic ? "single-attack line" : "onset bouquets preserved"}</text>
             <path className="immersion-contour-horizon" d="M 350 578 Q 600 560 850 578" />
             {contourGroups.filter((group) => group.points.length > 1).map((group) => <ellipse key={group.groupIndex} className="immersion-contour-bouquet" cx={group.centerX} cy={group.centerY} rx={group.radiusX} ry={group.radiusY}><title>{group.points.length} attacks share one timing group</title></ellipse>)}
-            {contour.segments.map((segment, index) => <g key={`${segment.from.event.id}-${segment.to.event.id}`} className={segment.sameGroup ? "is-same-group" : segment.connectAsLine ? "is-line" : "is-group-bridge"}>
+            {contour.segments.map((segment) => <g key={`${segment.from.event.id}-${segment.to.event.id}`} className={segment.sameGroup ? "is-same-group" : segment.connectAsLine ? "is-line" : "is-group-bridge"}>
               <path d={`M ${segment.from.x.toFixed(2)} ${segment.from.y.toFixed(2)} L ${segment.to.x.toFixed(2)} ${segment.to.y.toFixed(2)}`} />
-              {!segment.sameGroup && index >= contour.segments.length - 3 ? <text x={(segment.from.x + segment.to.x) / 2} y={(segment.from.y + segment.to.y) / 2 - 8}>{segment.steps === 0 ? "same key" : signedStepCount(segment.steps)}</text> : null}
               <title>{keyMove(segment.steps)} over {Math.round(segment.gapMs)} milliseconds; {segment.sameGroup ? "inside one timing group" : "between timing groups"}</title>
             </g>)}
             {contour.points.map((point) => <circle key={point.event.id} cx={point.x} cy={point.y} r={point.event.id === latestEvent?.id ? 4.6 : 2.8} />)}
@@ -746,7 +939,6 @@ export const PianoImmersion = memo(function PianoImmersion({
           </g>
 
           <g className="immersion-semitone-horizon" aria-label={`Semitone horizon. Octave-folded field pair counts: ${semitonePairCopy}. Selected scale gap loop: ${routeGapCopy}. Homeward cue: ${homeCueCopy}.`}>
-            <text x="600" y="596">semitone horizon · pair spacing / route gaps / move to Do</text>
             <path className="immersion-semitone-baseline" d="M 428 632 Q 600 612 772 632" />
             {Array.from({ length: 12 }, (_, index) => index + 1).map((semitones) => {
               const point = semitoneHorizonPoint(semitones);
@@ -758,7 +950,7 @@ export const PianoImmersion = memo(function PianoImmersion({
                 <circle cx={point.x} cy={point.y} r={bin ? Math.min(8, 3.2 + Math.sqrt(bin.pairCount) * 1.8) : 1.6} />
                 {routeCount ? <rect x={point.x - 3.5} y={point.y + 10} width="7" height="7" transform={`rotate(45 ${point.x} ${point.y + 13.5})`}><title>The selected route uses {routeCount} gap{routeCount === 1 ? "" : "s"} of {semitones} semitone{semitones === 1 ? "" : "s"}</title></rect> : null}
                 {isHomeCue ? <path className="immersion-semitone-home-cue" d={`M ${point.x - 5} ${point.y - 13} L ${point.x + 5} ${point.y - 13} L ${point.x} ${point.y - 6} Z`}><title>{homeCueCopy}</title></path> : null}
-                <text x={point.x} y={point.y + 29}>{semitones}</text>
+                {bin || routeCount || isHomeCue ? <text x={point.x} y={point.y + 29}>{semitones}</text> : null}
                 {bin ? <title>{bin.pairCount} sounding pair{bin.pairCount === 1 ? "" : "s"} fold to {semitones} semitone{semitones === 1 ? "" : "s"} within an octave; exact register distance{bin.exactDistances.length === 1 ? "" : "s"} {bin.exactDistances.join(", ")}</title> : null}
               </g>;
             })}
@@ -824,13 +1016,120 @@ export const PianoImmersion = memo(function PianoImmersion({
             <text x="600" y="394">a second pitch reveals the relationship</text>
           </g> : null}
         </svg>
+
+        <div className="piano-immersion-edge-hud">
+          <section className="piano-immersion-lens is-rhythm" aria-labelledby={`${instanceId}-rhythm-lens-title`}>
+            <header>
+              <span>Rhythm</span>
+              <strong id={`${instanceId}-rhythm-lens-title`}>{rhythmSourceLabel}</strong>
+            </header>
+            <p className="piano-immersion-lens-value">{rhythmRulerCopy}</p>
+            <p className="piano-immersion-ratio-reading"><span>Closest gap shape</span><strong>{rhythmDeviationCopy}</strong></p>
+            <p className="piano-immersion-lens-cue">{rhythmPhaseCopy}</p>
+            <p className="piano-immersion-lens-boundary"><span>Beat / measure</span><strong>—</strong><small>needs a declared downbeat and pulses per measure</small></p>
+            <small>Deviation is distance from the nearest ratio or pulse landmark—not performance accuracy.</small>
+          </section>
+
+          <section className="piano-immersion-lens is-harmony" aria-labelledby={`${instanceId}-harmony-lens-title`}>
+            <header>
+              <span>Harmony field</span>
+              <strong id={`${instanceId}-harmony-lens-title`} className={fusion != null && fusion >= 0.6 ? "is-fused" : ""}>{chordPanelIdentity}</strong>
+            </header>
+            <div className="piano-immersion-interval-strip" aria-label={`Octave-folded pair intervals: ${semitonePairCopy}`}>
+              {semitoneProfile.intervalBins.length
+                ? semitoneProfile.intervalBins.map((bin) => <span key={bin.semitones}>{bin.semitones}{bin.pairCount > 1 ? `×${bin.pairCount}` : ""}</span>)
+                : <span>add a second position</span>}
+            </div>
+            <small>{adjacentGapCopy} · {matchingChord ? `onset togetherness ${percentage(matchingChord.gesture.temporalCompactness)}` : "no matched timing group"} · interval values are semitones</small>
+
+            <div className="piano-immersion-character">
+              <svg viewBox="0 0 112 112" role="img" aria-label={ringSummary}>
+                <circle className="is-guide" cx="56" cy="56" r="43" />
+                {currentPerception ? <path className="is-roughness" d={characterArcPath(currentPerception.roughness, -90)} /> : null}
+                {riseShare != null ? <path className="is-rising" d={characterArcPath(riseShare, 0)} /> : null}
+                {fusion != null ? <path className="is-fusion" d={characterArcPath(fusion, 90)} /> : null}
+                {fallShare != null ? <path className="is-falling" d={characterArcPath(fallShare, 180)} /> : null}
+                <text x="56" y="52">model</text>
+                <text x="56" y="67">cues</text>
+              </svg>
+              <dl>
+                <div className="is-roughness"><dt>roughness</dt><dd>{percentage(currentPerception?.roughness ?? null)}</dd></div>
+                <div className="is-rising"><dt>rising share</dt><dd>{percentage(riseShare)}</dd></div>
+                <div className="is-fusion"><dt>model fusion</dt><dd>{percentage(fusion)}</dd></div>
+                <div className="is-falling"><dt>falling share</dt><dd>{percentage(fallShare)}</dd></div>
+              </dl>
+            </div>
+
+            <div className="piano-immersion-change-cues">
+              <span>Change cues · no resolution verdict</span>
+              <strong>{voiceMotionCopy}</strong>
+              <small>roughness {signedPercentDelta(roughnessDelta)} · model repose {signedPercentDelta(reposeDelta)} · selected-Do pull {signedPercentDelta(pullDelta)}</small>
+            </div>
+            <p className="piano-immersion-felt"><span>Felt character</span><strong>listener only · unreported</strong></p>
+            <small>Chord-name emphasis and the current membrane weight follow modeled fusion under the assumed spectrum; onset togetherness and catalog fit stay separate.</small>
+          </section>
+
+          <section className="piano-immersion-lens is-melody" aria-labelledby={`${instanceId}-melody-lens-title`}>
+            <header>
+              <span>Semitone path</span>
+              <strong id={`${instanceId}-melody-lens-title`}>{recentPathTitle}</strong>
+            </header>
+
+            <div className={`piano-immersion-latest-transition ${latestTransition ? `is-${latestTransition.direction}` : "is-waiting"}`} role="group" aria-label={latestTransitionSummary}>
+              <p className="piano-immersion-transition-number">
+                <span>{latestTransitionKindLabel}</span>
+                <strong>{latestTransitionMark}</strong>
+                <b>semitones</b>
+              </p>
+              <em>{latestTransition?.character.spacingLabel ?? "waiting for a second attack"}{latestTransition?.absoluteSemitones ? ` · common name region: ${latestTransition.landmark.conventionalName}` : ""}</em>
+              <small>{latestTransitionNotes}</small>
+            </div>
+
+            <small className="piano-immersion-transition-boundary">{latestSequenceBoundary}</small>
+
+            {recentPath.events.length && !recentPath.monophonic ? <p className="piano-immersion-bouquet-summary">
+              <span>Recent chronological attack spacing</span>
+              <strong>{recentStepCopy}</strong>
+              <small>{recentBoundaryCopy}. Attack order remains exact; melody, accompaniment, and whole-field voices are not isolated.</small>
+            </p> : <>
+              <p className="piano-immersion-degree-path">{recentDegreeCopy}</p>
+              <p className="piano-immersion-step-path"><span>Recent signed key intervals</span><strong>{recentStepCopy}</strong><small>{recentLandmarkCopy} · exact attack-to-attack MIDI-key differences</small></p>
+              <p className="piano-immersion-recent-summary">
+                <strong>{recentBoundaryCopy} · selected route {recentPath.selectedRouteCount}/{recentPath.events.length || 0} · repeated-size moves {recentPath.repeatedIntervalCount}/{recentPath.steps.length || 0}</strong>
+                <small>Compatible catalog routes: {recentCatalogCopy} · compatibility, not scale origin, harmony, or cohesion.</small>
+              </p>
+            </>}
+          </section>
+        </div>
       </div>
 
-      {latestEvent ? <div className="piano-immersion-orienting" aria-label="Proximal musical knowledge">
-        <p className="is-note"><span>Latest attack</span><strong>{latestRole}</strong><small>{latestMove} · {latestRecurrence}</small></p>
-        <p className="is-field"><span>{fieldProvenance}</span><strong>{matchingChord ? chordIdentity : `${fieldNotes.length} displayed position${fieldNotes.length === 1 ? "" : "s"}`}</strong><small>{matchingChord ? `${matchingChord.gesture.kind} in ${Math.round(matchingChord.gesture.spreadMs)} ms${chordStructure ? ` · ${chordStructure}` : ""}` : sampleIntervalCopy ?? "A second position will reveal a pairwise relationship."} · {adjacentGapCopy}; pair classes {semitonePairCopy}.{nearbyCopy ? ` Nearby in-route possibilities, not predictions: ${nearbyCopy}.` : ""}</small></p>
-        <p className="is-frame"><span>Route + center</span><strong>{routeEvidenceCopy}</strong><small>{routeGapCopy}. {contextCopy} {homeCueCopy}.{motifCopy ? ` ${motifCopy} Detector match only; intention and form are not inferred.` : ""}</small></p>
-      </div> : null}
+      <section className="piano-immersion-interval-context-bar" aria-labelledby={`${instanceId}-interval-context-title`}>
+        <header>
+          <span>Latest interval context</span>
+          <strong id={`${instanceId}-interval-context-title`}>{latestTransition ? `${latestTransitionMark} semitones · ${latestTransition.character.spacingLabel}` : "A second attack opens the interval context"}</strong>
+          <small>{latestTransitionNotes}</small>
+        </header>
+        <div>
+          <p className="is-acoustic"><span>Acoustic coordinate</span><strong>{latestReferenceCopy}</strong><small>{latestConnectionCopy}</small></p>
+          <p className="is-tonal"><span>Selected-frame context</span><strong>{latestTonalCopy}</strong><small>Route and Do are learner-selected coordinates—not inherent function or resolution.</small></p>
+          <p className="is-listening"><span>Listen for · possible words</span><strong>{latestTransition?.character.listeningPrompt ?? "spacing character appears with the next interval"}</strong><small>Prompts, not a prediction of emotion, consonance, preference, or meaning.</small></p>
+        </div>
+      </section>
+
+      <details className="piano-immersion-evidence">
+        <summary>Open exact current evidence and provenance</summary>
+        {latestEvent ? <div className="piano-immersion-orienting" aria-label="Detailed proximal musical evidence">
+          <p className="is-note"><span>Latest attack</span><strong>{latestRole}</strong><small>{latestMove} · {latestRecurrence}</small></p>
+          <p className="is-field"><span>{fieldProvenance}</span><strong>{matchingChord ? chordIdentity : `${fieldNotes.length} displayed position${fieldNotes.length === 1 ? "" : "s"}`}</strong><small>{matchingChord ? `${matchingChord.gesture.kind} in ${Math.round(matchingChord.gesture.spreadMs)} ms${chordStructure ? ` · ${chordStructure}` : ""}` : sampleIntervalCopy ?? "A second position will reveal a pairwise relationship."} · {adjacentGapCopy}; pair classes {semitonePairCopy}.{nearbyCopy ? ` Nearby in-route possibilities, not predictions: ${nearbyCopy}.` : ""}</small></p>
+          <p className="is-frame"><span>Route + center</span><strong>{routeEvidenceCopy}</strong><small>{routeGapCopy}. {contextCopy} {homeCueCopy}.{motifCopy ? ` ${motifCopy} Detector match only; intention and form are not inferred.` : ""}</small></p>
+        </div> : null}
+        <div className="piano-immersion-reading">
+          <span>Current reading</span>
+          <strong>{currentReading}</strong>
+          <small>{metricReading} These channels are never collapsed into correctness, emotion, preference, or musical goodness.</small>
+          <em>Reference depth derives from MIDI key number using A4=440 12-TET. Pitch bend, keyboard or DAW tuning, acoustic pitch, audio spectrum, and acoustic loudness are not captured.</em>
+        </div>
+      </details>
 
       <details className="piano-immersion-guide">
         <summary>Read the sky · open the visual key</summary>
@@ -847,12 +1146,6 @@ export const PianoImmersion = memo(function PianoImmersion({
         </div>
       </details>
 
-      <div className="piano-immersion-reading">
-        <span>Current reading</span>
-        <strong>{currentReading}</strong>
-        <small>{metricReading} These channels are never collapsed into correctness, emotion, preference, or musical goodness.</small>
-        <em>Reference depth derives from MIDI key number using A4=440 12-TET. Pitch bend, keyboard or DAW tuning, acoustic pitch, audio spectrum, and acoustic loudness are not captured.</em>
-      </div>
     </section>
   );
 });

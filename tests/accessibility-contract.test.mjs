@@ -19,6 +19,7 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
+  assert.match(piano, /pulseMirror=\{pulseMirrorModel\}/);
   assert.match(piano, /<details className="piano-immersion-keyboard">/);
   assert.match(piano, /immersionChordGestures\.slice\(-5\)/);
   assert.match(piano, /measureChordGestures\(immersionChordMeasureGestures[\s\S]*IMMERSION_MAX_FIELD_NOTES\)\.slice\(-4\)/);
@@ -28,7 +29,27 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
   assert.match(immersion, /role="img" aria-labelledby="piano-immersion-svg-title piano-immersion-svg-description"/);
   assert.match(immersion, /<desc id="piano-immersion-svg-description">\{visualSummary\}<\/desc>/);
   assert.match(immersion, /role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(immersion, /window\.setTimeout\(\(\) => setAnnouncedSummary\(visualSummary\), 280\)/);
+  assert.match(immersion, /window\.setTimeout\(\(\) => setAnnouncedSummary\(liveSummary\), 280\)/);
+  assert.match(immersion, /className="piano-immersion-edge-hud"/);
+  assert.match(immersion, /className="piano-immersion-lens is-rhythm" aria-labelledby=/);
+  assert.match(immersion, /className="piano-immersion-lens is-harmony" aria-labelledby=/);
+  assert.match(immersion, /className="piano-immersion-lens is-melody" aria-labelledby=/);
+  assert.match(immersion, /piano-immersion-latest-transition[\s\S]*role="group" aria-label=\{latestTransitionSummary\}/);
+  assert.match(immersion, /className="piano-immersion-interval-context-bar" aria-labelledby=/);
+  assert.match(immersion, /Latest sequential key interval/);
+  assert.match(immersion, /exact attack-to-attack MIDI-key differences/);
+  assert.match(immersion, /exact chronological attack spacing, not an isolated melody interval/);
+  assert.match(immersion, /not whole-field voice leading/);
+  assert.match(immersion, /simultaneous roughness withheld/);
+  assert.match(immersion, /Prompts, not a prediction of emotion, consonance, preference, or meaning/);
+  assert.match(immersion, /viewBox="0 0 112 112" role="img" aria-label=\{ringSummary\}/);
+  assert.match(immersion, /Local onset ruler · not a beat/);
+  assert.match(immersion, /Deviation is distance from the nearest ratio or pulse landmark—not performance accuracy/);
+  assert.match(immersion, /Change cues · no resolution verdict/);
+  assert.match(immersion, /listener only · unreported/);
+  assert.match(immersion, /Compatible catalog routes/);
+  assert.match(immersion, /melody and accompaniment are not isolated/);
+  assert.match(immersion, /planImmersionAnnotations\(annotationInputs, 1/);
   assert.match(immersion, /<select id="immersion-sound-model"/);
   assert.match(immersion, /dash density shows 12-TET mismatch to the named reference/);
   assert.match(immersion, /long dash = incomplete catalog fit · dotted overtrace = rolled timing/);
@@ -50,10 +71,23 @@ test("immersive piano sky keeps visual channels named, bounded, and non-color-on
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
   assert.match(model, /IMMERSION_MAX_INTERVAL_LINKS = 12/);
   assert.match(model, /IMMERSION_MAX_ANNOTATIONS = 5/);
+  assert.match(model, /export function immersionRhythmLens/);
+  assert.match(model, /fallback ruler is deliberately not promoted to a beat, meter, or accuracy/);
+  assert.match(model, /export function immersionIntervalCharacter/);
+  assert.match(model, /export function immersionLatestTransition/);
+  assert.match(model, /directionalFrequencyRatio: 2 \*\* \(signedSemitones \/ 12\)/);
+  assert.match(model, /snapshotOverlap[\s\S]*from\.note !== to\.note/);
+  assert.match(model, /export function immersionRecentPath/);
+  assert.match(model, /Catalog results are compatibility[\s\S]*matches over pitch classes/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.piano-immersion-note\.is-latest \.cosmos-node-bloom \{ animation: none/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-edge-hud[\s\S]*position: relative/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-reading \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-edge-hud \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-interval-context-bar > div \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-stage \* \{ filter: none/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-character \.is-roughness \{ stroke-dasharray/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-latest-transition\.is-down[\s\S]*border-left-style: dashed/);
   assert.match(css, /\.piano-immersion-note \.cosmos-node\.is-outside-route[\s\S]*stroke-dasharray/);
   assert.match(css, /\.immersion-pedal-ring[\s\S]*stroke-dasharray/);
   assert.match(css, /path:not\(\.immersion-root-curve\)[^}]*stroke-dasharray: none/);
@@ -245,6 +279,39 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(journey, /Piece-local expectation trail/);
   assert.match(journey, /<details className="journey-generated-disclosure"/);
   assert.match(atlas, /aria-label=\{`Music landmarks positioned/);
+});
+
+test("scale generator keeps orbit, window, home, and bounded meaning accessible", async () => {
+  const [generator, model, css] = await Promise.all([
+    readFile(new URL("../app/ScaleGeneratorExplainer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/scale-generator-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(generator, /<section className="scale-lesson generator-lesson" aria-labelledby="generator-lesson-title">/);
+  assert.match(generator, /The fifth is not sharpened\. The fifth becomes home/);
+  assert.match(generator, /role="group" aria-label="Circle of fifths major-scale derivation stages"/);
+  assert.match(generator, /aria-controls="generator-derivation-reading"/);
+  assert.match(generator, /className="sr-only generator-derivation-live-summary" role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(generator, /className="generator-degree-rail" role="img" aria-label=/);
+  assert.match(generator, /className="fifths-window-comparison" role="img" aria-label=/);
+  assert.match(generator, /<fieldset className="generator-options">/);
+  assert.match(generator, /id="generator-window-size" type="range"/);
+  assert.match(generator, /className="generator-clock" role="img" aria-label=\{description\}/);
+  assert.match(generator, /className="sr-only generator-workbench-live-summary" role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(generator, /The full \+7 orbit is chromatic; major appears only after selecting a seven-stop window and where Do sits/);
+  assert.match(generator, /Transposition always preserves the shape\. One-out\/one-in membership does not/);
+  assert.match(generator, /Contingent at the boundary; exact inside it/);
+  assert.match(generator, /tonic detection · function · resolution · consonance · emotion · quality/);
+  assert.match(generator, /Pure 3:2 spiral/);
+  assert.match(model, /cycleLength = divisions \/ divisor/);
+  assert.match(model, /boundaryRemainder: normalizePitchClass\(count \* orbit\.generator, divisions\)/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.generator-stability-ledger,[\s\S]*\.generator-boundary-grid \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(max-width: 380px\)[\s\S]*\.generator-degree-rail \{ grid-template-columns: repeat\(4/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.generator-clock g\.is-leaving circle/);
+  assert.match(css, /\.generator-gap-strip > li \{[^}]*flex-basis: 0/);
+  assert.match(css, /\.generator-options button:nth-of-type\(4n\)/);
+  assert.match(css, /\.generator-comparison-table \.generator-table-head \{ position: absolute; width: 1px/);
+  assert.doesNotMatch(generator, /tabIndex=\{?[1-9]/);
 });
 
 test("focus, reduced-motion, and non-color contracts are present", async () => {

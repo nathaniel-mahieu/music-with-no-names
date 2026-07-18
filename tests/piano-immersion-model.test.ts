@@ -14,16 +14,21 @@ import {
   immersionCurve,
   immersionDirectionPoint,
   immersionFifthsTide,
+  immersionIntervalCharacter,
   immersionIntervalField,
+  immersionLatestTransition,
   immersionPhraseNewness,
   immersionPitchPoint,
+  immersionRecentPath,
   immersionReleaseProvenSilence,
+  immersionRhythmLens,
   immersionScaleSectors,
   immersionSameNoteField,
   immersionTrail,
   planImmersionAnnotations,
 } from "../lib/piano-immersion-model.ts";
 import { PIANO_SCALES } from "../lib/piano-model.ts";
+import { livePulseMirror } from "../lib/rhythm-model.ts";
 
 const brightScale = PIANO_SCALES.find((scale) => scale.id === "bright-seven")!;
 
@@ -235,6 +240,182 @@ test("caps the attack contour at the newest deterministic event window", () => {
   assert.equal(contour.points.at(-1)?.event.id, 20);
   assert.equal(contour.groupCount, IMMERSION_MAX_CONTOUR_EVENTS);
   assert.equal(contour.monophonic, true);
+});
+
+test("keeps an unanchored rhythm reading on a local onset ruler rather than inventing beat accuracy", () => {
+  const events = [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 62, onsetMs: 500 },
+    { id: 3, note: 64, onsetMs: 750 },
+    { id: 4, note: 65, onsetMs: 1250 },
+  ];
+  const lens = immersionRhythmLens(events, null);
+  assert.equal(lens.source, "local-ruler");
+  assert.equal(lens.rulerMs, 500);
+  assert.equal(lens.pulsesPerMinute, null);
+  assert.equal(lens.latestGapMs, 500);
+  assert.equal(lens.latestMultiple, 1);
+  assert.equal(lens.nearestRatioLabel, "1:1");
+  assert.equal(lens.deviationPercent, 0);
+  assert.equal(lens.phaseLabel, null);
+});
+
+test("uses exact learner-declared pulse landmarks when a four-tap mirror is active", () => {
+  const events = [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 60, onsetMs: 500 },
+    { id: 3, note: 60, onsetMs: 1000 },
+    { id: 4, note: 60, onsetMs: 1500 },
+    { id: 5, note: 64, onsetMs: 1760 },
+    { id: 6, note: 67, onsetMs: 2010 },
+  ];
+  const mirror = livePulseMirror(events);
+  const lens = immersionRhythmLens(events, mirror);
+  assert.equal(lens.source, "learner-pulse");
+  assert.equal(lens.rulerMs, 500);
+  assert.equal(lens.pulsesPerMinute, 120);
+  assert.equal(lens.latestGapMs, 250);
+  assert.equal(lens.latestMultiple, 0.5);
+  assert.equal(lens.nearestRatioLabel, "1:2");
+  assert.equal(lens.deviationPercent, 0);
+  assert.equal(lens.phaseLabel, "pulse line");
+  assert.ok(lens.phaseDistanceMs != null && Math.abs(lens.phaseDistanceMs - 10) < 1e-9);
+});
+
+test("names every one-octave semitone spacing without replacing the exact key count", () => {
+  assert.deepEqual(Array.from({ length: 13 }, (_, semitones) => immersionIntervalCharacter(semitones).spacingLabel), [
+    "same-key repeat",
+    "nearest-key · tight",
+    "two-semitone · close",
+    "third-sized · compact",
+    "third-sized · broader",
+    "fourth-sized · open mid-span",
+    "half-octave · split",
+    "fifth-sized · open mid-span",
+    "sixth-sized · broad",
+    "sixth-sized · broader",
+    "seventh-sized · near octave",
+    "octave-edge · one key short",
+    "octave · register echo",
+  ]);
+  assert.equal(immersionIntervalCharacter(-3).spacingLabel, "third-sized · compact");
+  assert.equal(immersionIntervalCharacter(13).spacingLabel, "1 octave + nearest-key · tight");
+  assert.equal(immersionIntervalCharacter(24).spacingLabel, "2 octaves · register echo");
+});
+
+test("keeps compound physical motion, signed ratio, and folded pitch-class distance separate", () => {
+  const upward = immersionLatestTransition([
+    { id: 1, note: 60, onsetMs: 0, releaseMs: 100, releaseReason: "key" as const, fieldNotes: [60] },
+    { id: 2, note: 73, onsetMs: 240, releaseMs: null, releaseReason: null, fieldNotes: [73] },
+  ], 100, 60, brightScale);
+  assert.ok(upward);
+  assert.equal(upward.signedSemitones, 13);
+  assert.equal(upward.absoluteSemitones, 13);
+  assert.equal(upward.direction, "up");
+  assert.equal(upward.landmark.semitones, 13);
+  assert.equal(upward.octaveCount, 1);
+  assert.equal(upward.remainderSemitones, 1);
+  assert.equal(upward.pitchClassDistance, 1);
+  assert.equal(upward.samePitchClass, false);
+  assert.ok(Math.abs(upward.directionalFrequencyRatio - 2 ** (13 / 12)) < 1e-12);
+  assert.equal(upward.connection.kind, "silence");
+  assert.equal(upward.connection.durationMs, 140);
+
+  const downward = immersionLatestTransition([
+    { id: 1, note: 72, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 220 },
+  ], 100, 60, brightScale);
+  assert.ok(downward);
+  assert.equal(downward.signedSemitones, -8);
+  assert.equal(downward.direction, "down");
+  assert.equal(downward.pitchClassDistance, 4);
+  assert.ok(Math.abs(downward.directionalFrequencyRatio * downward.spanFrequencyRatio - 1) < 1e-12);
+});
+
+test("separates bouquet chronology from isolated note-to-note transitions", () => {
+  const inside = immersionLatestTransition([
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 50 },
+  ], 100, 60, brightScale);
+  assert.ok(inside);
+  assert.equal(inside.context, "inside-bouquet");
+  assert.equal(inside.sourceGroupAttackCount, 2);
+  assert.equal(inside.targetGroupAttackCount, 2);
+
+  const after = immersionLatestTransition([
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 50 },
+    { id: 3, note: 67, onsetMs: 300 },
+  ], 100, 60, brightScale);
+  assert.ok(after);
+  assert.equal(after.context, "after-bouquet");
+  assert.equal(after.sourceGroupAttackCount, 2);
+  assert.equal(after.targetGroupAttackCount, 1);
+  assert.equal(after.signedSemitones, 3);
+});
+
+test("gates pair-sound context on release or attack-snapshot overlap evidence", () => {
+  const releaseOverlap = immersionLatestTransition([
+    { id: 1, note: 60, onsetMs: 0, releaseMs: 260, releaseReason: "pedal" as const, fieldNotes: [60] },
+    { id: 2, note: 67, onsetMs: 220, releaseMs: null, releaseReason: null, fieldNotes: [60, 67] },
+  ], 100, 60, brightScale);
+  assert.ok(releaseOverlap);
+  assert.deepEqual(releaseOverlap.connection, { kind: "overlap", durationMs: 40, pedalExtended: true, basis: "release-time" });
+
+  const snapshotOverlap = immersionLatestTransition([
+    { id: 1, note: 60, onsetMs: 0, releaseMs: null, releaseReason: null, fieldNotes: [60] },
+    { id: 2, note: 64, onsetMs: 220, releaseMs: null, releaseReason: null, fieldNotes: [60, 64] },
+  ], 100, 60, brightScale);
+  assert.ok(snapshotOverlap);
+  assert.deepEqual(snapshotOverlap.connection, { kind: "overlap", durationMs: null, pedalExtended: false, basis: "attack-snapshot" });
+
+  const sameKeyUnknown = immersionLatestTransition([
+    { id: 1, note: 60, onsetMs: 0, releaseMs: null, releaseReason: null, fieldNotes: [60] },
+    { id: 2, note: 60, onsetMs: 220, releaseMs: null, releaseReason: null, fieldNotes: [60] },
+  ], 100, 60, brightScale);
+  assert.ok(sameKeyUnknown);
+  assert.equal(sameKeyUnknown.signedSemitones, 0);
+  assert.equal(sameKeyUnknown.samePitchClass, true);
+  assert.equal(sameKeyUnknown.connection.kind, "unknown");
+  assert.equal(immersionLatestTransition([], 100, 60, brightScale), null);
+});
+
+test("summarizes a transposition-stable five-note line with inspectable route and interval evidence", () => {
+  const events = [60, 62, 64, 65, 67].map((note, index) => ({ id: index + 1, note, onsetMs: index * 220 }));
+  const path = immersionRecentPath(events, 100, 60, brightScale);
+  assert.equal(path.completeFive, true);
+  assert.equal(path.monophonic, true);
+  assert.equal(path.groupCount, 5);
+  assert.deepEqual(path.steps.map((step) => step.semitones), [2, 2, 1, 2]);
+  assert.equal(path.direction, "rising");
+  assert.equal(path.pitchSpan, 7);
+  assert.equal(path.directionTurns, 0);
+  assert.equal(path.repeatedIntervalCount, 3);
+  assert.equal(path.selectedRouteCount, 5);
+  assert.equal(path.catalogCandidates.length, 2);
+  assert.equal(path.latestTransition?.signedSemitones, 2);
+  assert.equal(path.latestTransition?.context, "between-singletons");
+
+  const transposed = immersionRecentPath(events.map((event) => ({ ...event, note: event.note + 5 })), 100, 65, brightScale);
+  assert.deepEqual(transposed.steps, path.steps);
+  assert.equal(transposed.direction, path.direction);
+  assert.equal(transposed.pitchSpan, path.pitchSpan);
+  assert.equal(transposed.selectedRouteCount, path.selectedRouteCount);
+});
+
+test("refuses to turn a close-time bouquet into an isolated melody", () => {
+  const events = [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 50 },
+    { id: 3, note: 67, onsetMs: 300 },
+    { id: 4, note: 69, onsetMs: 520 },
+    { id: 5, note: 71, onsetMs: 740 },
+  ];
+  const path = immersionRecentPath(events, 100, 60, brightScale);
+  assert.equal(path.completeFive, true);
+  assert.equal(path.monophonic, false);
+  assert.equal(path.groupCount, 4);
+  assert.equal(path.steps[0].sameGroup, true);
 });
 
 test("builds valid closed cloud hulls for one, two, and three notes", () => {

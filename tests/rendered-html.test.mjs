@@ -72,6 +72,10 @@ test("removes the disposable starter and keeps audio safety visible in source", 
     readFile(new URL("../lib/piano-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-sound-model.ts", import.meta.url), "utf8"),
   ]);
+  const [scaleGenerator, scaleGeneratorModel] = await Promise.all([
+    readFile(new URL("../app/ScaleGeneratorExplainer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/scale-generator-model.ts", import.meta.url), "utf8"),
+  ]);
 
   assert.match(page, /<RatioLab \/>/);
   assert.match(layout, /Music With No Names/);
@@ -88,7 +92,8 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
-  assert.match(scaleLab, /Hear home\. Build intervals\. Predict what comes next/);
+  assert.match(ratioLab, /v1\.92/);
+  assert.match(scaleLab, /Hear home\. Build intervals\. Generate scales\. Predict what comes next/);
   assert.match(scaleLab, /Transposition moves every pitch together/);
   assert.match(scaleLab, /hear it in your mind first/i);
   assert.match(scaleLab, /Keep three questions separate/);
@@ -100,6 +105,16 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(scaleLab, /Stack scale degrees into three-note shapes/);
   assert.match(scaleLab, /fourth-stacks, inversions, and equal divisions/);
   assert.match(scaleLab, /does not predict emotion, goodness, or a required resolution/);
+  assert.match(scaleLab, /<ScaleGeneratorExplainer/);
+  assert.match(scaleGenerator, /Old Sol becomes new Do/);
+  assert.match(scaleGenerator, /7 × 7 = 49 ≡ 1 mod 12/);
+  assert.match(scaleGenerator, /full \+7 orbit is chromatic/);
+  assert.match(scaleGenerator, /not a complete map of harmony or musical meaning/);
+  assert.match(scaleGeneratorModel, /generatorOrbit/);
+  assert.match(scaleGeneratorModel, /fifthShiftProfile/);
+  assert.match(scaleGeneratorModel, /Harmonic minor/);
+  assert.match(scaleGeneratorModel, /Whole-tone/);
+  assert.match(scaleGeneratorModel, /PYTHAGOREAN_COMMA_CENTS/);
   assert.doesNotMatch(scaleLab, /Move Do to the next landmark/);
   assert.match(pianoLab, /Connect MIDI/);
   assert.match(pianoLab, /Attack history/);
