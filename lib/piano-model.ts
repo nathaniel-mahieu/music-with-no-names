@@ -759,9 +759,11 @@ export type ChordCandidate = {
 };
 
 export type ChordFingeringSuggestion = {
-  hand: "right";
+  hand: "left" | "right";
   notes: number[];
   fingers: number[];
+  registerCenterMidi: number;
+  registerRule: "below-middle-c" | "middle-c-or-above";
   basis: "triad-inversion" | "four-note-chord" | "even-spread";
 };
 
@@ -3381,38 +3383,55 @@ export function identifyChordCandidates(notes: number[], limit = 3): ChordCandid
 }
 
 /**
- * Returns one common right-hand fingering for a compact realized voicing.
- * This is deliberately advisory: black-key layout, hand size, register, and
- * the surrounding passage can all make a different fingering preferable.
+ * Returns one common one-hand fingering for a compact realized voicing. A
+ * simple normal-keyboard register heuristic assigns voicings centered below
+ * middle C (MIDI 60) to the left hand and all higher centers to the right.
+ * This is deliberately advisory: black-key layout, hand size, hand crossing,
+ * and the surrounding passage can all make a different allocation preferable.
  */
 export function suggestChordFingering(notes: number[], candidate: ChordCandidate | null): ChordFingeringSuggestion | null {
   if (!candidate?.exact) return null;
   const physicalNotes = [...new Set(notes)].sort((first, second) => first - second);
   if (physicalNotes.length < 2 || physicalNotes.length > 5) return null;
   if ((physicalNotes.at(-1) ?? 0) - physicalNotes[0] > 12) return null;
+  const registerCenterMidi = (physicalNotes[0] + (physicalNotes.at(-1) ?? physicalNotes[0])) / 2;
+  const hand = registerCenterMidi < 60 ? "left" : "right";
+  const registerRule = hand === "left" ? "below-middle-c" : "middle-c-or-above";
 
   if (physicalNotes.length === 3) {
     return {
-      hand: "right",
+      hand,
       notes: physicalNotes,
-      fingers: candidate.inversion === 1 ? [1, 2, 5] : [1, 3, 5],
+      fingers: hand === "right"
+        ? candidate.inversion === 1 ? [1, 2, 5] : [1, 3, 5]
+        : candidate.inversion === 2 ? [5, 2, 1] : [5, 3, 1],
+      registerCenterMidi,
+      registerRule,
       basis: "triad-inversion",
     };
   }
 
   if (physicalNotes.length === 4) {
     return {
-      hand: "right",
+      hand,
       notes: physicalNotes,
-      fingers: candidate.inversion === 1 || candidate.inversion === 2 ? [1, 2, 4, 5] : [1, 2, 3, 5],
+      fingers: hand === "right"
+        ? candidate.inversion === 1 || candidate.inversion === 2 ? [1, 2, 4, 5] : [1, 2, 3, 5]
+        : candidate.inversion === 1 || candidate.inversion === 2 ? [5, 4, 2, 1] : [5, 3, 2, 1],
+      registerCenterMidi,
+      registerRule,
       basis: "four-note-chord",
     };
   }
 
   return {
-    hand: "right",
+    hand,
     notes: physicalNotes,
-    fingers: physicalNotes.length === 2 ? [1, 5] : [1, 2, 3, 4, 5],
+    fingers: hand === "right"
+      ? physicalNotes.length === 2 ? [1, 5] : [1, 2, 3, 4, 5]
+      : physicalNotes.length === 2 ? [5, 1] : [5, 4, 3, 2, 1],
+    registerCenterMidi,
+    registerRule,
     basis: "even-spread",
   };
 }

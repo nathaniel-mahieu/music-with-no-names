@@ -40,15 +40,17 @@ import { EarLab } from "./EarLab";
 import { GuideLab } from "./GuideLab";
 import { ScaleLab } from "./ScaleLab";
 import { PianoLab } from "./PianoLab";
+import { VoiceLab } from "./VoiceLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "guide" | "ratio" | "scale" | "piano" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type LabId = "guide" | "ratio" | "scale" | "piano" | "voice" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "guide", label: "Start" },
   { id: "ratio", label: "Ratio" },
   { id: "scale", label: "Scale" },
   { id: "piano", label: "Piano" },
+  { id: "voice", label: "Voice" },
   { id: "ear", label: "Ear" },
   { id: "harmony", label: "Harmony" },
   { id: "rhythm", label: "Rhythm" },
@@ -58,7 +60,7 @@ const LABS: { id: LabId; label: string }[] = [
   { id: "personal", label: "Personal Lens" },
 ];
 
-const PRIMARY_LAB_IDS: LabId[] = ["guide", "piano", "personal"];
+const PRIMARY_LAB_IDS: LabId[] = ["guide", "piano", "voice", "personal"];
 const SUPPORT_LAB_GROUPS: Array<{ label: string; labs: LabId[] }> = [
   { label: "Pitch relationships", labs: ["ratio", "scale", "harmony"] },
   { label: "Time and listening", labs: ["ear", "rhythm", "journey"] },
@@ -131,6 +133,15 @@ const LAB_COPY: Record<
     principleTop: "Key press",
     principleMain: "→ interval → context",
     principleBottom: "physical evidence is not a quality score",
+  },
+  voice: {
+    eyebrow: "Practice sung pitch on its own page",
+    title: "Choose a piano frequency. Find it with your voice.",
+    description:
+      "Start the local microphone only when you are ready. Keep input activity, periodic pitch estimation, semitone distance, and fine cents position visible as separate evidence.",
+    principleTop: "Chosen key frequency",
+    principleMain: "→ sung estimate → distance",
+    principleBottom: "pitch detection, not speech recognition",
   },
   ear: {
     eyebrow: "Test what belongs to the interval",
@@ -760,7 +771,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v1.98
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.02
         </div>
       </header>
 
@@ -1009,6 +1020,8 @@ export function RatioLab() {
           <ScaleLab onNavigate={selectLab} />
         ) : activeLab === "piano" ? (
           <PianoLab />
+        ) : activeLab === "voice" ? (
+          <VoiceLab />
         ) : activeLab === "ear" ? (
           <EarLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "harmony" ? (
@@ -1028,7 +1041,7 @@ export function RatioLab() {
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Explore intervals · scales · piano + MIDI · hearing · harmony · rhythm · form · recordings · musical landmarks · your response</span>
+        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response</span>
       </footer>
     </main>
   );

@@ -16,7 +16,7 @@ import {
 
 type VocalPitchCoachProps = {
   anchorMidi: number;
-  anchorSource: "latest-piano-attack" | "selected-do";
+  anchorSource: "latest-piano-attack" | "selected-do" | "voice-lab-reference";
   doMidi: number;
   scale: PianoScale;
   showConventions: boolean;
@@ -60,6 +60,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const [microphoneNotice, setMicrophoneNotice] = useState("Microphone is off. Audio stays in this browser tab and is not recorded.");
   const [intervalSemitones, setIntervalSemitones] = useState(0);
   const [detection, setDetection] = useState<VocalPitchDetection | null>(null);
+  const [inputLevel, setInputLevel] = useState(0);
   const [previewNotice, setPreviewNotice] = useState("Reference is silent until you choose to hear it.");
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
@@ -98,7 +99,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     : microphoneNotice;
   const visualSummary = pitchMatch
     ? `Sung fundamental estimate ${pitchMatch.detectedFrequencyHz.toFixed(1)} hertz, nearest A4 equals 440 piano reference ${sungLabel} at ${pitchMatch.nearestReferenceHz.toFixed(1)} hertz, ${signedCents(pitchMatch.nearestCents)} from that key. Declared target ${targetLabel} at ${pitchMatch.targetReferenceHz.toFixed(1)} hertz. Voice is ${targetDistanceCopy}.`
-    : `Voice pitch meter waiting. Declared target ${targetLabel} at ${targetReferenceHz.toFixed(1)} hertz from ${anchorSource === "latest-piano-attack" ? "the latest piano attack" : "selected Do"} plus ${intervalSemitones} semitones.`;
+    : `Voice pitch meter waiting. Declared target ${targetLabel} at ${targetReferenceHz.toFixed(1)} hertz from ${anchorSource === "latest-piano-attack" ? "the latest piano attack" : anchorSource === "voice-lab-reference" ? "the chosen Voice reference" : "selected Do"} plus ${intervalSemitones} semitones.`;
 
   const disposeMicrophoneResources = useCallback(() => {
     if (analysisTimerRef.current != null) window.clearInterval(analysisTimerRef.current);
@@ -117,6 +118,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const stopMicrophone = useCallback(() => {
     disposeMicrophoneResources();
     setDetection(null);
+    setInputLevel(0);
     setMicrophoneState("idle");
     setMicrophoneNotice("Microphone stopped. No audio or pitch history was retained.");
   }, [disposeMicrophoneResources]);
@@ -129,6 +131,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     }
     disposeMicrophoneResources();
     setDetection(null);
+    setInputLevel(0);
     setMicrophoneState("requesting");
     setMicrophoneNotice("Waiting for microphone permission…");
     let context: AudioContext | null = null;
@@ -160,6 +163,9 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         const activeContext = contextRef.current;
         if (!activeAnalyser || !activeContext || activeContext.state === "closed") return;
         activeAnalyser.getFloatTimeDomainData(samples);
+        let energy = 0;
+        for (const sample of samples) energy += sample * sample;
+        setInputLevel(Math.sqrt(energy / samples.length));
         const next = detectVocalFundamental(samples, activeContext.sampleRate);
         if (!next) {
           missingFramesRef.current += 1;
@@ -190,6 +196,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       analyserRef.current = null;
       const denied = error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError");
       setMicrophoneState(denied ? "denied" : "error");
+      setInputLevel(0);
       setMicrophoneNotice(denied ? "Microphone permission was not granted. You can try again when ready." : "The microphone could not start. Check the selected input and browser audio settings.");
     }
   }, [disposeMicrophoneResources]);
@@ -228,9 +235,9 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     if (context && context.state !== "closed") void context.close();
   }, [disposeMicrophoneResources]);
 
-  return <section className={`piano-voice-coach ${targetDistanceClass}`} aria-labelledby="piano-voice-coach-title">
+  return <section className={`piano-voice-coach ${targetDistanceClass}`} aria-labelledby="voice-coach-title">
     <header>
-      <div><span>Voice match · local microphone</span><strong id="piano-voice-coach-title">Sing the interval in semitones</strong><small>One monophonic fundamental estimate · no recording · no upload</small></div>
+      <div><span>Voice match · local microphone</span><strong id="voice-coach-title">Sing the interval in semitones</strong><small>One monophonic fundamental estimate · no recording · no upload</small></div>
       <div className="piano-voice-actions">
         <button type="button" aria-pressed={microphoneState === "listening"} disabled={microphoneState === "requesting"} onClick={microphoneState === "listening" ? stopMicrophone : () => void startMicrophone()}>{microphoneState === "requesting" ? "Waiting for permission…" : microphoneState === "listening" ? "Stop microphone" : "Start microphone"}</button>
         <button type="button" onClick={() => void hearInterval()}>{intervalSemitones === 0 ? "Hear target" : "Hear anchor → target"}</button>
@@ -238,9 +245,15 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     </header>
 
     <div className="piano-voice-controls">
-      <p><span>Anchor</span><strong>{anchorLabel} · {formatHz(vocalReferenceFrequency(anchorMidi))}</strong><small>{anchorSource === "latest-piano-attack" ? "latest piano attack" : "selected Do until you play a key"}</small></p>
-      <label htmlFor="piano-voice-interval"><span>Target interval</span><select id="piano-voice-interval" value={intervalSemitones} onChange={(event) => setIntervalSemitones(Number(event.target.value))}>{VOCAL_INTERVAL_TARGETS.map((semitones) => <option key={semitones} value={semitones}>{vocalIntervalLabel(semitones)}</option>)}</select><small>Every choice is an exact equal-key distance from the anchor.</small></label>
+      <p><span>Anchor</span><strong>{anchorLabel} · {formatHz(vocalReferenceFrequency(anchorMidi))}</strong><small>{anchorSource === "latest-piano-attack" ? "latest piano attack" : anchorSource === "voice-lab-reference" ? "chosen on this Voice page" : "selected Do until you play a key"}</small></p>
+      <label htmlFor="voice-interval"><span>Target interval</span><select id="voice-interval" value={intervalSemitones} onChange={(event) => setIntervalSemitones(Number(event.target.value))}>{VOCAL_INTERVAL_TARGETS.map((semitones) => <option key={semitones} value={semitones}>{vocalIntervalLabel(semitones)}</option>)}</select><small>Every choice is an exact equal-key distance from the anchor.</small></label>
       <p className="is-target"><span>Target piano reference</span><strong>{targetLabel} · {formatHz(targetReferenceHz)}</strong><small>A4=440 12-TET coordinate, not measured piano audio.</small></p>
+    </div>
+
+    <div className="piano-voice-input">
+      <label htmlFor="voice-input-level"><span>Microphone input activity</span><meter id="voice-input-level" min={0} max={0.08} low={0.008} high={0.04} optimum={0.02} value={Math.min(0.08, inputLevel)}>{Math.round(inputLevel * 1000) / 10}% RMS</meter></label>
+      <strong>{microphoneState !== "listening" ? "microphone off" : inputLevel < 0.003 ? "very quiet" : inputLevel < 0.008 ? "signal present · below pitch threshold" : "signal present · checking periodicity"}</strong>
+      <small>This level confirms that samples are arriving; it is not calibrated loudness or a singing-quality score.</small>
     </div>
 
     <div className="piano-voice-reading">

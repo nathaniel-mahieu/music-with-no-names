@@ -1380,7 +1380,7 @@ test("separates exact chord identity, inversion, and incomplete outlines", () =>
   assert.equal(g7ThirdInversion.inversion, 3);
 });
 
-test("suggests compact right-hand fingerings without presenting them as universal", () => {
+test("suggests compact right-hand fingerings for voicings centered at or above middle C", () => {
   const rootTriad = identifyChordCandidates([60, 64, 67], 1)[0];
   const firstInversion = identifyChordCandidates([64, 67, 72], 1)[0];
   const secondInversion = identifyChordCandidates([67, 72, 76], 1)[0];
@@ -1394,6 +1394,26 @@ test("suggests compact right-hand fingerings without presenting them as universa
   assert.deepEqual(suggestChordFingering([59, 62, 65, 67], firstInversionSeventh)?.fingers, [1, 2, 4, 5]);
   assert.equal(suggestChordFingering([48, 60, 67], rootTriad), null);
   assert.equal(suggestChordFingering([60, 64, 67], null), null);
+});
+
+test("suggests left hand below middle C and uses the voicing center for crossing chords", () => {
+  const lowRoot = identifyChordCandidates([48, 52, 55], 1)[0];
+  const lowSecondInversion = identifyChordCandidates([55, 60, 64], 1)[0];
+  const crossingRight = identifyChordCandidates([57, 60, 64], 1)[0];
+  const lowSeventh = identifyChordCandidates([43, 47, 50, 53], 1)[0];
+
+  const rootSuggestion = suggestChordFingering([48, 52, 55], lowRoot);
+  assert.equal(rootSuggestion?.hand, "left");
+  assert.equal(rootSuggestion?.registerRule, "below-middle-c");
+  assert.equal(rootSuggestion?.registerCenterMidi, 51.5);
+  assert.deepEqual(rootSuggestion?.fingers, [5, 3, 1]);
+
+  const secondInversionSuggestion = suggestChordFingering([55, 60, 64], lowSecondInversion);
+  assert.equal(secondInversionSuggestion?.hand, "left");
+  assert.deepEqual(secondInversionSuggestion?.fingers, [5, 2, 1]);
+
+  assert.equal(suggestChordFingering([57, 60, 64], crossingRight)?.hand, "right");
+  assert.deepEqual(suggestChordFingering([43, 47, 50, 53], lowSeventh)?.fingers, [5, 3, 2, 1]);
 });
 
 test("ranks nearby scale chords by retained tones and names the concrete move", () => {

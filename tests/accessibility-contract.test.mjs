@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-const LABS = ["GuideLab", "ScaleLab", "PianoLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab"];
+const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab"];
 
 test("every learning lab exposes a named semantic region", async () => {
   for (const lab of LABS) {
@@ -12,9 +12,10 @@ test("every learning lab exposes a named semantic region", async () => {
 });
 
 test("immersive piano sky and vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
-  const [piano, immersion, vocal, model, vocalModel, css] = await Promise.all([
+  const [piano, immersion, voiceLab, vocal, model, vocalModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/VoiceLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/VocalPitchCoach.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-immersion-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vocal-pitch-model.ts", import.meta.url), "utf8"),
@@ -23,11 +24,23 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
   assert.match(piano, /pulseMirror=\{pulseMirrorModel\}/);
   assert.match(piano, /<details className="piano-immersion-keyboard">/);
-  assert.match(piano, /<VocalPitchCoach/);
-  assert.match(piano, /anchorMidi=\{phraseEvents\.at\(-1\)\?\.note \?\? doMidi\}/);
+  assert.doesNotMatch(piano, /VocalPitchCoach/);
+  assert.match(piano, /Sung-pitch practice now lives on the dedicated Voice page/);
+  assert.match(voiceLab, /<VocalPitchCoach/);
+  assert.match(voiceLab, /anchorSource="voice-lab-reference"/);
+  assert.match(voiceLab, /id="voice-anchor-key"/);
+  assert.match(voiceLab, /estimates sung pitch only—it does not recognize words/);
   assert.match(piano, /<RouteSelector scale=\{scale\}/);
   assert.match(piano, /doCaptureArmed=\{doCaptureArmed\}/);
   assert.match(piano, /onToggleDoCapture=\{toggleDoCapture\}/);
+  assert.match(piano, /frameLearningActive=\{frameMode === "discover" && frameLearningAnchorId != null\}/);
+  assert.match(piano, /frameLearningDistinctPitchClasses=\{frameLearningDistinctPitchClasses\}/);
+  assert.match(piano, /onResetFrameFromPlaying=\{resetFrameFromPlaying\}/);
+  assert.match(piano, /const resetFrameFromPlaying = \(\) =>/);
+  assert.match(piano, /frameLearningAnchorIdRef\.current = anchorId/);
+  assert.match(piano, /phraseEvents\.filter\(\(event\) => event\.id > frameLearningAnchorId\)/);
+  assert.match(piano, /url\.searchParams\.delete\("pianoDo"\)/);
+  assert.match(piano, /url\.searchParams\.delete\("pianoScale"\)/);
   assert.match(piano, /id="piano-route-choice"/);
   assert.match(piano, /Set Do from next note/);
   assert.match(piano, /Cancel · waiting for Do/);
@@ -53,6 +66,18 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(immersion, /role="status" aria-live="polite" aria-atomic="true"/);
   assert.match(immersion, /window\.setTimeout\(\(\) => setAnnouncedSummary\(liveSummary\), 280\)/);
   assert.match(immersion, /className="piano-immersion-edge-hud"/);
+  assert.match(immersion, /className="piano-immersion-lens is-scale"/);
+  assert.match(immersion, /className="piano-immersion-scale-grid" role="img" aria-label=\{scaleLensSummary\}/);
+  assert.match(immersion, /Array\.from\(\{ length: 12 \}/);
+  assert.match(immersion, /each cell = 1 semitone/);
+  assert.match(immersion, /Filled cell = selected route degree · dot = recent five-attack position · double dot = latest · outline = sounding/);
+  assert.match(immersion, /This is the chosen scale coordinate, not a detected key/);
+  assert.match(immersion, /aria-label="Quick scale-frame controls"/);
+  assert.match(immersion, /Reset Do · next note/);
+  assert.match(immersion, /Reset frame · play scale/);
+  assert.match(immersion, /role="status" aria-live="polite"/);
+  assert.match(immersion, /the next new MIDI or on-screen note becomes Do/);
+  assert.match(immersion, /distinct notes since reset/);
   assert.match(immersion, /className="piano-immersion-lens is-rhythm" aria-labelledby=/);
   assert.match(immersion, /className="piano-immersion-lens is-harmony" aria-labelledby=/);
   assert.match(immersion, /className="piano-immersion-lens is-melody" aria-labelledby=/);
@@ -85,11 +110,14 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(immersion, /is the bass over/);
   assert.match(immersion, /is both root and bass · root position/);
   assert.match(immersion, /function ChordFingeringGraphic/);
-  assert.match(immersion, /Suggested right hand/);
+  assert.match(immersion, /Suggested \{handLabel\} hand/);
+  assert.match(immersion, /voicing center below middle C/);
+  assert.match(immersion, /voicing center at or above middle C/);
   assert.match(immersion, /1 thumb · 5 pinky/);
-  assert.match(immersion, /One common right-hand fingering for/);
-  assert.match(immersion, /One common compact-voicing choice/);
-  assert.match(immersion, /hand size, black keys, register, and the next chord may favor another fingering/);
+  assert.match(immersion, /One common \$\{handLabel\}-hand fingering for/);
+  assert.match(immersion, /center below middle C suggests left hand/);
+  assert.match(immersion, /center at or above it suggests right/);
+  assert.match(immersion, /Hand size, black keys, crossing, accompaniment, and the next chord may favor another choice/);
   assert.match(immersion, /melody and accompaniment are not isolated/);
   assert.match(immersion, /planImmersionAnnotations\(annotationInputs, 1/);
   assert.match(immersion, /<select id="immersion-sound-model"/);
@@ -125,7 +153,10 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(model, /snapshotOverlap[\s\S]*from\.note !== to\.note/);
   assert.match(model, /export function immersionRecentPath/);
   assert.match(model, /Catalog results are compatibility[\s\S]*matches over pitch classes/);
-  assert.match(vocal, /id="piano-voice-interval"/);
+  assert.match(vocal, /id="voice-interval"/);
+  assert.match(vocal, /id="voice-input-level"/);
+  assert.match(vocal, /Microphone input activity/);
+  assert.match(vocal, /signal present · below pitch threshold/);
   assert.match(vocal, /Start microphone/);
   assert.match(vocal, /Stop microphone/);
   assert.match(vocal, /Hear anchor → target/);
@@ -142,14 +173,24 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(vocalModel, /returns null for a[\s\S]*weak or insufficiently periodic window/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-voice-reading \{ grid-template-columns: 1fr 1fr/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.voice-lab-reference \{ grid-template-columns: 1fr 1fr/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-route-selector \{ grid-template-columns: 1fr 1fr/);
   assert.match(css, /\.piano-do-capture button\[aria-pressed="true"\]/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-edge-hud[\s\S]*position: relative/);
+  assert.match(css, /\.piano-immersion-lens\.is-scale \{[\s\S]*grid-column: 3;[\s\S]*grid-row: 3/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-lens\.is-scale \{ grid-column: 2; grid-row: 2/);
+  assert.match(css, /\.piano-immersion-scale-grid \{[\s\S]*grid-template-columns: repeat\(12/);
+  assert.match(css, /\.piano-immersion-scale-grid > span\.is-latest b/);
+  assert.match(css, /\.piano-immersion-scale-grid > span\.is-active/);
+  assert.match(css, /\.piano-immersion-scale-actions \{[\s\S]*pointer-events: auto/);
+  assert.match(css, /\.piano-immersion-scale-actions button\[aria-pressed="true"\]/);
   assert.match(css, /\.piano-immersion-fingering \.is-finger-marker circle/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-reading \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-voice-controls,[\s\S]*\.piano-voice-reading/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.voice-lab-reference,[\s\S]*\.piano-voice-input \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-route-methods ol \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-edge-hud \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-lens\.is-scale \{ grid-column: 1; grid-row: auto/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-interval-context-bar > div \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-stage \* \{ filter: none/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-voice-rail b/);

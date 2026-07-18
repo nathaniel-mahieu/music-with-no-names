@@ -116,6 +116,9 @@ type PianoImmersionProps = {
   doMidi: number;
   scale: PianoScale;
   frameMode: "discover" | "locked";
+  doCaptureArmed: boolean;
+  frameLearningActive: boolean;
+  frameLearningDistinctPitchClasses: number;
   frameSnapshot: ScaleFrameSnapshot | null;
   gravityCandidates: TonalGravityCandidate[];
   motifs: MotifTransformation[];
@@ -125,6 +128,8 @@ type PianoImmersionProps = {
   soundModelId: PianoSoundModelId;
   showConventions: boolean;
   onSoundModelChange: (value: PianoSoundModelId) => void;
+  onToggleDoCapture: () => void;
+  onResetFrameFromPlaying: () => void;
 };
 
 const COSMIC_DUST = Array.from({ length: 54 }, (_, index) => ({
@@ -222,6 +227,10 @@ function ChordFingeringGraphic({
   const keyWidth = 24;
   const blackWidth = 14;
   const keyboardWidth = whiteNotes.length * keyWidth;
+  const handLabel = suggestion.hand === "left" ? "left" : "right";
+  const registerRuleLabel = suggestion.registerRule === "below-middle-c"
+    ? "voicing center below middle C"
+    : "voicing center at or above middle C";
   const spokenGuide = suggestion.notes
     .map((note, index) => `${noteLabel(note, doMidi, scale, showConventions)} finger ${suggestion.fingers[index]}`)
     .join(", ");
@@ -233,8 +242,8 @@ function ChordFingeringGraphic({
   };
 
   return <div className="piano-immersion-fingering">
-    <div><span>Suggested right hand</span><small>1 thumb · 5 pinky</small></div>
-    <svg viewBox={`0 0 ${keyboardWidth} 66`} role="img" aria-label={`One common right-hand fingering for ${chordName}: ${spokenGuide}.`}>
+    <div><span>Suggested {handLabel} hand</span><small>{registerRuleLabel} · 1 thumb · 5 pinky</small></div>
+    <svg viewBox={`0 0 ${keyboardWidth} 66`} role="img" aria-label={`One common ${handLabel}-hand fingering for ${chordName}, chosen because the ${registerRuleLabel}: ${spokenGuide}.`}>
       {whiteNotes.map((note, index) => <rect
         key={`white-${note}`}
         className={`is-white${fingerByNote.has(note) ? " is-chord-key" : ""}`}
@@ -264,7 +273,7 @@ function ChordFingeringGraphic({
         </g>;
       })}
     </svg>
-    <small>One common compact-voicing choice; hand size, black keys, register, and the next chord may favor another fingering.</small>
+    <small>Register guide: center below middle C suggests left hand; center at or above it suggests right. Hand size, black keys, crossing, accompaniment, and the next chord may favor another choice.</small>
   </div>;
 }
 
@@ -377,6 +386,9 @@ export const PianoImmersion = memo(function PianoImmersion({
   doMidi,
   scale,
   frameMode,
+  doCaptureArmed,
+  frameLearningActive,
+  frameLearningDistinctPitchClasses,
   frameSnapshot,
   gravityCandidates,
   motifs,
@@ -386,6 +398,8 @@ export const PianoImmersion = memo(function PianoImmersion({
   soundModelId,
   showConventions,
   onSoundModelChange,
+  onToggleDoCapture,
+  onResetFrameFromPlaying,
 }: PianoImmersionProps) {
   const instanceId = useId().replace(/:/g, "");
   const metronomeContextRef = useRef<AudioContext | null>(null);
@@ -701,6 +715,25 @@ export const PianoImmersion = memo(function PianoImmersion({
     : recentPath.monophonic
       ? `${recentPath.direction} · ${recentPath.pitchSpan} st span · ${recentPath.directionTurns} turn${recentPath.directionTurns === 1 ? "" : "s"}`
       : `${recentPath.groupCount} onset groups · melody and accompaniment are not isolated`;
+  const selectedScalePositions = scaleSemitones(scale);
+  const recentScalePositions = new Set(recentPath.events.map((event) => (pitchClassFromMidi(event.note) - selectedRootPitchClass + 12) % 12));
+  const activeScalePositions = new Set(activeNotes.map((active) => (pitchClassFromMidi(active.note) - selectedRootPitchClass + 12) % 12));
+  const latestScalePosition = latestEvent ? (pitchClassFromMidi(latestEvent.note) - selectedRootPitchClass + 12) % 12 : null;
+  const latestScaleDegree = latestScalePosition == null ? -1 : selectedScalePositions.indexOf(latestScalePosition);
+  const selectedScaleName = showConventions
+    ? `${CONVENTIONAL_PITCH_CLASSES[selectedRootPitchClass]} ${scale.conventionalName}`
+    : `Do + ${scale.name}`;
+  const latestScaleCopy = latestEvent
+    ? `${latestLabel} · ${latestScalePosition === 0 ? "Do / 0 st" : `+${latestScalePosition} st from Do`} · ${latestScaleDegree >= 0 ? `route degree ${latestScaleDegree + 1}` : "outside selected route"}`
+    : "Play one note to place it against the route";
+  const scaleResetStatusCopy = doCaptureArmed
+    ? "Waiting: the next new MIDI or on-screen note becomes Do; the current route stays and locks."
+    : frameLearningActive
+      ? frameLearningDistinctPitchClasses < 4
+        ? `${frameLearningDistinctPitchClasses}/4 distinct notes since reset · play ${4 - frameLearningDistinctPitchClasses} more distinct scale note${4 - frameLearningDistinctPitchClasses === 1 ? "" : "s"}.`
+        : `${frameLearningDistinctPitchClasses} distinct notes since reset · the frame can now stabilize from only this new played evidence.`
+      : "Reset Do from one note, or reset the frame and play a scale as fresh evidence.";
+  const scaleLensSummary = `${selectedScaleName}. Twelve equal cells run from selected Do through the eleven higher pitch classes; each cell is one semitone. Selected route positions are ${selectedScalePositions.join(", ")} semitones from Do with cyclic gaps ${scale.steps.join(", ")}. ${recentPath.events.length ? `Recent five-attack window occupies ${[...recentScalePositions].sort((first, second) => first - second).join(", ")} semitones from Do.` : "No recent attacks."} ${latestEvent ? `Latest attack: ${latestScaleCopy}.` : ""} ${activeScalePositions.size ? `${activeScalePositions.size} positions are currently sounding.` : "No positions are currently sounding."}`;
   const latestTransitionSpoken = !latestTransition
     ? "A second isolated attack will reveal the exact signed MIDI-key difference"
     : latestTransition.direction === "up"
@@ -1216,6 +1249,37 @@ export const PianoImmersion = memo(function PianoImmersion({
                 <small>{recentPath.completeFive ? "Five-note catalog names are shown above; they remain compatibility matches." : `Complete five-note span to name the strongest compatible scale frames. Current evidence: ${recentCatalogCopy}.`}</small>
               </p>
             </>}
+          </section>
+
+          <section className="piano-immersion-lens is-scale" aria-labelledby={`${instanceId}-scale-lens-title`}>
+            <header>
+              <span>Scale lens</span>
+              <strong id={`${instanceId}-scale-lens-title`}>{selectedScaleName}</strong>
+              <small>{frameMode === "locked" ? "selected route · frame locked" : "selected route · evidence can suggest another frame"}</small>
+            </header>
+            <div className="piano-immersion-scale-actions" aria-label="Quick scale-frame controls">
+              <button type="button" aria-pressed={doCaptureArmed} onClick={onToggleDoCapture}>{doCaptureArmed ? "Cancel Do reset" : "Reset Do · next note"}</button>
+              <button type="button" aria-pressed={frameLearningActive} onClick={onResetFrameFromPlaying}>{frameLearningActive ? "Restart frame · play scale" : "Reset frame · play scale"}</button>
+            </div>
+            <p className="piano-immersion-scale-reset-status" role="status" aria-live="polite">{scaleResetStatusCopy}</p>
+            <div className="piano-immersion-scale-grid" role="img" aria-label={scaleLensSummary}>
+              {Array.from({ length: 12 }, (_, position) => {
+                const degreeIndex = selectedScalePositions.indexOf(position);
+                const isRoute = degreeIndex >= 0;
+                return <span
+                  key={position}
+                  className={`${isRoute ? "is-route" : "is-outside-route"}${recentScalePositions.has(position) ? " is-recent" : ""}${latestScalePosition === position ? " is-latest" : ""}${activeScalePositions.has(position) ? " is-active" : ""}`}
+                  aria-hidden="true"
+                >
+                  {isRoute ? <i>{degreeIndex + 1}</i> : null}
+                  {recentScalePositions.has(position) ? <b /> : null}
+                </span>;
+              })}
+            </div>
+            <div className="piano-immersion-scale-axis" aria-hidden="true"><span>Do · 0</span><span>each cell = 1 semitone</span><span>12 · octave</span></div>
+            <p className="piano-immersion-scale-reading"><span>Latest position</span><strong>{latestScaleCopy}</strong></p>
+            <p className="piano-immersion-scale-reading"><span>Route gap loop</span><strong>{scale.steps.join("–")} st</strong><small>{selectedCoveredCount}/{routePitchClasses.size} route positions visited in retained memory</small></p>
+            <small>Filled cell = selected route degree · dot = recent five-attack position · double dot = latest · outline = sounding. This is the chosen scale coordinate, not a detected key.</small>
           </section>
         </div>
       </div>
