@@ -11,17 +11,22 @@ test("every learning lab exposes a named semantic region", async () => {
   }
 });
 
-test("immersive piano sky and vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
-  const [piano, immersion, voiceLab, vocal, model, vocalModel, css] = await Promise.all([
+test("immersive and research piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
+  const [piano, immersion, research, voiceLab, vocal, model, researchModel, vocalModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoResearchHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/VoiceLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/VocalPitchCoach.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-immersion-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-research-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vocal-pitch-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
+  assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
+  assert.match(piano, /events=\{immersionHistoryEvents\}/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "research"/);
   assert.match(piano, /pulseMirror=\{pulseMirrorModel\}/);
   assert.match(piano, /<details className="piano-immersion-keyboard">/);
   assert.doesNotMatch(piano, /VocalPitchCoach/);
@@ -61,7 +66,7 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(piano, /groupChordGestures\(immersionHistoryEvents[\s\S]*measureChordGestures\(immersionChordGestures[\s\S]*IMMERSION_MAX_FIELD_NOTES\)\.slice\(-4\)/);
   assert.match(piano, /phraseEvents=\{immersionHistoryEvents\}/);
   assert.match(piano, /shared HUD history · notes \+ chords/);
-  assert.match(piano, /focusLens !== "immersion"[\s\S]*window\.setInterval\(\(\) => setNowMs\(currentHudTime\(\)\), 120\)/);
+  assert.match(piano, /if \(!isShortHudFocus\)[\s\S]*window\.setInterval\(\(\) => setNowMs\(currentHudTime\(\)\), 120\)/);
   assert.match(piano, /window\.setTimeout\(\(\) => setNowMs\(currentHudTime\(\)\), remainingMs\)/);
   assert.match(immersion, /<section className="piano-immersion" aria-labelledby="piano-immersion-title">/);
   assert.match(immersion, /role="img" aria-labelledby="piano-immersion-svg-title piano-immersion-svg-description"/);
@@ -149,6 +154,33 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(immersion, /Attack circle/);
   assert.doesNotMatch(immersion, /feGaussianBlur|<filter /);
   assert.doesNotMatch(immersion, /tabIndex=\{?[1-9]/);
+  assert.match(research, /<section className="piano-research-hud" aria-labelledby="piano-research-title">/);
+  assert.match(research, /aria-label="Research HUD note arrangement"/);
+  assert.match(research, /aria-pressed=\{layout === option\.id\}/);
+  assert.match(research, /id="piano-research-generator"/);
+  assert.match(research, /role="img" aria-labelledby="piano-research-clock-title piano-research-clock-description"/);
+  assert.match(research, /<desc id="piano-research-clock-description">\{clockSummary\}<\/desc>/);
+  assert.match(research, /one neighboring position is one semitone/);
+  assert.match(research, /Do = \{doLabel\}/);
+  assert.match(research, /const anchorNote = doMidi;/);
+  assert.doesNotMatch(research, /const anchorNote = latest\?\.note \?\? doMidi/);
+  assert.match(research, /Loop length = 12 ÷ gcd\(12, \{generator\.step\}\)/);
+  assert.match(research, /className="piano-research-lattice" role="list"/);
+  assert.match(research, /className=\{classes\} role="listitem"/);
+  assert.match(research, /→ \+3 st · minor third/);
+  assert.match(research, /↓ \+4 st · major third/);
+  assert.match(research, /↘ \+7 st · perfect fifth/);
+  assert.match(research, /major-triad pitch-class shape uses the anchor, one step down \(\+4\), and one step down-right \(\+7\)/);
+  assert.match(research, /minor-triad shape uses the anchor, one step right \(\+3\)/);
+  assert.match(research, /<div className="piano-research-matrix-layout">/);
+  assert.doesNotMatch(research, /className="piano-research-matrix-layout" role="img"/);
+  assert.match(research, /<table className="piano-research-matrix" aria-describedby="piano-research-matrix-reading">/);
+  assert.match(research, /Latest sequential movement/);
+  assert.match(research, /exact attack-to-attack MIDI-key distance/);
+  assert.match(research, /fifth steps, not generic note affinity, consonance, harmonic function, resolution, emotion, or quality/);
+  assert.match(research, /pure 3:2 fifths do not close exactly after twelve steps/);
+  assert.match(research, /do not measure acoustic pitch, piano tuning, overtones, loudness, or listening experience/);
+  assert.doesNotMatch(research, /tabIndex=\{?[1-9]/);
   assert.match(model, /IMMERSION_HISTORY_ATTACKS = 12/);
   assert.match(model, /export function immersionHistory[\s\S]*slice\(-IMMERSION_HISTORY_ATTACKS\)/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
@@ -164,6 +196,12 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(model, /snapshotOverlap[\s\S]*from\.note !== to\.note/);
   assert.match(model, /export function immersionRecentPath/);
   assert.match(model, /Catalog results are compatibility[\s\S]*matches over pitch classes/);
+  assert.match(researchModel, /export function chromaticClock/);
+  assert.match(researchModel, /export function generatorComponents/);
+  assert.match(researchModel, /const divisor = greatestCommonDivisor\(step, RESEARCH_PITCH_CLASS_COUNT\)/);
+  assert.match(researchModel, /export function thirdsLattice/);
+  assert.match(researchModel, /3 \* x \+ 4 \* y/);
+  assert.match(researchModel, /export function intervalMatrix/);
   assert.match(vocal, /id="voice-interval"/);
   assert.match(vocal, /id="voice-input-level"/);
   assert.match(vocal, /Microphone input activity/);
@@ -183,6 +221,12 @@ test("immersive piano sky and vocal pitch match keep visual channels named, boun
   assert.match(vocalModel, /export function matchVocalPitch/);
   assert.match(vocalModel, /returns null for a[\s\S]*weak or insufficiently periodic window/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
+  assert.match(css, /\.piano-research-layout-controls \{[^}]*grid-template-columns: repeat\(3/);
+  assert.match(css, /\.piano-research-lattice \{[^}]*grid-template-columns: repeat\(4/);
+  assert.match(css, /\.piano-research-matrix \{[^}]*table-layout: fixed/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-research-clock-layout \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-research-boundaries \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-research-clock-node\.is-latest circle/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-voice-reading \{ grid-template-columns: 1fr 1fr/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.voice-lab-reference \{ grid-template-columns: 1fr 1fr/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-route-selector \{ grid-template-columns: 1fr 1fr/);

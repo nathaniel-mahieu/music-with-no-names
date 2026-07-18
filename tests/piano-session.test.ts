@@ -20,6 +20,14 @@ test("preserves the immersive relationship-sky lens in the tab summary", () => {
   })), { attackCount: 2, focusLens: "immersion" });
 });
 
+test("preserves the research HUD lens in the tab summary", () => {
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 25,
+    focusLens: "research",
+    phraseEvents: [phraseEvent(1, 60, 100), phraseEvent(2, 61, 240)],
+  })), { attackCount: 2, focusLens: "research" });
+});
+
 test("falls back to the whole-phrase lens for older sessions", () => {
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 2,

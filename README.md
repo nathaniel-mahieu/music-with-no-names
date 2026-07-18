@@ -4,7 +4,9 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Shared Short HUD History v2.04**. It provides:
+The current milestone is **Research HUD v2.05**. It provides:
+
+- A separate Research HUD beside Immersion that reuses the same movable Do, selected route, live MIDI field, and newest-twelve-attack history while comparing three complementary arrangements of all twelve semitone positions. The fixed chromatic clock makes one geometric step equal one semitone and can overlay any repeated `+1` through `+7 (mod 12)` generator; the `+7` overlay is the circle-of-fifths path. A `+3`/`+4` thirds lattice exposes minor-third, major-third, and diagonal fifth relationships locally, while an all-pairs matrix states every directed pitch-class interval without privileging one generator. These are 12-TET/MIDI pitch-class references: they fold away register, voicing, tuning, spectrum, timing, and context. Fifths-path distance counts repeated `+7` steps—not generic note affinity, consonance, harmonic function, emotional meaning, or musical value.
 
 - One shared twelve-attack Immersion history for notes and grouped chords. The central note wake is shorter than the former twenty-eight-mark trail, chord membranes are derived from exactly the same attack window, and the HUD state bar shows the shared count so note and chord evidence visibly age out together. The longer sixty-second phrase remains available to the other Piano learning focuses.
 

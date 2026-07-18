@@ -8700,7 +8700,7 @@ footer a {
 
 .piano-focus-lenses {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   border-bottom: 1px solid var(--line);
 }
 
@@ -8723,7 +8723,227 @@ footer a {
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
 
-/* Piano HUD v2.04: one short shared note-and-chord history plus register-aware scale fingering. */
+/* Piano HUD v2.05: alternate interval-space research maps on the shared short HUD history. */
+.piano-research-hud {
+  --research-violet: #c69cff;
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  color: #f5f2ec;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(59, 78, 125, .22), transparent 30%),
+    radial-gradient(circle at 86% 68%, rgba(119, 73, 150, .1), transparent 30%),
+    linear-gradient(180deg, #05070c, #070a12 58%, #04060a);
+}
+
+.piano-research-intro {
+  display: flex;
+  gap: 24px 48px;
+  align-items: end;
+  justify-content: space-between;
+  padding: 26px clamp(20px, 4vw, 52px) 22px;
+  border-bottom: 1px solid rgba(225, 232, 246, .16);
+}
+
+.piano-research-intro > div:first-child { max-width: 780px; }
+.piano-research-intro > div:first-child > span,
+.piano-research-transition > span,
+.piano-research-boundaries span,
+.piano-research-generator-control label > span {
+  color: var(--piano-gold);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.piano-research-intro h3 {
+  margin: 5px 0 7px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.45rem, 2.6vw, 2.35rem);
+  font-weight: 400;
+  letter-spacing: -.025em;
+  line-height: 1.08;
+}
+
+.piano-research-intro p { max-width: 76ch; margin: 0; color: #abb5c8; font-size: .74rem; line-height: 1.55; }
+.piano-research-context { display: grid; flex: 0 1 300px; min-width: 230px; gap: 7px; margin: 0; }
+.piano-research-context > div { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 9px; padding-top: 6px; border-top: 1px solid rgba(225, 232, 246, .16); }
+.piano-research-context dt { color: #8793a6; font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; }
+.piano-research-context dd { min-width: 0; margin: 0; font-size: .68rem; font-weight: 500; line-height: 1.35; }
+
+.piano-research-layout-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid rgba(225, 232, 246, .16); }
+.piano-research-layout-controls button {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px clamp(14px, 2.4vw, 28px);
+  border: 0;
+  border-right: 1px solid rgba(225, 232, 246, .16);
+  color: #f5f2ec;
+  background: rgba(7, 10, 18, .78);
+  text-align: left;
+  cursor: pointer;
+}
+.piano-research-layout-controls button:last-child { border-right: 0; }
+.piano-research-layout-controls button[aria-pressed="true"] { color: #090b10; background: var(--piano-gold); }
+.piano-research-layout-controls strong { font-size: .76rem; font-weight: 600; }
+.piano-research-layout-controls span { color: #909bad; font-size: .62rem; line-height: 1.35; }
+.piano-research-layout-controls button[aria-pressed="true"] span { color: #30343d; }
+
+.piano-research-clock-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 29%); min-width: 0; }
+.piano-research-generator-control {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  align-items: end;
+  justify-content: space-between;
+  padding: 14px clamp(20px, 4vw, 52px);
+  border-bottom: 1px solid rgba(225, 232, 246, .14);
+  background: rgba(8, 11, 19, .7);
+}
+.piano-research-generator-control label { display: grid; flex: 0 1 300px; gap: 5px; min-width: 220px; }
+.piano-research-generator-control select {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid rgba(225, 231, 246, .28);
+  color: #f5f2ec;
+  background: #070a12;
+  font: inherit;
+}
+.piano-research-generator-control > div { display: grid; gap: 3px; text-align: right; }
+.piano-research-generator-control > div strong { color: var(--piano-blue); font-family: var(--font-mono), monospace; font-size: .74rem; font-weight: 500; }
+.piano-research-generator-control > div small { color: #909bad; font-size: .61rem; line-height: 1.4; }
+
+.piano-research-clock-figure { min-width: 0; padding: 8px clamp(10px, 2vw, 26px) 18px; }
+.piano-research-clock-figure > svg { display: block; width: min(100%, 780px); height: auto; margin: 0 auto; overflow: visible; }
+.piano-research-clock-ring { fill: rgba(225, 232, 246, .015); stroke: rgba(225, 232, 246, .22); stroke-width: 1.5; }
+.piano-research-clock-tick { stroke: rgba(225, 232, 246, .22); stroke-width: 1; }
+.piano-research-orbit { fill: none; stroke: var(--piano-blue); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; opacity: .56; }
+.piano-research-orbit.is-pair { stroke-width: 3; }
+.piano-research-field-shape { fill: rgba(236, 199, 109, .08); stroke: var(--piano-gold); stroke-width: 2.5; stroke-dasharray: 6 4; stroke-linecap: round; stroke-linejoin: round; }
+.piano-research-clock-node circle { fill: #090d16; stroke: rgba(225, 232, 246, .36); stroke-width: 1.5; }
+.piano-research-clock-node.is-recent circle { stroke: var(--piano-blue); stroke-dasharray: 3 2; }
+.piano-research-clock-node.is-sounding circle { stroke: #f5f2ec; stroke-width: 4; stroke-dasharray: none; }
+.piano-research-clock-node.is-latest circle { fill: var(--piano-gold); stroke: #090b10; stroke-width: 2.5; }
+.piano-research-clock-node text { fill: #f5f2ec; font-family: var(--font-mono), monospace; text-anchor: middle; pointer-events: none; }
+.piano-research-clock-node.is-latest text { fill: #090b10; }
+.piano-research-node-offset { font-size: 10px; font-weight: 700; }
+.piano-research-node-label { font-size: 8px; }
+.piano-research-node-count { fill: var(--piano-gold) !important; font-size: 8px; font-weight: 700; paint-order: stroke; stroke: #05070c; stroke-width: 3px; }
+.piano-research-clock-center text { fill: #909bad; font-family: var(--font-mono), monospace; font-size: 9px; text-anchor: middle; }
+.piano-research-clock-center text.is-value { fill: #f5f2ec; font-family: var(--font-display), Georgia, serif; font-size: 17px; }
+.piano-research-map-key { display: flex; flex-wrap: wrap; gap: 7px 16px; justify-content: center; color: #aab4c6; font-size: .61rem; }
+.piano-research-map-key span { display: inline-flex; gap: 6px; align-items: center; }
+.piano-research-map-key i { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(225, 232, 246, .38); border-radius: 50%; background: #090d16; }
+.piano-research-map-key i.is-latest { border-color: var(--piano-gold); background: var(--piano-gold); }
+.piano-research-map-key i.is-sounding { border: 3px solid #f5f2ec; }
+.piano-research-map-key i.is-recent { border-color: var(--piano-blue); border-style: dashed; }
+.piano-research-map-key i.is-field { width: 16px; height: 0; border: 0; border-top: 2px dashed var(--piano-gold); border-radius: 0; }
+
+.piano-research-transition { display: grid; align-content: center; gap: 7px; min-width: 0; padding: clamp(22px, 4vw, 48px); border-left: 1px solid rgba(225, 232, 246, .16); background: rgba(8, 11, 19, .58); }
+.piano-research-transition strong { font-family: var(--font-display), Georgia, serif; font-size: clamp(1.25rem, 2.3vw, 2.15rem); font-weight: 400; line-height: 1.06; }
+.piano-research-transition small { color: #aab4c6; font-size: .68rem; line-height: 1.55; }
+
+.piano-research-lattice-layout { display: grid; gap: 20px; padding: clamp(24px, 4vw, 48px) clamp(20px, 5vw, 68px); }
+.piano-research-lattice-axes { display: flex; flex-wrap: wrap; gap: 9px 28px; justify-content: center; }
+.piano-research-lattice-axes strong { color: var(--piano-blue); font-family: var(--font-mono), monospace; font-size: .7rem; font-weight: 500; }
+.piano-research-lattice { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; width: min(100%, 850px); margin: 0 auto; }
+.piano-research-lattice-cell { display: grid; gap: 5px; min-width: 0; min-height: 105px; align-content: center; padding: 14px; border: 1px solid rgba(225, 232, 246, .22); background: rgba(9, 13, 22, .82); text-align: center; }
+.piano-research-lattice-cell.is-recent { border-style: dashed; border-color: var(--piano-blue); }
+.piano-research-lattice-cell.is-sounding { box-shadow: inset 0 0 0 3px #f5f2ec; }
+.piano-research-lattice-cell.is-latest { color: #090b10; border-color: var(--piano-gold); background: var(--piano-gold); box-shadow: none; }
+.piano-research-lattice-cell span { color: var(--piano-blue); font-family: var(--font-mono), monospace; font-size: .66rem; }
+.piano-research-lattice-cell.is-latest span { color: #30343d; }
+.piano-research-lattice-cell strong { font-family: var(--font-display), Georgia, serif; font-size: 1.1rem; font-weight: 400; }
+.piano-research-lattice-cell small { color: #909bad; font-size: .61rem; line-height: 1.35; }
+.piano-research-lattice-cell.is-latest small { color: #30343d; }
+.piano-research-lattice-reading { max-width: 82ch; margin: 0 auto; color: #aab4c6; font-size: .69rem; line-height: 1.55; text-align: center; }
+
+.piano-research-matrix-layout { display: grid; gap: 13px; min-width: 0; padding: clamp(24px, 4vw, 48px) clamp(12px, 4vw, 52px); }
+.piano-research-matrix-axis { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: baseline; justify-content: space-between; }
+.piano-research-matrix-axis strong { color: var(--piano-blue); font-family: var(--font-mono), monospace; font-size: .71rem; font-weight: 500; }
+.piano-research-matrix-axis span { color: #909bad; font-size: .62rem; }
+.piano-research-matrix { width: min(100%, 960px); margin: 0 auto; border-collapse: collapse; table-layout: fixed; color: #f5f2ec; font-family: var(--font-mono), monospace; font-size: .68rem; text-align: center; }
+.piano-research-matrix th,
+.piano-research-matrix td { height: clamp(22px, 3.2vw, 38px); padding: 2px 1px; border: 1px solid rgba(225, 232, 246, .14); }
+.piano-research-matrix th { color: var(--piano-blue); background: rgba(112, 213, 223, .06); font-size: .61rem; font-weight: 500; }
+.piano-research-matrix td { background: rgba(9, 13, 22, .65); }
+.piano-research-matrix td.is-latest-pair { color: #090b10; outline: 2px solid #f5f2ec; outline-offset: -3px; background: var(--piano-gold); }
+.piano-research-matrix-layout > p { max-width: 82ch; margin: 0 auto; color: #aab4c6; font-size: .68rem; line-height: 1.55; text-align: center; }
+
+.piano-research-boundaries { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid rgba(225, 232, 246, .16); background: rgba(5, 7, 12, .74); }
+.piano-research-boundaries > div { display: grid; gap: 5px; min-width: 0; padding: 15px clamp(20px, 4vw, 52px); }
+.piano-research-boundaries > div + div { border-left: 1px solid rgba(225, 232, 246, .16); }
+.piano-research-boundaries strong { font-size: .68rem; font-weight: 500; line-height: 1.48; }
+.piano-research-boundaries > p,
+.piano-research-boundaries > small { grid-column: 1 / -1; margin: 0; padding: 13px clamp(20px, 4vw, 52px); border-top: 1px solid rgba(225, 232, 246, .14); color: #aab4c6; font-size: .65rem; line-height: 1.55; }
+.piano-research-boundaries b { color: #f5f2ec; font-weight: 600; }
+.piano-research-boundaries code { color: var(--piano-gold); font-family: var(--font-mono), monospace; }
+.piano-research-boundaries > small { color: #8793a6; }
+
+@media (max-width: 900px) {
+  .piano-research-intro { align-items: stretch; flex-direction: column; }
+  .piano-research-context { width: 100%; min-width: 0; }
+  .piano-research-context > div { grid-template-columns: 100px minmax(0, 1fr); }
+  .piano-research-clock-layout { grid-template-columns: 1fr; }
+  .piano-research-transition { border-top: 1px solid rgba(225, 232, 246, .16); border-left: 0; }
+}
+
+@media (max-width: 620px) {
+  .piano-research-intro { gap: 18px; padding-top: 22px; }
+  .piano-research-layout-controls button { padding: 11px 9px; text-align: center; }
+  .piano-research-layout-controls span { display: none; }
+  .piano-research-generator-control { align-items: stretch; }
+  .piano-research-generator-control label { flex-basis: 100%; min-width: 0; }
+  .piano-research-generator-control > div { width: 100%; text-align: left; }
+  .piano-research-clock-figure { padding-right: 0; padding-left: 0; }
+  .piano-research-map-key { padding: 0 14px; }
+  .piano-research-lattice-layout { padding-right: 14px; padding-left: 14px; }
+  .piano-research-lattice { gap: 7px; }
+  .piano-research-lattice-cell { min-height: 82px; padding: 8px 4px; }
+  .piano-research-lattice-cell strong { font-size: .9rem; }
+  .piano-research-lattice-cell small { font-size: .56rem; }
+  .piano-research-matrix-layout { padding-right: 5px; padding-left: 5px; }
+  .piano-research-matrix { font-size: .61rem; }
+  .piano-research-matrix th { font-size: .55rem; }
+  .piano-research-boundaries { grid-template-columns: 1fr; }
+  .piano-research-boundaries > div + div { border-top: 1px solid rgba(225, 232, 246, .16); border-left: 0; }
+}
+
+@media (forced-colors: active) {
+  .piano-research-hud,
+  .piano-research-layout-controls button,
+  .piano-research-generator-control,
+  .piano-research-transition,
+  .piano-research-lattice-cell,
+  .piano-research-matrix th,
+  .piano-research-matrix td,
+  .piano-research-boundaries { color: CanvasText; background: Canvas; }
+  .piano-research-layout-controls button[aria-pressed="true"],
+  .piano-research-lattice-cell.is-latest,
+  .piano-research-matrix td.is-latest-pair { color: HighlightText; border-color: Highlight; background: Highlight; }
+  .piano-research-clock-ring,
+  .piano-research-clock-tick { stroke: CanvasText; }
+  .piano-research-orbit { stroke: LinkText; }
+  .piano-research-field-shape { fill: Canvas; stroke: Highlight; }
+  .piano-research-clock-node circle { fill: Canvas; stroke: CanvasText; }
+  .piano-research-clock-node.is-recent circle { stroke: LinkText; }
+  .piano-research-clock-node.is-sounding circle { stroke: CanvasText; }
+  .piano-research-clock-node.is-latest circle { fill: Highlight; stroke: HighlightText; }
+  .piano-research-clock-node text,
+  .piano-research-clock-center text,
+  .piano-research-clock-center text.is-value { fill: CanvasText; }
+  .piano-research-clock-node.is-latest text { fill: HighlightText; }
+  .piano-research-map-key i { border-color: CanvasText; background: Canvas; }
+  .piano-research-map-key i.is-latest { border-color: Highlight; background: Highlight; }
+  .piano-research-map-key i.is-recent { border-color: LinkText; }
+  .piano-research-map-key i.is-field { border-top-color: Highlight; }
+  .piano-research-lattice-cell.is-sounding { box-shadow: inset 0 0 0 3px CanvasText; }
+}
+
 .voice-lab { display: grid; min-width: 0; }
 .voice-lab-intro { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .7fr); gap: clamp(28px, 6vw, 86px); align-items: end; padding: clamp(28px, 4vw, 58px); border-bottom: 1px solid var(--line); }
 .voice-lab-intro > div { display: grid; gap: 11px; min-width: 0; }
