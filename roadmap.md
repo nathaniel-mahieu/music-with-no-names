@@ -1,7 +1,7 @@
 # Music With No Names — Development Roadmap
 
 Status: implementation underway
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 ## North star
 
@@ -573,6 +573,7 @@ Objective: introduce a piano as a silent, interactive translation of the existin
 - [x] **K2.6.89** Add Register-Aware Scale Fingering v2.03: derive the nearest selected-route octave from the recent played register; suggest left hand for an octave centered below middle C and right hand at or above it; display one compact ascending 1–5 strip with the crossing point for seven-, six-, and five-position routes; expose a complete text alternative; keep the heuristic visibly bounded by key layout, direction, hand size, and surrounding passage; and verify narrow and forced-color presentation.
 - [x] **K2.6.90** Add Shared Short HUD History v2.04: reduce the Immersion note wake from twenty-eight to twelve attacks; derive note marks, pitch-class visits, local center evidence, motif evidence, and chord groups from the same newest-twelve-attack slice; keep the four-membrane rendering cap separate from the shared evidence boundary; show the shared count in the HUD state bar; preserve the longer phrase for non-Immersion learning focuses; and verify deterministic aging, accessible disclosure, and production deployment.
 - [x] **K2.6.91** Add Research HUD v2.05 as a separate Piano focus over the same movable Do, selected route, live MIDI field, and newest-twelve-attack history: make the fixed chromatic clock primary so adjacent positions always mean one semitone; overlay repeated `+1` through `+7 (mod 12)` generator paths without moving nodes; compare a `+3`/`+4` thirds lattice and complete directed all-pairs interval matrix; state what each projection preserves and folds away; define fifths distance only as repeated `+7` steps rather than affinity, consonance, function, resolution, emotion, or value; retain the 12-TET/MIDI-reference boundary; and verify modular geometry, state continuity, accessibility, responsive layout, and production deployment.
+- [x] **K2.6.92** Add practitioner-derived Scale Gravity HUD v2.06 as a separate Piano focus over the shared movable Do, live MIDI field, and newest-twelve-attack history: make a thirteen-slot semitone runway from Do through its octave copy primary; pin one major degree while IV, V, and I change its exact interval and triad role; keep exact 12-TET structure, style-bound common-practice tendencies, and subjective listening prompts visibly separate; show the newest five unfolded physical key moves; re-home the unchanged diatonic collection through all seven modes without changing the shared Do or claiming a heard tonic; state the cultural and mathematical limits of the major frame; preserve native keyboard controls, non-color state redundancy, responsive reflow, and forced-color support; and record the private practitioner elicitation as paraphrased design input rather than empirical validation or retained project data.
 
 Exit gate:
 

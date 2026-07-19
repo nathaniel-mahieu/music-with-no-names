@@ -4,7 +4,9 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Research HUD v2.05**. It provides:
+The current milestone is **Scale Gravity HUD v2.06**. It provides:
+
+- A separate Scale Gravity HUD that turns a practitioner-described choir exercise into a transposable ear-training landscape. A thirteen-slot runway keeps every semitone from Do through its octave copy visible, marks the major-scale locations and one-semitone seams, and follows the newest five physical key moves. Pinning one degree while IV, V, and I move beneath it exposes exact interval and triad membership beside—but never merged with—common-practice tendency language and subjective listening prompts. A local mode control re-hears the same seven pitches from each possible home without moving the pitches or the app's selected Do, while stating that emphasis, bass, duration, repetition, or cadence must establish a heard home. The display treats the major scale as one productive coordinate for diatonic Western tonal practice, not a universal basis for music, and does not turn “gravity,” color, or arrival into a ratio-derived score.
 
 - A separate Research HUD beside Immersion that reuses the same movable Do, selected route, live MIDI field, and newest-twelve-attack history while comparing three complementary arrangements of all twelve semitone positions. The fixed chromatic clock makes one geometric step equal one semitone and can overlay any repeated `+1` through `+7 (mod 12)` generator; the `+7` overlay is the circle-of-fifths path. A `+3`/`+4` thirds lattice exposes minor-third, major-third, and diagonal fifth relationships locally, while an all-pairs matrix states every directed pitch-class interval without privileging one generator. These are 12-TET/MIDI pitch-class references: they fold away register, voicing, tuning, spectrum, timing, and context. Fifths-path distance counts repeated `+7` steps—not generic note affinity, consonance, harmonic function, emotional meaning, or musical value.
 

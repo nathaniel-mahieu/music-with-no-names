@@ -11,22 +11,25 @@ test("every learning lab exposes a named semantic region", async () => {
   }
 });
 
-test("immersive and research piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
-  const [piano, immersion, research, voiceLab, vocal, model, researchModel, vocalModel, css] = await Promise.all([
+test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
+  const [piano, immersion, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoResearchHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoScaleGravityHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/VoiceLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/VocalPitchCoach.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-immersion-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-research-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-scale-gravity-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vocal-pitch-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
   assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
+  assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "research"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(piano, /pulseMirror=\{pulseMirrorModel\}/);
   assert.match(piano, /<details className="piano-immersion-keyboard">/);
   assert.doesNotMatch(piano, /VocalPitchCoach/);
@@ -181,6 +184,38 @@ test("immersive and research piano HUDs plus vocal pitch match keep visual chann
   assert.match(research, /pure 3:2 fifths do not close exactly after twelve steps/);
   assert.match(research, /do not measure acoustic pitch, piano tuning, overtones, loudness, or listening experience/);
   assert.doesNotMatch(research, /tabIndex=\{?[1-9]/);
+  assert.match(gravity, /<section className="piano-scale-gravity-hud" aria-labelledby="piano-scale-gravity-title">/);
+  assert.match(gravity, /A composer’s choir warm-up becomes a live map/);
+  assert.match(gravity, /className="piano-scale-gravity-slots" role="group"/);
+  assert.match(gravity, /Array\.from\(\{ length: 13 \}/);
+  assert.match(gravity, /className="piano-scale-gravity-degree-picker" role="group"/);
+  assert.match(gravity, /aria-pressed=\{pinnedDegree === node\.degree\}/);
+  assert.match(gravity, /This runway is an exact physical window from selected Do to Do′/);
+  assert.match(gravity, /latestWindowOffset === offset/);
+  assert.match(gravity, /latest captured field matched/);
+  assert.match(gravity, /Equally nearest triad tones/);
+  assert.match(gravity, /className="piano-scale-gravity-contexts" role="group"/);
+  assert.match(gravity, /Exact structure/);
+  assert.match(gravity, /Style-bound tendency/);
+  assert.match(gravity, /Listening prompt/);
+  assert.match(gravity, /id="piano-scale-gravity-mode-home"/);
+  assert.match(gravity, /This moves a listening frame, not the pitches or the app’s selected Do/);
+  assert.match(gravity, /not the basis of all music/);
+  assert.match(gravity, /Natural minor is its sixth rotation/);
+  assert.match(gravity, /floating or pastel[\s\S]*listening prompt/);
+  assert.doesNotMatch(gravity, /tabIndex=\{?[1-9]/);
+  assert.match(gravityModel, /MAJOR_SCALE_OFFSETS = \[0, 2, 4, 5, 7, 9, 11\]/);
+  assert.match(gravityModel, /MAJOR_SCALE_STEPS = \[2, 2, 1, 2, 2, 2, 1\]/);
+  assert.match(gravityModel, /export function majorDegreeHarmonyReading/);
+  assert.match(gravityModel, /export function physicalScaleGravityWindowOffset/);
+  assert.match(gravityModel, /export function recognizeMajorHarmonyContext/);
+  assert.match(gravityModel, /export function rotateMajorMode/);
+  assert.match(css, /\.piano-scale-gravity-slots[\s\S]*grid-template-columns: repeat\(13, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-scale-gravity-intro/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-slots/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-degree-picker[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-scale-gravity-hud/);
+  assert.match(css, /\.piano-focus-lenses[\s\S]*repeat\(10, minmax\(0, 1fr\)\)/);
   assert.match(model, /IMMERSION_HISTORY_ATTACKS = 12/);
   assert.match(model, /export function immersionHistory[\s\S]*slice\(-IMMERSION_HISTORY_ATTACKS\)/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
