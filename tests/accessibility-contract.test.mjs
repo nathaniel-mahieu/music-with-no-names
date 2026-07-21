@@ -240,7 +240,11 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(vocal, /id="voice-interval"/);
   assert.match(vocal, /id="voice-input-level"/);
   assert.match(vocal, /Microphone input activity/);
-  assert.match(vocal, /signal present · below pitch threshold/);
+  assert.match(vocal, /voice is very quiet · move closer/);
+  assert.match(vocal, /voice heard · hold one vowel steady/);
+  assert.match(vocal, /pitch detected/);
+  assert.match(vocal, /activeInputLabel/);
+  assert.match(vocalModel, /VOCAL_INPUT_MINIMUM_RMS = 0\.0015/);
   assert.match(vocal, /Start microphone/);
   assert.match(vocal, /Stop microphone/);
   assert.match(vocal, /Hear anchor → target/);

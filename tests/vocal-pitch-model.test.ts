@@ -23,11 +23,16 @@ test("detects a monophonic sung-frequency fixture without choosing its stronger 
   const harmonic = detectVocalFundamental(sine(196, 48_000, 4096, 0.42), 48_000);
   assert.ok(harmonic);
   assert.ok(Math.abs(harmonic.frequencyHz - 196) < 1.2);
+
+  const quietBuiltInMicrophone = sine(185, 48_000, 4096, 0.18).map((sample) => sample * 0.004);
+  const quiet = detectVocalFundamental(quietBuiltInMicrophone, 48_000);
+  assert.ok(quiet);
+  assert.ok(Math.abs(quiet.frequencyHz - 185) < 1.2);
 });
 
 test("withholds pitch for silence, weak input, malformed windows, and noise-like alternation", () => {
   assert.equal(detectVocalFundamental(new Float32Array(4096), 48_000), null);
-  assert.equal(detectVocalFundamental(sine(220).map((sample) => sample * 0.001), 48_000), null);
+  assert.equal(detectVocalFundamental(sine(220).map((sample) => sample * 0.0005), 48_000), null);
   assert.equal(detectVocalFundamental(new Float32Array(120), 48_000), null);
   const alternating = Float32Array.from({ length: 4096 }, (_, index) => index % 2 ? 0.3 : -0.3);
   assert.equal(detectVocalFundamental(alternating, 48_000), null);

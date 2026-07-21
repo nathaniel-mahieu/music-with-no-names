@@ -20,6 +20,11 @@ export type VocalPitchMatch = {
   frequencyDifferenceHz: number;
 };
 
+// Browser microphone levels vary widely. A quiet built-in microphone can
+// deliver a clean sung vowel below 0.008 RMS, so periodicity—not volume alone—
+// remains the final gate once a small but usable signal is present.
+export const VOCAL_INPUT_MINIMUM_RMS = 0.0015;
+
 export const VOCAL_INTERVAL_NAMES = [
   "unison",
   "nearest-key step",
@@ -72,7 +77,7 @@ export function detectVocalFundamental(
   const sampleRate = Number.isFinite(sampleRateInput) ? clamp(sampleRateInput, 8_000, 192_000) : 48_000;
   const minimumHz = clamp(options.minimumHz ?? 65, 40, 600);
   const maximumHz = clamp(options.maximumHz ?? 1_000, minimumHz + 1, 2_400);
-  const minimumRms = clamp(options.minimumRms ?? 0.008, 0.0001, 1);
+  const minimumRms = clamp(options.minimumRms ?? VOCAL_INPUT_MINIMUM_RMS, 0.0001, 1);
   const threshold = clamp(options.threshold ?? 0.13, 0.02, 0.5);
   if (!(samplesInput instanceof Float32Array) || samplesInput.length < 256) return null;
 

@@ -9,6 +9,7 @@ import {
 import {
   detectVocalFundamental,
   matchVocalPitch,
+  VOCAL_INPUT_MINIMUM_RMS,
   vocalIntervalLabel,
   vocalReferenceFrequency,
   type VocalPitchDetection,
@@ -23,6 +24,10 @@ type VocalPitchCoachProps = {
 };
 
 type MicrophoneState = "idle" | "requesting" | "listening" | "denied" | "unsupported" | "error";
+
+type AudioContextWindow = Window & typeof globalThis & {
+  webkitAudioContext?: typeof AudioContext;
+};
 
 const VOCAL_INTERVAL_TARGETS = Array.from({ length: 25 }, (_, index) => index - 12);
 
@@ -61,6 +66,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const [intervalSemitones, setIntervalSemitones] = useState(0);
   const [detection, setDetection] = useState<VocalPitchDetection | null>(null);
   const [inputLevel, setInputLevel] = useState(0);
+  const [activeInputLabel, setActiveInputLabel] = useState("");
   const [previewNotice, setPreviewNotice] = useState("Reference is silent until you choose to hear it.");
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
@@ -95,8 +101,20 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       ? `${signedCents(pitchMatch.targetCents)} · ${pitchMatch.targetCents < -0.5 ? "below" : pitchMatch.targetCents > 0.5 ? "above" : "at"} target`
       : `${signedSemitoneStep(pitchMatch.nearestTargetStep)} from target · ${signedCents(pitchMatch.targetFineCents)} from that neighboring key`;
   const microphoneStatusCopy = microphoneState === "listening"
-    ? "Listening locally · live pitch updates appear above"
-    : microphoneNotice;
+    ? detection
+      ? "Pitch detected · keep the vowel steady"
+      : inputLevel >= VOCAL_INPUT_MINIMUM_RMS
+        ? "Voice signal detected · finding a stable pitch"
+        : "Listening locally · waiting for your voice"
+    : microphoneState === "requesting"
+      ? "Opening your microphone"
+      : microphoneState === "denied"
+        ? "Microphone access is blocked"
+        : microphoneState === "unsupported"
+          ? "Microphone analysis is unavailable"
+          : microphoneState === "error"
+            ? "Microphone could not start"
+            : "Microphone is off";
   const visualSummary = pitchMatch
     ? `Sung fundamental estimate ${pitchMatch.detectedFrequencyHz.toFixed(1)} hertz, nearest A4 equals 440 piano reference ${sungLabel} at ${pitchMatch.nearestReferenceHz.toFixed(1)} hertz, ${signedCents(pitchMatch.nearestCents)} from that key. Declared target ${targetLabel} at ${pitchMatch.targetReferenceHz.toFixed(1)} hertz. Voice is ${targetDistanceCopy}.`
     : `Voice pitch meter waiting. Declared target ${targetLabel} at ${targetReferenceHz.toFixed(1)} hertz from ${anchorSource === "latest-piano-attack" ? "the latest piano attack" : anchorSource === "voice-lab-reference" ? "the chosen Voice reference" : "selected Do"} plus ${intervalSemitones} semitones.`;
@@ -106,7 +124,12 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     analysisTimerRef.current = null;
     analyserRef.current?.disconnect();
     analyserRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current?.getTracks().forEach((track) => {
+      track.onmute = null;
+      track.onunmute = null;
+      track.onended = null;
+      track.stop();
+    });
     streamRef.current = null;
     const context = contextRef.current;
     contextRef.current = null;
@@ -119,12 +142,14 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     disposeMicrophoneResources();
     setDetection(null);
     setInputLevel(0);
+    setActiveInputLabel("");
     setMicrophoneState("idle");
     setMicrophoneNotice("Microphone stopped. No audio or pitch history was retained.");
   }, [disposeMicrophoneResources]);
 
   const startMicrophone = useCallback(async () => {
-    if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext) {
+    const AudioContextConstructor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
+    if (!navigator.mediaDevices?.getUserMedia || !AudioContextConstructor) {
       setMicrophoneState("unsupported");
       setMicrophoneNotice("This browser does not expose local microphone analysis.");
       return;
@@ -132,22 +157,24 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     disposeMicrophoneResources();
     setDetection(null);
     setInputLevel(0);
+    setActiveInputLabel("");
     setMicrophoneState("requesting");
     setMicrophoneNotice("Waiting for microphone permission…");
     let context: AudioContext | null = null;
     let stream: MediaStream | null = null;
     try {
-      context = new window.AudioContext({ latencyHint: "interactive" });
+      context = new AudioContextConstructor({ latencyHint: "interactive" });
       await context.resume();
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          channelCount: 1,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
+          channelCount: { ideal: 1 },
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: true },
         },
         video: false,
       });
+      await context.resume();
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
       analyser.fftSize = 4096;
@@ -156,12 +183,29 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       streamRef.current = stream;
       contextRef.current = context;
       analyserRef.current = analyser;
+      const inputTrack = stream.getAudioTracks()[0];
+      setActiveInputLabel(inputTrack?.label || "browser-selected microphone");
+      if (inputTrack) {
+        inputTrack.onmute = () => {
+          setDetection(null);
+          setInputLevel(0);
+          setMicrophoneNotice("The selected microphone stopped sending samples. Check the browser's input choice or reconnect the device.");
+        };
+        inputTrack.onunmute = () => setMicrophoneNotice("Microphone input resumed. Hold one steady vowel.");
+        inputTrack.onended = () => {
+          setDetection(null);
+          setInputLevel(0);
+          setMicrophoneState("error");
+          setMicrophoneNotice("The selected microphone disconnected. Reconnect it, then start the microphone again.");
+        };
+      }
       const samples = new Float32Array(analyser.fftSize);
       analysisTimerRef.current = window.setInterval(() => {
         if (performance.now() < ignoreMicrophoneUntilRef.current) return;
         const activeAnalyser = analyserRef.current;
         const activeContext = contextRef.current;
         if (!activeAnalyser || !activeContext || activeContext.state === "closed") return;
+        if (activeContext.state === "suspended") void activeContext.resume();
         activeAnalyser.getFloatTimeDomainData(samples);
         let energy = 0;
         for (const sample of samples) energy += sample * sample;
@@ -185,7 +229,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         setDetection({ ...next, frequencyHz: smoothedFrequency });
       }, 80);
       setMicrophoneState("listening");
-      setMicrophoneNotice("Listening locally. Sing one steady vowel; no audio is recorded or uploaded.");
+      setMicrophoneNotice("Listening locally. Start with an ‘ah’ near the chosen target and hold it for about one second.");
     } catch (error) {
       if (analysisTimerRef.current != null) window.clearInterval(analysisTimerRef.current);
       analysisTimerRef.current = null;
@@ -197,12 +241,14 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       const denied = error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError");
       setMicrophoneState(denied ? "denied" : "error");
       setInputLevel(0);
-      setMicrophoneNotice(denied ? "Microphone permission was not granted. You can try again when ready." : "The microphone could not start. Check the selected input and browser audio settings.");
+      setActiveInputLabel("");
+      setMicrophoneNotice(denied ? "Allow microphone access for this site in your browser's address-bar settings, then try again." : "The microphone could not start. Check the browser's selected input, then try again.");
     }
   }, [disposeMicrophoneResources]);
 
   const hearInterval = useCallback(async () => {
-    if (!window.AudioContext) {
+    const AudioContextConstructor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
+    if (!AudioContextConstructor) {
       setPreviewNotice("Reference playback is unavailable in this browser.");
       return;
     }
@@ -210,7 +256,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     const priorContext = previewContextRef.current;
     if (priorContext && priorContext.state !== "closed") void priorContext.close();
     try {
-      const context = new window.AudioContext({ latencyHint: "interactive" });
+      const context = new AudioContextConstructor({ latencyHint: "interactive" });
       previewContextRef.current = context;
       await context.resume();
       const startsAt = context.currentTime + 0.035;
@@ -251,16 +297,16 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     </div>
 
     <div className="piano-voice-input">
-      <label htmlFor="voice-input-level"><span>Microphone input activity</span><meter id="voice-input-level" min={0} max={0.08} low={0.008} high={0.04} optimum={0.02} value={Math.min(0.08, inputLevel)}>{Math.round(inputLevel * 1000) / 10}% RMS</meter></label>
-      <strong>{microphoneState !== "listening" ? "microphone off" : inputLevel < 0.003 ? "very quiet" : inputLevel < 0.008 ? "signal present · below pitch threshold" : "signal present · checking periodicity"}</strong>
-      <small>This level confirms that samples are arriving; it is not calibrated loudness or a singing-quality score.</small>
+      <label htmlFor="voice-input-level"><span>Microphone input activity</span><meter id="voice-input-level" min={0} max={0.03} low={VOCAL_INPUT_MINIMUM_RMS} high={0.015} optimum={0.008} value={Math.min(0.03, inputLevel)}>{Math.round(inputLevel * 10_000) / 100}% RMS</meter></label>
+      <strong>{microphoneState !== "listening" ? "microphone off" : detection ? "pitch detected" : inputLevel < 0.0004 ? "no input yet" : inputLevel < VOCAL_INPUT_MINIMUM_RMS ? "voice is very quiet · move closer" : "voice heard · hold one vowel steady"}</strong>
+      <small>{activeInputLabel ? `Using ${activeInputLabel}. ` : ""}The level only confirms that samples are arriving; it is not a singing-quality score.</small>
     </div>
 
     <div className="piano-voice-reading">
       <div className="piano-voice-detected">
         <span>Live sung estimate</span>
         <strong>{pitchMatch ? `${sungLabel} · ${formatHz(pitchMatch.detectedFrequencyHz)}` : "—"}</strong>
-        <small>{pitchMatch && detection ? `nearest piano reference ${formatHz(pitchMatch.nearestReferenceHz)} · ${signedCents(pitchMatch.nearestCents)} · clarity ${Math.round(detection.clarity * 100)}%` : microphoneState === "listening" ? "Hold one vowel steadily; noise and polyphony are withheld." : "Start the microphone when you are ready to sing."}</small>
+        <small>{pitchMatch && detection ? `nearest piano reference ${formatHz(pitchMatch.nearestReferenceHz)} · ${signedCents(pitchMatch.nearestCents)} · clarity ${Math.round(detection.clarity * 100)}%` : microphoneState === "listening" && inputLevel >= VOCAL_INPUT_MINIMUM_RMS ? "Your voice is arriving. Hold an ‘ah’ steadily for about one second; breath noise and changing pitch are withheld." : microphoneState === "listening" ? "Sing closer to the microphone and watch the input activity move." : "Start the microphone when you are ready to sing."}</small>
       </div>
       <div className="piano-voice-distance">
         <span>Distance from target</span>
