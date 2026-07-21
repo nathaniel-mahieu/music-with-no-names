@@ -25,11 +25,17 @@ type VocalPitchCoachProps = {
 
 type MicrophoneState = "idle" | "requesting" | "listening" | "denied" | "unsupported" | "error";
 
+type MicrophoneInput = {
+  deviceId: string;
+  label: string;
+};
+
 type AudioContextWindow = Window & typeof globalThis & {
   webkitAudioContext?: typeof AudioContext;
 };
 
 const VOCAL_INTERVAL_TARGETS = Array.from({ length: 25 }, (_, index) => index - 12);
+const DEFAULT_MICROPHONE_ID = "default";
 
 function formatHz(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
@@ -67,6 +73,8 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const [detection, setDetection] = useState<VocalPitchDetection | null>(null);
   const [inputLevel, setInputLevel] = useState(0);
   const [activeInputLabel, setActiveInputLabel] = useState("");
+  const [microphoneInputs, setMicrophoneInputs] = useState<MicrophoneInput[]>([]);
+  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState(DEFAULT_MICROPHONE_ID);
   const [previewNotice, setPreviewNotice] = useState("Reference is silent until you choose to hear it.");
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
@@ -138,6 +146,26 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     missingFramesRef.current = 0;
   }, []);
 
+  const refreshMicrophoneInputs = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices
+        .filter((device) => device.kind === "audioinput" && Boolean(device.deviceId) && device.deviceId !== DEFAULT_MICROPHONE_ID)
+        .map((device, index) => ({
+          deviceId: device.deviceId,
+          label: device.label || `Microphone ${index + 1}`,
+        }));
+      setMicrophoneInputs(inputs);
+      setSelectedMicrophoneId((current) => current === DEFAULT_MICROPHONE_ID || inputs.some((input) => input.deviceId === current)
+        ? current
+        : DEFAULT_MICROPHONE_ID);
+    } catch {
+      // The default input remains available even when a browser withholds the
+      // device list. Permission errors are handled by startMicrophone.
+    }
+  }, []);
+
   const stopMicrophone = useCallback(() => {
     disposeMicrophoneResources();
     setDetection(null);
@@ -147,7 +175,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     setMicrophoneNotice("Microphone stopped. No audio or pitch history was retained.");
   }, [disposeMicrophoneResources]);
 
-  const startMicrophone = useCallback(async () => {
+  const startMicrophone = useCallback(async (microphoneId = selectedMicrophoneId) => {
     const AudioContextConstructor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
     if (!navigator.mediaDevices?.getUserMedia || !AudioContextConstructor) {
       setMicrophoneState("unsupported");
@@ -171,6 +199,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
           echoCancellation: { ideal: false },
           noiseSuppression: { ideal: false },
           autoGainControl: { ideal: true },
+          ...(microphoneId === DEFAULT_MICROPHONE_ID ? {} : { deviceId: { exact: microphoneId } }),
         },
         video: false,
       });
@@ -185,6 +214,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       analyserRef.current = analyser;
       const inputTrack = stream.getAudioTracks()[0];
       setActiveInputLabel(inputTrack?.label || "browser-selected microphone");
+      void refreshMicrophoneInputs();
       if (inputTrack) {
         inputTrack.onmute = () => {
           setDetection(null);
@@ -195,8 +225,10 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         inputTrack.onended = () => {
           setDetection(null);
           setInputLevel(0);
+          setSelectedMicrophoneId(DEFAULT_MICROPHONE_ID);
           setMicrophoneState("error");
           setMicrophoneNotice("The selected microphone disconnected. Reconnect it, then start the microphone again.");
+          void refreshMicrophoneInputs();
         };
       }
       const samples = new Float32Array(analyser.fftSize);
@@ -229,7 +261,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         setDetection({ ...next, frequencyHz: smoothedFrequency });
       }, 80);
       setMicrophoneState("listening");
-      setMicrophoneNotice("Listening locally. Start with an ‘ah’ near the chosen target and hold it for about one second.");
+      setMicrophoneNotice(`Listening locally through ${inputTrack?.label || "the browser-selected microphone"}. Hold an ‘ah’ near the target for about one second.`);
     } catch (error) {
       if (analysisTimerRef.current != null) window.clearInterval(analysisTimerRef.current);
       analysisTimerRef.current = null;
@@ -239,12 +271,21 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       contextRef.current = null;
       analyserRef.current = null;
       const denied = error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError");
+      const unavailable = error instanceof DOMException && (error.name === "NotFoundError" || error.name === "OverconstrainedError");
+      if (unavailable) {
+        setSelectedMicrophoneId(DEFAULT_MICROPHONE_ID);
+        void refreshMicrophoneInputs();
+      }
       setMicrophoneState(denied ? "denied" : "error");
       setInputLevel(0);
       setActiveInputLabel("");
-      setMicrophoneNotice(denied ? "Allow microphone access for this site in your browser's address-bar settings, then try again." : "The microphone could not start. Check the browser's selected input, then try again.");
+      setMicrophoneNotice(denied
+        ? "Allow microphone access for this site in your browser's address-bar settings, then try again."
+        : unavailable
+          ? "That microphone is no longer available. System default is selected; start the microphone again."
+          : "The microphone could not start. Check the browser's selected input, then try again.");
     }
-  }, [disposeMicrophoneResources]);
+  }, [disposeMicrophoneResources, refreshMicrophoneInputs, selectedMicrophoneId]);
 
   const hearInterval = useCallback(async () => {
     const AudioContextConstructor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
@@ -281,11 +322,26 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     if (context && context.state !== "closed") void context.close();
   }, [disposeMicrophoneResources]);
 
+  useEffect(() => {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) return;
+    const handleDeviceChange = () => {
+      if (streamRef.current) void refreshMicrophoneInputs();
+    };
+    mediaDevices.addEventListener("devicechange", handleDeviceChange);
+    return () => mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+  }, [refreshMicrophoneInputs]);
+
   return <section className={`piano-voice-coach ${targetDistanceClass}`} aria-labelledby="voice-coach-title">
     <header>
       <div><span>Voice match · local microphone</span><strong id="voice-coach-title">Sing the interval in semitones</strong><small>One monophonic fundamental estimate · no recording · no upload</small></div>
       <div className="piano-voice-actions">
-        <button type="button" aria-pressed={microphoneState === "listening"} disabled={microphoneState === "requesting"} onClick={microphoneState === "listening" ? stopMicrophone : () => void startMicrophone()}>{microphoneState === "requesting" ? "Waiting for permission…" : microphoneState === "listening" ? "Stop microphone" : "Start microphone"}</button>
+        <label className="piano-voice-source" htmlFor="voice-input-source"><span>Microphone source</span><select id="voice-input-source" value={selectedMicrophoneId} disabled={microphoneState === "requesting"} onChange={(event) => {
+          const microphoneId = event.target.value;
+          setSelectedMicrophoneId(microphoneId);
+          if (microphoneState === "listening") void startMicrophone(microphoneId);
+        }}><option value={DEFAULT_MICROPHONE_ID}>System default{selectedMicrophoneId === DEFAULT_MICROPHONE_ID && activeInputLabel ? ` · ${activeInputLabel}` : ""}</option>{microphoneInputs.map((input) => <option key={input.deviceId} value={input.deviceId}>{input.label}</option>)}</select></label>
+        <button type="button" aria-pressed={microphoneState === "listening"} disabled={microphoneState === "requesting"} onClick={microphoneState === "listening" ? stopMicrophone : () => void startMicrophone(selectedMicrophoneId)}>{microphoneState === "requesting" ? "Opening microphone…" : microphoneState === "listening" ? "Stop microphone" : "Start microphone"}</button>
         <button type="button" onClick={() => void hearInterval()}>{intervalSemitones === 0 ? "Hear target" : "Hear anchor → target"}</button>
       </div>
     </header>

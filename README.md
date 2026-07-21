@@ -4,7 +4,9 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Reliable Voice Input v2.07**. It provides:
+The current milestone is **Selectable Voice Input v2.08**. It provides:
+
+- A native microphone-source menu on the Voice page. It begins with the operating system's default input, reveals the browser-authorized microphones after access is granted, and switches the live analysis stream immediately when another source is chosen. The active device remains written beside the activity meter; disconnected selections fall safely back to the system default. Device names and identifiers remain tab-local and are never stored or uploaded.
 
 - A more sensitive voice-pitch path for quiet built-in microphones. Clean periodic vowels can now cross the detector at 0.0015 RMS instead of the former 0.008 RMS floor, while periodicity still rejects unpitched input. The browser may apply automatic input gain, the audio context is resumed again after permission, older Safari audio contexts are supported, and the page names the active microphone. Live states now distinguish no input, a very quiet signal, a voice awaiting stable pitch, and a detected pitch; microphone mute and disconnection receive actionable recovery copy.
 

@@ -9236,6 +9236,18 @@ footer a {
 .piano-voice-reading small,
 .piano-voice-coach > footer small { color: var(--muted); font-size: .65rem; line-height: 1.45; }
 .piano-voice-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.piano-voice-source { display: grid; min-width: min(260px, 100%); gap: 3px; }
+.piano-voice-source span { color: var(--muted); font-size: .64rem; letter-spacing: .07em; text-transform: uppercase; }
+.piano-voice-source select {
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  color: var(--foreground);
+  background: var(--surface-raised);
+  font: inherit;
+  font-size: .7rem;
+}
 .piano-voice-actions button {
   min-height: 34px;
   padding: 0 11px;
@@ -12182,6 +12194,7 @@ footer a {
 @media (forced-colors: active) {
   .piano-voice-coach,
   .piano-voice-controls select,
+  .piano-voice-source select,
   .piano-voice-actions button { color: CanvasText; border-color: CanvasText; background: Canvas; }
   .piano-voice-actions button[aria-pressed="true"] { color: HighlightText; border-color: Highlight; background: Highlight; }
   .piano-voice-rail > div,

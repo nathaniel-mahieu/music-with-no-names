@@ -239,6 +239,12 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(researchModel, /export function intervalMatrix/);
   assert.match(vocal, /id="voice-interval"/);
   assert.match(vocal, /id="voice-input-level"/);
+  assert.match(vocal, /id="voice-input-source"/);
+  assert.match(vocal, /Microphone source/);
+  assert.match(vocal, /System default/);
+  assert.match(vocal, /enumerateDevices/);
+  assert.match(vocal, /deviceId: \{ exact: microphoneId \}/);
+  assert.match(vocal, /addEventListener\("devicechange"/);
   assert.match(vocal, /Microphone input activity/);
   assert.match(vocal, /voice is very quiet · move closer/);
   assert.match(vocal, /voice heard · hold one vowel steady/);
@@ -259,6 +265,7 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(vocalModel, /export function detectVocalFundamental/);
   assert.match(vocalModel, /export function matchVocalPitch/);
   assert.match(vocalModel, /returns null for a[\s\S]*weak or insufficiently periodic window/);
+  assert.match(css, /\.piano-voice-source select/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
   assert.match(css, /\.piano-research-layout-controls \{[^}]*grid-template-columns: repeat\(3/);
   assert.match(css, /\.piano-research-lattice \{[^}]*grid-template-columns: repeat\(4/);
