@@ -12,7 +12,7 @@ test("every learning lab exposes a named semantic region", async () => {
 });
 
 test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
-  const [piano, immersion, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, css] = await Promise.all([
+  const [piano, immersion, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, vocalTrainingModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoResearchHud.tsx", import.meta.url), "utf8"),
@@ -24,6 +24,7 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
     readFile(new URL("../lib/piano-scale-gravity-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vocal-pitch-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vocal-spectrum-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/vocal-training-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
@@ -259,9 +260,18 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(vocal, /source\.connect\(analyser\)/);
   assert.match(vocal, /getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
   assert.doesNotMatch(vocal, /MediaRecorder|localStorage|sessionStorage|fetch\(/);
-  assert.match(vocal, /className="piano-voice-rail" role="img" aria-label=\{visualSummary\}/);
-  assert.match(vocal, /<b style=\{\{ left: `\$\{railPosition \* 100\}%` \}\} \/>/);
-  assert.doesNotMatch(vocal, /--voice-position/);
+  assert.match(vocal, /className="piano-voice-trace-frame" role="img" aria-label=\{pitchTraceSummary\}/);
+  assert.match(vocal, /Center the pitch\. Then steady the trail\./);
+  assert.match(vocal, /Hear target[\s\S]*Sing from memory[\s\S]*Check direction[\s\S]*Repeat without looking/);
+  assert.match(vocal, /\+1 st[\s\S]*higher[\s\S]*\+50¢[\s\S]*target[\s\S]*−50¢[\s\S]*−1 st[\s\S]*lower/);
+  assert.match(vocal, /VOCAL_TRAIL_DURATION_MS = 3_200/);
+  assert.match(vocal, /VOCAL_TRAIL_MAXIMUM_SAMPLES = 28/);
+  assert.match(vocal, /className="piano-voice-ear-readings"/);
+  assert.match(vocal, /Accuracy · pitch center/);
+  assert.match(vocal, /Clarity · can one pitch be tracked\?/);
+  assert.match(vocal, /Steadiness · recent trail width/);
+  assert.match(vocal, /<meter aria-label=\{`Detector periodicity/);
+  assert.match(vocal, /not tone quality, diction, or musical correctness/);
   assert.match(vocal, /className="piano-voice-spectrum-plot" role="img" aria-label=\{spectrumSummary\}/);
   assert.match(vocal, /<canvas ref=\{spectrumCanvasRef\} aria-hidden="true" \/>/);
   assert.match(vocal, /Voice energy × target harmonics/);
@@ -276,9 +286,17 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(vocalModel, /returns null for a[\s\S]*weak or insufficiently periodic window/);
   assert.match(vocalSpectrumModel, /export function vocalSpectrumPosition/);
   assert.match(vocalSpectrumModel, /export function vocalTargetHarmonics/);
+  assert.match(vocalTrainingModel, /export function vocalPitchLanePosition/);
+  assert.match(vocalTrainingModel, /export function vocalAccuracyReading/);
+  assert.match(vocalTrainingModel, /export function vocalClarityReading/);
+  assert.match(vocalTrainingModel, /export function vocalRecentPitchSpread/);
+  assert.match(vocalTrainingModel, /export function vocalEarTrainingCue/);
   assert.match(css, /\.piano-voice-source select/);
   assert.match(css, /\.piano-voice-spectrum-guides i \{ border-left: 1px dashed/);
   assert.match(css, /\.piano-voice-spectrum-guides b \{ border-left: 2px solid/);
+  assert.match(css, /\.piano-voice-trace-stage path\.is-fragile \{ stroke-dasharray/);
+  assert.match(css, /\.piano-voice-trace-stage path\.is-usable \{ stroke-dasharray/);
+  assert.match(css, /\.piano-voice-trace-stage path\.is-clear \{ stroke-dasharray/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
   assert.match(css, /\.piano-research-layout-controls \{[^}]*grid-template-columns: repeat\(3/);
   assert.match(css, /\.piano-research-lattice \{[^}]*grid-template-columns: repeat\(4/);
@@ -286,7 +304,7 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-research-clock-layout \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-research-boundaries \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-research-clock-node\.is-latest circle/);
-  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-voice-reading \{ grid-template-columns: 1fr 1fr/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-voice-ear-layout \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.voice-lab-reference \{ grid-template-columns: 1fr 1fr/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-route-selector \{ grid-template-columns: 1fr 1fr/);
   assert.match(css, /\.piano-do-capture button\[aria-pressed="true"\]/);
@@ -302,14 +320,14 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-scale-fingering/);
   assert.match(css, /\.piano-immersion-fingering \.is-finger-marker circle/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-reading \{ grid-template-columns: 1fr/);
-  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-voice-controls,[\s\S]*\.piano-voice-reading/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-voice-trace-frame \{ grid-template-columns: 58px minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.voice-lab-reference,[\s\S]*\.piano-voice-input \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-route-methods ol \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-edge-hud \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-lens\.is-scale \{ grid-column: 1; grid-row: auto/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-interval-context-bar > div \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-stage \* \{ filter: none/);
-  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-voice-rail b/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-voice-trace-stage path/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-voice-spectrum-guides i/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-route-selector select/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-do-capture button\[aria-pressed="true"\]/);

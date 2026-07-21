@@ -24,12 +24,12 @@ export function VoiceLab() {
       <div>
         <p className="section-kicker">Dedicated voice pitch practice · local microphone</p>
         <h2 id="voice-lab-title">Match one piano-key frequency with your voice.</h2>
-        <p>This page estimates sung pitch only—it does not recognize words. Choose a piano reference, start the microphone, and hold one steady vowel. The live spectrum shows what reaches the browser against ideal target harmonics; microphone audio stays in this tab and is never recorded or uploaded.</p>
+        <p>This page estimates sung pitch only—it does not recognize words. Choose a piano reference, hear it, sing from memory, and use the live map to decide whether to move higher, move lower, or stay. The spectrum and recent pitch trail remain local; microphone audio is never recorded or uploaded.</p>
       </div>
       <aside role="note">
-        <span>Four separate readings</span>
-        <strong>Input activity · frequency spectrum · periodic pitch estimate · distance from target</strong>
-        <p>If the spectrum moves but pitch stays blank, the microphone is working but the sound is not yet steady or periodic enough. Its tallest band may be a formant or upper harmonic—not the sung fundamental.</p>
+        <span>Three ear-training questions</span>
+        <strong>Is sound arriving? · where is its pitch center? · can one pitch be tracked steadily?</strong>
+        <p>Accuracy is distance from the target. Clarity is repeating-wave evidence. Steadiness is how narrowly the recent pitch stays grouped. None is a score for the voice.</p>
       </aside>
     </div>
 

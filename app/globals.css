@@ -9224,7 +9224,8 @@ footer a {
 .piano-voice-coach > header > div:first-child { display: grid; gap: 3px; min-width: 0; }
 .piano-voice-coach > header span,
 .piano-voice-controls span,
-.piano-voice-reading span {
+.piano-voice-ear-training span,
+.piano-voice-ear-readings span {
   color: var(--muted);
   font-size: .64rem;
   letter-spacing: .07em;
@@ -9233,7 +9234,7 @@ footer a {
 .piano-voice-coach > header strong { font-family: var(--font-display), Georgia, serif; font-size: 1.15rem; font-weight: 400; }
 .piano-voice-coach > header small,
 .piano-voice-controls small,
-.piano-voice-reading small,
+.piano-voice-ear-training small,
 .piano-voice-coach > footer small { color: var(--muted); font-size: .65rem; line-height: 1.45; }
 .piano-voice-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .piano-voice-source { display: grid; min-width: min(260px, 100%); gap: 3px; }
@@ -9296,23 +9297,64 @@ footer a {
 .piano-voice-spectrum > footer i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--piano-blue); }
 .piano-voice-spectrum > footer i.is-target { border-top: 1px dashed var(--piano-gold); }
 .piano-voice-spectrum > footer small { flex: 0 0 100%; min-width: 0; color: var(--muted); font-size: .7rem; }
-.piano-voice-reading { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(230px, 1fr) minmax(320px, 1.5fr); gap: 16px 24px; align-items: center; }
-.piano-voice-detected,
-.piano-voice-distance { display: grid; min-width: 0; gap: 3px; }
-.piano-voice-detected strong,
-.piano-voice-distance strong { font-size: .82rem; font-weight: 500; line-height: 1.35; }
-.piano-voice-distance strong { color: var(--voice-position-color); }
-.piano-voice-rail { display: grid; min-width: 0; gap: 4px; }
-.piano-voice-rail > div { position: relative; height: 26px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); background: linear-gradient(90deg, color-mix(in srgb, var(--piano-blue) 7%, transparent), transparent 48%, color-mix(in srgb, var(--piano-coral) 7%, transparent)); }
-.piano-voice-rail i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-strong); }
-.piano-voice-rail i:nth-child(1) { left: 10%; }
-.piano-voice-rail i:nth-child(2) { left: 30%; }
-.piano-voice-rail i:nth-child(3) { left: 50%; }
-.piano-voice-rail i:nth-child(4) { left: 70%; }
-.piano-voice-rail i:nth-child(5) { left: 90%; }
-.piano-voice-rail i.is-target { width: 2px; background: var(--piano-gold); }
-.piano-voice-rail b { position: absolute; top: 50%; width: 12px; height: 12px; border: 2px solid var(--surface-soft); border-radius: 50%; background: var(--voice-position-color); transform: translate(-50%, -50%); }
-.piano-voice-rail ol { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0; padding: 0; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .6rem; list-style: none; text-align: center; }
+.piano-voice-ear-training { display: grid; min-width: 0; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); }
+.piano-voice-ear-training > header { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: end; justify-content: space-between; }
+.piano-voice-ear-training > header > div { display: grid; gap: 2px; }
+.piano-voice-ear-training > header span { color: var(--muted); font-size: .7rem; letter-spacing: .07em; text-transform: uppercase; }
+.piano-voice-ear-training > header strong { font-family: var(--font-display), Georgia, serif; font-size: 1.15rem; font-weight: 400; }
+.piano-voice-ear-training > header ol { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; color: var(--muted); font-size: .7rem; list-style: none; }
+.piano-voice-ear-training > header li + li::before { content: "→"; margin-right: 16px; color: var(--piano-gold); }
+.piano-voice-ear-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(270px, .72fr); min-width: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.piano-voice-ear-layout figure { min-width: 0; margin: 0; padding: 14px 18px 12px 0; }
+.piano-voice-trace-frame { display: grid; grid-template-columns: 66px minmax(0, 1fr); gap: 8px; min-width: 0; }
+.piano-voice-trace-scale { position: relative; height: 210px; margin: 0; padding: 0; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .7rem; list-style: none; }
+.piano-voice-trace-scale li { position: absolute; right: 0; display: grid; justify-items: end; transform: translateY(-50%); white-space: nowrap; }
+.piano-voice-trace-scale li:nth-child(1) { top: 0; transform: none; }
+.piano-voice-trace-scale li:nth-child(2) { top: 25%; }
+.piano-voice-trace-scale li:nth-child(3) { top: 50%; color: var(--foreground); }
+.piano-voice-trace-scale li:nth-child(4) { top: 75%; }
+.piano-voice-trace-scale li:nth-child(5) { top: 100%; transform: translateY(-100%); }
+.piano-voice-trace-scale strong { font-size: .7rem; font-weight: 500; }
+.piano-voice-trace-scale small { font-size: .7rem; }
+.piano-voice-trace-stage { position: relative; height: 210px; min-width: 0; overflow: hidden; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); background: linear-gradient(180deg, color-mix(in srgb, var(--piano-coral) 5%, transparent), transparent 43%, color-mix(in srgb, var(--piano-blue) 5%, transparent)); }
+.piano-voice-trace-stage > i { position: absolute; right: 0; left: 0; display: block; pointer-events: none; }
+.piano-voice-trace-stage > i.is-target-neighborhood { top: 25%; height: 50%; background: color-mix(in srgb, var(--piano-gold) 12%, transparent); }
+.piano-voice-trace-stage > i.is-center-lane { top: 47.5%; height: 5%; background: color-mix(in srgb, var(--piano-gold) 28%, transparent); }
+.piano-voice-trace-stage > i.is-upper-boundary,
+.piano-voice-trace-stage > i.is-lower-boundary { border-top: 1px dashed var(--line-strong); }
+.piano-voice-trace-stage > i.is-upper-boundary { top: 25%; }
+.piano-voice-trace-stage > i.is-target-line { top: 50%; border-top: 2px solid var(--piano-gold); }
+.piano-voice-trace-stage > i.is-lower-boundary { top: 75%; }
+.piano-voice-trace-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.piano-voice-trace-stage path { fill: none; stroke: var(--voice-position-color); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.piano-voice-trace-stage path.is-fragile { stroke-dasharray: 1 6; }
+.piano-voice-trace-stage path.is-usable { stroke-dasharray: 6 5; }
+.piano-voice-trace-stage path.is-clear { stroke-dasharray: 16 4; }
+.piano-voice-trace-stage b { position: absolute; width: 7px; height: 7px; border: 1px solid var(--surface-soft); border-radius: 50%; transform: translate(-50%, -50%); }
+.piano-voice-trace-stage b.is-flat { background: var(--piano-blue); }
+.piano-voice-trace-stage b.is-centered { background: var(--piano-gold); }
+.piano-voice-trace-stage b.is-sharp { background: var(--piano-coral); }
+.piano-voice-trace-stage b.is-current { width: 13px; height: 13px; border-width: 2px; box-shadow: 0 0 0 1px var(--voice-position-color); }
+.piano-voice-trace-stage > em { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .7rem; font-style: normal; }
+.piano-voice-trace-stage > strong { position: absolute; right: 8px; color: var(--foreground); font-size: .7rem; font-weight: 500; }
+.piano-voice-trace-stage > strong.is-above { top: 7px; }
+.piano-voice-trace-stage > strong.is-below { bottom: 7px; }
+.piano-voice-trace-time { display: flex; justify-content: space-between; margin: 3px 0 0 74px; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .7rem; }
+.piano-voice-ear-layout figcaption { margin: 8px 0 0 74px; color: var(--muted); font-size: .7rem; line-height: 1.5; }
+.piano-voice-ear-readings { display: grid; min-width: 0; border-left: 1px solid var(--line); }
+.piano-voice-ear-readings span { font-size: .7rem; }
+.piano-voice-ear-readings p { display: grid; align-content: center; min-width: 0; gap: 4px; margin: 0; padding: 12px 16px; }
+.piano-voice-ear-readings p + p { border-top: 1px solid var(--line); }
+.piano-voice-ear-readings p.is-action { border-left: 3px solid var(--voice-position-color); background: color-mix(in srgb, var(--voice-position-color) 5%, transparent); }
+.piano-voice-ear-readings strong { color: var(--foreground); font-size: .8rem; font-weight: 500; line-height: 1.4; }
+.piano-voice-ear-readings p.is-action strong { color: var(--voice-position-color); font-family: var(--font-display), Georgia, serif; font-size: 1.05rem; font-weight: 400; }
+.piano-voice-ear-readings meter { width: 100%; height: 13px; appearance: none; border: 1px solid var(--line-strong); background: var(--surface-raised); accent-color: var(--voice-position-color); }
+.piano-voice-ear-readings meter::-webkit-meter-bar { border: 0; background: var(--surface-raised); }
+.piano-voice-ear-readings meter::-webkit-meter-optimum-value,
+.piano-voice-ear-readings meter::-webkit-meter-suboptimum-value,
+.piano-voice-ear-readings meter::-webkit-meter-even-less-good-value,
+.piano-voice-ear-readings meter::-moz-meter-bar { background: var(--voice-position-color); }
+.piano-voice-ear-readings small { color: var(--muted); font-size: .7rem; line-height: 1.5; }
 .piano-voice-coach > footer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 22px; align-items: start; }
 .piano-voice-coach > footer p { display: grid; gap: 2px; margin: 0; }
 .piano-voice-coach > footer p strong { font-size: .68rem; font-weight: 500; line-height: 1.4; }
@@ -11807,8 +11849,9 @@ footer a {
   .piano-voice-input > small { grid-column: 1 / -1; }
   .piano-voice-controls { grid-template-columns: 1fr 1fr; }
   .piano-voice-controls > *:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0; }
-  .piano-voice-reading { grid-template-columns: 1fr 1fr; }
-  .piano-voice-rail { grid-column: 1 / -1; }
+  .piano-voice-ear-layout { grid-template-columns: 1fr; }
+  .piano-voice-ear-layout figure { padding-right: 0; }
+  .piano-voice-ear-readings { border-top: 1px solid var(--line); border-left: 0; }
   .piano-immersion-intro { align-items: start; flex-direction: column; padding-top: 22px; }
   .piano-immersion-model { flex: 0 0 auto; width: min(100%, 300px); min-width: 0; }
   .piano-immersion-stage { min-height: 0; }
@@ -11915,13 +11958,18 @@ footer a {
   .piano-voice-spectrum > footer small { flex: 0 1 auto; width: 100%; }
   .piano-voice-coach { padding-inline: 18px; }
   .piano-voice-coach > header { align-items: stretch; flex-direction: column; }
+  .piano-voice-ear-training > header { align-items: stretch; flex-direction: column; }
+  .piano-voice-ear-training > header ol { align-items: flex-start; flex-direction: column; }
+  .piano-voice-trace-frame { grid-template-columns: 58px minmax(0, 1fr); gap: 6px; }
+  .piano-voice-trace-scale,
+  .piano-voice-trace-stage { height: 190px; }
+  .piano-voice-trace-time,
+  .piano-voice-ear-layout figcaption { margin-left: 64px; }
   .piano-voice-actions { display: grid; grid-template-columns: 1fr; }
   .piano-voice-controls,
-  .piano-voice-reading,
   .piano-voice-coach > footer { grid-template-columns: 1fr; }
   .piano-voice-controls > * + * { border-top: 1px solid var(--line); border-left: 0; }
   .piano-voice-controls > *:nth-child(3),
-  .piano-voice-rail,
   .piano-voice-coach > footer > small { grid-column: 1; }
   .piano-immersion-intro { gap: 17px; padding-inline: 18px; }
   .piano-immersion-intro p { font-size: .69rem; }
@@ -12226,10 +12274,13 @@ footer a {
   .piano-voice-source select,
   .piano-voice-actions button { color: CanvasText; border-color: CanvasText; background: Canvas; }
   .piano-voice-actions button[aria-pressed="true"] { color: HighlightText; border-color: Highlight; background: Highlight; }
-  .piano-voice-rail > div,
-  .piano-voice-rail i { border-color: CanvasText; background: Canvas; }
-  .piano-voice-rail i.is-target { background: Highlight; }
-  .piano-voice-rail b { border-color: Canvas; background: Highlight; }
+  .piano-voice-trace-stage { border-color: CanvasText; background: Canvas; }
+  .piano-voice-trace-stage > i.is-target-neighborhood { background: Canvas; }
+  .piano-voice-trace-stage > i.is-center-lane { background: Highlight; }
+  .piano-voice-trace-stage > i.is-target-line { border-color: Highlight; }
+  .piano-voice-trace-stage path { stroke: CanvasText; }
+  .piano-voice-trace-stage b { border-color: Canvas; background: Highlight; }
+  .piano-voice-ear-readings p.is-action { border-color: Highlight; background: Canvas; }
   .piano-voice-spectrum-guides i { border-color: Highlight; }
   .piano-voice-spectrum-guides b { border-color: CanvasText; }
   .piano-voice-spectrum > footer i.is-voice { border-color: CanvasText; }

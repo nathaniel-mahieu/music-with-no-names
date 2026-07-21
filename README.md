@@ -4,7 +4,11 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Voice Spectrum + Tuner v2.09**. It provides:
+The current milestone is **Intuitive Voice Ear Map v2.10**. It provides:
+
+- A direction-first ear-training map: higher pitch rises, lower pitch falls, the target sits at the center, ±50 cents marks the nearest-key neighborhood, and a narrow ±5-cent lane makes fine centering visible. A bounded recent trail shows the approach over time, while direct coaching says whether to ease up, ease down, replay the target, or hold the center.
+
+- Explicit separation of three often-confused readings. Accuracy is logarithmic distance from the selected target; clarity is the detector's repeating-wave evidence and changes the trail's dash pattern; steadiness is the middle-80% width of about two seconds of recent pitch. The interface states that none measures vocal quality or musical correctness and supplies a hear → sing from memory → check direction → repeat loop.
 
 - A live logarithmic microphone spectrum from 50 Hz to 3 kHz with the chosen target's ideal integer harmonics overlaid. A solid detected-voice marker remains distinct from the dashed target guides, and the strongest visible band is explicitly not treated as the fundamental because vocal formants and upper harmonics can dominate it. This gives an immediate diagnostic even when periodic pitch detection is withheld.
 
