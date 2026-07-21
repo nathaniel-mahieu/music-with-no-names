@@ -9271,6 +9271,31 @@ footer a {
 .piano-voice-input meter { width: 100%; height: 13px; accent-color: var(--piano-blue); }
 .piano-voice-input strong { font-size: .68rem; font-weight: 500; line-height: 1.4; }
 .piano-voice-input > small { color: var(--muted); font-size: .64rem; line-height: 1.4; }
+.piano-voice-spectrum { display: grid; min-width: 0; gap: 5px; }
+.piano-voice-spectrum > header { display: flex; flex-wrap: wrap; gap: 5px 18px; align-items: end; justify-content: space-between; }
+.piano-voice-spectrum > header > div { display: grid; gap: 2px; }
+.piano-voice-spectrum > header span,
+.piano-voice-spectrum > header small { color: var(--muted); font-size: .7rem; line-height: 1.4; }
+.piano-voice-spectrum > header span { letter-spacing: .07em; text-transform: uppercase; }
+.piano-voice-spectrum > header strong { font-size: .82rem; font-weight: 500; }
+.piano-voice-spectrum-plot { position: relative; min-width: 0; height: 150px; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line-strong); background: linear-gradient(180deg, color-mix(in srgb, var(--piano-blue) 4%, transparent), transparent); }
+.piano-voice-spectrum-plot canvas,
+.piano-voice-spectrum-guides { position: absolute; inset: 0; width: 100%; height: 100%; }
+.piano-voice-spectrum-guides i,
+.piano-voice-spectrum-guides b { position: absolute; top: 0; bottom: 0; width: 0; }
+.piano-voice-spectrum-guides i { border-left: 1px dashed var(--piano-gold); }
+.piano-voice-spectrum-guides b { border-left: 2px solid var(--foreground); }
+.piano-voice-spectrum-guides span { position: absolute; top: 3px; left: 3px; color: var(--foreground); font-family: var(--font-mono), monospace; font-size: .7rem; font-style: normal; font-weight: 500; white-space: nowrap; }
+.piano-voice-spectrum-guides b span { top: auto; bottom: 3px; }
+.piano-voice-spectrum-axis { position: relative; height: 16px; margin: 0; padding: 0; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .7rem; list-style: none; }
+.piano-voice-spectrum-axis li { position: absolute; transform: translateX(-50%); }
+.piano-voice-spectrum-axis li:first-child { transform: none; }
+.piano-voice-spectrum-axis li:last-child { transform: translateX(-100%); }
+.piano-voice-spectrum > footer { display: flex; flex-wrap: wrap; gap: 5px 16px; align-items: center; color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.piano-voice-spectrum > footer span { display: inline-flex; gap: 6px; align-items: center; color: var(--foreground); }
+.piano-voice-spectrum > footer i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--piano-blue); }
+.piano-voice-spectrum > footer i.is-target { border-top: 1px dashed var(--piano-gold); }
+.piano-voice-spectrum > footer small { flex: 0 0 100%; min-width: 0; color: var(--muted); font-size: .7rem; }
 .piano-voice-reading { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(230px, 1fr) minmax(320px, 1.5fr); gap: 16px 24px; align-items: center; }
 .piano-voice-detected,
 .piano-voice-distance { display: grid; min-width: 0; gap: 3px; }
@@ -9286,7 +9311,7 @@ footer a {
 .piano-voice-rail i:nth-child(4) { left: 70%; }
 .piano-voice-rail i:nth-child(5) { left: 90%; }
 .piano-voice-rail i.is-target { width: 2px; background: var(--piano-gold); }
-.piano-voice-rail b { position: absolute; top: 50%; left: var(--voice-position); width: 12px; height: 12px; border: 2px solid var(--surface-soft); border-radius: 50%; background: var(--voice-position-color); transform: translate(-50%, -50%); }
+.piano-voice-rail b { position: absolute; top: 50%; width: 12px; height: 12px; border: 2px solid var(--surface-soft); border-radius: 50%; background: var(--voice-position-color); transform: translate(-50%, -50%); }
 .piano-voice-rail ol { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0; padding: 0; color: var(--muted); font-family: var(--font-mono), monospace; font-size: .6rem; list-style: none; text-align: center; }
 .piano-voice-coach > footer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 22px; align-items: start; }
 .piano-voice-coach > footer p { display: grid; gap: 2px; margin: 0; }
@@ -11884,6 +11909,10 @@ footer a {
   .voice-lab-reference > *:nth-child(3),
   .piano-voice-input > small { grid-column: 1; }
   .piano-voice-input label { grid-template-columns: 1fr; }
+  .piano-voice-spectrum-plot { height: 126px; }
+  .piano-voice-spectrum > header { align-items: start; flex-direction: column; }
+  .piano-voice-spectrum > footer { align-items: start; flex-direction: column; flex-wrap: nowrap; }
+  .piano-voice-spectrum > footer small { flex: 0 1 auto; width: 100%; }
   .piano-voice-coach { padding-inline: 18px; }
   .piano-voice-coach > header { align-items: stretch; flex-direction: column; }
   .piano-voice-actions { display: grid; grid-template-columns: 1fr; }
@@ -12201,6 +12230,10 @@ footer a {
   .piano-voice-rail i { border-color: CanvasText; background: Canvas; }
   .piano-voice-rail i.is-target { background: Highlight; }
   .piano-voice-rail b { border-color: Canvas; background: Highlight; }
+  .piano-voice-spectrum-guides i { border-color: Highlight; }
+  .piano-voice-spectrum-guides b { border-color: CanvasText; }
+  .piano-voice-spectrum > footer i.is-voice { border-color: CanvasText; }
+  .piano-voice-spectrum > footer i.is-target { border-color: Highlight; }
   .piano-route-selector,
   .piano-route-selector select,
   .piano-do-capture button { color: CanvasText; border-color: CanvasText; background: Canvas; }

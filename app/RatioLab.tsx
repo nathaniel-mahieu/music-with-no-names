@@ -140,7 +140,7 @@ const LAB_COPY: Record<
     eyebrow: "Practice sung pitch on its own page",
     title: "Choose a piano frequency. Find it with your voice.",
     description:
-      "Start the local microphone only when you are ready. Keep input activity, periodic pitch estimation, semitone distance, and fine cents position visible as separate evidence.",
+      "Start the local microphone only when you are ready. Compare the live spectrum with the target's ideal harmonic series, then keep input activity, periodic pitch estimation, semitone distance, and fine cents position separate.",
     principleTop: "Chosen key frequency",
     principleMain: "→ sung estimate → distance",
     principleBottom: "pitch detection, not speech recognition",
@@ -773,7 +773,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.08
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.09
         </div>
       </header>
 

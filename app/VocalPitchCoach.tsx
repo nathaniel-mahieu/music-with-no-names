@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   conventionalPitchName,
   noteContext,
@@ -12,8 +12,15 @@ import {
   VOCAL_INPUT_MINIMUM_RMS,
   vocalIntervalLabel,
   vocalReferenceFrequency,
+  vocalTargetRailPosition,
   type VocalPitchDetection,
 } from "@/lib/vocal-pitch-model";
+import {
+  VOCAL_SPECTRUM_MAXIMUM_HZ,
+  VOCAL_SPECTRUM_MINIMUM_HZ,
+  vocalSpectrumPosition,
+  vocalTargetHarmonics,
+} from "@/lib/vocal-spectrum-model";
 
 type VocalPitchCoachProps = {
   anchorMidi: number;
@@ -36,6 +43,7 @@ type AudioContextWindow = Window & typeof globalThis & {
 
 const VOCAL_INTERVAL_TARGETS = Array.from({ length: 25 }, (_, index) => index - 12);
 const DEFAULT_MICROPHONE_ID = "default";
+const VOCAL_SPECTRUM_TICKS = [50, 100, 200, 500, 1_000, 2_000, 3_000];
 
 function formatHz(value: number) {
   return `${value.toFixed(value < 1000 ? 1 : 0)} Hz`;
@@ -66,6 +74,72 @@ function playReferenceTone(context: AudioContext, frequencyHz: number, startsAt:
   oscillator.stop(startsAt + durationSeconds + 0.02);
 }
 
+function clearVoiceSpectrum(canvas: HTMLCanvasElement | null) {
+  const context = canvas?.getContext("2d");
+  if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawVoiceSpectrum(canvas: HTMLCanvasElement | null, analyser: AnalyserNode, frequencyData: Float32Array<ArrayBuffer>) {
+  if (!canvas) return null;
+  const bounds = canvas.getBoundingClientRect();
+  if (bounds.width <= 0 || bounds.height <= 0) return null;
+  const pixelRatio = Math.min(2, window.devicePixelRatio || 1);
+  const width = Math.max(1, Math.round(bounds.width * pixelRatio));
+  const height = Math.max(1, Math.round(bounds.height * pixelRatio));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  analyser.getFloatFrequencyData(frequencyData);
+  context.clearRect(0, 0, width, height);
+  const styles = window.getComputedStyle(canvas);
+  const spectrumColor = styles.getPropertyValue("--piano-blue").trim() || styles.color;
+  const binWidthHz = analyser.context.sampleRate / analyser.fftSize;
+  const decibelFloor = -105;
+  const decibelCeiling = -25;
+  let peakDecibels = Number.NEGATIVE_INFINITY;
+  let peakFrequencyHz: number | null = null;
+  context.beginPath();
+  for (let x = 0; x < width; x += 1) {
+    const share = width <= 1 ? 0 : x / (width - 1);
+    const frequencyHz = VOCAL_SPECTRUM_MINIMUM_HZ * (VOCAL_SPECTRUM_MAXIMUM_HZ / VOCAL_SPECTRUM_MINIMUM_HZ) ** share;
+    const bin = Math.min(frequencyData.length - 1, Math.max(0, Math.round(frequencyHz / binWidthHz)));
+    const decibels = Number.isFinite(frequencyData[bin]) ? frequencyData[bin] : decibelFloor;
+    if (decibels > peakDecibels) {
+      peakDecibels = decibels;
+      peakFrequencyHz = frequencyHz;
+    }
+    const amplitude = Math.max(0, Math.min(1, (decibels - decibelFloor) / (decibelCeiling - decibelFloor)));
+    const y = height - amplitude * height;
+    if (x === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
+  }
+  context.lineTo(width, height);
+  context.lineTo(0, height);
+  context.closePath();
+  context.globalAlpha = 0.16;
+  context.fillStyle = spectrumColor;
+  context.fill();
+  context.globalAlpha = 1;
+  context.beginPath();
+  for (let x = 0; x < width; x += 1) {
+    const share = width <= 1 ? 0 : x / (width - 1);
+    const frequencyHz = VOCAL_SPECTRUM_MINIMUM_HZ * (VOCAL_SPECTRUM_MAXIMUM_HZ / VOCAL_SPECTRUM_MINIMUM_HZ) ** share;
+    const bin = Math.min(frequencyData.length - 1, Math.max(0, Math.round(frequencyHz / binWidthHz)));
+    const decibels = Number.isFinite(frequencyData[bin]) ? frequencyData[bin] : decibelFloor;
+    const amplitude = Math.max(0, Math.min(1, (decibels - decibelFloor) / (decibelCeiling - decibelFloor)));
+    const y = height - amplitude * height;
+    if (x === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
+  }
+  context.strokeStyle = spectrumColor;
+  context.lineWidth = Math.max(1, pixelRatio * 1.25);
+  context.stroke();
+  return peakDecibels > decibelFloor + 8 ? peakFrequencyHz : null;
+}
+
 export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showConventions }: VocalPitchCoachProps) {
   const [microphoneState, setMicrophoneState] = useState<MicrophoneState>("idle");
   const [microphoneNotice, setMicrophoneNotice] = useState("Microphone is off. Audio stays in this browser tab and is not recorded.");
@@ -75,10 +149,13 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const [activeInputLabel, setActiveInputLabel] = useState("");
   const [microphoneInputs, setMicrophoneInputs] = useState<MicrophoneInput[]>([]);
   const [selectedMicrophoneId, setSelectedMicrophoneId] = useState(DEFAULT_MICROPHONE_ID);
+  const [spectrumPeakHz, setSpectrumPeakHz] = useState<number | null>(null);
   const [previewNotice, setPreviewNotice] = useState("Reference is silent until you choose to hear it.");
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const spectrumFrameRef = useRef(0);
   const analysisTimerRef = useRef<number | null>(null);
   const previewContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<number | null>(null);
@@ -87,6 +164,9 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const ignoreMicrophoneUntilRef = useRef(0);
   const targetMidi = Math.max(0, Math.min(127, anchorMidi + intervalSemitones));
   const targetReferenceHz = vocalReferenceFrequency(targetMidi);
+  const targetFrequencyRef = useRef(targetReferenceHz);
+  const targetHarmonics = useMemo(() => vocalTargetHarmonics(targetReferenceHz), [targetReferenceHz]);
+  const visibleTargetHarmonics = targetHarmonics.slice(0, 12);
   const pitchMatch = useMemo(() => detection ? matchVocalPitch(detection.frequencyHz, targetMidi) : null, [detection, targetMidi]);
   const nearestContext = pitchMatch ? noteContext(pitchMatch.nearestMidi, doMidi, scale) : null;
   const targetContext = noteContext(targetMidi, doMidi, scale);
@@ -95,7 +175,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const targetLabel = noteLabel(targetMidi, targetContext.syllable);
   const anchorLabel = noteLabel(anchorMidi, anchorContext.syllable);
   const sungLabel = pitchMatch && nearestContext ? noteLabel(pitchMatch.nearestMidi, nearestContext.syllable) : "—";
-  const railPosition = pitchMatch ? Math.max(0, Math.min(1, (pitchMatch.targetSemitones + 2.5) / 5)) : 0.5;
+  const railPosition = vocalTargetRailPosition(pitchMatch?.targetSemitones ?? 0);
   const targetDistanceClass = !pitchMatch
     ? "is-waiting"
     : Math.abs(pitchMatch.targetCents) <= 5
@@ -126,6 +206,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
   const visualSummary = pitchMatch
     ? `Sung fundamental estimate ${pitchMatch.detectedFrequencyHz.toFixed(1)} hertz, nearest A4 equals 440 piano reference ${sungLabel} at ${pitchMatch.nearestReferenceHz.toFixed(1)} hertz, ${signedCents(pitchMatch.nearestCents)} from that key. Declared target ${targetLabel} at ${pitchMatch.targetReferenceHz.toFixed(1)} hertz. Voice is ${targetDistanceCopy}.`
     : `Voice pitch meter waiting. Declared target ${targetLabel} at ${targetReferenceHz.toFixed(1)} hertz from ${anchorSource === "latest-piano-attack" ? "the latest piano attack" : anchorSource === "voice-lab-reference" ? "the chosen Voice reference" : "selected Do"} plus ${intervalSemitones} semitones.`;
+  const spectrumSummary = `Live microphone magnitude spectrum from ${VOCAL_SPECTRUM_MINIMUM_HZ} to ${VOCAL_SPECTRUM_MAXIMUM_HZ} hertz on a logarithmic frequency axis. Target ${targetLabel} has visible ideal harmonic guides at ${targetHarmonics.slice(0, 8).map((harmonic) => `${harmonic.harmonic} times, ${harmonic.frequencyHz.toFixed(1)} hertz`).join("; ") || "none in range"}.${pitchMatch ? ` Detected fundamental is ${pitchMatch.detectedFrequencyHz.toFixed(1)} hertz.` : spectrumPeakHz ? ` The strongest visible spectrum band is near ${spectrumPeakHz.toFixed(0)} hertz; this is not necessarily the fundamental.` : " No reliable fundamental is currently detected."}`;
 
   const disposeMicrophoneResources = useCallback(() => {
     if (analysisTimerRef.current != null) window.clearInterval(analysisTimerRef.current);
@@ -144,6 +225,8 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     if (context && context.state !== "closed") void context.close();
     smoothedFrequencyRef.current = null;
     missingFramesRef.current = 0;
+    spectrumFrameRef.current = 0;
+    clearVoiceSpectrum(spectrumCanvasRef.current);
   }, []);
 
   const refreshMicrophoneInputs = useCallback(async () => {
@@ -171,6 +254,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     setDetection(null);
     setInputLevel(0);
     setActiveInputLabel("");
+    setSpectrumPeakHz(null);
     setMicrophoneState("idle");
     setMicrophoneNotice("Microphone stopped. No audio or pitch history was retained.");
   }, [disposeMicrophoneResources]);
@@ -186,6 +270,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     setDetection(null);
     setInputLevel(0);
     setActiveInputLabel("");
+    setSpectrumPeakHz(null);
     setMicrophoneState("requesting");
     setMicrophoneNotice("Waiting for microphone permission…");
     let context: AudioContext | null = null;
@@ -207,7 +292,9 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
       analyser.fftSize = 4096;
-      analyser.smoothingTimeConstant = 0;
+      analyser.minDecibels = -105;
+      analyser.maxDecibels = -25;
+      analyser.smoothingTimeConstant = 0.62;
       source.connect(analyser);
       streamRef.current = stream;
       contextRef.current = context;
@@ -232,6 +319,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         };
       }
       const samples = new Float32Array(analyser.fftSize);
+      const frequencyData = new Float32Array(analyser.frequencyBinCount);
       analysisTimerRef.current = window.setInterval(() => {
         if (performance.now() < ignoreMicrophoneUntilRef.current) return;
         const activeAnalyser = analyserRef.current;
@@ -242,7 +330,13 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         let energy = 0;
         for (const sample of samples) energy += sample * sample;
         setInputLevel(Math.sqrt(energy / samples.length));
-        const next = detectVocalFundamental(samples, activeContext.sampleRate);
+        const peakHz = drawVoiceSpectrum(spectrumCanvasRef.current, activeAnalyser, frequencyData);
+        spectrumFrameRef.current += 1;
+        if (spectrumFrameRef.current % 5 === 0) setSpectrumPeakHz(peakHz);
+        const next = detectVocalFundamental(samples, activeContext.sampleRate, {
+          minimumHz: 35,
+          maximumHz: Math.min(2_400, Math.max(1_600, targetFrequencyRef.current * 2)),
+        });
         if (!next) {
           missingFramesRef.current += 1;
           if (missingFramesRef.current >= 4) {
@@ -279,6 +373,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       setMicrophoneState(denied ? "denied" : "error");
       setInputLevel(0);
       setActiveInputLabel("");
+      setSpectrumPeakHz(null);
       setMicrophoneNotice(denied
         ? "Allow microphone access for this site in your browser's address-bar settings, then try again."
         : unavailable
@@ -286,6 +381,10 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
           : "The microphone could not start. Check the browser's selected input, then try again.");
     }
   }, [disposeMicrophoneResources, refreshMicrophoneInputs, selectedMicrophoneId]);
+
+  useEffect(() => {
+    targetFrequencyRef.current = targetReferenceHz;
+  }, [targetReferenceHz]);
 
   const hearInterval = useCallback(async () => {
     const AudioContextConstructor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
@@ -358,6 +457,19 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       <small>{activeInputLabel ? `Using ${activeInputLabel}. ` : ""}The level only confirms that samples are arriving; it is not a singing-quality score.</small>
     </div>
 
+    <section className="piano-voice-spectrum" aria-labelledby="voice-spectrum-title">
+      <header><div><span>Live microphone spectrum</span><strong id="voice-spectrum-title">Voice energy × target harmonics</strong></div><small>{spectrumPeakHz ? `strongest visible band ≈ ${formatHz(spectrumPeakHz)}` : "waiting for microphone energy"}</small></header>
+      <div className="piano-voice-spectrum-plot" role="img" aria-label={spectrumSummary}>
+        <canvas ref={spectrumCanvasRef} aria-hidden="true" />
+        <div className="piano-voice-spectrum-guides" aria-hidden="true">
+          {visibleTargetHarmonics.map((harmonic) => <i key={harmonic.harmonic} style={{ left: `${harmonic.position * 100}%` }}>{harmonic.harmonic <= 4 ? <span>{harmonic.harmonic}×</span> : null}</i>)}
+          {pitchMatch ? <b style={{ left: `${vocalSpectrumPosition(pitchMatch.detectedFrequencyHz) * 100}%` }}><span>voice</span></b> : null}
+        </div>
+      </div>
+      <ol className="piano-voice-spectrum-axis" aria-hidden="true">{VOCAL_SPECTRUM_TICKS.map((frequencyHz) => <li key={frequencyHz} style={{ left: `${vocalSpectrumPosition(frequencyHz) * 100}%` }}>{frequencyHz >= 1_000 ? `${frequencyHz / 1_000}k` : frequencyHz}</li>)}</ol>
+      <footer><span><i className="is-voice" />live microphone magnitude</span><span><i className="is-target" />ideal target harmonics</span><small>Log-frequency view · target guides are integer multiples, not predicted vocal loudness. Formants can make an upper harmonic taller than the fundamental.</small></footer>
+    </section>
+
     <div className="piano-voice-reading">
       <div className="piano-voice-detected">
         <span>Live sung estimate</span>
@@ -370,7 +482,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         <small>{pitchMatch ? `${pitchMatch.frequencyDifferenceHz >= 0 ? "+" : "−"}${Math.abs(pitchMatch.frequencyDifferenceHz).toFixed(1)} Hz from the target reference` : "Semitone error stays coarse; cents show the fine position."}</small>
       </div>
       <div className="piano-voice-rail" role="img" aria-label={visualSummary}>
-        <div aria-hidden="true"><i /><i /><i className="is-target" /><i /><i />{pitchMatch ? <b style={{ "--voice-position": `${railPosition * 100}%` } as CSSProperties} /> : null}</div>
+        <div aria-hidden="true"><i /><i /><i className="is-target" /><i /><i />{pitchMatch ? <b style={{ left: `${railPosition * 100}%` }} /> : null}</div>
         <ol aria-hidden="true"><li>−2 st</li><li>−1</li><li>target</li><li>+1</li><li>+2 st</li></ol>
         <small>{pitchMatch && Math.abs(pitchMatch.targetSemitones) > 2.5 ? `Marker pinned; exact distance is ${pitchMatch.targetSemitones > 0 ? "+" : "−"}${Math.abs(pitchMatch.targetSemitones).toFixed(2)} st.` : "Marker moves continuously: one full segment = one piano-key semitone."}</small>
       </div>

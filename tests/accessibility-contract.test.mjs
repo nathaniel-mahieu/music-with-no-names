@@ -12,7 +12,7 @@ test("every learning lab exposes a named semantic region", async () => {
 });
 
 test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
-  const [piano, immersion, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, css] = await Promise.all([
+  const [piano, immersion, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoResearchHud.tsx", import.meta.url), "utf8"),
@@ -23,6 +23,7 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
     readFile(new URL("../lib/piano-research-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-scale-gravity-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vocal-pitch-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/vocal-spectrum-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
@@ -259,13 +260,25 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(vocal, /getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
   assert.doesNotMatch(vocal, /MediaRecorder|localStorage|sessionStorage|fetch\(/);
   assert.match(vocal, /className="piano-voice-rail" role="img" aria-label=\{visualSummary\}/);
+  assert.match(vocal, /<b style=\{\{ left: `\$\{railPosition \* 100\}%` \}\} \/>/);
+  assert.doesNotMatch(vocal, /--voice-position/);
+  assert.match(vocal, /className="piano-voice-spectrum-plot" role="img" aria-label=\{spectrumSummary\}/);
+  assert.match(vocal, /<canvas ref=\{spectrumCanvasRef\} aria-hidden="true" \/>/);
+  assert.match(vocal, /Voice energy × target harmonics/);
+  assert.match(vocal, /ideal target harmonics/);
+  assert.match(vocal, /Formants can make an upper harmonic taller/);
   assert.match(vocal, /no recording · no upload/);
   assert.match(vocal, /not measured piano audio/);
   assert.match(vocal, /not vocal quality, correctness, timbre, harmony, emotion/);
   assert.match(vocalModel, /export function detectVocalFundamental/);
   assert.match(vocalModel, /export function matchVocalPitch/);
+  assert.match(vocalModel, /export function vocalTargetRailPosition/);
   assert.match(vocalModel, /returns null for a[\s\S]*weak or insufficiently periodic window/);
+  assert.match(vocalSpectrumModel, /export function vocalSpectrumPosition/);
+  assert.match(vocalSpectrumModel, /export function vocalTargetHarmonics/);
   assert.match(css, /\.piano-voice-source select/);
+  assert.match(css, /\.piano-voice-spectrum-guides i \{ border-left: 1px dashed/);
+  assert.match(css, /\.piano-voice-spectrum-guides b \{ border-left: 2px solid/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-intro/);
   assert.match(css, /\.piano-research-layout-controls \{[^}]*grid-template-columns: repeat\(3/);
   assert.match(css, /\.piano-research-lattice \{[^}]*grid-template-columns: repeat\(4/);
@@ -297,6 +310,7 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-interval-context-bar > div \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-stage \* \{ filter: none/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-voice-rail b/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-voice-spectrum-guides i/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-route-selector select/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-do-capture button\[aria-pressed="true"\]/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-immersion-character \.is-roughness \{ stroke-dasharray/);

@@ -75,10 +75,10 @@ export function detectVocalFundamental(
   options: { minimumHz?: number; maximumHz?: number; minimumRms?: number; threshold?: number } = {},
 ): VocalPitchDetection | null {
   const sampleRate = Number.isFinite(sampleRateInput) ? clamp(sampleRateInput, 8_000, 192_000) : 48_000;
-  const minimumHz = clamp(options.minimumHz ?? 65, 40, 600);
-  const maximumHz = clamp(options.maximumHz ?? 1_000, minimumHz + 1, 2_400);
+  const minimumHz = clamp(options.minimumHz ?? 45, 35, 600);
+  const maximumHz = clamp(options.maximumHz ?? 1_600, minimumHz + 1, 2_400);
   const minimumRms = clamp(options.minimumRms ?? VOCAL_INPUT_MINIMUM_RMS, 0.0001, 1);
-  const threshold = clamp(options.threshold ?? 0.13, 0.02, 0.5);
+  const threshold = clamp(options.threshold ?? 0.2, 0.02, 0.5);
   if (!(samplesInput instanceof Float32Array) || samplesInput.length < 256) return null;
 
   const samples = samplesInput;
@@ -127,7 +127,7 @@ export function detectVocalFundamental(
         selectedLag = lag;
       }
     }
-    if (selectedLag < 0 || bestValue > 0.34) return null;
+    if (selectedLag < 0 || bestValue > 0.48) return null;
   }
 
   const before = normalized[Math.max(minimumLag, selectedLag - 1)];
@@ -138,7 +138,7 @@ export function detectVocalFundamental(
   const periodSamples = selectedLag + correction;
   const frequencyHz = sampleRate / periodSamples;
   const clarity = clamp(1 - center, 0, 1);
-  if (!Number.isFinite(frequencyHz) || frequencyHz < minimumHz || frequencyHz > maximumHz || clarity < 0.55) return null;
+  if (!Number.isFinite(frequencyHz) || frequencyHz < minimumHz || frequencyHz > maximumHz || clarity < 0.5) return null;
   return { frequencyHz, rms, clarity, periodSamples };
 }
 
@@ -168,4 +168,9 @@ export function matchVocalPitch(frequencyHzInput: number, targetMidiInput: numbe
     targetFineCents,
     frequencyDifferenceHz: detectedFrequencyHz - targetReferenceHz,
   };
+}
+
+export function vocalTargetRailPosition(targetSemitonesInput: number) {
+  const targetSemitones = Number.isFinite(targetSemitonesInput) ? targetSemitonesInput : 0;
+  return clamp((targetSemitones + 2.5) / 5, 0, 1);
 }

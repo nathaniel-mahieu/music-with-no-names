@@ -4,7 +4,11 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Selectable Voice Input v2.08**. It provides:
+The current milestone is **Voice Spectrum + Tuner v2.09**. It provides:
+
+- A live logarithmic microphone spectrum from 50 Hz to 3 kHz with the chosen target's ideal integer harmonics overlaid. A solid detected-voice marker remains distinct from the dashed target guides, and the strongest visible band is explicitly not treated as the fundamental because vocal formants and upper harmonics can dominate it. This gives an immediate diagnostic even when periodic pitch detection is withheld.
+
+- A repaired target-distance rail whose live marker uses a direct bounded position, plus a broader 35–2400 Hz analysis search and more tolerant periodicity gate. This includes low targets created by shifting the lowest Voice anchor down an octave while continuing to reject silence, weak input, malformed windows, and out-of-range noise-like alternation.
 
 - A native microphone-source menu on the Voice page. It begins with the operating system's default input, reveals the browser-authorized microphones after access is granted, and switches the live analysis stream immediately when another source is chosen. The active device remains written beside the activity meter; disconnected selections fall safely back to the system default. Device names and identifiers remain tab-local and are never stored or uploaded.
 

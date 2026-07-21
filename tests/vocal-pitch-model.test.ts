@@ -5,6 +5,7 @@ import {
   matchVocalPitch,
   vocalIntervalLabel,
   vocalReferenceFrequency,
+  vocalTargetRailPosition,
 } from "../lib/vocal-pitch-model.ts";
 
 function sine(frequencyHz: number, sampleRate = 48_000, length = 4096, harmonicShare = 0) {
@@ -28,6 +29,10 @@ test("detects a monophonic sung-frequency fixture without choosing its stronger 
   const quiet = detectVocalFundamental(quietBuiltInMicrophone, 48_000);
   assert.ok(quiet);
   assert.ok(Math.abs(quiet.frequencyHz - 185) < 1.2);
+
+  const lowTarget = detectVocalFundamental(sine(49, 48_000, 4096, 0.22), 48_000);
+  assert.ok(lowTarget);
+  assert.ok(Math.abs(lowTarget.frequencyHz - 49) < 0.8);
 });
 
 test("withholds pitch for silence, weak input, malformed windows, and noise-like alternation", () => {
@@ -55,6 +60,12 @@ test("matches microphone pitch to both its nearest key and a declared piano targ
   assert.equal(fifth.nearestTargetStep, 7);
   assert.ok(Math.abs(fifth.targetFineCents) < 1e-9);
   assert.equal(matchVocalPitch(Number.NaN, 69), null);
+
+  assert.equal(vocalTargetRailPosition(-2.5), 0);
+  assert.equal(vocalTargetRailPosition(0), 0.5);
+  assert.equal(vocalTargetRailPosition(2.5), 1);
+  assert.equal(vocalTargetRailPosition(-12), 0);
+  assert.equal(vocalTargetRailPosition(12), 1);
 });
 
 test("names interval targets with semitone count kept primary", () => {
