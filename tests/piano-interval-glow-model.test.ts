@@ -6,6 +6,8 @@ import {
   foldIntervalForGlow,
   intervalListeningCue,
   intervalTimeline,
+  sequentialIntervalFeeling,
+  togetherIntervalFeeling,
 } from "../lib/piano-interval-glow-model.ts";
 
 test("the glow ring keeps unison distinct from positive octave multiples", () => {
@@ -61,6 +63,8 @@ test("the phrase timeline groups tight attacks but preserves every melodic trans
   assert.deepEqual(timeline.groups[1].notes, [69]);
   assert.deepEqual(timeline.transitions.map((transition) => transition.signedSemitones), [4, 3, 2]);
   assert.deepEqual(timeline.transitions.map((transition) => transition.folded.ringSemitones), [4, 3, 2]);
+  assert.deepEqual(timeline.transitions.map((transition) => transition.sameGroup), [true, true, false]);
+  assert.deepEqual(timeline.transitions.map((transition) => transition.onsetGapMs), [80, 60, 560]);
 });
 
 test("a reloaded tab may shift retained monotonic onsets below zero without changing their relationships", () => {
@@ -77,4 +81,25 @@ test("copy and listening cues teach comparisons without declaring musical qualit
   assert.equal(exactIntervalCopy(19), "19 semitones · 1 octave + 7");
   assert.match(intervalListeningCue(5), /six- and seven-semitone spans/);
   assert.doesNotMatch(intervalListeningCue(3), /happy|sad|good|bad/i);
+});
+
+test("sequential feeling keeps measured gesture separate from possible felt words", () => {
+  assert.deepEqual(sequentialIntervalFeeling(7, 140), {
+    gesture: "reach",
+    direction: "rising",
+    pace: "quick",
+    phrase: "quick rising reach",
+    possibleWords: "space · declaration · suspension",
+    listeningPrompt: "Feel the hand-sized reach, then reverse it without changing its exact span.",
+  });
+  assert.equal(sequentialIntervalFeeling(-2, 800).phrase, "spacious falling nudge");
+  assert.equal(sequentialIntervalFeeling(12, 400).gesture, "echo");
+});
+
+test("together feeling follows exact physical spacing instead of octave folding alone", () => {
+  assert.equal(togetherIntervalFeeling(1).texture, "rub");
+  assert.equal(togetherIntervalFeeling(11).texture, "edge");
+  assert.equal(togetherIntervalFeeling(12).texture, "echo");
+  assert.equal(togetherIntervalFeeling(13).texture, "layer");
+  assert.match(togetherIntervalFeeling(6).possibleWords, /symmetry/);
 });

@@ -4,15 +4,15 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Interval Glow HUD v2.11**. It provides:
+The current milestone is **Interval Glow Felt Gestures v2.12**. It provides:
 
-- A new `Interval Glow` tab inside the Piano companion. The full 88-key range is unrolled into equal semitone cells, the newest attack-to-attack move lights one stable 1–12 position and color, and the exact signed distance remains written even when a compound interval is folded onto the ring.
+- A two-life visual language for every interval inside the Piano companion's `Interval Glow` tab. Across separate moments, the interval becomes a traveling arrow whose direction, bend, weight, and pace follow signed semitone motion and performed onset timing. Attacks interpreted inside the selected chord window become a woven bloom instead, so MIDI packet order is not mistaken for isolated melody.
 
-- Live chord decomposition from the selected 80, 160, or 320 millisecond grouping window. The HUD shows low-to-high adjacent gaps and every all-pairs distance separately; each pair lights its ring position, while pairs separated by added octaves move inward and become smaller without losing their exact semitone count.
+- Live chord decomposition from the selected 80, 160, or 320 millisecond grouping window. The HUD shows low-to-high adjacent gaps and every all-pairs distance separately; each pair receives a distinct texture prompt and lights its stable ring color, while pairs separated by added octaves move inward and become smaller without losing their exact semitone count.
 
-- A bounded central phrase thread that retains up to twenty-four attacks. Attack order runs left to right, pitch rises vertically, every link is colored and labeled by signed semitone movement, and closely attacked notes share a dashed chord halo. This is a timing abstraction rather than inferred chord identity, meter, or musical intention.
+- A bounded central phrase thread that retains up to twenty-four attacks. Sequential links curve and carry arrowheads; links inside one grouped chord moment become lighter dashed weaves without directional claims. The center's bloom spreads with modeled register openness, develops a rougher edge with modeled spectral roughness, and gains a denser core with modeled fusion under the selected equal-level teaching spectrum.
 
-- Proximal ear-training prompts for each spacing. The teaching cues ask for neighboring-interval and octave-complement comparisons while explicitly withholding emotion, consonance, correctness, and quality judgments. The HUD remains silent so the learner can hear a connected instrument or DAW while MIDI supplies visualization only.
+- Proximal ear-training prompts deliberately offer embodied words such as nudge, reach, vault, rub, frame, bloom, or echo as hypotheses to test. A direct broken-then-together exercise lets the learner hear one exact spacing as motion and texture while the interface explicitly withholds fixed emotion, consonance, correctness, and quality verdicts. The HUD remains silent so a connected instrument or DAW supplies the actual sound.
 
 - A direction-first ear-training map: higher pitch rises, lower pitch falls, the target sits at the center, ±50 cents marks the nearest-key neighborhood, and a narrow ±5-cent lane makes fine centering visible. A bounded recent trail shows the approach over time, while direct coaching says whether to ease up, ease down, replay the target, or hold the center.
 

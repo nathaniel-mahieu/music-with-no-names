@@ -5742,6 +5742,8 @@ export function PianoLab() {
         doMidi={doMidi}
         scale={scale}
         chordWindowMs={chordWindowMs}
+        soundModelId={soundModelId}
+        onSoundModelChange={setSoundModelId}
         showConventions={showConventions}
       /> : null}
 
