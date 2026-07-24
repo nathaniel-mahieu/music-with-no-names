@@ -11,10 +11,11 @@ test("every learning lab exposes a named semantic region", async () => {
   }
 });
 
-test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
-  const [piano, immersion, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, vocalTrainingModel, css] = await Promise.all([
+test("immersive piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
+  const [piano, immersion, intervalGlow, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, vocalTrainingModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoIntervalGlowHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoResearchHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoScaleGravityHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/VoiceLab.tsx", import.meta.url), "utf8"),
@@ -28,10 +29,23 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(piano, /focusLens === "immersion" \? <PianoImmersion/);
+  assert.match(piano, /focusLens === "interval-glow" \? <PianoIntervalGlowHud/);
   assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
+  assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
+  assert.match(intervalGlow, /smaller, inward marks/);
+  assert.match(intervalGlow, /From low to high:/);
+  assert.match(intervalGlow, /Every pair:/);
+  assert.match(intervalGlow, /MIDI key number, attack order, and grouping time/);
+  assert.match(intervalGlow, /not measured[\s\S]*emotion, consonance, or musical quality/i);
+  assert.match(intervalGlow, /intervalClass\(latestInterval\.ringSemitones\)/);
+  assert.match(css, /\.interval-glow-node\.is-lit[\s\S]*var\(--interval-color\)/);
+  assert.match(css, /\.interval-glow-pair[\s\S]*fill: var\(--interval-color\)/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.interval-glow-readings article/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-interval-glow/);
   assert.match(piano, /pulseMirror=\{pulseMirrorModel\}/);
   assert.match(piano, /<details className="piano-immersion-keyboard">/);
   assert.doesNotMatch(piano, /VocalPitchCoach/);
@@ -217,7 +231,7 @@ test("immersive, research, and scale-gravity piano HUDs plus vocal pitch match k
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-slots/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-degree-picker[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-scale-gravity-hud/);
-  assert.match(css, /\.piano-focus-lenses[\s\S]*repeat\(10, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.piano-focus-lenses[\s\S]*repeat\(11, minmax\(0, 1fr\)\)/);
   assert.match(model, /IMMERSION_HISTORY_ATTACKS = 12/);
   assert.match(model, /export function immersionHistory[\s\S]*slice\(-IMMERSION_HISTORY_ATTACKS\)/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);

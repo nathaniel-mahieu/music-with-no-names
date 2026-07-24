@@ -8700,7 +8700,7 @@ footer a {
 
 .piano-focus-lenses {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(11, minmax(0, 1fr));
   border-bottom: 1px solid var(--line);
 }
 
@@ -8722,6 +8722,201 @@ footer a {
 .piano-focus-lenses strong { font-size: .8rem; }
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
+
+/* Piano HUD v2.11: exact semitone spacing as a live color/place memory. */
+.piano-interval-glow {
+  --interval-0: #f4f0e7;
+  --interval-1: #ff8f86;
+  --interval-2: #f5a46f;
+  --interval-3: #edc66a;
+  --interval-4: #c9d875;
+  --interval-5: #85d6a0;
+  --interval-6: #69d8d0;
+  --interval-7: #65c8e5;
+  --interval-8: #7eafe9;
+  --interval-9: #9d9ce8;
+  --interval-10: #c494e2;
+  --interval-11: #dd8dca;
+  --interval-12: #f3df9b;
+  min-width: 0;
+  overflow: hidden;
+  color: #f5f2ec;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(90, 112, 177, .19), transparent 30%),
+    radial-gradient(circle at 12% 24%, rgba(101, 200, 229, .09), transparent 27%),
+    radial-gradient(circle at 88% 72%, rgba(196, 148, 226, .08), transparent 29%),
+    linear-gradient(180deg, #05070c, #070a12 58%, #04060a);
+}
+
+.piano-interval-glow-intro {
+  display: flex;
+  gap: 24px 48px;
+  align-items: end;
+  justify-content: space-between;
+  padding: 28px clamp(20px, 4vw, 52px) 24px;
+  border-bottom: 1px solid rgba(225, 231, 246, .13);
+}
+
+.piano-interval-glow-intro > div { max-width: 790px; }
+.piano-interval-glow-intro > div > span,
+.interval-keyboard-horizon > div > span,
+.interval-glow-readings article > span,
+.interval-glow-boundary strong {
+  color: var(--piano-gold);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.piano-interval-glow-intro h3 {
+  margin: 5px 0 8px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.5rem, 2.8vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: -.03em;
+}
+
+.piano-interval-glow-intro p {
+  max-width: 74ch;
+  margin: 0;
+  color: #adb7ca;
+  font-size: .75rem;
+  line-height: 1.55;
+}
+
+.piano-interval-glow-intro dl {
+  flex: 0 1 310px;
+  min-width: 250px;
+  margin: 0;
+  border-left: 1px solid rgba(225, 231, 246, .18);
+}
+
+.piano-interval-glow-intro dl > div {
+  display: grid;
+  grid-template-columns: 105px 1fr;
+  gap: 12px;
+  padding: 6px 0 6px 16px;
+}
+
+.piano-interval-glow-intro dt {
+  color: #7f899b;
+  font-size: .57rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.piano-interval-glow-intro dd { margin: 0; color: #dce1eb; font-size: .65rem; line-height: 1.4; }
+
+.interval-keyboard-horizon {
+  display: grid;
+  grid-template-columns: minmax(230px, .45fr) minmax(0, 1.55fr);
+  gap: 24px;
+  align-items: center;
+  padding: 17px clamp(20px, 4vw, 52px) 13px;
+  border-bottom: 1px solid rgba(225, 231, 246, .1);
+  background: rgba(5, 7, 12, .66);
+}
+
+.interval-keyboard-horizon > div { display: grid; gap: 4px; }
+.interval-keyboard-horizon > div > strong { font-size: .75rem; font-weight: 500; }
+.interval-keyboard-horizon > div > small { color: #8f99aa; font-size: .61rem; line-height: 1.45; }
+.interval-keyboard-horizon svg { display: block; width: 100%; overflow: visible; }
+.interval-keyboard-cell { fill: #161c28; stroke: rgba(225, 231, 246, .13); stroke-width: .7; }
+.interval-keyboard-cell:nth-of-type(12n + 4) { stroke: rgba(243, 223, 155, .45); }
+.interval-keyboard-cell.is-active { fill: var(--interval-color, var(--piano-gold)); stroke: #f5f2ec; stroke-width: 1.4; }
+.interval-keyboard-cell.is-previous { stroke: var(--interval-color, #dce1eb); stroke-width: 2; }
+.interval-keyboard-cell.is-latest { fill: var(--interval-color, var(--piano-gold)); stroke: #fff; stroke-width: 2; }
+.interval-keyboard-arc { fill: none; stroke: var(--interval-color, var(--piano-gold)); stroke-width: 2; }
+.interval-keyboard-horizon svg text { fill: #8f99aa; font-family: var(--font-mono), monospace; font-size: 8px; }
+.interval-keyboard-horizon svg text:not(:last-of-type) { fill: #dce1eb; font-size: 9px; }
+
+.is-interval-0 { --interval-color: var(--interval-0); color: var(--interval-0); }
+.is-interval-1 { --interval-color: var(--interval-1); color: var(--interval-1); }
+.is-interval-2 { --interval-color: var(--interval-2); color: var(--interval-2); }
+.is-interval-3 { --interval-color: var(--interval-3); color: var(--interval-3); }
+.is-interval-4 { --interval-color: var(--interval-4); color: var(--interval-4); }
+.is-interval-5 { --interval-color: var(--interval-5); color: var(--interval-5); }
+.is-interval-6 { --interval-color: var(--interval-6); color: var(--interval-6); }
+.is-interval-7 { --interval-color: var(--interval-7); color: var(--interval-7); }
+.is-interval-8 { --interval-color: var(--interval-8); color: var(--interval-8); }
+.is-interval-9 { --interval-color: var(--interval-9); color: var(--interval-9); }
+.is-interval-10 { --interval-color: var(--interval-10); color: var(--interval-10); }
+.is-interval-11 { --interval-color: var(--interval-11); color: var(--interval-11); }
+.is-interval-12 { --interval-color: var(--interval-12); color: var(--interval-12); }
+
+.interval-glow-stage {
+  position: relative;
+  width: min(930px, 100%);
+  margin: 0 auto;
+  padding: 0 clamp(4px, 1vw, 12px);
+}
+
+.interval-glow-stage > svg { display: block; width: 100%; height: auto; overflow: visible; }
+.interval-glow-atmosphere { fill: rgba(54, 68, 106, .07); stroke: rgba(205, 218, 246, .05); }
+.interval-glow-guide { fill: none; stroke: rgba(205, 218, 246, .13); stroke-width: 1; }
+.interval-glow-guide.is-inner { stroke-dasharray: 2 10; stroke: rgba(205, 218, 246, .09); }
+.interval-glow-node { color: #6e788b; }
+.interval-glow-node-body { fill: #0b0f18; stroke: currentColor; stroke-width: 1.2; }
+.interval-glow-node.is-lit .interval-glow-node-body { fill: color-mix(in srgb, var(--interval-color) 16%, #0b0f18); stroke: var(--interval-color); stroke-width: 2.2; }
+.interval-glow-node.is-latest .interval-glow-node-body { stroke-width: 4; }
+.interval-glow-aura { fill: var(--interval-color); opacity: .62; }
+.interval-glow-octave-orbit { fill: none; stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 4; }
+.interval-glow-number { fill: currentColor; font-family: var(--font-mono), monospace; font-size: 15px; font-weight: 700; }
+.interval-glow-node.is-lit .interval-glow-number { fill: var(--interval-color); }
+.interval-glow-name { fill: #929caf; font-size: 9px; letter-spacing: .03em; }
+.interval-glow-count { fill: var(--interval-color); font-family: var(--font-mono), monospace; font-size: 8px; }
+.interval-glow-pair { fill: var(--interval-color); stroke: #05070c; stroke-width: 1.5; }
+.interval-glow-center-disc { fill: rgba(5, 8, 15, .91); stroke: rgba(205, 218, 246, .14); stroke-width: 1; }
+.interval-glow-center-wash { color: #65c8e5; }
+.interval-glow-center-kicker { fill: #7f899b; font-size: 8px; font-weight: 700; letter-spacing: .13em; }
+.interval-glow-center-value { fill: currentColor; font-family: var(--font-display), Georgia, serif; font-size: 29px; }
+.interval-glow-center-detail { fill: #9aa5b8; font-size: 9px; }
+.interval-thread-axis { stroke: rgba(205, 218, 246, .16); stroke-width: 1; }
+.interval-thread-time-label { fill: #697386; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.interval-thread-chord-halo { fill: rgba(101, 200, 229, .045); stroke: rgba(101, 200, 229, .38); stroke-width: 1; stroke-dasharray: 3 3; }
+.interval-thread-link { stroke: var(--interval-color); stroke-width: 2.3; stroke-linecap: round; opacity: .74; }
+.interval-thread-step {
+  fill: var(--interval-color);
+  stroke: #060910;
+  stroke-width: 3px;
+  paint-order: stroke;
+  font-family: var(--font-mono), monospace;
+  font-size: 8px;
+  font-weight: 700;
+}
+.interval-thread-note circle { fill: #dce1eb; stroke: #060910; stroke-width: 2; }
+.interval-thread-note.is-latest circle { fill: var(--piano-gold); stroke: #fff; }
+.interval-thread-empty { fill: #6f798b; font-size: 10px; }
+
+.interval-glow-readings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid rgba(225, 231, 246, .1);
+  border-bottom: 1px solid rgba(225, 231, 246, .1);
+  background: rgba(5, 7, 12, .52);
+}
+
+.interval-glow-readings article {
+  min-width: 0;
+  padding: 20px clamp(18px, 3vw, 32px);
+  border-right: 1px solid rgba(225, 231, 246, .1);
+}
+
+.interval-glow-readings article:last-child { border-right: 0; }
+.interval-glow-readings article > strong { display: block; margin: 8px 0; color: #eef1f6; font-size: .82rem; font-weight: 500; }
+.interval-glow-readings article p { margin: 0; color: #9da7b9; font-size: .67rem; line-height: 1.55; }
+.interval-glow-readings article p b { color: #dce1eb; font-weight: 500; }
+
+.interval-glow-boundary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1.2fr);
+  gap: 8px 16px;
+  align-items: start;
+  padding: 16px clamp(20px, 4vw, 52px) 22px;
+}
+
+.interval-glow-boundary span { color: #8f99aa; font-size: .62rem; line-height: 1.5; }
 
 /* Piano HUD v2.05: alternate interval-space research maps on the shared short HUD history. */
 .piano-research-hud {
@@ -11852,6 +12047,13 @@ footer a {
   .piano-voice-ear-layout { grid-template-columns: 1fr; }
   .piano-voice-ear-layout figure { padding-right: 0; }
   .piano-voice-ear-readings { border-top: 1px solid var(--line); border-left: 0; }
+  .piano-interval-glow-intro { align-items: start; flex-direction: column; }
+  .piano-interval-glow-intro dl { width: 100%; min-width: 0; }
+  .interval-keyboard-horizon { grid-template-columns: 1fr; gap: 8px; }
+  .interval-glow-readings { grid-template-columns: 1fr; }
+  .interval-glow-readings article { border-right: 0; border-bottom: 1px solid rgba(225, 231, 246, .1); }
+  .interval-glow-readings article:last-child { border-bottom: 0; }
+  .interval-glow-boundary { grid-template-columns: auto minmax(0, 1fr); }
   .piano-immersion-intro { align-items: start; flex-direction: column; padding-top: 22px; }
   .piano-immersion-model { flex: 0 0 auto; width: min(100%, 300px); min-width: 0; }
   .piano-immersion-stage { min-height: 0; }
@@ -11971,6 +12173,15 @@ footer a {
   .piano-voice-controls > * + * { border-top: 1px solid var(--line); border-left: 0; }
   .piano-voice-controls > *:nth-child(3),
   .piano-voice-coach > footer > small { grid-column: 1; }
+  .piano-interval-glow-intro { gap: 16px; padding-inline: 18px; }
+  .piano-interval-glow-intro dl > div { grid-template-columns: 88px 1fr; padding-left: 12px; }
+  .interval-keyboard-horizon { padding-inline: 18px; }
+  .interval-glow-stage { margin-inline: -2px; width: calc(100% + 4px); }
+  .interval-glow-name,
+  .interval-glow-count { display: none; }
+  .interval-glow-readings article { padding-inline: 18px; }
+  .interval-glow-boundary { grid-template-columns: 1fr; padding-inline: 18px; }
+  .interval-glow-boundary strong:not(:first-child) { margin-top: 6px; }
   .piano-immersion-intro { gap: 17px; padding-inline: 18px; }
   .piano-immersion-intro p { font-size: .69rem; }
   .piano-immersion-stage { margin-inline: -3px; }
@@ -12269,6 +12480,33 @@ footer a {
 }
 
 @media (forced-colors: active) {
+  .piano-interval-glow,
+  .piano-interval-glow-intro,
+  .interval-keyboard-horizon,
+  .interval-glow-readings,
+  .interval-glow-boundary { color: CanvasText; border-color: CanvasText; background: Canvas; }
+  .interval-keyboard-cell { fill: Canvas; stroke: CanvasText; }
+  .interval-keyboard-cell.is-active,
+  .interval-keyboard-cell.is-latest { fill: Highlight; stroke: HighlightText; }
+  .interval-keyboard-arc,
+  .interval-glow-node-body,
+  .interval-glow-guide,
+  .interval-glow-octave-orbit,
+  .interval-thread-link { stroke: Highlight; }
+  .interval-glow-node-body,
+  .interval-glow-center-disc { fill: Canvas; }
+  .interval-glow-pair,
+  .interval-thread-note circle { fill: Highlight; stroke: HighlightText; }
+  .interval-glow-number,
+  .interval-glow-name,
+  .interval-glow-count,
+  .interval-glow-center-kicker,
+  .interval-glow-center-value,
+  .interval-glow-center-detail,
+  .interval-thread-time-label,
+  .interval-thread-step,
+  .interval-thread-empty { fill: CanvasText; }
+  .interval-thread-chord-halo { fill: Canvas; stroke: CanvasText; }
   .piano-voice-coach,
   .piano-voice-controls select,
   .piano-voice-source select,

@@ -70,6 +70,7 @@ const SUPPORT_LAB_IDS = new Set(SUPPORT_LAB_GROUPS.flatMap((group) => group.labs
 const PIANO_LENS_LABELS: Record<PianoSessionSummary["focusLens"], string> = {
   explore: "whole-phrase",
   immersion: "immersive-sky",
+  "interval-glow": "interval-glow-hud",
   research: "research-hud",
   gravity: "scale-gravity-hud",
   intervals: "interval",
@@ -773,7 +774,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.10
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.11
         </div>
       </header>
 

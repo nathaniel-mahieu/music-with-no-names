@@ -3,6 +3,7 @@ export const PIANO_SESSION_KEY = "music-with-no-names:piano-session:v2";
 export const PIANO_SESSION_LENSES = [
   "explore",
   "immersion",
+  "interval-glow",
   "research",
   "gravity",
   "intervals",
