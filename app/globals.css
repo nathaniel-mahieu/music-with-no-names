@@ -8700,7 +8700,7 @@ footer a {
 
 .piano-focus-lenses {
   display: grid;
-  grid-template-columns: repeat(11, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   border-bottom: 1px solid var(--line);
 }
 
@@ -8718,6 +8718,7 @@ footer a {
 }
 
 .piano-focus-lenses button:last-child { border-right: 0; }
+.piano-focus-lenses button:nth-child(-n + 6) { border-bottom: 1px solid var(--line); }
 .piano-focus-lenses button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
 .piano-focus-lenses strong { font-size: .8rem; }
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }

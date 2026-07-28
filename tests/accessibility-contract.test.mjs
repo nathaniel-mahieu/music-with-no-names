@@ -11,6 +11,39 @@ test("every learning lab exposes a named semantic region", async () => {
   }
 });
 
+test("Sight Shapes keeps notation, interval, keyboard, and learner-report channels explicit and silent", async () => {
+  const [piano, sight, sightCss, model] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoSightReadingHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoSightReadingHud.module.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-sight-reading-model.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(piano, /focusLens === "sight-shapes" \? <PianoSightReadingHud/);
+  assert.match(piano, /scale=\{scale\}[\s\S]*chordWindowMs=\{chordWindowMs\}/);
+  assert.match(sight, /<section className=\{styles\.shell\} aria-labelledby="sight-shapes-title">/);
+  assert.match(sight, /role="img" aria-labelledby="sight-score-title sight-score-description"/);
+  assert.match(sight, /role="img" aria-labelledby="sight-keyboard-svg-title sight-keyboard-svg-description"/);
+  assert.match(sight, /generic thirds[\s\S]*three or four semitones/i);
+  assert.match(sight, /Relational diagnosis/);
+  assert.match(sight, /Personal words are observations to test/);
+  assert.match(sight, /not inferred from MIDI/);
+  assert.match(sight, /noteNeedsFlag\(frame\)/);
+  assert.match(sight, /noteNeedsDot\(frame\)/);
+  assert.match(sight, /selected \$\{chordWindowMs\} ms reading window/);
+  assert.match(sight, /aria-live="polite"/);
+  assert.match(sight, /aria-pressed=\{practiceMode === "transfer"\}/);
+  assert.doesNotMatch(sight, /AudioContext|createOscillator|OscillatorNode|tabIndex=\{?[1-9]/);
+  assert.match(model, /written distance \(staff steps \/ generic interval\)/);
+  assert.match(model, /export function analyzeNotatedInterval/);
+  assert.match(model, /export function evaluateSightReadingAttempt/);
+  assert.doesNotMatch(model, /emotionScore|goodnessScore|musicalityScore/);
+  assert.match(sightCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(sightCss, /@media \(forced-colors: active\)/);
+  assert.match(sightCss, /\.flag[\s\S]*\.durationDot/);
+  assert.match(sightCss, /\.workbenchActions button[\s\S]*min-height: 44px/);
+});
+
 test("immersive piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
   const [piano, immersion, intervalGlow, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, vocalTrainingModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
@@ -33,7 +66,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
   assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
   assert.match(intervalGlow, /octave layers shrink inward/);
@@ -242,7 +275,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-slots/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-degree-picker[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-scale-gravity-hud/);
-  assert.match(css, /\.piano-focus-lenses[\s\S]*repeat\(11, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.piano-focus-lenses[\s\S]*repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(model, /IMMERSION_HISTORY_ATTACKS = 12/);
   assert.match(model, /export function immersionHistory[\s\S]*slice\(-IMMERSION_HISTORY_ATTACKS\)/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);

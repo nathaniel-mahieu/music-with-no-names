@@ -144,6 +144,7 @@ import { PianoImmersion } from "@/app/PianoImmersion";
 import { PianoIntervalGlowHud } from "@/app/PianoIntervalGlowHud";
 import { PianoResearchHud } from "@/app/PianoResearchHud";
 import { PianoScaleGravityHud } from "@/app/PianoScaleGravityHud";
+import { PianoSightReadingHud } from "@/app/PianoSightReadingHud";
 import { IMMERSION_HISTORY_ATTACKS, IMMERSION_MAX_FIELD_NOTES, immersionHistory } from "@/lib/piano-immersion-model";
 
 type MidiInputLike = {
@@ -195,7 +196,7 @@ type ChordMeasure = {
   commonPitchClassCount: number;
 };
 type FrameMode = "discover" | "locked";
-type FocusLens = "explore" | "immersion" | "interval-glow" | "research" | "gravity" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
+type FocusLens = "explore" | "immersion" | "interval-glow" | "sight-shapes" | "research" | "gravity" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif" | "breath";
 type ChordFocusMode = "cause" | "change" | "echo";
 type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo" | "resolution-fork" | "motif-return" | "landmark-path";
@@ -361,6 +362,7 @@ const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }>
   { id: "explore", label: "Explore", description: "See the whole phrase across every representation." },
   { id: "immersion", label: "Immersion", description: "Let register, fifths, intervals, timing, chords, and pull become one living sky." },
   { id: "interval-glow", label: "Interval Glow", description: "Make each exact semitone spacing a stable place, color, and phrase trace." },
+  { id: "sight-shapes", label: "Sight Shapes", description: "Read staff geometry as one shape for the eyes, hands, and ear." },
   { id: "research", label: "Research HUD", description: "Compare semitone, interval-orbit, thirds-lattice, and all-pairs maps." },
   { id: "gravity", label: "Scale Gravity", description: "Hold one degree while IV, V, and I change its role beneath you." },
   { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },
@@ -4148,7 +4150,8 @@ export function PianoLab() {
   const [showConventions, setShowConventions] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [focusLens, setFocusLens] = useState<FocusLens>("explore");
-  const isShortHudFocus = focusLens === "immersion" || focusLens === "interval-glow" || focusLens === "research" || focusLens === "gravity";
+  const [sightShapesResetVersion, setSightShapesResetVersion] = useState(0);
+  const isShortHudFocus = focusLens === "immersion" || focusLens === "interval-glow" || focusLens === "sight-shapes" || focusLens === "research" || focusLens === "gravity";
   const [intervalEchoTarget, setIntervalEchoTarget] = useState<IntervalEchoTarget | null>(null);
   const [ghostChord, setGhostChord] = useState<NearbyChord | null>(null);
   const [ghostNotes, setGhostNotes] = useState<number[]>([]);
@@ -4793,6 +4796,7 @@ export function PianoLab() {
     setPulseMirrorSession(null);
     setMotifEchoSession(null);
     setPhraseCompareSession(null);
+    setSightShapesResetVersion((current) => current + 1);
     setLatchedNotes(new Map());
     midi.clear();
   };
@@ -5684,7 +5688,7 @@ export function PianoLab() {
   return (
     <section className="advanced-lab piano-lab piano-hud" aria-labelledby="piano-hud-title">
       <header className="piano-hud-header">
-        <div><p className="section-kicker">MIDI relationship companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : focusLens === "interval-glow" ? "Every exact attack-to-attack and within-chord semitone spacing becomes a stable color and place around one live phrase thread." : focusLens === "research" ? "The same twelve pitch positions stay fixed while semitone, interval-orbit, thirds-lattice, and all-pairs maps expose different relationships—and their limits." : focusLens === "gravity" ? "A semitone-accurate major-scale landscape keeps degree location fixed while IV, V, and I reveal how one held pitch changes role without moving." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} MIDI sends note data only. Sung-pitch practice now lives on the dedicated Voice page.</p></div>
+        <div><p className="section-kicker">MIDI relationship companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : focusLens === "interval-glow" ? "Every exact attack-to-attack and within-chord semitone spacing becomes a stable color and place around one live phrase thread." : focusLens === "sight-shapes" ? "Turn written intervals, lines, chord silhouettes, anchors, movement groups, and musical intention into one linked eyes–hands–ear practice loop." : focusLens === "research" ? "The same twelve pitch positions stay fixed while semitone, interval-orbit, thirds-lattice, and all-pairs maps expose different relationships—and their limits." : focusLens === "gravity" ? "A semitone-accurate major-scale landscape keeps degree location fixed while IV, V, and I reveal how one held pitch changes role without moving." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} MIDI sends note data only. Sung-pitch practice now lives on the dedicated Voice page.</p></div>
         <div className="piano-hud-controls" aria-label="HUD controls">
           <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{midi.status}</strong></div></div>
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
@@ -5700,7 +5704,7 @@ export function PianoLab() {
         <span className={frameMode === "locked" ? "is-locked" : ""}>{frameMode === "locked" ? "Locked frame" : "Discovering frame"}</span>
         <strong>Do reference · {formatHz(frequencyFromMidi(doMidi))}{showConventions ? ` · ${conventionalPitchName(doMidi)}` : ""}</strong>
         <small>{latestSnapshot?.evidenceLabel ?? "Play four distinct positions before the frame can move."} · group gaps up to {chordWindowMs} ms ({chordWindowMs * 2} ms maximum span)</small>
-        <em>{frozen ? "Trace frozen; held keys still show below." : isShortHudFocus ? `${immersionHistoryEvents.length}/${IMMERSION_HISTORY_ATTACKS} shared HUD history · notes + chords` : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
+        <em>{frozen ? "Trace frozen; held keys still show below." : focusLens === "sight-shapes" ? `${phraseEvents.length} in silent phrase · each exercise starts from a learner-set boundary` : isShortHudFocus ? `${immersionHistoryEvents.length}/${IMMERSION_HISTORY_ATTACKS} shared HUD history · notes + chords` : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
       </div>
 
       <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} />
@@ -5744,6 +5748,16 @@ export function PianoLab() {
         chordWindowMs={chordWindowMs}
         soundModelId={soundModelId}
         onSoundModelChange={setSoundModelId}
+        showConventions={showConventions}
+      /> : null}
+
+      {focusLens === "sight-shapes" ? <PianoSightReadingHud
+        key={sightShapesResetVersion}
+        events={phraseEvents}
+        activeNotes={activeNoteNumbers}
+        doMidi={doMidi}
+        scale={scale}
+        chordWindowMs={chordWindowMs}
         showConventions={showConventions}
       /> : null}
 
@@ -5801,7 +5815,7 @@ export function PianoLab() {
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}
 
       {isShortHudFocus ? <details className="piano-immersion-keyboard">
-        <summary><span>Open the silent hand horizon</span><small>Optional on-screen keys for testing without a MIDI device. They visualize only and never make sound.</small></summary>
+        <summary><span>Open the silent hand horizon</span><small>Optional on-screen keys for testing without MIDI. Tap once to hold, again to release; repeated attacks need a release between them. Nothing here makes sound.</small></summary>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{WHITE_NOTES.map((note) => renderKey(note, false))}{VISIBLE_NOTES.filter((note) => !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))).map((note) => renderKey(note, true))}</div>
       </details> : <div className="piano-hud-keyboard-wrap">
         <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>gold attacked · dotted inherited member · crossed inherited exclusion · dashed silent target · double mark Do</small></div>

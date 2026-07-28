@@ -4,7 +4,15 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Interval Glow Felt Gestures v2.12**. It provides:
+The current milestone is **Sight Shapes v2.13**. It provides:
+
+- A silent sight-reading studio inside the Piano companion that keeps conventional notation central while linking each selected pattern to staff geometry, exact semitone spacing, local keyboard territory, and an ear-directed listening question. Generic intervals and chromatic distances stay separate: the same written third may span three or four equal-tempered semitones.
+
+- A curriculum modeled on the complete understand → embody → integrate → reflect arc: interval atoms, melodic contours, chord silhouettes and inversions, arpeggio folding, common-tone anchors, transformed repeats, physical grouping, destination pre-movement, hand-coordination archetypes, indications, musical ideas, and learner-authored character-plus-texture words.
+
+- Exact-position and transferable-shape practice with deterministic exercises, progressive scaffold fading, relational attempt diagnoses, and a target-versus-performance overlay. MIDI supplies keys, attack timing, release evidence, and sounding fields only; it does not reveal fingers, gaze, muscular tension, intended phrasing, heard emotion, correctness, or musical quality.
+
+- A phrase-quiet learning loop—see, predict, prepare, play, reveal, diagnose, transfer, fade—in which the connected keyboard or DAW supplies sound and the app never synthesizes or routes the MIDI performance. Feedback remains split into anchor, direction, staff interval, semitone distance, chord membership/voicing, timing, and learner reflection instead of producing an overall sight-reading or musicality score.
 
 - A two-life visual language for every interval inside the Piano companion's `Interval Glow` tab. Across separate moments, the interval becomes a traveling arrow whose direction, bend, weight, and pace follow signed semitone motion and performed onset timing. Attacks interpreted inside the selected chord window become a woven bloom instead, so MIDI packet order is not mistaken for isolated melody.
 

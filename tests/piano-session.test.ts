@@ -28,6 +28,14 @@ test("preserves the interval-glow HUD lens in the tab summary", () => {
   })), { attackCount: 2, focusLens: "interval-glow" });
 });
 
+test("preserves the sight-shapes reader in the tab summary", () => {
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 25,
+    focusLens: "sight-shapes",
+    phraseEvents: [phraseEvent(1, 60, 100), phraseEvent(2, 63, 240)],
+  })), { attackCount: 2, focusLens: "sight-shapes" });
+});
+
 test("preserves the research HUD lens in the tab summary", () => {
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 25,
