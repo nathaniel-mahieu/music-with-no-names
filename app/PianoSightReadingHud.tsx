@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -9,10 +11,15 @@ import styles from "./PianoSightReadingHud.module.css";
 import {
   PITCH_LETTERS,
   analyzeNotatedInterval,
+  assignNotesToTargets,
+  attacksShareChordWindow,
+  displayedAccidentalsForMeasure,
+  inferUniformTransposition,
+  preferredAccidentalsForShape,
+  preferredAccidentalsForTonic,
+  spellShapeRelativePitch,
   spellMidiPitch,
-  transposeNotatedPitchByShape,
   type Accidental,
-  type Clef,
   type NotatedPitch,
 } from "@/lib/piano-sight-reading-model";
 import { scaleSemitones, type PianoScale } from "@/lib/piano-model";
@@ -33,6 +40,8 @@ type PianoSightReadingHudProps = {
   scale: PianoScale;
   chordWindowMs: number;
   showConventions: boolean;
+  frozen: boolean;
+  onResumeCapture: () => void;
 };
 
 type Chapter = "understand" | "embody" | "integrate" | "mindset";
@@ -169,14 +178,14 @@ const PATTERNS: SightPattern[] = [
     chapter: "understand",
     family: "Inversion",
     name: "Inversion wedge",
-    miniature: "3 + 5 · same pitch classes",
+    miniature: "3 + 5 · root above bass",
     frames: [{ offsets: [0, 3, 8], beats: 2, hands: ["right", "right", "right"] }],
     groups: [{ from: 0, to: 0, label: "bass changes the silhouette" }],
     focus: "A fourth inside a triad is a fast visual clue that the chord has been inverted.",
     eyes: "Read the compact third below and wider fourth above as a single wedge.",
     hands: "Feel the uneven 3 + 5 spacing rather than reconstructing a root-position label first.",
-    ears: "Compare the same pitch classes with a different bass and registral balance.",
-    idea: "familiar material · newly weighted",
+    ears: "Hear how the lower third and upper fourth redistribute weight when the chord root is not the bass.",
+    idea: "root displaced · weight redistributed",
   },
   {
     id: "folded-arpeggio",
@@ -402,8 +411,9 @@ const PATTERNS: SightPattern[] = [
   },
 ];
 
-const PITCH_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-const SOLFEGE = ["Do", "Di", "Re", "Ri", "Mi", "Fa", "Fi", "Sol", "Si", "La", "Li", "Ti"];
+// These syllables follow the written interval shapes used by this reader:
+// lowered 2/3/6/7 are Ra/Me/Le/Te, while the raised fourth is Fi.
+const SHAPE_SOLFEGE = ["Do", "Ra", "Re", "Me", "Mi", "Fa", "Fi", "Sol", "Le", "La", "Te", "Ti"];
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const INTERVAL_COLORS = [
   "#8ea1b5", "#ee6d92", "#ef9a5b", "#e9c46a", "#9fd36c", "#56c6a9", "#48b9cf",
@@ -418,10 +428,21 @@ function pitchClass(note: number) {
   return ((note % 12) + 12) % 12;
 }
 
-function pitchLabel(note: number, doMidi: number, showConventions: boolean) {
+function pitchLabel(note: number, doMidi: number, showConventions: boolean, prefer = preferredAccidentalsForTonic(doMidi)) {
   const relative = ((note - doMidi) % 12 + 12) % 12;
-  if (!showConventions) return SOLFEGE[relative];
-  return `${PITCH_NAMES[pitchClass(note)]}${Math.floor(note / 12) - 1}`;
+  if (!showConventions) return SHAPE_SOLFEGE[relative];
+  if (!Number.isInteger(note) || note < 0 || note > 127) return "outside MIDI range";
+  return spellMidiPitch(note, {
+    clef: note < 60 ? "bass" : "treble",
+    prefer,
+  }).label;
+}
+
+function pitchClassLabel(note: number, prefer: "sharps" | "flats") {
+  if (!Number.isInteger(note) || note < 0 || note > 127) return "out";
+  const notation = spellMidiPitch(note, { prefer });
+  const symbol = notation.accidental === "natural" ? "" : accidentalGlyph(notation.accidental);
+  return `${notation.letter}${symbol ?? ""}`;
 }
 
 function signed(value: number) {
@@ -438,40 +459,23 @@ function ordinal(value: number) {
   return `${value}${ending}`;
 }
 
-const CANONICAL_STAFF_STEPS = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6] as const;
-
-function canonicalStaffOffset(semitoneOffset: number) {
-  if (!Number.isFinite(semitoneOffset)) return 0;
-  const rounded = Math.round(semitoneOffset);
-  const sign = Math.sign(rounded);
-  const absolute = Math.abs(rounded);
-  return sign * (Math.floor(absolute / 12) * 7 + CANONICAL_STAFF_STEPS[absolute % 12]);
-}
-
-function notatePatternPitch(anchorMidi: number, semitoneOffset: number): NotatedPitch {
-  const clef: Clef = anchorMidi + semitoneOffset < 60 ? "bass" : "treble";
-  const anchor = spellMidiPitch(anchorMidi, { clef, prefer: "sharps" });
-  return transposeNotatedPitchByShape(anchor, canonicalStaffOffset(semitoneOffset), Math.round(semitoneOffset), clef);
+function notatePatternPitch(anchorMidi: number, semitoneOffset: number, prefer = preferredAccidentalsForTonic(anchorMidi)): NotatedPitch {
+  return spellShapeRelativePitch(anchorMidi, Math.round(semitoneOffset), prefer);
 }
 
 function diatonicIndex(pitch: NotatedPitch) {
   return pitch.octave * 7 + PITCH_LETTERS.indexOf(pitch.letter);
 }
 
-function genericIntervalFromOffsets(firstOffset: number, secondOffset: number, anchorMidi: number) {
+function genericIntervalFromOffsets(firstOffset: number, secondOffset: number, anchorMidi: number, prefer: "sharps" | "flats") {
   return analyzeNotatedInterval(
-    notatePatternPitch(anchorMidi, firstOffset),
-    notatePatternPitch(anchorMidi, secondOffset),
+    notatePatternPitch(anchorMidi, firstOffset, prefer),
+    notatePatternPitch(anchorMidi, secondOffset, prefer),
   ).genericNumber;
 }
 
 function staffY(pitch: NotatedPitch) {
   return 144 - (diatonicIndex(pitch) - 30) * 7;
-}
-
-function frameCenterY(frame: PatternFrame, anchorMidi: number) {
-  const positions = frame.offsets.map((offset) => staffY(notatePatternPitch(anchorMidi, offset)));
-  return positions.reduce((sum, value) => sum + value, 0) / Math.max(1, positions.length);
 }
 
 function ledgerLines(pitch: NotatedPitch) {
@@ -486,6 +490,7 @@ function ledgerLines(pitch: NotatedPitch) {
 function accidentalGlyph(accidental: Accidental) {
   if (accidental === "flat") return "♭";
   if (accidental === "sharp") return "♯";
+  if (accidental === "natural") return "♮";
   if (accidental === "double-flat") return "𝄫";
   if (accidental === "double-sharp") return "𝄪";
   return null;
@@ -500,13 +505,28 @@ function frameStarts(pattern: SightPattern) {
   });
 }
 
-function flattenPattern(pattern: SightPattern, anchor: number) {
+function connectedRuns(pattern: SightPattern) {
+  const runs: Array<{ from: number; to: number }> = [];
+  let start: number | null = null;
+  pattern.frames.forEach((frame, index) => {
+    if (frame.articulation === "connected") {
+      if (start == null) start = index;
+      return;
+    }
+    if (start != null && index - start >= 2) runs.push({ from: start, to: index - 1 });
+    start = null;
+  });
+  if (start != null && pattern.frames.length - start >= 2) runs.push({ from: start, to: pattern.frames.length - 1 });
+  return runs;
+}
+
+function flattenPattern(pattern: SightPattern, anchor: number, prefer: "sharps" | "flats") {
   return pattern.frames.flatMap((frame, frameIndex) => frame.offsets.map((offset, noteIndex) => ({
     frameIndex,
     noteIndex,
     note: anchor + offset,
     offset,
-    notation: notatePatternPitch(anchor, offset),
+    notation: notatePatternPitch(anchor, offset, prefer),
     hand: frame.hands?.[noteIndex] ?? (offset < 0 ? "left" : "right"),
   })));
 }
@@ -544,9 +564,37 @@ function feelingForInterval(distance: number) {
   return "register echo · expanded identity";
 }
 
-function patternFingerprint(pattern: SightPattern) {
-  const anchors = pattern.frames.map((frame) => frame.offsets.reduce((sum, note) => sum + note, 0) / frame.offsets.length);
-  return anchors.slice(1).map((anchor, index) => anchor - anchors[index]);
+type MotionLane = {
+  id: "gesture" | Hand;
+  label: string;
+  centers: number[];
+  moves: number[];
+};
+
+function offsetsForMotionLane(frame: PatternFrame, lane: MotionLane["id"]) {
+  if (lane === "gesture") return frame.offsets;
+  return frame.offsets.filter((_, index) => frame.hands?.[index] === lane);
+}
+
+function patternMotionLanes(pattern: SightPattern): MotionLane[] {
+  const hasIndependentHands = pattern.frames.some((frame) => frame.hands?.includes("left") && frame.hands.includes("right"));
+  const laneSpecs: Array<{ id: MotionLane["id"]; label: string }> = hasIndependentHands
+    ? [{ id: "left", label: "L" }, { id: "right", label: "R" }]
+    : [{ id: "gesture", label: "gesture" }];
+  return laneSpecs.map((lane) => {
+    const centers = pattern.frames.map((frame) => median(offsetsForMotionLane(frame, lane.id)));
+    return {
+      ...lane,
+      centers,
+      moves: centers.slice(1).map((center, index) => center - centers[index]),
+    };
+  });
+}
+
+function motionLaneY(frame: PatternFrame, lane: MotionLane["id"], anchorMidi: number, prefer: "sharps" | "flats") {
+  const offsets = offsetsForMotionLane(frame, lane);
+  const positions = offsets.map((offset) => staffY(notatePatternPitch(anchorMidi, offset, prefer)));
+  return positions.reduce((sum, value) => sum + value, 0) / Math.max(1, positions.length);
 }
 
 function adjacentGaps(notes: number[]) {
@@ -594,6 +642,19 @@ function keyboardWindow(notes: number[]) {
   return { low, high };
 }
 
+function registerFitsScore(doMidi: number, shift: number, pattern: SightPattern) {
+  try {
+    const offsets = pattern.frames.flatMap((frame) => frame.offsets);
+    const prefer = preferredAccidentalsForShape(doMidi + shift, offsets);
+    return offsets.every((offset) => {
+      const y = staffY(notatePatternPitch(doMidi + shift, offset, prefer));
+      return y >= 60 && y <= 246;
+    });
+  } catch {
+    return false;
+  }
+}
+
 function patternChapterCopy(chapter: Chapter) {
   if (chapter === "understand") return "Reduce detail into intervals, contour, chord silhouette, transformation, and fixed points.";
   if (chapter === "embody") return "Turn visual groups into prepared territories, continuous movement, and coordinated hands.";
@@ -601,7 +662,7 @@ function patternChapterCopy(chapter: Chapter) {
   return "Preserve what worked, identify the smallest consequential difference, and retry one change.";
 }
 
-export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chordWindowMs, showConventions }: PianoSightReadingHudProps) {
+export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chordWindowMs, showConventions, frozen, onResumeCapture }: PianoSightReadingHudProps) {
   const [chapter, setChapter] = useState<Chapter>("understand");
   const [patternId, setPatternId] = useState("neighbor-return");
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("exact");
@@ -610,19 +671,38 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
   const [registerShift, setRegisterShift] = useState(0);
   const [foldArpeggio, setFoldArpeggio] = useState(true);
   const [attemptAfterId, setAttemptAfterId] = useState(() => events.at(-1)?.id ?? -1);
+  const [writtenFrame, setWrittenFrame] = useState(() => ({ doMidi, scale }));
   const [scoreRevealed, setScoreRevealed] = useState(true);
   const [intention, setIntention] = useState("follow the written idea");
   const [wordOne, setWordOne] = useState("");
   const [wordTwo, setWordTwo] = useState("");
+  const scoreViewportRef = useRef<HTMLDivElement>(null);
+  const keyboardViewportRef = useRef<HTMLDivElement>(null);
 
   const pattern = PATTERNS.find((candidate) => candidate.id === patternId) ?? PATTERNS[0];
   const patternsForChapter = PATTERNS.filter((candidate) => candidate.chapter === chapter);
-  const anchor = doMidi + registerShift;
-  const targetNotes = useMemo(() => flattenPattern(pattern, anchor), [anchor, pattern]);
-  const selectedRoute = useMemo(() => new Set(scaleSemitones(scale)), [scale]);
-  const targetRouteOffsets = [...new Set(targetNotes.map((target) => ((target.note - doMidi) % 12 + 12) % 12))];
+  const motionLanes = useMemo(() => patternMotionLanes(pattern), [pattern]);
+  const slurRuns = useMemo(() => connectedRuns(pattern), [pattern]);
+  const anchor = writtenFrame.doMidi + registerShift;
+  const notationPreference = useMemo(
+    () => preferredAccidentalsForShape(anchor, pattern.frames.flatMap((frame) => frame.offsets)),
+    [anchor, pattern],
+  );
+  const targetNotes = useMemo(() => flattenPattern(pattern, anchor, notationPreference), [anchor, notationPreference, pattern]);
+  const displayedAccidentals = useMemo(
+    () => displayedAccidentalsForMeasure(targetNotes.map((target) => target.notation)),
+    [targetNotes],
+  );
+  const selectedRoute = useMemo(() => new Set(scaleSemitones(writtenFrame.scale)), [writtenFrame.scale]);
+  const targetRouteOffsets = [...new Set(targetNotes.map((target) => ((target.note - writtenFrame.doMidi) % 12 + 12) % 12))];
   const routeMemberCount = targetRouteOffsets.filter((offset) => selectedRoute.has(offset)).length;
   const targetPitchClassCount = new Set(targetNotes.map((target) => pitchClass(target.note))).size;
+  const routeOutsideCount = targetPitchClassCount - routeMemberCount;
+  const outsideRouteLabels = [...new Set(targetNotes.flatMap((target) => {
+    const offset = ((target.note - writtenFrame.doMidi) % 12 + 12) % 12;
+    return selectedRoute.has(offset) ? [] : [target.notation.label];
+  }))];
+  const liveFrameChanged = writtenFrame.doMidi !== doMidi || writtenFrame.scale.id !== scale.id;
   const expectedAttackCount = targetNotes.length;
   const attemptEvents = useMemo(
     () => events.filter((event) => event.id > attemptAfterId).slice(0, expectedAttackCount),
@@ -630,10 +710,44 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
   );
   const attemptFrames = useMemo(() => splitAttempt(attemptEvents, pattern), [attemptEvents, pattern]);
   const attemptComplete = attemptEvents.length === expectedAttackCount;
-  const firstAttempt = attemptEvents[0]?.note ?? null;
-  const transferShift = practiceMode === "transfer" && firstAttempt != null ? firstAttempt - targetNotes[0].note : 0;
+  const firstAttemptFrame = attemptFrames[0] ?? [];
+  const firstTargetFrame = pattern.frames[0].offsets.map((offset) => anchor + offset);
+  const transferShift = practiceMode === "transfer" && firstAttemptFrame.length
+    ? (() => {
+      if (firstTargetFrame.length === 1) return firstAttemptFrame[0].note - firstTargetFrame[0];
+      if (firstAttemptFrame.length !== firstTargetFrame.length) return 0;
+      return inferUniformTransposition(firstTargetFrame, firstAttemptFrame.map((event) => event.note)) ?? 0;
+    })()
+    : 0;
   const shownAttemptNotes = attemptEvents.map((event) => event.note - transferShift);
-  const scoreVeiled = !scoreRevealed || (challengeMode === "fade" && attemptEvents.length > 0) || (challengeMode === "memory" && attemptEvents.length > 0);
+  const physicalDo = writtenFrame.doMidi + transferShift;
+  const physicalShapeOffsets = pattern.frames.flatMap((frame) => frame.offsets);
+  const physicalNotationPreference = physicalShapeOffsets.every((offset) => physicalDo + offset >= 0 && physicalDo + offset <= 127)
+    ? preferredAccidentalsForShape(physicalDo, physicalShapeOffsets)
+    : notationPreference;
+  const frameTargetStartIndices = useMemo(() => {
+    return pattern.frames.map((_, frameIndex) => pattern.frames
+      .slice(0, frameIndex)
+      .reduce((start, frame) => start + frame.offsets.length, 0));
+  }, [pattern]);
+  const attemptTargetIndices = useMemo(() => pattern.frames.flatMap((frame, frameIndex) => {
+    const start = frameTargetStartIndices[frameIndex];
+    const candidates = targetNotes.slice(start, start + frame.offsets.length).map((target, localIndex) => ({
+      globalIndex: start + localIndex,
+      note: target.note,
+    }));
+    const actual = (attemptFrames[frameIndex] ?? []).map((event) => event.note - transferShift);
+    return assignNotesToTargets(actual, candidates.map((candidate) => candidate.note)).map((localIndex) => candidates[localIndex].globalIndex);
+  }), [attemptFrames, frameTargetStartIndices, pattern, targetNotes, transferShift]);
+  const currentFrameIndex = pattern.frames.findIndex((frame, index) => (attemptFrames[index]?.length ?? 0) < frame.offsets.length);
+  const nextFlatTargets = currentFrameIndex < 0 ? [] : (() => {
+    const start = frameTargetStartIndices[currentFrameIndex];
+    const frameTargets = targetNotes.slice(start, start + pattern.frames[currentFrameIndex].offsets.length);
+    const assigned = new Set(attemptTargetIndices.slice(start, start + (attemptFrames[currentFrameIndex]?.length ?? 0)));
+    return frameTargets.filter((_, localIndex) => !assigned.has(start + localIndex));
+  })();
+  const nextPhysicalTargets = nextFlatTargets.map((target) => target.note + transferShift);
+  const scoreVeiled = !scoreRevealed || (challengeMode === "fade" && attemptEvents.length > 0);
   const targetFrameStarts = useMemo(() => frameStarts(pattern), [pattern]);
 
   const evaluation = useMemo(() => {
@@ -642,10 +756,12 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
       const actual = sorted((attemptFrames[index] ?? []).map((event) => event.note));
       const complete = actual.length === target.length;
       const correct = complete && sameNumbers(target, actual);
-      const spread = actual.length > 1
-        ? Math.max(...(attemptFrames[index] ?? []).map((event) => event.onsetMs)) - Math.min(...(attemptFrames[index] ?? []).map((event) => event.onsetMs))
-        : 0;
-      return { target, actual, complete, correct, spread };
+      const grouped = attacksShareChordWindow(
+        (attemptFrames[index] ?? []).map((event) => event.onsetMs),
+        chordWindowMs,
+        chordWindowMs * 2,
+      );
+      return { target, actual, complete, correct, grouped };
     });
     const pitchHits = frameResults.reduce((count, frame) => {
       const remaining = [...frame.target];
@@ -657,14 +773,29 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
       }, 0);
       return count + hits;
     }, 0);
-    const targetCenters = pattern.frames.map((frame) => median(frame.offsets.map((offset) => anchor + offset)));
-    const actualCenters = attemptFrames.filter((frame) => frame.length).map((frame) => median(frame.map((event) => event.note - transferShift)));
-    const targetMoves = targetCenters.slice(1).map((value, index) => Math.sign(value - targetCenters[index]));
-    const actualMoves = actualCenters.slice(1).map((value, index) => Math.sign(value - actualCenters[index]));
-    const comparedDirections = Math.min(targetMoves.length, actualMoves.length);
-    const directionHits = actualMoves.slice(0, comparedDirections).filter((value, index) => value === targetMoves[index]).length;
+    const actualByTargetIndex = new Map<number, number>();
+    attemptEvents.forEach((event, index) => actualByTargetIndex.set(attemptTargetIndices[index], event.note - transferShift));
+    const directionComparisons = motionLanes.flatMap((lane) => lane.moves.flatMap((targetMove, transitionIndex) => {
+      const frameActualCenter = (frameIndex: number) => {
+        const frame = pattern.frames[frameIndex];
+        const start = frameTargetStartIndices[frameIndex];
+        const localIndices = frame.offsets.flatMap((_, localIndex) => (
+          lane.id === "gesture" || frame.hands?.[localIndex] === lane.id ? [localIndex] : []
+        ));
+        const values = localIndices.flatMap((localIndex) => {
+          const actual = actualByTargetIndex.get(start + localIndex);
+          return actual == null ? [] : [actual];
+        });
+        return values.length === localIndices.length ? median(values) : null;
+      };
+      const from = frameActualCenter(transitionIndex);
+      const to = frameActualCenter(transitionIndex + 1);
+      return from == null || to == null ? [] : [{ target: Math.sign(targetMove), actual: Math.sign(to - from) }];
+    }));
+    const comparedDirections = directionComparisons.length;
+    const directionHits = directionComparisons.filter((comparison) => comparison.actual === comparison.target).length;
     const chordFrames = frameResults.filter((_, index) => pattern.frames[index].offsets.length > 1);
-    const chordGroupingHits = chordFrames.filter((frame) => frame.complete && frame.spread <= chordWindowMs).length;
+    const chordGroupingHits = chordFrames.filter((frame) => frame.complete && frame.grouped).length;
     const actualOnsets = attemptFrames.filter((frame) => frame.length).map((frame) => frame[0].onsetMs);
     const actualGaps = actualOnsets.slice(1).map((value, index) => value - actualOnsets[index]);
     const targetGaps = targetFrameStarts.slice(1).map((value, index) => value - targetFrameStarts[index]);
@@ -679,35 +810,55 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
       pitchHits,
       pitchFit: expectedAttackCount ? pitchHits / expectedAttackCount : 0,
       directionHits,
+      directionComparisonCount: comparedDirections,
+      targetDirectionCount: motionLanes.reduce((count, lane) => count + lane.moves.length, 0),
       directionFit: comparedDirections ? directionHits / comparedDirections : null,
       chordGroupingHits,
       chordFrameCount: chordFrames.length,
       pulseFit,
       allCorrect: attemptComplete && frameResults.every((frame) => frame.correct),
     };
-  }, [anchor, attemptComplete, attemptFrames, chordWindowMs, expectedAttackCount, pattern, targetFrameStarts, transferShift]);
+  }, [anchor, attemptComplete, attemptEvents, attemptFrames, attemptTargetIndices, chordWindowMs, expectedAttackCount, frameTargetStartIndices, motionLanes, pattern, targetFrameStarts, transferShift]);
 
-  const diagnosis = useMemo(() => {
+  const diagnosis = (() => {
     if (!attemptEvents.length) return {
       title: "Read the whole gesture before launching it.",
       body: pattern.focus,
       next: pattern.frames.length > 1 ? `Prepare frame 1, then let your attention move toward frame 2 before the first sound ends.` : "Prepare the entire vertical spacing before any key goes down.",
     };
     if (!attemptComplete) {
-      const nextFlat = targetNotes[attemptEvents.length];
       const priorActual = attemptEvents.at(-1)!.note;
-      const expectedPhysicalNote = nextFlat.note + transferShift;
+      if (practiceMode === "transfer" && pattern.frames[0].offsets.length > 1 && firstAttemptFrame.length < pattern.frames[0].offsets.length) return {
+        title: `${firstAttemptFrame.length} of ${pattern.frames[0].offsets.length} opening chord tones received.`,
+        body: "Complete the opening vertical shape in any attack order. Its sorted spacing—not the first MIDI packet—will establish the transfer anchor.",
+        next: "Prepare the whole sonority and gather its remaining keys inside the selected chord window.",
+      };
+      if (nextPhysicalTargets.length > 1) return {
+        title: `${attemptEvents.length} of ${expectedAttackCount} attacks placed. Complete one vertical object.`,
+        body: `${nextPhysicalTargets.length} chord members remain in this frame; their internal attack order does not matter.`,
+        next: "Prepare the outside span, then gather every remaining member before moving to the next frame.",
+      };
+      const expectedPhysicalNote = nextPhysicalTargets[0];
       return {
         title: `${attemptEvents.length} of ${expectedAttackCount} attacks placed. Keep the phrase alive.`,
-        body: `The next destination is ${signed(expectedPhysicalNote - priorActual)} semitones from your latest key. That is a preparation cue, not a command to hurry.`,
+        body: expectedPhysicalNote == null
+          ? "The current frame is complete; prepare the next written object."
+          : `The next destination is ${signed(expectedPhysicalNote - priorActual)} semitones from your latest key. That is a preparation cue, not a command to hurry.`,
         next: "Let the hand orient early while the written duration continues.",
       };
     }
     if (evaluation.allCorrect && evaluation.chordFrameCount && evaluation.chordGroupingHits < evaluation.chordFrameCount) {
       return {
         title: "The pitches fit; simultaneity changed the object.",
-        body: `${evaluation.pitchHits}/${expectedAttackCount} target positions matched, but one intended vertical group spread beyond the selected ${chordWindowMs} ms reading window.`,
+        body: `${evaluation.pitchHits}/${expectedAttackCount} target positions matched, but one intended vertical group exceeded an adjacent gap of ${chordWindowMs} ms or the shared ${chordWindowMs * 2} ms maximum span.`,
         next: "Prepare the complete outer span first, then let the interior keys arrive inside the same window.",
+      };
+    }
+    if (evaluation.allCorrect && evaluation.pulseFit != null && evaluation.pulseFit < .72) {
+      return {
+        title: "The pitch shape landed; the onset proportions changed.",
+        body: `${evaluation.pitchHits}/${expectedAttackCount} positions matched, while the tempo-adaptive pulse-shape fit was ${Math.round(evaluation.pulseFit * 100)}%.`,
+        next: "Keep the same pitches and retry the long-versus-short relationships before fading any support.",
       };
     }
     if (evaluation.allCorrect) {
@@ -722,9 +873,8 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
     }
     const firstWrongFrame = evaluation.frameResults.findIndex((frame) => frame.complete && !frame.correct);
     const wrong = evaluation.frameResults[firstWrongFrame];
-    const target = wrong?.target[0];
-    const actual = wrong?.actual[0];
-    const difference = target != null && actual != null ? actual - target : null;
+    const differences = wrong ? wrong.actual.map((actual, index) => actual - (wrong.target[index] ?? actual)) : [];
+    const difference = differences.find((candidate) => candidate !== 0) ?? null;
     if ((evaluation.directionFit ?? 0) >= .75 && evaluation.pitchFit < 1) return {
       title: "The contour survived; an exact span changed.",
       body: difference == null ? "Direction was mostly preserved, but at least one destination had a different semitone width." : `At frame ${firstWrongFrame + 1}, the performed landing was ${pluralSemitones(difference)} ${difference > 0 ? "higher" : "lower"} than the target after alignment.`,
@@ -732,21 +882,30 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
     };
     return {
       title: "Some landmarks moved; preserve one relation on the retry.",
-      body: `${evaluation.pitchHits}/${expectedAttackCount} positions and ${evaluation.directionHits}/${Math.max(1, pattern.frames.length - 1)} contour directions matched after ${practiceMode === "transfer" ? "transposition alignment" : "exact-pitch comparison"}.`,
+      body: `${evaluation.pitchHits}/${expectedAttackCount} positions and ${evaluation.directionHits}/${Math.max(1, evaluation.targetDirectionCount)} contour directions matched after ${practiceMode === "transfer" ? "transposition alignment" : "exact-pitch comparison"}.`,
       next: firstWrongFrame >= 0 ? `Preview frame ${firstWrongFrame + 1} as a destination, then replay the surrounding group—not the isolated wrong note.` : "Return to the first group and keep its silhouette intact.",
     };
-  }, [attemptComplete, attemptEvents, chordWindowMs, evaluation, expectedAttackCount, pattern, practiceMode, support, targetNotes, transferShift]);
+  })();
 
   const resetAttempt = () => {
     setAttemptAfterId(events.at(-1)?.id ?? -1);
     setScoreRevealed(challengeMode !== "memory");
   };
 
+  const adoptLiveFrame = () => {
+    setWrittenFrame({ doMidi, scale });
+    if (!registerFitsScore(doMidi, registerShift, pattern)) setRegisterShift(0);
+    setAttemptAfterId(events.at(-1)?.id ?? -1);
+    setScoreRevealed(true);
+  };
+
   const selectPattern = (next: SightPattern) => {
     setPatternId(next.id);
+    setWrittenFrame({ doMidi, scale });
+    if (!registerFitsScore(doMidi, registerShift, next)) setRegisterShift(0);
     setAttemptAfterId(events.at(-1)?.id ?? -1);
     setFoldArpeggio(Boolean(next.foldable));
-    setScoreRevealed(challengeMode !== "memory");
+    setScoreRevealed(true);
     setIntention("follow the written idea");
     setWordOne("");
     setWordTwo("");
@@ -766,10 +925,9 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
   const selectRegister = (next: number) => {
     setRegisterShift(next);
     setAttemptAfterId(events.at(-1)?.id ?? -1);
+    setScoreRevealed(true);
   };
 
-  const nextFlatTarget = targetNotes[Math.min(attemptEvents.length, targetNotes.length - 1)] ?? null;
-  const nextPhysicalTarget = nextFlatTarget ? nextFlatTarget.note + transferShift : null;
   const keyboardTargetNotes = targetNotes.map((note) => note.note + transferShift);
   const visibleKeyboardNotes = [...keyboardTargetNotes, ...attemptEvents.map((event) => event.note), ...activeNotes];
   const { low: keyboardLow, high: keyboardHigh } = keyboardWindow(visibleKeyboardNotes);
@@ -780,7 +938,29 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
     if (WHITE_PITCH_CLASSES.has(pitchClass(note))) return whitesBefore * whiteWidth;
     return whitesBefore * whiteWidth - whiteWidth * .31;
   };
-  const patternMoves = patternFingerprint(pattern);
+  const scoreScrollX = currentFrameIndex >= 0 ? eventFrameX(currentFrameIndex, pattern) : null;
+  const nextKeyboardTargetForScroll = nextPhysicalTargets.find((note) => note >= keyboardLow && note <= keyboardHigh) ?? null;
+  const keyboardScrollX = nextKeyboardTargetForScroll == null ? null : keyX(nextKeyboardTargetForScroll);
+  useEffect(() => {
+    const scoreViewport = scoreViewportRef.current;
+    if (scoreViewport && scoreViewport.scrollWidth > scoreViewport.clientWidth + 1 && scoreScrollX != null) {
+      const scoreX = scoreScrollX / 1120 * scoreViewport.scrollWidth;
+      scoreViewport.scrollTo({
+        left: Math.max(0, Math.min(scoreViewport.scrollWidth - scoreViewport.clientWidth, scoreX - scoreViewport.clientWidth / 2)),
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    }
+    const keyboardViewport = keyboardViewportRef.current;
+    if (keyboardViewport && keyboardScrollX != null && keyboardViewport.scrollWidth > keyboardViewport.clientWidth + 1) {
+      const keyboardX = keyboardScrollX / 1040 * keyboardViewport.scrollWidth;
+      keyboardViewport.scrollTo({
+        left: Math.max(0, Math.min(keyboardViewport.scrollWidth - keyboardViewport.clientWidth, keyboardX - keyboardViewport.clientWidth / 2)),
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    }
+  }, [keyboardScrollX, scoreScrollX]);
+  const patternMoves = motionLanes.flatMap((lane) => lane.moves);
+  const foldedOffsets = [...new Set(pattern.frames.flatMap((frame) => frame.offsets))].sort((first, second) => first - second);
   const targetSpan = Math.max(...keyboardTargetNotes) - Math.min(...keyboardTargetNotes);
   const completedFrameCount = attemptFrames.filter((frame, index) => frame.length === pattern.frames[index].offsets.length).length;
   const anchorOccurrences = pattern.anchorOffset == null ? [] : targetNotes.filter((note) => note.offset === pattern.anchorOffset);
@@ -796,9 +976,9 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
         <dl className={styles.statusLedger} aria-label="Sight-reading session status">
           <div><dt>sound</dt><dd>visualization only · piano or DAW supplies audio</dd></div>
           <div><dt>target</dt><dd>{expectedAttackCount} attacks · {pattern.frames.length} frame{pattern.frames.length === 1 ? "" : "s"}</dd></div>
-          <div><dt>attempt</dt><dd>{attemptEvents.length}/{expectedAttackCount} attacks · {activeNotes.length} sounding now</dd></div>
+          <div><dt>attempt</dt><dd>{attemptEvents.length}/{expectedAttackCount} attacks · {activeNotes.length} active / held now</dd></div>
           <div><dt>comparison</dt><dd>{practiceMode === "exact" ? "written position" : "transposable shape"}</dd></div>
-          <div><dt>selected frame</dt><dd>{showConventions ? scale.conventionalName : scale.name} · {routeMemberCount}/{targetPitchClassCount} target positions inside its route</dd></div>
+          <div><dt>written frame</dt><dd>{showConventions ? writtenFrame.scale.conventionalName : writtenFrame.scale.name} from {pitchLabel(writtenFrame.doMidi, writtenFrame.doMidi, showConventions, notationPreference)} · {routeMemberCount}/{targetPitchClassCount} target positions inside its route{routeOutsideCount ? ` · ${routeOutsideCount} authored alteration${routeOutsideCount === 1 ? "" : "s"}` : ""}</dd></div>
         </dl>
       </header>
 
@@ -831,10 +1011,13 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
             <p>{pattern.focus}</p>
           </div>
           <div className={styles.workbenchActions}>
-            <button type="button" className={styles.primaryAction} onClick={resetAttempt}>{attemptComplete ? "Try it again" : attemptEvents.length ? "Restart attempt" : "Start from now"}</button>
+            <button type="button" className={styles.primaryAction} onClick={resetAttempt}>{challengeMode === "memory" && scoreRevealed && !attemptEvents.length ? "Start from memory" : attemptComplete ? "Try it again" : attemptEvents.length ? "Restart from now" : "Reset boundary"}</button>
+            {liveFrameChanged ? <button type="button" onClick={adoptLiveFrame}>Adopt live frame</button> : null}
             {challengeMode === "memory" ? <button type="button" aria-pressed={scoreRevealed} onClick={() => setScoreRevealed((current) => !current)}>{scoreRevealed ? "Veil score" : "Reveal score"}</button> : null}
           </div>
         </header>
+
+        {frozen ? <p className={styles.frameNotice} role="alert"><strong>Attack capture is frozen.</strong> Held keys can still light, but new notes cannot enter this attempt. <button type="button" onClick={onResumeCapture}>Resume capture</button></p> : liveFrameChanged ? <p className={styles.frameNotice} role="status"><strong>The live Do / route moved.</strong> This written score stays fixed through the attempt. Adopt the live frame only when you want a new target.</p> : null}
 
         <div className={styles.controlRail}>
           <fieldset>
@@ -844,7 +1027,10 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
           </fieldset>
           <fieldset>
             <legend>Register</legend>
-            {[-12, 0, 12].map((shift) => <button key={shift} type="button" aria-pressed={registerShift === shift} onClick={() => selectRegister(shift)}>{shift < 0 ? "low" : shift > 0 ? "high" : "center"}<span>{signed(shift)} st</span></button>)}
+            {[-12, 0, 12].map((shift) => {
+              const readable = registerFitsScore(writtenFrame.doMidi, shift, pattern);
+              return <button key={shift} type="button" aria-pressed={registerShift === shift} disabled={!readable} title={readable ? undefined : "This register would collide with the interval braid."} onClick={() => selectRegister(shift)}>{shift < 0 ? "low" : shift > 0 ? "high" : "center"}<span>{signed(shift)} st</span></button>;
+            })}
           </fieldset>
           <label className={styles.supportControl}>
             <span><strong>Scaffold</strong><small>{["score only", "territory", "intervals", "full decode"][support]}</small></span>
@@ -852,7 +1038,7 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
           </label>
           <label className={styles.selectControl}>
             <span>Reading challenge</span>
-            <select value={challengeMode} onChange={(event) => { const next = event.target.value as ChallengeMode; setChallengeMode(next); setScoreRevealed(next !== "memory"); }}>
+            <select value={challengeMode} onChange={(event) => { const next = event.target.value as ChallengeMode; setChallengeMode(next); setScoreRevealed(true); }}>
               <option value="open">Open score</option>
               <option value="fade">Fade after first attack</option>
               <option value="memory">Preview, then veil</option>
@@ -863,10 +1049,12 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
 
         <div className={cx(styles.scoreFrame, scoreVeiled && styles.isVeiled, challengeMode === "fade" && styles.isFading)}>
           <div className={styles.scoreHeading}>
-            <div><span>Primary reading surface</span><strong>Grand staff + interval braid</strong></div>
+            <div><span>Primary reading surface</span><strong>Grand staff + interval braid</strong><small>One unbarred measure · accidentals carry to the closing bar · ♮ cancels them · no key signature assumed</small></div>
             <div className={styles.scoreLegend} aria-label="Score overlay key"><span><i className={styles.targetMark} />written target</span><span><i className={styles.attemptMark} />performed overlay</span><span><i className={styles.magnetMark} />next destination</span></div>
           </div>
-          <svg className={styles.score} viewBox="0 0 1120 360" role="img" aria-labelledby="sight-score-title sight-score-description">
+          {outsideRouteLabels.length ? <p className={styles.routeNotice}><strong>Fixed interval specimen · {outsideRouteLabels.join(" · ")} {outsideRouteLabels.length === 1 ? "is" : "are"} outside the selected route.</strong> {pattern.id === "transposed-cell" ? "The final pitch is intentional: the second cell preserves the same +2, +2 semitone interior as the first. Replacing it with the neighboring route pitch would make the last move +1." : "The selected route provides context; it does not rewrite this authored spacing exercise."}</p> : null}
+          <div ref={scoreViewportRef} className={styles.scoreViewport} tabIndex={0} aria-label="Scrollable notation viewport; it follows the next written frame on narrow screens.">
+            <svg className={styles.score} viewBox="0 0 1120 360" role="img" aria-labelledby="sight-score-title sight-score-description">
             <title id="sight-score-title">{pattern.name} notation with aligned interval and attempt overlays</title>
             <desc id="sight-score-description">{pattern.focus} {attemptEvents.length ? `${attemptEvents.length} performed attacks are overlaid.` : "No performed attacks yet."}</desc>
             <defs>
@@ -897,55 +1085,85 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
             </g> : null}
 
             <g className={styles.targetLayer} aria-hidden={scoreVeiled}>
-              {pattern.frames.slice(1).map((frame, index) => {
+              {motionLanes.flatMap((lane) => pattern.frames.slice(1).map((frame, index) => {
                 const prior = pattern.frames[index];
-                const fromOffset = median(prior.offsets);
-                const toOffset = median(frame.offsets);
-                const distance = Math.round(toOffset - fromOffset);
+                const distance = lane.moves[index];
                 const x1 = eventFrameX(index, pattern);
                 const x2 = eventFrameX(index + 1, pattern);
-                const y1 = frameCenterY(prior, anchor);
-                const y2 = frameCenterY(frame, anchor);
-                return <path key={`contour-${index}`} d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - 12} ${x2} ${y2}`} className={styles.contourPath} style={{ "--interval-color": colorForInterval(distance) } as CSSProperties} />;
-              })}
-              {targetNotes.map((target) => {
+                const y1 = motionLaneY(prior, lane.id, anchor, notationPreference);
+                const y2 = motionLaneY(frame, lane.id, anchor, notationPreference);
+                return <path key={`contour-${lane.id}-${index}`} d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - 12} ${x2} ${y2}`} className={styles.contourPath} style={{ "--interval-color": colorForInterval(distance) } as CSSProperties} />;
+              }))}
+              <g className={styles.slurLayer}>
+                {slurRuns.map((run) => {
+                  const fromFrame = pattern.frames[run.from];
+                  const toFrame = pattern.frames[run.to];
+                  const x1 = eventFrameX(run.from, pattern) - 8;
+                  const x2 = eventFrameX(run.to, pattern) + 8;
+                  const y1 = Math.max(...fromFrame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference)))) + 17;
+                  const y2 = Math.max(...toFrame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference)))) + 17;
+                  return <path key={`slur-${run.from}-${run.to}`} d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.max(y1, y2) + 18} ${x2} ${y2}`} />;
+                })}
+              </g>
+              {pattern.groups.filter((group) => group.label.toLowerCase().includes("breathe")).map((group) => <text key={`breath-${group.to}`} x={eventFrameX(group.to, pattern) + 35} y="80" className={styles.breathMark}>𝄒</text>)}
+              {targetNotes.map((target, targetIndex) => {
                 const frame = pattern.frames[target.frameIndex];
                 const x = eventFrameX(target.frameIndex, pattern) + (target.noteIndex - (frame.offsets.length - 1) / 2) * 7;
                 const y = staffY(target.notation);
                 const isAnchor = pattern.anchorOffset != null && target.offset === pattern.anchorOffset;
-                const accidental = accidentalGlyph(target.notation.accidental);
+                const accidental = displayedAccidentals[targetIndex] == null ? null : accidentalGlyph(displayedAccidentals[targetIndex]!);
                 return <g key={`target-${target.frameIndex}-${target.noteIndex}`} className={cx(styles.targetNote, isAnchor && styles.isAnchor)}>
                   {ledgerLines(target.notation).map((line) => <line key={line} x1={x - 15} x2={x + 15} y1={line} y2={line} className={styles.ledgerLine} />)}
                   {accidental ? <text x={x - 20} y={y + 5} className={styles.accidental}>{accidental}</text> : null}
                   <ellipse cx={x} cy={y} rx="10" ry="7" transform={`rotate(-14 ${x} ${y})`} className={noteHead(frame) === "open" ? styles.openNote : styles.filledNote} />
-                  <line x1={x + 9} x2={x + 9} y1={y} y2={y - 38} className={styles.stem} />
-                  {noteNeedsFlag(frame) ? <path d={`M ${x + 9} ${y - 38} Q ${x + 27} ${y - 31} ${x + 18} ${y - 15}`} className={styles.flag} /> : null}
+                  {frame.offsets.length === 1 ? <line x1={x + 9} x2={x + 9} y1={y} y2={y - 38} className={styles.stem} /> : null}
+                  {frame.offsets.length === 1 && noteNeedsFlag(frame) ? <path d={`M ${x + 9} ${y - 38} Q ${x + 27} ${y - 31} ${x + 18} ${y - 15}`} className={styles.flag} /> : null}
                   {noteNeedsDot(frame) ? <circle cx={x + 17} cy={y} r="2.4" className={styles.durationDot} /> : null}
                   {frame.articulation === "detached" ? <circle cx={x} cy={y + 15} r="2.5" className={styles.articulation} /> : null}
                   {frame.articulation === "accent" ? <text x={x} y={y + 22} className={styles.accent}>&gt;</text> : null}
-                  {support === 3 ? <text x={x} y={255 + target.noteIndex * 13} className={styles.noteLabel}>{showConventions ? target.notation.label : pitchLabel(target.note, doMidi, false)}</text> : null}
+                  {support === 3 ? <text x={x} y={255 + target.noteIndex * 13} className={styles.noteLabel}>{showConventions ? target.notation.label : pitchLabel(target.note, writtenFrame.doMidi, false)}</text> : null}
+                </g>;
+              })}
+              {pattern.frames.map((frame, frameIndex) => {
+                if (frame.offsets.length <= 1) return null;
+                const x = eventFrameX(frameIndex, pattern) + 9;
+                const positions = frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference)));
+                const top = Math.min(...positions);
+                const bottom = Math.max(...positions);
+                return <g key={`chord-rhythm-${frameIndex}`} className={styles.targetNote}>
+                  <line x1={x} x2={x} y1={bottom} y2={top - 38} className={styles.stem} />
+                  {noteNeedsFlag(frame) ? <path d={`M ${x} ${top - 38} Q ${x + 18} ${top - 31} ${x + 9} ${top - 15}`} className={styles.flag} /> : null}
                 </g>;
               })}
               {pattern.frames.map((frame, frameIndex) => frame.offsets.length > 1 ? <g key={`hull-${frameIndex}`} className={styles.chordHull}>
-                <rect x={eventFrameX(frameIndex, pattern) - 22} y={Math.min(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset)))) - 16} width="44" height={Math.max(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset)))) - Math.min(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset)))) + 32} rx="20" />
-                {support >= 2 ? <text x={eventFrameX(frameIndex, pattern) + 29} y={(Math.min(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset)))) + Math.max(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset))))) / 2}>{adjacentGaps(frame.offsets).join(" + ")} st</text> : null}
+                <rect x={eventFrameX(frameIndex, pattern) - 22} y={Math.min(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference)))) - 16} width="44" height={Math.max(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference)))) - Math.min(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference)))) + 32} rx="20" />
+                {support >= 2 ? <text x={eventFrameX(frameIndex, pattern) + 29} y={(Math.min(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference)))) + Math.max(...frame.offsets.map((offset) => staffY(notatePatternPitch(anchor, offset, notationPreference))))) / 2}>{adjacentGaps(frame.offsets).join(" + ")} st</text> : null}
               </g> : null)}
               {pattern.indication ? <text x="88" y="248" className={styles.indication}>{pattern.indication}</text> : null}
               {foldArpeggio && pattern.foldable ? <g className={styles.foldedChord}>
-                <path d={`M 980 ${staffY(notatePatternPitch(anchor, 0))} Q 1040 ${staffY(notatePatternPitch(anchor, 6))} 1018 ${staffY(notatePatternPitch(anchor, 12))}`} />
-                {[0, 4, 7, 12].map((offset) => <circle key={offset} cx="1042" cy={staffY(notatePatternPitch(anchor, offset))} r="5" />)}
+                <path d={`M 980 ${staffY(notatePatternPitch(anchor, foldedOffsets[0], notationPreference))} Q 1040 ${(staffY(notatePatternPitch(anchor, foldedOffsets[0], notationPreference)) + staffY(notatePatternPitch(anchor, foldedOffsets.at(-1)!, notationPreference))) / 2} 1018 ${staffY(notatePatternPitch(anchor, foldedOffsets.at(-1)!, notationPreference))}`} />
+                {foldedOffsets.map((offset) => <circle key={offset} cx="1042" cy={staffY(notatePatternPitch(anchor, offset, notationPreference))} r="5" />)}
                 <text x="1036" y="52">folded memory</text>
               </g> : null}
             </g>
 
             <g className={styles.attemptLayer}>
               {attemptEvents.map((event, index) => {
-                const target = targetNotes[index];
+                const target = targetNotes[attemptTargetIndices[index] ?? index];
                 if (!target) return null;
                 const x = eventFrameX(target.frameIndex, pattern) + (target.noteIndex - (pattern.frames[target.frameIndex].offsets.length - 1) / 2) * 7;
-                const y = staffY(spellMidiPitch(shownAttemptNotes[index], { clef: shownAttemptNotes[index] < 60 ? "bass" : "treble", prefer: "sharps" }));
                 const expected = target.note;
                 const matches = shownAttemptNotes[index] === expected;
+                const normalizedNote = shownAttemptNotes[index];
+                const performedNotation = matches
+                  ? target.notation
+                  : Number.isInteger(normalizedNote) && normalizedNote >= 0 && normalizedNote <= 127
+                    ? spellMidiPitch(normalizedNote, {
+                      clef: normalizedNote < 60 ? "bass" : "treble",
+                      prefer: notationPreference,
+                    })
+                    : null;
+                const y = performedNotation ? staffY(performedNotation) : normalizedNote < 0 ? 252 : 60;
                 return <g key={event.id} className={matches ? styles.isMatch : styles.isDifferent}>
                   <circle cx={x} cy={y} r="14" />
                   <circle cx={x} cy={y} r="4" />
@@ -954,29 +1172,44 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
               })}
             </g>
 
-            {nextPhysicalTarget != null && !attemptComplete && support >= 1 ? <g className={styles.scoreMagnet} filter="url(#sight-soft-glow)">
-              <circle cx={eventFrameX(nextFlatTarget!.frameIndex, pattern)} cy={staffY(nextFlatTarget!.notation)} r="18" />
-              <text x={eventFrameX(nextFlatTarget!.frameIndex, pattern)} y={staffY(nextFlatTarget!.notation) - 26}>next</text>
+            {nextFlatTargets.length && !attemptComplete && support >= 1 ? <g className={styles.scoreMagnet} filter="url(#sight-soft-glow)">
+              {nextFlatTargets.map((target, index) => {
+                const frame = pattern.frames[target.frameIndex];
+                const x = eventFrameX(target.frameIndex, pattern) + (target.noteIndex - (frame.offsets.length - 1) / 2) * 7;
+                const labelY = Math.min(...nextFlatTargets.map((candidate) => staffY(candidate.notation))) - 18;
+                return <g key={`next-${target.frameIndex}-${target.noteIndex}`}><circle cx={x} cy={staffY(target.notation)} r="18" />{index === 0 ? <text x={x + 28} y={labelY}>{nextFlatTargets.length > 1 ? "next chord" : "next"}</text> : null}</g>;
+              })}
             </g> : null}
 
             <g className={styles.braidLayer}>
               <text x="70" y="286" className={styles.braidTitle}>INTERVAL BRAID · frame-to-frame physical movement</text>
-              <line x1="84" x2="1050" y1="321" y2="321" className={styles.braidBaseline} />
+              {motionLanes.map((lane, laneIndex) => {
+                const baseline = motionLanes.length === 1 ? 321 : 314 + laneIndex * 18;
+                return <g key={`braid-lane-${lane.id}`}>
+                  <line x1="84" x2="1050" y1={baseline} y2={baseline} className={styles.braidBaseline} />
+                  {motionLanes.length > 1 ? <text x="73" y={baseline + 3} className={styles.braidLaneLabel}>{lane.label}</text> : null}
+                  {pattern.frames.map((frame, index) => {
+                    const x = eventFrameX(index, pattern);
+                    const move = index ? lane.moves[index - 1] : null;
+                    return <g key={`braid-${lane.id}-${index}`}>
+                      {move != null ? <path d={`M ${eventFrameX(index - 1, pattern)} ${baseline} Q ${(eventFrameX(index - 1, pattern) + x) / 2} ${baseline - Math.min(18, Math.abs(move) * 2)} ${x} ${baseline}`} className={styles.braidArc} style={{ "--interval-color": colorForInterval(move) } as CSSProperties} /> : null}
+                      <circle cx={x} cy={baseline} r={motionLanes.length > 1 ? 6 : frame.offsets.length > 1 ? 11 : 7} className={styles.braidNode} style={{ "--interval-color": colorForInterval(move ?? 0) } as CSSProperties} />
+                    </g>;
+                  })}
+                </g>;
+              })}
               {pattern.frames.map((frame, index) => {
                 const x = eventFrameX(index, pattern);
-                const center = median(frame.offsets);
-                const prior = index ? median(pattern.frames[index - 1].offsets) : null;
-                const move = prior == null ? null : Math.round(center - prior);
-                return <g key={`braid-${index}`}>
-                  {move != null ? <path d={`M ${eventFrameX(index - 1, pattern)} 321 Q ${(eventFrameX(index - 1, pattern) + x) / 2} ${321 - Math.min(24, Math.abs(move) * 2)} ${x} 321`} className={styles.braidArc} style={{ "--interval-color": colorForInterval(move) } as CSSProperties} /> : null}
-                  <circle cx={x} cy="321" r={frame.offsets.length > 1 ? 11 : 7} className={styles.braidNode} style={{ "--interval-color": colorForInterval(move ?? 0) } as CSSProperties} />
-                  {support >= 2 && move != null ? <text x={(eventFrameX(index - 1, pattern) + x) / 2} y="302" className={styles.braidLabel}>{signed(move)} st · {pattern.frames[index - 1].offsets.length === 1 && frame.offsets.length === 1 ? ordinal(genericIntervalFromOffsets(pattern.frames[index - 1].offsets[0], frame.offsets[0], anchor)) : "frame-center move"}</text> : null}
+                const moveLabel = index === 0 ? null : motionLanes.map((lane) => `${motionLanes.length > 1 ? `${lane.label} ` : ""}${signed(lane.moves[index - 1])} st`).join(" · ");
+                return <g key={`braid-label-${index}`}>
+                  {support >= 2 && moveLabel ? <text x={(eventFrameX(index - 1, pattern) + x) / 2} y="301" className={styles.braidLabel}>{moveLabel}{motionLanes.length === 1 && pattern.frames[index - 1].offsets.length === 1 && frame.offsets.length === 1 ? ` · ${ordinal(genericIntervalFromOffsets(pattern.frames[index - 1].offsets[0], frame.offsets[0], anchor, notationPreference))}` : ""}</text> : null}
                   <text x={x} y="350" className={styles.frameLabel}>{index + 1}</text>
                 </g>;
               })}
             </g>
             {scoreVeiled ? <g className={styles.veilMessage}><rect x="72" y="72" width="996" height="192" rx="16" /><text x="570" y="154">Hold the shape in working memory</text><text x="570" y="180">The interval braid and keyboard can remain—or fade with the scaffold control.</text></g> : null}
-          </svg>
+            </svg>
+          </div>
         </div>
 
         {support >= 1 ? <section className={styles.keyboardPanel} aria-labelledby="sight-keyboard-title">
@@ -984,16 +1217,17 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
             <div><span>Embodied territory</span><strong id="sight-keyboard-title">Where the gesture lives beneath the hand</strong></div>
             <p>{targetSpan} semitone span · {pattern.coordination ?? (keyboardTargetNotes.some((note) => note < anchor) ? "shared keyboard territory" : "one-hand study")}</p>
           </header>
-          <svg className={styles.keyboard} viewBox="0 0 1040 168" role="img" aria-labelledby="sight-keyboard-svg-title sight-keyboard-svg-description">
+          <div ref={keyboardViewportRef} className={styles.keyboardViewport} tabIndex={0} aria-label="Scrollable keyboard viewport; it follows the next destination on narrow screens.">
+            <svg className={styles.keyboard} viewBox="0 0 1040 168" role="img" aria-labelledby="sight-keyboard-svg-title sight-keyboard-svg-description">
             <title id="sight-keyboard-svg-title">Keyboard territory, active keys, and next-destination magnet</title>
-            <desc id="sight-keyboard-svg-description">{`Keyboard territory from ${pitchLabel(keyboardLow, doMidi, showConventions)} through ${pitchLabel(keyboardHigh, doMidi, showConventions)}. ${nextPhysicalTarget == null ? "Attempt complete." : `Next target ${pitchLabel(nextPhysicalTarget, doMidi, showConventions)}.`}`}</desc>
+            <desc id="sight-keyboard-svg-description">{`Keyboard territory from ${pitchLabel(keyboardLow, physicalDo, showConventions, physicalNotationPreference)} through ${pitchLabel(keyboardHigh, physicalDo, showConventions, physicalNotationPreference)}. ${nextPhysicalTargets.length ? `Next ${nextPhysicalTargets.length > 1 ? "chord members" : "target"}: ${nextPhysicalTargets.map((note) => pitchLabel(note, physicalDo, showConventions, physicalNotationPreference)).join(", ")}.` : "Attempt complete."}`}</desc>
             {whiteNotes.map((note) => {
               const target = keyboardTargetNotes.includes(note);
               const attempted = attemptEvents.some((event) => event.note === note);
               const active = activeNotes.includes(note);
               return <g key={`white-${note}`} className={cx(styles.whiteKey, target && styles.isTargetKey, attempted && styles.isAttemptedKey, active && styles.isActiveKey)}>
                 <rect x={keyX(note) + 1} y="1" width={whiteWidth - 2} height="148" rx="0 0 6 6" />
-                {(showConventions && (target || active)) ? <text x={keyX(note) + whiteWidth / 2} y="138">{PITCH_NAMES[pitchClass(note)]}</text> : null}
+                {(showConventions && (target || active)) ? <text x={keyX(note) + whiteWidth / 2} y="138">{pitchClassLabel(note, physicalNotationPreference)}</text> : null}
               </g>;
             })}
             {Array.from({ length: keyboardHigh - keyboardLow + 1 }, (_, index) => keyboardLow + index).filter((note) => !WHITE_PITCH_CLASSES.has(pitchClass(note))).map((note) => {
@@ -1002,11 +1236,12 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
               const active = activeNotes.includes(note);
               return <g key={`black-${note}`} className={cx(styles.blackKey, target && styles.isTargetKey, attempted && styles.isAttemptedKey, active && styles.isActiveKey)}>
                 <rect x={keyX(note)} y="1" width={whiteWidth * .62} height="92" rx="0 0 5 5" />
+                {(showConventions && (target || active)) ? <text x={keyX(note) + whiteWidth * .31} y="82">{pitchClassLabel(note, physicalNotationPreference)}</text> : null}
               </g>;
             })}
-            {nextPhysicalTarget != null && !attemptComplete ? <g className={styles.keyboardMagnet} transform={`translate(${keyX(nextPhysicalTarget) + (WHITE_PITCH_CLASSES.has(pitchClass(nextPhysicalTarget)) ? whiteWidth / 2 : whiteWidth * .31)} 112)`}>
-              <circle r="18" /><circle r="6" /><text y="40">NEXT</text>
-            </g> : null}
+            {nextPhysicalTargets.filter((note) => note >= keyboardLow && note <= keyboardHigh).map((note, index) => <g key={`keyboard-next-${note}`} className={styles.keyboardMagnet} transform={`translate(${keyX(note) + (WHITE_PITCH_CLASSES.has(pitchClass(note)) ? whiteWidth / 2 : whiteWidth * .31)} 112)`}>
+              <circle r="18" /><circle r="6" />{index === 0 ? <text y="40">{nextPhysicalTargets.length > 1 ? "NEXT CHORD" : "NEXT"}</text> : null}
+            </g>)}
             <g className={styles.handTerritory}>
               {(["left", "right"] as Hand[]).map((hand) => {
                 const notes = targetNotes.filter((note) => note.hand === hand).map((note) => note.note + transferShift);
@@ -1018,10 +1253,19 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
                 return <g key={hand} className={hand === "left" ? styles.leftHand : styles.rightHand}><line x1={x} x2={x + width} y1="160" y2="160" /><text x={x + width / 2} y="166">{hand === "left" ? "L" : "R"}</text></g>;
               })}
             </g>
-          </svg>
-          <div className={styles.preMovement} aria-live="polite">
+            </svg>
+          </div>
+          <div className={styles.preMovement}>
             <span>pre-movement magnet</span>
-            <strong>{attemptComplete ? "Phrase complete—release, notice, then reset." : attemptEvents.length ? `${signed(nextPhysicalTarget! - attemptEvents.at(-1)!.note)} st from the latest attack toward ${pitchLabel(nextPhysicalTarget!, doMidi, showConventions)}` : `Orient to ${pitchLabel(nextPhysicalTarget!, doMidi, showConventions)} before beginning.`}</strong>
+            <strong>{attemptComplete
+              ? "Phrase complete—release, notice, then reset."
+              : nextPhysicalTargets.length > 1
+                ? `Gather ${nextPhysicalTargets.map((note) => pitchLabel(note, physicalDo, showConventions, physicalNotationPreference)).join(" · ")} as one vertical object; attack order does not matter.`
+                : attemptEvents.length && nextPhysicalTargets[0] != null
+                  ? `${signed(nextPhysicalTargets[0] - attemptEvents.at(-1)!.note)} st from the latest attack toward ${pitchLabel(nextPhysicalTargets[0], physicalDo, showConventions, physicalNotationPreference)}`
+                  : nextPhysicalTargets[0] != null
+                    ? `Orient to ${pitchLabel(nextPhysicalTargets[0], physicalDo, showConventions, physicalNotationPreference)} before beginning.`
+                    : "Choose a transfer anchor that keeps the complete shape inside the keyboard range."}</strong>
             <small>The magnet names a destination. It does not ask you to shorten the written rhythm.</small>
           </div>
         </section> : null}
@@ -1031,7 +1275,7 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
             <header><span>Eyes</span><strong>What to compress</strong></header>
             <p>{pattern.eyes}</p>
             <dl>
-              <div><dt>contour</dt><dd>{patternMoves.length ? patternMoves.map((move) => `${signed(move)} st`).join(" · ") : "vertical field"}</dd></div>
+              <div><dt>contour</dt><dd>{patternMoves.length ? motionLanes.map((lane) => `${motionLanes.length > 1 ? `${lane.label}: ` : ""}${lane.moves.map((move) => `${signed(move)} st`).join(" · ")}`).join(" / ") : "vertical field"}</dd></div>
               <div><dt>groups</dt><dd>{pattern.groups.map((group) => group.label).join(" → ")}</dd></div>
               {pattern.frames.some((frame) => frame.offsets.length > 1) ? <div><dt>chord gaps</dt><dd>{pattern.frames.filter((frame) => frame.offsets.length > 1).map((frame) => adjacentGaps(frame.offsets).join(" + ")).join(" · ")} st</dd></div> : null}
             </dl>
@@ -1068,7 +1312,7 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
             <div style={{ "--meter": `${Math.round((evaluation.pulseFit ?? 0) * 100)}%` } as CSSProperties}><span>pulse shape</span><strong>{evaluation.pulseFit == null ? "needs 3 frames" : `${Math.round(evaluation.pulseFit * 100)}%`}</strong><i /></div>
             {evaluation.chordFrameCount ? <div style={{ "--meter": `${Math.round((evaluation.chordGroupingHits / evaluation.chordFrameCount) * 100)}%` } as CSSProperties}><span>vertical groups</span><strong>{evaluation.chordGroupingHits}/{evaluation.chordFrameCount}</strong><i /></div> : null}
           </div>
-          <p className={styles.measureBoundary}>Position, direction, relative onset spacing, and attack clustering are measured. “Pulse shape” adapts to your tempo. Fingering, gaze, acoustic loudness, physical tension, and emotional meaning are not inferred from MIDI.</p>
+          <p className={styles.measureBoundary}>Position, direction, relative onset spacing, and attack clustering are measured. Chord membership uses the same selected rule as the main HUD: adjacent gaps up to {chordWindowMs} ms and a {chordWindowMs * 2} ms maximum span. “Pulse shape” adapts to your tempo. Fingering, gaze, acoustic loudness, physical tension, and emotional meaning are not inferred from MIDI.</p>
         </section>
 
         <section className={styles.integratePanel} aria-labelledby="sight-integrate-title">

@@ -21,6 +21,7 @@ import {
   compareScaleGapMutation,
   compareScaleLandingIntervalRipple,
   comparePhraseLenses,
+  conventionalPitchName,
   phraseChangeProfile,
   controlledSonorityChange,
   detectMotifTransformations,
@@ -80,6 +81,12 @@ test("maps equal-tempered MIDI notes to physical frequency", () => {
   assert.equal(frequencyFromMidi(69), 440);
   assert.ok(Math.abs(frequencyFromMidi(60) - 261.625565) < 0.00001);
   assert.ok(Math.abs(frequencyFromMidi(72) / frequencyFromMidi(60) - 2) < 1e-12);
+});
+
+test("conventional pitch labels can follow sharp or flat frame spelling", () => {
+  assert.equal(conventionalPitchName(63), "D♯4");
+  assert.equal(conventionalPitchName(63, "flats"), "E♭4");
+  assert.equal(conventionalPitchName(66, "flats"), "G♭4");
 });
 
 test("offers transparent shared-cycle tradeoffs for MIDI-derived reference frequencies", () => {

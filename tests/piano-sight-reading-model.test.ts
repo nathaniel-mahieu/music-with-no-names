@@ -2,14 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeNotatedInterval,
+  assignNotesToTargets,
+  attacksShareChordWindow,
   chordSpacing,
+  displayedAccidentalsForMeasure,
   evaluateSightReadingAttempt,
   generateSightReadingExercise,
+  inferUniformTransposition,
   initialScaffoldState,
   makeNotatedPitch,
   nextScaffoldState,
+  preferredAccidentalsForShape,
+  preferredAccidentalsForTonic,
   reducePattern,
   spellMidiPitch,
+  spellShapeRelativePitch,
   transposeNotatedPitchByShape,
   validateTwoWordReflection,
   type SightReadingAttack,
@@ -54,6 +61,64 @@ test("MIDI spelling retains explicit accidentals and supports sharp or flat pref
     clef: "bass",
     label: "D♭4",
   });
+});
+
+test("movable-Do centers choose practical enharmonic spellings", () => {
+  assert.equal(preferredAccidentalsForTonic(61), "flats", "D-flat is simpler than C-sharp for this reader");
+  assert.equal(preferredAccidentalsForTonic(63), "flats", "E-flat is simpler than D-sharp");
+  assert.equal(preferredAccidentalsForTonic(66), "sharps", "F-sharp is simpler than G-flat");
+  assert.equal(preferredAccidentalsForTonic(70), "flats", "B-flat is simpler than A-sharp");
+});
+
+test("every authored spacing round-trips across twelve Do positions and three registers", () => {
+  const authoredPatterns = [
+    [0, 2, 0], [0, 3, 0, 4], [0, 2, 4, 5, 7], [0, 2, 4, 5, 4, 2, 0],
+    [0, 4, 7], [0, 3, 8], [0, 4, 7, 12], [0, 7, 0, 5, 0],
+    [0, 2, 4, 2, 4, 6], [0, 2, 4, 5, 7, 9, 7], [0, 2, 9],
+    [0, 3, 7, 12, 7, 3, 0], [-12, 0, -14, 2, -16, 4, -17, 5],
+    [-12, 0, -12, 2, -12, 4, -12, 2, -12, 0], [0, 2, 5, 4, 2, 0],
+    [0, 3, 5, 0, 3, 7], [0, 4, 7, 5, 2, 0], [0, 2, 7, 5, 0],
+  ];
+  for (const register of [48, 60, 72]) {
+    for (let pitchClass = 0; pitchClass < 12; pitchClass += 1) {
+      const anchor = register + pitchClass;
+      for (const offsets of authoredPatterns) {
+        const prefer = preferredAccidentalsForShape(anchor, offsets);
+        for (const offset of offsets) {
+          const notation = spellShapeRelativePitch(anchor, offset, prefer);
+          assert.equal(notation.midi, anchor + offset, `anchor ${anchor}, offset ${offset}`);
+          assert.notEqual(notation.accidental, "double-flat", `avoid double-flat at anchor ${anchor}, offset ${offset}`);
+          assert.notEqual(notation.accidental, "double-sharp", `avoid double-sharp at anchor ${anchor}, offset ${offset}`);
+        }
+      }
+    }
+  }
+  const risingPreference = preferredAccidentalsForShape(63, [0, 2, 4, 5, 7]);
+  assert.deepEqual([0, 2, 4, 5, 7].map((offset) => spellShapeRelativePitch(63, offset, risingPreference).label), ["E♭4", "F4", "G4", "A♭4", "B♭4"]);
+});
+
+test("single-measure accidental carry suppresses repeats and prints cancellations", () => {
+  const c = makeNotatedPitch({ letter: "C", octave: 4 });
+  const eFlat = makeNotatedPitch({ letter: "E", accidental: "flat", octave: 4 });
+  const e = makeNotatedPitch({ letter: "E", octave: 4 });
+  const eFlatHigh = makeNotatedPitch({ letter: "E", accidental: "flat", octave: 5 });
+
+  assert.deepEqual(
+    displayedAccidentalsForMeasure([c, eFlat, c, eFlat, e, e, eFlatHigh]),
+    [null, "flat", null, null, "natural", null, "flat"],
+  );
+});
+
+test("unordered chord packets map to written members and infer one shared transfer", () => {
+  assert.deepEqual(assignNotesToTargets([67, 60, 64], [60, 64, 67]), [2, 0, 1]);
+  assert.equal(inferUniformTransposition([60, 64, 67], [69, 62, 66]), 2);
+  assert.equal(inferUniformTransposition([60, 64, 67], [62, 65, 69]), null);
+});
+
+test("sight chord grouping mirrors adjacent-gap and maximum-span rules", () => {
+  assert.equal(attacksShareChordWindow([1_000, 1_150, 1_300], 160, 320), true);
+  assert.equal(attacksShareChordWindow([1_000, 1_170, 1_300], 160, 320), false);
+  assert.equal(attacksShareChordWindow([1_000, 1_160, 1_330], 170, 320), false);
 });
 
 test("written generic distance stays distinct from exact and signed semitones", () => {

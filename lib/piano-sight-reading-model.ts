@@ -387,6 +387,19 @@ const FLAT_SPELLINGS: Array<[PitchLetter, Accidental]> = [
   ["A", "flat"], ["A", "natural"], ["B", "flat"], ["B", "natural"],
 ];
 
+const COMMON_FLAT_TONIC_PITCH_CLASSES = new Set([1, 3, 8, 10]);
+const CANONICAL_SHAPE_STAFF_STEPS = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6] as const;
+
+/**
+ * Chooses the lower-complexity conventional name for a movable-Do center.
+ * D-flat, E-flat, A-flat, and B-flat avoid the double-sharps produced by their
+ * enharmonic sharp keys; F-sharp remains the practical choice over G-flat.
+ */
+export function preferredAccidentalsForTonic(midi: number): "sharps" | "flats" {
+  assertMidi(midi, "Tonic MIDI note");
+  return COMMON_FLAT_TONIC_PITCH_CLASSES.has(pitchClass(midi)) ? "flats" : "sharps";
+}
+
 /** Gives a valid conventional spelling for a MIDI note without discarding the accidental. */
 export function spellMidiPitch(
   midi: number,
@@ -396,6 +409,100 @@ export function spellMidiPitch(
   const [letter, accidental] = (options.prefer === "flats" ? FLAT_SPELLINGS : SHARP_SPELLINGS)[pitchClass(midi)];
   const octave = Math.floor(midi / 12) - 1;
   return makeNotatedPitch({ letter, accidental, octave, clef: options.clef ?? "treble" });
+}
+
+/** Maps exact semitone distance onto this reader's default simple written interval shape. */
+export function canonicalStaffStepsForSemitones(semitones: number) {
+  if (!Number.isFinite(semitones)) throw new RangeError("Shape distance must be finite.");
+  const rounded = Math.round(semitones);
+  const sign = Math.sign(rounded);
+  const absolute = Math.abs(rounded);
+  return sign * (Math.floor(absolute / 12) * 7 + CANONICAL_SHAPE_STAFF_STEPS[absolute % 12]);
+}
+
+/** Spells one authored shape pitch while preserving both staff and keyboard distance. */
+export function spellShapeRelativePitch(
+  anchorMidi: number,
+  semitoneOffset: number,
+  prefer: "sharps" | "flats" = preferredAccidentalsForTonic(anchorMidi),
+): NotatedPitch {
+  assertMidi(anchorMidi, "Shape anchor");
+  if (!Number.isInteger(semitoneOffset)) throw new RangeError("Shape semitone offset must be an integer.");
+  const targetMidi = anchorMidi + semitoneOffset;
+  assertMidi(targetMidi, "Shape target");
+  const clef: Clef = targetMidi < 60 ? "bass" : "treble";
+  const anchor = spellMidiPitch(anchorMidi, { clef, prefer });
+  return transposeNotatedPitchByShape(anchor, canonicalStaffStepsForSemitones(semitoneOffset), semitoneOffset, clef);
+}
+
+/** Chooses one consistent tonic spelling that minimizes accidental complexity for a complete authored shape. */
+export function preferredAccidentalsForShape(anchorMidi: number, semitoneOffsets: number[]): "sharps" | "flats" {
+  assertMidi(anchorMidi, "Shape anchor");
+  if (!semitoneOffsets.length || !semitoneOffsets.every(Number.isInteger)) throw new RangeError("A shape preference needs integer semitone offsets.");
+  const accidentalCost: Record<Accidental, number> = {
+    natural: 0,
+    flat: 1,
+    sharp: 1,
+    "double-flat": 8,
+    "double-sharp": 8,
+  };
+  const score = (prefer: "sharps" | "flats") => semitoneOffsets.reduce((total, offset) => (
+    total + accidentalCost[spellShapeRelativePitch(anchorMidi, offset, prefer).accidental]
+  ), 0);
+  const sharpCost = score("sharps");
+  const flatCost = score("flats");
+  return flatCost === sharpCost ? preferredAccidentalsForTonic(anchorMidi) : flatCost < sharpCost ? "flats" : "sharps";
+}
+
+/**
+ * Returns only the accidental signs that standard single-measure notation
+ * needs to print. A sign carries for the same written letter and octave until
+ * the closing barline; a natural sign is therefore emitted when it cancels an
+ * earlier flat or sharp.
+ */
+export function displayedAccidentalsForMeasure(pitches: NotatedPitch[]): Array<Accidental | null> {
+  const activeAccidentals = new Map<string, Accidental>();
+  return pitches.map((pitch) => {
+    const position = `${pitch.letter}${pitch.octave}`;
+    const previous = activeAccidentals.get(position) ?? "natural";
+    activeAccidentals.set(position, pitch.accidental);
+    return pitch.accidental === previous ? null : pitch.accidental;
+  });
+}
+
+/** Maps each received note, in arrival order, to one unique target index. */
+export function assignNotesToTargets(actualNotes: number[], targetNotes: number[]): number[] {
+  if (actualNotes.length > targetNotes.length) throw new RangeError("An assignment needs at least as many targets as received notes.");
+  if (![...actualNotes, ...targetNotes].every(Number.isFinite)) throw new RangeError("Assignment notes must be finite numbers.");
+  const unmatched = targetNotes.map((note, index) => ({ note, index }));
+  return actualNotes.map((note) => {
+    const exactIndex = unmatched.findIndex((candidate) => candidate.note === note);
+    const matchIndex = exactIndex >= 0 ? exactIndex : unmatched.reduce((best, candidate, index) => (
+      best < 0 || Math.abs(candidate.note - note) < Math.abs(unmatched[best].note - note) ? index : best
+    ), -1);
+    const [matched] = unmatched.splice(matchIndex, 1);
+    return matched.index;
+  });
+}
+
+/** Returns the shared shift between two unordered pitch sets, or null when their spacing differs. */
+export function inferUniformTransposition(targetNotes: number[], actualNotes: number[]): number | null {
+  if (!targetNotes.length || targetNotes.length !== actualNotes.length) return null;
+  if (![...targetNotes, ...actualNotes].every(Number.isFinite)) throw new RangeError("Transposition notes must be finite numbers.");
+  const target = [...targetNotes].sort((first, second) => first - second);
+  const actual = [...actualNotes].sort((first, second) => first - second);
+  const shift = actual[0] - target[0];
+  return actual.every((note, index) => note - target[index] === shift) ? shift : null;
+}
+
+/** Mirrors the Piano HUD's adjacent-gap plus maximum-span chord grouping rule. */
+export function attacksShareChordWindow(onsetsMs: number[], adjacentGapMs: number, maximumSpanMs = adjacentGapMs * 2) {
+  if (!Number.isFinite(adjacentGapMs) || adjacentGapMs <= 0 || !Number.isFinite(maximumSpanMs) || maximumSpanMs < adjacentGapMs) return false;
+  if (!onsetsMs.every(Number.isFinite)) return false;
+  if (onsetsMs.length <= 1) return true;
+  const ordered = [...onsetsMs].sort((first, second) => first - second);
+  const adjacentFits = ordered.slice(1).every((onset, index) => onset - ordered[index] <= adjacentGapMs);
+  return adjacentFits && ordered.at(-1)! - ordered[0] <= maximumSpanMs;
 }
 
 /**

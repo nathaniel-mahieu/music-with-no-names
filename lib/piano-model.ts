@@ -818,6 +818,21 @@ export const CONVENTIONAL_PITCH_CLASSES = [
   "B",
 ] as const;
 
+export const CONVENTIONAL_FLAT_PITCH_CLASSES = [
+  "C",
+  "D♭",
+  "D",
+  "E♭",
+  "E",
+  "F",
+  "G♭",
+  "G",
+  "A♭",
+  "A",
+  "B♭",
+  "B",
+] as const;
+
 export const PIANO_SCALES: PianoScale[] = [
   {
     id: "bright-seven",
@@ -1658,10 +1673,11 @@ export function pitchClassFromMidi(note: number) {
   return modulo(Math.round(note), 12);
 }
 
-export function conventionalPitchName(note: number) {
+export function conventionalPitchName(note: number, prefer: "sharps" | "flats" = "sharps") {
   const rounded = Math.round(note);
   const octave = Math.floor(rounded / 12) - 1;
-  return `${CONVENTIONAL_PITCH_CLASSES[pitchClassFromMidi(rounded)]}${octave}`;
+  const names = prefer === "flats" ? CONVENTIONAL_FLAT_PITCH_CLASSES : CONVENTIONAL_PITCH_CLASSES;
+  return `${names[pitchClassFromMidi(rounded)]}${octave}`;
 }
 
 export function nearestMidiForPitchClass(pitchClass: number, nearMidi = 60) {

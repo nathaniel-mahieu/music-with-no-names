@@ -4,7 +4,11 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Sight Shapes v2.13**. It provides:
+The current milestone is **Sight Shapes Notation Repair v2.14**. It provides:
+
+- Contextual staff spelling across every Sight Shapes exercise: common flat centers remain E♭, A♭, B♭, or D♭ rather than becoming awkward enharmonic sharp keys; a matched MIDI note keeps the target's written line or space; standard one-measure accidental carry prints a natural when required; and notation, solfège, destination copy, route labels, and the optional on-screen theory names share one spelling. Fixed interval specimens are called out when they intentionally leave the selected route—including the expected F♯ in C–D–E → D–E–F♯, which preserves the exact +2, +2 transformation.
+
+- Hardened Sight Shapes practice behavior: each attempt snapshots its written Do and route until the learner explicitly adopts the live frame; vertical MIDI packets score and overlay independently of arrival order; transferable chords derive one shift from the completed pitch set; grouping follows the shared adjacent-gap and maximum-span rule; pitch and pulse diagnoses no longer contradict one another; memory mode previews before veiling; two-hand motion retains separate left/right strands; invalid low registers are disabled; and narrow score and keyboard viewports follow the next destination.
 
 - A silent sight-reading studio inside the Piano companion that keeps conventional notation central while linking each selected pattern to staff geometry, exact semitone spacing, local keyboard territory, and an ear-directed listening question. Generic intervals and chromatic distances stay separate: the same written third may span three or four equal-tempered semitones.
 
