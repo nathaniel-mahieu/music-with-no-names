@@ -1081,7 +1081,7 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
 
             {anchorOccurrences.length > 1 ? <g className={styles.anchorLayer}>
               <line x1={eventFrameX(anchorOccurrences[0].frameIndex, pattern)} x2={eventFrameX(anchorOccurrences.at(-1)!.frameIndex, pattern)} y1={staffY(anchorOccurrences[0].notation)} y2={staffY(anchorOccurrences[0].notation)} />
-              <text x={eventFrameX(anchorOccurrences[0].frameIndex, pattern)} y={staffY(anchorOccurrences[0].notation) - 16}>fixed point</text>
+              <text x={eventFrameX(anchorOccurrences[0].frameIndex, pattern)} y={staffY(anchorOccurrences[0].notation) - 30}>fixed point</text>
             </g> : null}
 
             <g className={styles.targetLayer} aria-hidden={scoreVeiled}>
