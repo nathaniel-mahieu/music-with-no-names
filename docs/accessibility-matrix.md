@@ -58,3 +58,9 @@ The following must be checked with real assistive technology and are not claimed
 - Touch target comfort and switch-control operation on real mobile devices.
 - Physical MIDI-keyboard connection, sustain behavior, disconnect/reconnect announcements, and device switching with assistive technology.
 - Reduced-motion behavior in a browser with the operating-system preference enabled.
+
+## EchoKey v2.15
+
+- The complete stage order is present as text and never relies on contour, color, staff position, or keyboard light alone. Every SVG has a programmatic name and nearby prose alternative; exact directed semitones, target/performance substitutions, and completion state are written after disclosure.
+- Native buttons control every reference sound, stage transition, mode, retry, and data deletion. A polite status names each new phase and diagnosis; focus moves to the newly mounted named phase panel. Frozen capture and unscored chord-like or extra-attack input use explicit alerts with direct recovery actions. The score and revealed keyboard are supporting representations after the auditory attempt, not the only source of instructions.
+- Focus order follows the learner loop, the narrow phase rail follows the current step horizontally, touch targets retain the shared minimum sizing, motion respects the operating-system preference, and the compact layout becomes a single column. Staff duration is redundant through filled/open heads and written beat counts in the accessible name; the revealed keyboard repeats event order, solfège or names, and signed semitone position in text. Automated coverage cannot validate actual sound audibility, hardware MIDI focus, screen-reader timing during live attacks, color perception, singing accessibility, or whether delayed visual disclosure helps learning; those remain manual and participant checks.

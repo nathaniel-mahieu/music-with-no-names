@@ -139,3 +139,9 @@ These cards describe educational models used by Music With No Names. A model out
 - Empirical anchors and prohibited claims are recorded in [research-ledger.md](./research-ledger.md).
 - Reproducible checks and their limits are recorded in [validation-report.md](./validation-report.md).
 - Dataset and fixture origins are recorded in [data-provenance.md](./data-provenance.md).
+
+## EchoKey relational-attempt model · v2.15
+
+Every authored phrase is an ordered list of integer semitone offsets and beat lengths around a snapshotted MIDI Do. In the default any-key mode, the first performed attack supplies one uniform integer transposition; all later directed semitone moves must match. Given-start mode retains the authored anchor and reports an otherwise intact path separately from an anchor miss. The first mismatching move is classified as contour when its repeat/rise/fall category changes and interval width when that category survives but its exact key distance changes. Contour and interval match proportions remain separate outputs. The monophonic capture waits briefly after the authored attack count, rejects any additional attack, and rejects adjacent onsets at or below the declared 70 ms chord-like window instead of silently truncating either case into a melody.
+
+The model does not infer what the learner heard, sang, intended, or physically attempted, and it does not score expression, rhythm, voice quality, talent, musicality, preference, emotion, or learning. A singing self-report is shown beside the MIDI result but never used to explain it. The short confusion list retains misses only, so its counts are neither attempt totals nor proficiency rates; it is a bounded tab-scoped record of observed keyboard substitutions, not a persistent learner identity or clinical or educational diagnosis.
