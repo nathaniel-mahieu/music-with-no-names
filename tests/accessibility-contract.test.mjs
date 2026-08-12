@@ -44,6 +44,59 @@ test("Sight Shapes keeps notation, interval, keyboard, and learner-report channe
   assert.match(sightCss, /\.workbenchActions button[\s\S]*min-height: 44px/);
 });
 
+test("EchoKey preserves an ear-first boundary while keeping every later representation explicit", async () => {
+  const [piano, echo, echoCss, model, session] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoEchoKeyHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoEchoKeyHud.module.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/echo-key-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-session.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(piano, /focusLens === "echo-key" \? <PianoEchoKeyHud/);
+  assert.match(piano, /MIDI input stays silent; only clearly labeled reference and repair buttons/);
+  assert.match(piano, /physical position \$\{echoKeyPosition\} of \$\{VISIBLE_NOTES\.length\} from the left/);
+  assert.match(piano, /EchoKey reveals relationship labels in its Read step/);
+  assert.match(piano, /VISIBLE_NOTES\.map\(\(note\) => renderKey\(note, !WHITE_PITCH_CLASSES\.has/);
+  assert.match(piano, /echoKeyBlind \? strikeEchoScreenKey\(note\) : toggleScreenKey\(note\)/);
+  assert.match(piano, /isPersistedHudEventList\(saved\.phraseEvents\)/);
+  assert.match(piano, /sessionStorage\.removeItem\(ECHO_KEY_LESSON_STORAGE_KEY\)/);
+  assert.match(session, /"echo-key"/);
+  assert.match(echo, /type EchoPhase = "hear" \| "sing" \| "find" \| "diagnose" \| "repair" \| "read" \| "vary"/);
+  assert.match(echo, /phase === "read" \? <section[\s\S]*?<CompactStaff/);
+  assert.match(echo, /<CompactStaff spellings=\{scoreSpellings\} beats=\{phrase\.beats\}/);
+  assert.match(echo, /<ReadKeyboard notes=\{scoreNotes\} spellings=\{scoreSpellings\}/);
+  assert.match(echo, /relationalReveal \? ` · \$\{candidate\.subtitle\}` : ""/);
+  assert.match(echo, /Math\.sign\(value - offsets\[index - 1\]\)/);
+  assert.match(echo, /Direction only: every rise and fall has equal visual height/);
+  assert.match(echo, /event\.id > attemptBoundaryId/);
+  assert.match(echo, /attempt begins after event \{attemptBoundaryId\}/);
+  assert.match(echo, /restoredFind \? newestEventId\(events\) : persisted\.attemptBoundaryId/);
+  assert.match(echo, /captureNeedsRelease/);
+  assert.match(echo, /Release every sounding key/);
+  assert.match(echo, /echoKeyCaptureIssue\(latestEvents, phrase\.offsets\.length\)/);
+  assert.match(echo, /More than one attack arrived together/);
+  assert.match(echo, /More attacks arrived than this phrase contains/);
+  assert.match(model, /export function echoKeyCaptureIssue/);
+  assert.match(echo, /displayedAccidentalsForMeasure/);
+  assert.match(echo, /configureSafetyCompressor\(compressor, now\)/);
+  assert.match(echo, /master\.gain\.setValueAtTime\(SYNTH_MASTER_GAIN, now\)/);
+  assert.match(echo, /no microphone is opened, recorded, or scored/i);
+  assert.match(echo, /window\.sessionStorage/);
+  assert.match(echo, /History veiled during blind recall/);
+  assert.match(echo, /Clear this tab’s history/);
+  assert.match(echo, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(echo, /phasePanelRef\.current\?\.focus\(\)/);
+  assert.doesNotMatch(echo, /<main className=\{styles\.workbench\}/);
+  assert.doesNotMatch(echo, /localStorage/);
+  assert.doesNotMatch(model, /emotionScore|goodnessScore|musicalityScore|overallScore/);
+  assert.match(echoCss, /min-height: 44px/);
+  assert.match(echoCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(echoCss, /@media \(forced-colors: active\)/);
+  assert.match(echoCss, /\.openNotehead/);
+  assert.match(echoCss, /\.readKeyboardKeys/);
+});
+
 test("immersive piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
   const [piano, immersion, intervalGlow, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, vocalTrainingModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
@@ -66,7 +119,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
   assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
   assert.match(intervalGlow, /octave layers shrink inward/);

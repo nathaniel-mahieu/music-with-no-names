@@ -4,7 +4,21 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Sight Shapes Notation Repair v2.14**. It provides:
+The current milestone is **EchoKey Ear-First Path v2.15**. It provides:
+
+- A new guided `EchoKey` section inside the persistent Piano companion. It runs one complete relationship-learning loop—hear, hold internally, sing or hum, find on a silent MIDI/on-screen keyboard, diagnose, repair, read, and transfer—without making notation or key names the first representation.
+
+- Relative reproduction as the default success criterion. A complete phrase played from another starting key receives full relationship credit; wrong direction, wrong semitone width, and a missed supplied anchor receive separate feedback rather than being compressed into an overall correctness or “musicality” score.
+
+- Progressive visual disclosure. After listening and before playing, the learner sees only an equally spaced rise/fall/repeat trace with exact pitch and interval width removed; after an attempt, aligned target/performance paths expose the first divergence on a fixed semitone ruler. Scale degrees, movable-Do syllables, signed semitones, an event-numbered chromatic semitone strip, and duration-aware staff notation arrive only in the later Read step.
+
+- A bounded repair loop that contrasts the intended interval with the performed substitution from one shared anchor, then asks for the repaired link inside the whole phrase. Repeated substitutions are summarized only in tab-scoped session storage, are visibly deletable, and are described as practice evidence—not a diagnosis of hearing, talent, or motor ability.
+
+- Monophonic capture that waits briefly for the phrase boundary and refuses to grade chord-like attacks within 70 ms, an extra attack, or a field armed over an already held/sustained note. Returning from another Piano focus rebases a Find attempt so off-lens attacks cannot be scored. The global Clear action resets the lesson, while the miss-only history has its own explicit deletion control and stays veiled during blind recall.
+
+- Five short, deterministic relationship studies spanning reversible steps, mirrored contour, major/minor triad interiors, and a major-pentatonic wave. Explicit reference and repair controls use the shared conservative synthesis budget; incoming MIDI and the on-screen keyboard remain silent.
+
+The prior **Sight Shapes Notation Repair v2.14** remains available and provides:
 
 - Contextual staff spelling across every Sight Shapes exercise: common flat centers remain E♭, A♭, B♭, or D♭ rather than becoming awkward enharmonic sharp keys; a matched MIDI note keeps the target's written line or space; standard one-measure accidental carry prints a natural when required; and notation, solfège, destination copy, route labels, and the optional on-screen theory names share one spelling. Fixed interval specimens are called out when they intentionally leave the selected route—including the expected F♯ in C–D–E → D–E–F♯, which preserves the exact +2, +2 transformation.
 

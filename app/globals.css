@@ -8701,7 +8701,6 @@ footer a {
 .piano-focus-lenses {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  border-bottom: 1px solid var(--line);
 }
 
 .piano-focus-lenses button {
@@ -8711,14 +8710,23 @@ footer a {
   padding: 12px 16px;
   border: 0;
   border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   color: var(--foreground);
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
 
-.piano-focus-lenses button:last-child { border-right: 0; }
-.piano-focus-lenses button:nth-child(-n + 6) { border-bottom: 1px solid var(--line); }
+.piano-focus-lenses button:nth-child(7),
+.piano-focus-lenses button:nth-child(13) { border-right: 0; }
+.piano-focus-lenses button.is-ear-first {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(max-content, .34fr) minmax(0, 1fr);
+  align-items: baseline;
+  border-right: 0;
+  background: color-mix(in srgb, var(--piano-gold) 7%, transparent);
+}
+.piano-focus-lenses button.is-ear-first strong { color: var(--piano-gold); font-size: .84rem; }
 .piano-focus-lenses button[aria-pressed="true"] { color: var(--background); background: var(--foreground); }
 .piano-focus-lenses strong { font-size: .8rem; }
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
@@ -12202,6 +12210,11 @@ footer a {
   .piano-model-disclosure > p { grid-column: 1 / -1; }
   .piano-focus-lenses { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .piano-focus-lenses button { border-bottom: 1px solid var(--line); }
+  .piano-focus-lenses button:nth-child(n) { border-right: 1px solid var(--line); }
+  .piano-focus-lenses button:nth-child(5),
+  .piano-focus-lenses button:nth-child(9),
+  .piano-focus-lenses button:nth-child(13),
+  .piano-focus-lenses button.is-ear-first { border-right: 0; }
   .piano-focus-grid.is-motion,
   .piano-focus-grid.is-interval-practice { grid-template-columns: 1fr; }
   .piano-focus-grid.is-motion > * + *,
@@ -12397,6 +12410,10 @@ footer a {
   .piano-model-disclosure > p { grid-column: 1 / -1; }
   .piano-focus-lenses { grid-template-columns: 1fr 1fr; }
   .piano-focus-lenses button { padding: 10px 12px; }
+  .piano-focus-lenses button:nth-child(n) { border-right: 1px solid var(--line); }
+  .piano-focus-lenses button:nth-child(2n + 1),
+  .piano-focus-lenses button.is-ear-first { border-right: 0; }
+  .piano-focus-lenses button.is-ear-first { grid-template-columns: 1fr; }
   .piano-focus-lenses span { display: none; }
   .piano-focus-lenses button:last-child { grid-column: auto; }
   .hud-motion-mode-nav { grid-template-columns: 1fr 1fr; }

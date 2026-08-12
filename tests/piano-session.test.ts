@@ -20,6 +20,14 @@ test("preserves the immersive relationship-sky lens in the tab summary", () => {
   })), { attackCount: 2, focusLens: "immersion" });
 });
 
+test("preserves the ear-first EchoKey lens in the tab summary", () => {
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 25,
+    focusLens: "echo-key",
+    phraseEvents: [phraseEvent(1, 60, 100), phraseEvent(2, 62, 240)],
+  })), { attackCount: 2, focusLens: "echo-key" });
+});
+
 test("preserves the interval-glow HUD lens in the tab summary", () => {
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 25,
