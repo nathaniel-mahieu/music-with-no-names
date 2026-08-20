@@ -842,9 +842,23 @@ export async function importMusicXmlFile(file: File) {
 
 /** Convert preserved MusicXML evidence into the bounded live-coaching model. */
 export function normalizeImportedMusicXmlScore(imported: ImportedMusicXmlScore): SheetMusicScore {
+  const notesByMeasure = new Map<number, ImportedMusicXmlNote[]>();
+  for (const note of imported.notes) {
+    if (note.grace) continue;
+    const grouped = notesByMeasure.get(note.measureIndex) ?? [];
+    grouped.push(note);
+    notesByMeasure.set(note.measureIndex, grouped);
+  }
+  const restsByMeasure = new Map<number, ImportedMusicXmlRest[]>();
+  for (const rest of imported.rests) {
+    if (rest.durationBeats <= 0) continue;
+    const grouped = restsByMeasure.get(rest.measureIndex) ?? [];
+    grouped.push(rest);
+    restsByMeasure.set(rest.measureIndex, grouped);
+  }
   const measures: SheetMusicScoreInput["measures"] = imported.measures.map((measure) => {
-    const measureNotes = imported.notes.filter((note) => note.measureIndex === measure.index && !note.grace);
-    const measureRests = imported.rests.filter((rest) => rest.measureIndex === measure.index && rest.durationBeats > 0);
+    const measureNotes = notesByMeasure.get(measure.index) ?? [];
+    const measureRests = restsByMeasure.get(measure.index) ?? [];
     return {
       id: `measure-${measure.index + 1}`,
       number: measure.number,

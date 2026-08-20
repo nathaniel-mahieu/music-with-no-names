@@ -179,6 +179,13 @@ export type SheetMusicLoopSelection = {
   hand?: PracticeHand;
   /** Make a held tie continuation playable when a loop begins in its measure. */
   includeBoundaryTies?: boolean;
+  /**
+   * Optional exact attack boundary, resolved after the measure and hand filters.
+   * Supply both IDs together; the returned practice loop contains that inclusive
+   * attack slice and no surrounding attacks from the containing measures.
+   */
+  startAttackId?: string;
+  endAttackId?: string;
 };
 
 export type SheetMusicPracticeAttack = SheetMusicAttack & {
@@ -353,6 +360,9 @@ export type SheetReadingChordSpacing = ChordSpacing & {
 export type SheetReadingChunk = {
   id: string;
   ordinal: number;
+  /** Stable boundary IDs from the hand-filtered practice loop. */
+  startAttackId: string;
+  endAttackId: string;
   attackIndexes: number[];
   startAttackIndex: number;
   endAttackIndex: number;
@@ -898,7 +908,7 @@ export function selectSheetMusicLoop(score: SheetMusicScore, selection: SheetMus
   const endMeasure = score.measures[endMeasureIndex];
   const startBeat = startMeasure.startBeat;
   const endBeat = endMeasure.startBeat + endMeasure.durationBeats;
-  const attacks = score.attacks
+  let attacks = score.attacks
     .filter((attack) => attack.onsetBeat >= startBeat - EPSILON && attack.onsetBeat < endBeat - EPSILON)
     .map((attack) => filterAttackForHand(attack, hand))
     .filter((attack): attack is SheetMusicAttack => attack !== null)
@@ -939,6 +949,27 @@ export function selectSheetMusicLoop(score: SheetMusicScore, selection: SheetMus
     }
   }
   attacks.sort((first, second) => first.onsetBeat - second.onsetBeat || first.id.localeCompare(second.id));
+  const hasStartAttackId = selection.startAttackId !== undefined;
+  const hasEndAttackId = selection.endAttackId !== undefined;
+  if (hasStartAttackId !== hasEndAttackId) {
+    throw new RangeError("Exact attack selection requires both startAttackId and endAttackId.");
+  }
+  if (hasStartAttackId && hasEndAttackId) {
+    const startAttackId = selection.startAttackId;
+    const endAttackId = selection.endAttackId;
+    if (typeof startAttackId !== "string" || !startAttackId.trim() || typeof endAttackId !== "string" || !endAttackId.trim()) {
+      throw new TypeError("Exact attack selection IDs must be non-empty text.");
+    }
+    const startAttackIndex = attacks.findIndex((attack) => attack.id === startAttackId);
+    const endAttackIndex = attacks.findIndex((attack) => attack.id === endAttackId);
+    if (startAttackIndex < 0 || endAttackIndex < 0) {
+      throw new RangeError("Exact attack selection IDs must exist after the measure and hand filters.");
+    }
+    if (startAttackIndex > endAttackIndex) {
+      throw new RangeError("Exact attack selection must run from an earlier attack ID through a later attack ID.");
+    }
+    attacks = attacks.slice(startAttackIndex, endAttackIndex + 1);
+  }
   return {
     scoreId: score.id,
     startMeasureIndex,
@@ -970,6 +1001,18 @@ function attackLabel(attack: SheetMusicAttack) {
 function shortAttackSequence(labels: string[]) {
   if (labels.length <= 5) return labels.join(" → ");
   return `${labels.slice(0, 2).join(" → ")} → … → ${labels.slice(-2).join(" → ")}`;
+}
+
+function stableReadingChunkId(scoreId: string, hand: PracticeHand, startAttackId: string, endAttackId: string) {
+  const value = `${scoreId}\u001f${hand}\u001f${startAttackId}\u001f${endAttackId}`;
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `reading-chunk-${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`;
 }
 
 function handSummary(hands: SheetHand[]) {
@@ -1073,17 +1116,8 @@ function readingStrategy(attacks: SheetMusicAttack[], semitones: number[]) {
   };
 }
 
-function restBoundaryBetween(score: SheetMusicScore, hand: PracticeHand, previous: SheetMusicAttack, next: SheetMusicAttack) {
-  if (next.onsetBeat - previous.onsetBeat <= 0.5 + EPSILON) return false;
-  return score.events.some((event) => event.kind === "rest"
-    && event.onsetBeat > previous.onsetBeat + EPSILON
-    && event.onsetBeat + event.durationBeats <= next.onsetBeat + EPSILON
-    && (hand === "both" || event.hand === hand || event.hand === "unknown"));
-}
-
 function readingBoundaryScore(
-  score: SheetMusicScore,
-  loop: SheetMusicPracticeLoop,
+  restBoundaryPositions: Set<number>,
   indexed: Array<{ attack: SheetMusicPracticeAttack; index: number }>,
   position: number,
 ) {
@@ -1091,7 +1125,7 @@ function readingBoundaryScore(
   const next = indexed[position].attack;
   let value = 0;
   if (previous.measureIndex !== next.measureIndex) value += 10;
-  if (restBoundaryBetween(score, loop.hand, previous, next)) value += 8;
+  if (restBoundaryPositions.has(position)) value += 8;
   const silence = next.onsetBeat - (previous.onsetBeat + previous.soundingDurationBeats);
   if (silence >= 0.5 - EPSILON) value += 6;
   else if (next.onsetBeat - previous.onsetBeat >= 2 - EPSILON) value += 2;
@@ -1109,8 +1143,7 @@ function readingBoundaryScore(
 }
 
 function readingChunkSegments(
-  score: SheetMusicScore,
-  loop: SheetMusicPracticeLoop,
+  restBoundaryPositions: Set<number>,
   indexed: Array<{ attack: SheetMusicPracticeAttack; index: number }>,
   minAttacks: number,
   maxAttacks: number,
@@ -1133,7 +1166,7 @@ function readingChunkSegments(
     for (let position = lower; position <= upper; position += 1) {
       candidates.push({
         position,
-        boundary: readingBoundaryScore(score, loop, indexed, position),
+        boundary: readingBoundaryScore(restBoundaryPositions, indexed, position),
         targetDistance: Math.abs(position - start - targetAttacks),
       });
     }
@@ -1174,6 +1207,16 @@ export function buildSheetMusicReadingChunks(score: SheetMusicScore, options: Sh
   if (!Number.isInteger(targetAttacks) || targetAttacks < minAttacks || targetAttacks > maxAttacks) {
     throw new RangeError("Reading-chunk target must fall inside its minimum and maximum bounds.");
   }
+  const hasStartAttackId = options.startAttackId !== undefined;
+  const hasEndAttackId = options.endAttackId !== undefined;
+  if (hasStartAttackId !== hasEndAttackId) {
+    throw new RangeError("Exact attack selection requires both startAttackId and endAttackId.");
+  }
+  const hasExactIdRange = hasStartAttackId && hasEndAttackId;
+  const hasLocalIndexRange = options.startAttackIndex !== undefined || options.endAttackIndex !== undefined;
+  if (hasExactIdRange && hasLocalIndexRange) {
+    throw new RangeError("Reading chunks accept either stable attack IDs or loop-local attack indexes, not both.");
+  }
   const loop = selectSheetMusicLoop(score, options);
   if (!loop.attacks.length) return [];
   const startAttackIndex = options.startAttackIndex ?? 0;
@@ -1185,7 +1228,29 @@ export function buildSheetMusicReadingChunks(score: SheetMusicScore, options: Sh
   const indexed = loop.attacks
     .map((attack, index) => ({ attack, index }))
     .slice(startAttackIndex, endAttackIndex + 1);
-  const segments = readingChunkSegments(score, loop, indexed, minAttacks, maxAttacks, targetAttacks);
+  const relevantRests = score.events.filter((event): event is SheetMusicRest => event.kind === "rest"
+    && event.onsetBeat >= loop.startBeat - EPSILON
+    && event.onsetBeat < loop.endBeat - EPSILON
+    && (loop.hand === "both" || event.hand === loop.hand || event.hand === "unknown"))
+    .sort((first, second) => first.onsetBeat - second.onsetBeat || first.id.localeCompare(second.id));
+  const restBoundaryPositions = new Set<number>();
+  let restIndex = 0;
+  for (let position = 1; position < indexed.length; position += 1) {
+    const previous = indexed[position - 1].attack;
+    const next = indexed[position].attack;
+    if (next.onsetBeat - previous.onsetBeat <= 0.5 + EPSILON) continue;
+    while (restIndex < relevantRests.length && relevantRests[restIndex].onsetBeat <= previous.onsetBeat + EPSILON) restIndex += 1;
+    let candidate = restIndex;
+    while (candidate < relevantRests.length && relevantRests[candidate].onsetBeat < next.onsetBeat - EPSILON) {
+      const rest = relevantRests[candidate];
+      if (rest.onsetBeat + rest.durationBeats <= next.onsetBeat + EPSILON) {
+        restBoundaryPositions.add(position);
+        break;
+      }
+      candidate += 1;
+    }
+  }
+  const segments = readingChunkSegments(restBoundaryPositions, indexed, minAttacks, maxAttacks, targetAttacks);
   return segments.map((segment, ordinal): SheetReadingChunk => {
     const attacks = segment.map((item) => item.attack);
     const attackIndexes = segment.map((item) => item.index);
@@ -1197,9 +1262,13 @@ export function buildSheetMusicReadingChunks(score: SheetMusicScore, options: Sh
     const allNotes = attacks.flatMap((attack) => attack.midiNotes);
     const startBeat = attacks[0].onsetBeat;
     const endBeat = Math.max(...attacks.map((attack) => attack.onsetBeat + attack.soundingDurationBeats));
+    const startAttackId = attacks[0].id;
+    const endAttackId = attacks.at(-1)!.id;
     return {
-      id: `reading-chunk-${attackIndexes[0]}-${attackIndexes.at(-1)}`,
+      id: stableReadingChunkId(loop.scoreId, loop.hand, startAttackId, endAttackId),
       ordinal,
+      startAttackId,
+      endAttackId,
       attackIndexes,
       startAttackIndex: attackIndexes[0],
       endAttackIndex: attackIndexes.at(-1)!,
@@ -1679,6 +1748,35 @@ function alignTargetAwareAttacks(
   for (let expectedIndex = consumedExpectedCount; expectedIndex < expected.length; expectedIndex += 1) {
     atomicOperations.push({ kind: "missing", expectedIndex, atomStart: null, atomEnd: null });
   }
+  // Attach every inserted performance attack to the nearest adjacent written
+  // landing. Operation distance works for self-paced takes and for neighboring
+  // missing attacks; an exact middle tie deliberately points forward. The two
+  // passes stay linear even when a capture contains a long run of extras.
+  type ExpectedAnchor = { position: number; expectedIndex: number };
+  const previousExpectedAnchors = new Array<ExpectedAnchor | null>(atomicOperations.length).fill(null);
+  const nextExpectedAnchors = new Array<ExpectedAnchor | null>(atomicOperations.length).fill(null);
+  let previousExpectedAnchor: ExpectedAnchor | null = null;
+  atomicOperations.forEach((operation, position) => {
+    previousExpectedAnchors[position] = previousExpectedAnchor;
+    if (operation.kind !== "extra" && operation.expectedIndex !== null) {
+      previousExpectedAnchor = { position, expectedIndex: operation.expectedIndex };
+    }
+  });
+  let nextExpectedAnchor: ExpectedAnchor | null = null;
+  for (let index = atomicOperations.length - 1; index >= 0; index -= 1) {
+    nextExpectedAnchors[index] = nextExpectedAnchor;
+    const operation = atomicOperations[index];
+    if (operation.kind !== "extra" && operation.expectedIndex !== null) {
+      nextExpectedAnchor = { position: index, expectedIndex: operation.expectedIndex };
+    }
+  }
+  atomicOperations.forEach((operation, position) => {
+    if (operation.kind !== "extra") return;
+    const previous = previousExpectedAnchors[position];
+    const next = nextExpectedAnchors[position];
+    const nearest = previous && (!next || position - previous.position < next.position - position) ? previous : next;
+    operation.expectedIndex = nearest?.expectedIndex ?? null;
+  });
   const clusters: MidiAttackCluster[] = [];
   const operations = atomicOperations.map((operation): AlignmentOperation => {
     if (operation.kind === "missing") return { kind: "missing", expectedIndex: operation.expectedIndex, actualIndex: null };
@@ -1783,13 +1881,24 @@ function firstDivergence(
   comparisons: SheetEventComparison[],
   clusters: MidiAttackCluster[],
 ): SheetPerformanceDivergence | null {
-  for (const operation of operations) {
+  for (let operationIndex = 0; operationIndex < operations.length; operationIndex += 1) {
+    const operation = operations[operationIndex];
     if (operation.kind === "extra") {
       const cluster = clusters[operation.actualIndex!];
+      const adjacent = operation.expectedIndex === null ? null : comparisons[operation.expectedIndex];
+      const hasPreviousLanding = operations.slice(0, operationIndex).some((candidate) => candidate.kind !== "extra" && candidate.expectedIndex !== null);
+      const hasNextLanding = operations.slice(operationIndex + 1).some((candidate) => candidate.kind !== "extra" && candidate.expectedIndex !== null);
+      const placement = hasPreviousLanding && hasNextLanding
+        ? "arrived between written landings"
+        : hasNextLanding
+          ? "arrived before the first written landing"
+          : hasPreviousLanding
+            ? "arrived after the final written landing"
+            : "arrived outside an empty written loop";
       return {
-        kind: "extra-attack", expectedIndex: null, actualIndex: operation.actualIndex, measureNumber: null,
+        kind: "extra-attack", expectedIndex: operation.expectedIndex, actualIndex: operation.actualIndex, measureNumber: adjacent?.expected.measureNumber ?? null,
         expectedNotes: [], actualNotes: cluster.notes, signedSemitoneCorrection: null,
-        message: `An extra attack (${cluster.notes.map((note) => performedMidiLabel(note, score.keyFifths)).join(" + ")}) arrived before the next written landing.`,
+        message: `An extra attack (${cluster.notes.map((note) => performedMidiLabel(note, score.keyFifths)).join(" + ")}) ${placement}.`,
       };
     }
     const comparison = comparisons[operation.expectedIndex!];
@@ -1887,7 +1996,9 @@ export function evaluateSheetMusicPerformance(
   assertPositive(durationToleranceMs, "Duration tolerance");
 
   const operationByExpected = new Map<number, AlignmentOperation>();
-  for (const operation of operations) if (operation.expectedIndex !== null) operationByExpected.set(operation.expectedIndex, operation);
+  for (const operation of operations) {
+    if (operation.kind !== "extra" && operation.expectedIndex !== null) operationByExpected.set(operation.expectedIndex, operation);
+  }
   const lastPairedExpected = paired.length ? Math.max(...paired.map((operation) => operation.expectedIndex!)) : -1;
   const comparisons = loop.attacks.map((expected, expectedIndex): SheetEventComparison => {
     const operation = operationByExpected.get(expectedIndex)!;
