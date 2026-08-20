@@ -2,6 +2,7 @@ export const PIANO_SESSION_KEY = "music-with-no-names:piano-session:v2";
 
 export const PIANO_SESSION_LENSES = [
   "echo-key",
+  "score-flow",
   "explore",
   "immersion",
   "interval-glow",
@@ -56,7 +57,7 @@ function parsePhraseEvents(serialized: string | null): Record<string, unknown>[]
   try {
     const session = JSON.parse(serialized) as Record<string, unknown>;
     if (!session || typeof session !== "object" || !Array.isArray(session.phraseEvents)) return null;
-    if (session.phraseEvents.length > 512 || !session.phraseEvents.every(isSafePhraseEvent)) return null;
+    if (session.phraseEvents.length > 4096 || !session.phraseEvents.every(isSafePhraseEvent)) return null;
     return session.phraseEvents as Record<string, unknown>[];
   } catch {
     return null;

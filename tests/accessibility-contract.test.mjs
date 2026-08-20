@@ -44,6 +44,62 @@ test("Sight Shapes keeps notation, interval, keyboard, and learner-report channe
   assert.match(sightCss, /\.workbenchActions button[\s\S]*min-height: 44px/);
 });
 
+test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidence explicit", async () => {
+  const [piano, scoreFlow, scoreFlowCss, importer, model, session, ratio] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoScoreFlowHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoScoreFlowHud.module.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/musicxml-import.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/sheet-music-coach-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-session.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(piano, /\{ id: "score-flow", label: "Score Flow · upload music"/);
+  assert.match(piano, /focusLens === "score-flow" \? <PianoScoreFlowHud/);
+  assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*onResumeCapture=\{\(\) => setFrozen\(false\)\}/);
+  assert.match(piano, /focusLens === "score-flow"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
+  assert.match(piano, /The score stays in this browser tab\. MIDI stays silent; only the explicit score-reference button makes sound\./);
+  assert.match(session, /"score-flow"/);
+  assert.match(ratio, /"score-flow": "uploaded-score coach"/);
+
+  assert.match(scoreFlow, /<section className=\{styles\.shell\} aria-labelledby="score-flow-title">/);
+  assert.match(scoreFlow, /<label htmlFor="score-flow-upload">Choose score<input id="score-flow-upload" type="file"/);
+  assert.match(scoreFlow, /accept="\.mxl,\.musicxml,\.xml,[^"]+" onChange=\{onFileChange\}/);
+  assert.match(scoreFlow, /role=\{fileState === "error" \? "alert" : "status"\}/);
+  assert.match(scoreFlow, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(scoreFlow, /Nothing leaves this browser tab/);
+  assert.match(scoreFlow, /window\.sessionStorage\.setItem\(SCORE_FLOW_STORAGE_KEY/);
+  assert.match(scoreFlow, /window\.sessionStorage\.removeItem\(SCORE_FLOW_STORAGE_KEY/);
+  assert.match(importer, /new Uint8Array\(await file\.arrayBuffer\(\)\)/);
+  assert.ok(importer.indexOf("if (file.size > MAX_ARCHIVE_BYTES)") < importer.indexOf("await file.arrayBuffer()"), "oversized score files must fail before browser allocation");
+  assert.doesNotMatch(scoreFlow, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
+
+  assert.match(scoreFlow, /Reference audio is off\. MIDI remains silent\./);
+  assert.match(scoreFlow, /Take armed\.[^"`]*MIDI remains silent\./);
+  assert.match(scoreFlow, /onClick=\{\(\) => void playReference\(\)\}>Hear from cursor · audio<\/button>/);
+  assert.match(scoreFlow, /const playReference = useCallback\(async \(voice: ReferenceVoice = "full"\) => \{[\s\S]*new AudioContextConstructor[\s\S]*createOscillator\(\)/);
+  assert.match(scoreFlow, /captureState === "review" \? "Try loop again" : "Arm silent take"/);
+  assert.match(scoreFlow, /event\.keyReleaseMs \?\? event\.releaseMs/);
+  assert.match(scoreFlow, /MAX_LIVE_FEEDBACK_ATTACKS = 160[\s\S]*live alignment pauses/);
+  assert.match(scoreFlow, /This piano release evaluates one MusicXML part at a time/);
+
+  assert.match(scoreFlow, /Pitch landings[\s\S]*Chord gathering[\s\S]*Chord voicing shape[\s\S]*Marked roll direction[\s\S]*Upper contour[\s\S]*Upper interval width[\s\S]*Bass route[\s\S]*Pulse proportions[\s\S]*Release lengths[\s\S]*Progress/);
+  assert.match(scoreFlow, /Abstract score horizon[\s\S]*not a facsimile of the engraved page/);
+  assert.match(scoreFlow, /aria-label=\{`Measure \$\{measure\.number\}[\s\S]*\$\{state\}`\}/);
+  assert.match(scoreFlow, /Latest upper link[\s\S]*Latest bass link/);
+  assert.match(scoreFlow, /Not an overall score; simply aligned attack moments/);
+  assert.match(scoreFlow, /This is not a musicality or expression score/);
+  assert.match(model, /Metrics stay separate:[\s\S]*no blended “musicality score”/);
+  assert.doesNotMatch(model, /emotionScore|goodnessScore|musicalityScore|overallScore|blendedScore/);
+
+  assert.match(scoreFlowCss, /\.shell button,[\s\S]*\.shell label:has\(input\[type="file"\]\) \{ min-height: 44px; \}/);
+  assert.match(scoreFlowCss, /\.shell label:has\(input\[type="file"\]:focus-visible\) \{ outline: 3px/);
+  assert.match(scoreFlowCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(scoreFlowCss, /@media \(forced-colors: active\)/);
+  assert.doesNotMatch(scoreFlowCss, /forced-color-adjust:\s*none/);
+});
+
 test("EchoKey preserves an ear-first boundary while keeping every later representation explicit", async () => {
   const [piano, echo, echoCss, model, session] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
@@ -58,7 +114,7 @@ test("EchoKey preserves an ear-first boundary while keeping every later represen
   assert.match(piano, /physical position \$\{echoKeyPosition\} of \$\{VISIBLE_NOTES\.length\} from the left/);
   assert.match(piano, /EchoKey reveals relationship labels in its Read step/);
   assert.match(piano, /VISIBLE_NOTES\.map\(\(note\) => renderKey\(note, !WHITE_PITCH_CLASSES\.has/);
-  assert.match(piano, /echoKeyBlind \? strikeEchoScreenKey\(note\) : toggleScreenKey\(note\)/);
+  assert.match(piano, /relationshipBlind \? strikeEchoScreenKey\(note\) : toggleScreenKey\(note\)/);
   assert.match(piano, /isPersistedHudEventList\(saved\.phraseEvents\)/);
   assert.match(piano, /sessionStorage\.removeItem\(ECHO_KEY_LESSON_STORAGE_KEY\)/);
   assert.match(session, /"echo-key"/);
@@ -119,7 +175,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
   assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
   assert.match(intervalGlow, /octave layers shrink inward/);

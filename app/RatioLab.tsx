@@ -69,6 +69,7 @@ const SUPPORT_LAB_GROUPS: Array<{ label: string; labs: LabId[] }> = [
 const SUPPORT_LAB_IDS = new Set(SUPPORT_LAB_GROUPS.flatMap((group) => group.labs));
 const PIANO_LENS_LABELS: Record<PianoSessionSummary["focusLens"], string> = {
   "echo-key": "ear-first EchoKey",
+  "score-flow": "uploaded-score coach",
   explore: "whole-phrase",
   immersion: "immersive-sky",
   "interval-glow": "interval-glow-hud",

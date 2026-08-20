@@ -44,6 +44,14 @@ test("preserves the sight-shapes reader in the tab summary", () => {
   })), { attackCount: 2, focusLens: "sight-shapes" });
 });
 
+test("preserves the uploaded-score coach in the tab summary", () => {
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 25,
+    focusLens: "score-flow",
+    phraseEvents: [phraseEvent(1, 60, 100), phraseEvent(2, 64, 240)],
+  })), { attackCount: 2, focusLens: "score-flow" });
+});
+
 test("preserves the research HUD lens in the tab summary", () => {
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 25,
@@ -67,12 +75,21 @@ test("falls back to the whole-phrase lens for older sessions", () => {
   })), { attackCount: 1, focusLens: "explore" });
 });
 
-test("rejects malformed or implausibly large session data", () => {
+test("retains a full Score Flow history through the expanded 4,096-event boundary", () => {
+  const phraseEvents = Array.from({ length: 4096 }, (_, id) => phraseEvent(id, 60 + id % 12, id * 10));
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 25,
+    focusLens: "score-flow",
+    phraseEvents,
+  })), { attackCount: 4096, focusLens: "score-flow" });
+});
+
+test("rejects malformed data or histories beyond the expanded boundary", () => {
   assert.equal(parsePianoSessionSummary(null), null);
   assert.equal(parsePianoSessionSummary("not json"), null);
   assert.equal(parsePianoSessionSummary(JSON.stringify({ phraseEvents: [{ note: 200 }] })), null);
   assert.equal(parsePianoSessionSummary(JSON.stringify({
-    phraseEvents: Array.from({ length: 513 }, (_, id) => phraseEvent(id, 60, id)),
+    phraseEvents: Array.from({ length: 4097 }, (_, id) => phraseEvent(id, 60, id)),
   })), null);
 });
 
