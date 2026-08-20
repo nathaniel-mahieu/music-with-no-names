@@ -4,7 +4,13 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Score Flow · Adaptive Chunk Practice v2.18**. It provides:
+The current milestone is **Score Flow · Live Response v2.19**. It provides:
+
+- Always-on provisional score following. Once a score is loaded, new MIDI or silent on-screen attacks cross a fresh boundary and move the landing, chunk, and journey views without requiring an Arm step. A completed live-follow loop leaves its result visible briefly, then returns to landing one for another repetition; `Start review take` remains the explicit way to freeze and retain one pass.
+
+- A focal `Played now` echo inside the illuminated landing field. Every raw attack produces an immediate, non-judgmental bloom; a chord then moves through `Received` or `Gathering` before the selected togetherness window resolves to a written `✓ Aligned` or `× Repair` result. Ear-first and memory veils preserve only anonymous attack count and receipt, never pitch identity or correctness.
+
+- More legible MIDI readiness and recovery. The score command bar distinguishes disconnected, ready, received, paused, live-follow, review-take, and frozen-review states; it offers local Connect/Retry and Resume actions. A previously authorized tab reconnects safely, same-ID device reconnections rebind their message handler, and resuming the shared trace clears the event gate synchronously so the first fast attack is not lost.
 
 - Selectable reading chunks as exact practice units. Each numbered chunk in the form journey is a keyboard-accessible target: selecting one arms only its stable first-to-last landing IDs, so notes elsewhere in the containing measures cannot become fabricated misses. A first divergence now offers the smallest containing chunk before falling back to a measure repair loop.
 

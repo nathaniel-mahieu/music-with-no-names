@@ -23,6 +23,7 @@ import {
   analyzeLocalPitchCollections,
   buildSheetMusicReadingChunks,
   chordSpacing,
+  clusterMidiPerformance,
   evaluateSheetMusicPerformance,
   fingerDistance,
   repairLoopAroundFirstDivergence,
@@ -30,6 +31,7 @@ import {
   summarizeSheetReadingChunkProgress,
   type PracticeHand,
   type MidiPerformanceNote,
+  type MidiAttackCluster,
   type SheetPitchCollectionAnalysis,
   type SheetReadingChunk,
   type SheetReadingChunkProgress,
@@ -80,6 +82,9 @@ type PianoScoreFlowHudProps = {
   chordWindowMs: number;
   showConventions: boolean;
   frozen: boolean;
+  midiConnected: boolean;
+  midiStatus: string;
+  onConnectMidi: () => void;
   onResumeCapture: () => void;
 };
 
@@ -354,6 +359,69 @@ function evidenceReadingLens(comparison: SheetEventComparison | null, timingMode
   return "motion";
 }
 
+function LiveAttackEcho({
+  liveAttack,
+  comparison,
+  veiled,
+  showConventions,
+  prefer,
+  arrivalWindowOpen,
+  captureState,
+}: {
+  liveAttack: MidiAttackCluster | null;
+  comparison: SheetEventComparison | null;
+  veiled: boolean;
+  showConventions: boolean;
+  prefer: "flats" | "sharps";
+  arrivalWindowOpen: boolean;
+  captureState: CaptureState;
+}) {
+  if (!liveAttack) return <div className={cx(styles.liveAttackEcho, styles.isWaiting)} data-state="waiting" role="status" aria-live="polite">
+    <div className={styles.attackEchoPulse} aria-hidden="true"><i /></div>
+    <div><span>Input echo</span><strong>Play any key</strong><small>The first incoming attack will bloom here immediately.</small></div>
+  </div>;
+
+  const gatheringChord = arrivalWindowOpen && (comparison?.expected.midiNotes.length ?? 1) > 1;
+  const feedbackState = arrivalWindowOpen
+    ? gatheringChord ? "gathering" : "received"
+    : comparison?.status === "correct"
+      ? "aligned"
+      : comparison?.status === "incorrect" || comparison?.status === "missed"
+        ? "repair"
+        : "received";
+  const feedbackLabel = feedbackState === "gathering"
+    ? "Gathering"
+    : feedbackState === "aligned"
+      ? "✓ Aligned"
+      : feedbackState === "repair"
+        ? "× Repair"
+        : "Received";
+  const noteCount = liveAttack.notes.length;
+  const details = veiled
+    ? `${noteCount} anonymous key attack${noteCount === 1 ? "" : "s"} received · pitch identity is hidden`
+    : showConventions
+      ? liveAttack.notes.slice(0, 8).map((midi) => pitchClassName(midi, prefer)).join(" + ")
+      : `${noteCount} played tone${noteCount === 1 ? "" : "s"}`;
+  const explanation = veiled
+    ? "Receipt is visible; pitch, position, and right/repair outcome stay veiled until review."
+    : feedbackState === "gathering"
+      ? "The first attack keeps this togetherness window open; add the rest of the chord now."
+      : feedbackState === "aligned"
+        ? "This completed landing matched. The gold destination may already have moved to what comes next."
+        : feedbackState === "repair"
+          ? `${attackStatusLabel(comparison, false)} in landing ${(comparison?.expectedIndex ?? 0) + 1} · the destination above has moved to what comes next.`
+          : captureState === "review"
+            ? "MIDI was received, but the formal review remains frozen until you start another take."
+            : "MIDI was received and the live-follow comparison is provisional.";
+  return <div className={styles.liveAttackEcho} data-state={veiled ? "veiled" : feedbackState} role="status" aria-live="polite" aria-atomic="true">
+    <div className={styles.attackEchoPulse} aria-hidden="true">
+      <i />
+      {Array.from({ length: Math.min(8, noteCount) }, (_, index) => <b key={index} style={{ "--echo-angle": `${index * (360 / Math.max(1, Math.min(8, noteCount)))}deg` } as CSSProperties} />)}
+    </div>
+    <div><span>Played now · {feedbackLabel}</span><strong>{details}{liveAttack.notes.length > 8 ? ` + ${liveAttack.notes.length - 8} more` : ""}</strong><small>{explanation}</small></div>
+  </div>;
+}
+
 function FocusLanding({
   attack,
   comparison,
@@ -366,6 +434,8 @@ function FocusLanding({
   arrivalWindowMs,
   arrivalWindowOpen,
   captureState,
+  liveAttack,
+  liveComparison,
 }: {
   attack: SheetMusicPracticeAttack | null;
   comparison: SheetEventComparison | null;
@@ -378,6 +448,8 @@ function FocusLanding({
   arrivalWindowMs: number;
   arrivalWindowOpen: boolean;
   captureState: CaptureState;
+  liveAttack: MidiAttackCluster | null;
+  liveComparison: SheetEventComparison | null;
 }) {
   if (!attack && totalAttacks === 0) return <section className={styles.focusLanding} aria-labelledby="focus-landing-title">
     <header><span>Now · landing</span><strong id="focus-landing-title">No playable landing in this selection</strong></header>
@@ -385,7 +457,8 @@ function FocusLanding({
   </section>;
   if (!attack) return <section className={styles.focusLanding} aria-labelledby="focus-landing-title">
     <header><span>Now · landing</span><strong id="focus-landing-title">Loop complete</strong></header>
-    <div className={styles.landingComplete}><i>✓</i><strong>{captureState === "review" ? "Every written landing has a frozen comparison." : "Every written landing has arrived."}</strong><small>{captureState === "armed" ? "Release any held keys so note lengths can enter the frozen review." : "Review the first repair, move the loop, or veil the score for recall."}</small></div>
+    <div className={styles.landingComplete}><i>✓</i><strong>{captureState === "review" ? "Every written landing has a frozen comparison." : "Every written landing has arrived."}</strong><small>{captureState === "armed" ? "Release any held keys so note lengths can enter the frozen review." : "Live follow will return to the first landing after this result has had a moment to remain visible."}</small></div>
+    <LiveAttackEcho key={String(liveAttack?.events.at(-1)?.id ?? "complete")} liveAttack={liveAttack} comparison={liveComparison} veiled={veiled} showConventions={showConventions} prefer={prefer} arrivalWindowOpen={arrivalWindowOpen} captureState={captureState} />
   </section>;
   const ordered = [...attack.notes].sort((first, second) => first.pitch.midi - second.pitch.midi);
   const bass = ordered[0]?.pitch.midi ?? 60;
@@ -395,20 +468,21 @@ function FocusLanding({
   const capturedTargetCount = [...new Set((comparison?.actualNotes ?? []).filter((note) => attack.midiNotes.includes(note)))].length;
   const capturedExtraCount = [...new Set(comparison?.extraNotes ?? [])].length;
   const gatheredTargetCount = Math.min(attack.midiNotes.length, Math.max(activeTargetCount, capturedTargetCount));
-  const gathering = captureState === "armed" && arrivalWindowOpen && attack.midiNotes.length > 1 && capturedExtraCount === 0
+  const gathering = captureState !== "review" && arrivalWindowOpen && attack.midiNotes.length > 1 && capturedExtraCount === 0
     && ((gatheredTargetCount > 0 && gatheredTargetCount < attack.midiNotes.length) || Boolean(comparison?.missingNotes.length && !comparison.extraNotes.length));
   const revealOutcome = !veiled && !gathering;
   const status = veiled ? `${attack.midiNotes.length}-note landing · feedback veiled` : gathering ? `gathering ${gatheredTargetCount} of ${attack.midiNotes.length} · ${arrivalWindowMs} ms lens` : attackStatusLabel(comparison, true);
-  return <section className={cx(styles.focusLanding, revealOutcome && comparison?.status === "correct" && styles.isFocusCorrect, revealOutcome && (comparison?.status === "incorrect" || comparison?.status === "missed") && styles.isFocusWrong)} aria-labelledby="focus-landing-title">
+  return <section className={cx(styles.focusLanding, revealOutcome && comparison?.status === "correct" && styles.isFocusCorrect, revealOutcome && (comparison?.status === "incorrect" || comparison?.status === "missed") && styles.isFocusWrong)} aria-labelledby="focus-landing-title" aria-busy={arrivalWindowOpen}>
     <header><span>{revealOutcome && comparison && comparison.status !== "pending" ? "Review · landing" : "Now · landing"}</span><strong id="focus-landing-title">Landing {Math.min(currentIndex + 1, totalAttacks)} of {totalAttacks} · m.{attack.measureNumber}</strong><em>{status}</em></header>
-    <div className={cx(styles.landingField, veiled && styles.isVeiled)}>
+    <div className={cx(styles.landingField, veiled && styles.isVeiled)} data-input={liveAttack ? "received" : "waiting"}>
       <div className={styles.landingOrbits} aria-hidden="true"><i /><i /><i /></div>
       <div className={styles.noteConstellation} role="list" aria-label={veiled ? `Veiled landing with ${attack.notes.length} simultaneous note${attack.notes.length === 1 ? "" : "s"}` : `Written landing: ${ordered.map((note) => note.pitch.label).join(" plus ")}`}>
         {ordered.map((note, index) => {
           const relative = note.pitch.midi - bass;
           const held = activeNotes.includes(note.pitch.midi);
           const matched = comparison?.actualNotes.includes(note.pitch.midi) && !comparison.missingNotes.includes(note.pitch.midi);
-          const missing = comparison?.missingNotes.includes(note.pitch.midi) || (gathering && !held && !matched);
+          const comparisonIsJudged = comparison?.status === "incorrect" || comparison?.status === "missed";
+          const missing = (comparisonIsJudged && comparison.missingNotes.includes(note.pitch.midi)) || (gathering && !held && !matched);
           return <article key={note.id} role="listitem" className={cx(styles.landingNote, !veiled && held && styles.isHeld, !veiled && matched && styles.isMatched, !veiled && missing && styles.isMissing)} style={{ "--node-color": intervalColor(relative), "--node-rise": veiled ? "0px" : `${Math.min(42, relative * 3)}px` } as CSSProperties}>
             <i aria-hidden="true" />
             <strong>{veiled ? "?" : showConventions ? note.pitch.label : `tone ${index + 1}`}</strong>
@@ -418,6 +492,7 @@ function FocusLanding({
         })}
         {!veiled && comparison?.extraNotes.map((midi) => <article key={`extra-${midi}`} role="listitem" className={cx(styles.landingNote, styles.isExtra)} style={{ "--node-color": "#f18d7e", "--node-rise": "0px" } as CSSProperties}><i aria-hidden="true" /><strong>+ {pitchClassName(midi, prefer)}</strong><span>extra note</span></article>)}
       </div>
+      <LiveAttackEcho key={String(liveAttack?.events.at(-1)?.id ?? "waiting")} liveAttack={liveAttack} comparison={liveComparison} veiled={veiled} showConventions={showConventions} prefer={prefer} arrivalWindowOpen={arrivalWindowOpen} captureState={captureState} />
     </div>
     <div className={styles.landingFacts}>
       <div><span>Notes</span><strong>{veiled ? `${attack.notes.length} concealed` : ordered.map((note) => showConventions ? note.pitch.label : note.staff > 1 ? "lower" : "upper").join(" + ")}</strong><small>One landing = one or more notes that begin together.</small></div>
@@ -610,7 +685,7 @@ function ScoreJourney({
       const repetition = veiled ? "repeat evidence veiled" : memory?.consecutiveCleanTakes ? `${memory.consecutiveCleanTakes} aligned in a row` : memory?.repeatedRepairLandingIds.length ? `same repair at ${memory.repeatedRepairLandingIds.length} landing${memory.repeatedRepairLandingIds.length === 1 ? "" : "s"}` : "no repeat pattern yet";
       return <button key={chunk.id} type="button" className={cx(progress?.status === "secure" && styles.isSecure, progress?.status === "repair" && styles.isRepair, live && styles.isCursor, selected && styles.isSelected)} style={{ "--chunk-grow": chunk.attackCount } as CSSProperties} aria-pressed={selected} aria-current={live ? "step" : undefined} aria-label={`Practice chunk ${chunk.ordinal + 1}, measures ${chunk.measureNumbers.join(" to ")}, ${chunk.attackCount} landings${live ? ", current" : ""}, ${outcome}, ${repetition}`} onClick={() => onSelectChunk(chunk)}><span>{chunk.ordinal + 1}</span><small>{progress?.status === "secure" ? "✓" : progress?.status === "repair" ? "×" : "○"}</small>{live ? <b aria-hidden="true">now</b> : null}{memory?.recentTakes.length ? <em>{memory.consecutiveCleanTakes >= 2 ? "2×✓" : memory.repeatedRepairLandingIds.length ? "repeat ×" : `${memory.recentTakes.length} take${memory.recentTakes.length === 1 ? "" : "s"}`}</em> : null}</button>;
     })}</div>
-    <p>{veiled ? "Chunk boundaries and landing counts remain visible; pitch, outcomes, and repetition evidence return in review." : selectedChunkId ? "A selected chunk becomes the exact practice target; surrounding measure landings stay visible here but are not marked missed." : captureState === "review" ? "Frozen review: ✓ and × are definitive for this take. Select a chunk to repeat only that reading unit." : captureState === "armed" ? "Live alignment is provisional; a later landing can clarify an earlier match." : "Choose a chunk for a short repetition, or arm the full measure loop."}</p>
+    <p>{veiled ? "Chunk boundaries and landing counts remain visible; pitch, outcomes, and repetition evidence return in review." : selectedChunkId ? "A selected chunk becomes the exact practice target; surrounding measure landings stay visible here but are not marked missed." : captureState === "review" ? "Frozen review: ✓ and × are definitive for this take. Select a chunk to repeat only that reading unit." : captureState === "armed" ? "Live alignment is provisional; a later landing can clarify an earlier match." : "Live follow is already active. Choose a chunk for a short repetition, or start a review take when you want one pass frozen."}</p>
   </section>;
 }
 
@@ -627,7 +702,7 @@ function stopAudioContext(context: AudioContext | null, master: GainNode | null)
   } catch { void context.close(); }
 }
 
-export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWindowMs, showConventions, frozen, onResumeCapture }: PianoScoreFlowHudProps) {
+export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWindowMs, showConventions, frozen, midiConnected, midiStatus, onConnectMidi, onResumeCapture }: PianoScoreFlowHudProps) {
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
   const [fileState, setFileState] = useState<"empty" | "loading" | "ready" | "error">("empty");
@@ -646,7 +721,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const [reviewTakeEvents, setReviewTakeEvents] = useState<MidiPerformanceNote[] | null>(null);
   const [attemptAfterId, setAttemptAfterId] = useState(() => newestEventId(events));
   const [settledThroughEventId, setSettledThroughEventId] = useState(() => newestEventId(events));
-  const [captureNotice, setCaptureNotice] = useState("Load a score, choose a short loop, then arm the silent MIDI take.");
+  const [captureNotice, setCaptureNotice] = useState("Load a score, then play: live follow begins without arming. Start a review take only when you want to freeze one pass.");
   const [isDragging, setIsDragging] = useState(false);
   const [audioState, setAudioState] = useState<"idle" | "playing" | "unavailable">("idle");
   const [audioNotice, setAudioNotice] = useState("Reference audio is off. MIDI remains silent.");
@@ -691,7 +766,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     setReviewTakeEvents(null);
     setAttemptAfterId(newestEventId(eventsRef.current));
     setSettledThroughEventId(newestEventId(eventsRef.current));
-    setCaptureNotice("Score ready. Study the next written shape or arm a silent take.");
+    setCaptureNotice("Score ready. Play now for provisional live follow; start a review take when you want one pass frozen for diagnosis and repetition memory.");
     if (persist) {
       try {
         // Never let an older score reappear if the new score exceeds the tab's
@@ -821,19 +896,21 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id)
     .map((event) => ({ id: event.id, midi: event.note, onsetMs: event.onsetMs, velocity: event.velocity, releaseMs: event.keyReleaseMs ?? event.releaseMs ?? undefined })), [attemptAfterId, events]);
   const latestLiveEventId = liveTakeEvents.at(-1)?.id ?? -1;
-  const takeEvents = useMemo(() => captureState === "armed"
-    ? liveTakeEvents
-    : captureState === "review"
-      ? reviewTakeEvents ?? []
-      : [], [captureState, liveTakeEvents, reviewTakeEvents]);
-  const scoreVeiled = captureState !== "review" && (readingMode === "ear" || (readingMode === "memory" && captureState === "armed" && takeEvents.length > 0));
+  // Study and armed states both follow the post-boundary stream. Only Review
+  // substitutes its frozen copy; therefore playing never looks inert merely
+  // because the learner did not discover an Arm button first.
+  const takeEvents = useMemo(() => captureState === "review"
+    ? reviewTakeEvents ?? []
+    : liveTakeEvents, [captureState, liveTakeEvents, reviewTakeEvents]);
+  const liveAttack = useMemo(() => clusterMidiPerformance(liveTakeEvents.slice(-32), clusterWindow).at(-1) ?? null, [clusterWindow, liveTakeEvents]);
+  const scoreVeiled = captureState !== "review" && (readingMode === "ear" || (readingMode === "memory" && takeEvents.length > 0));
   const localTempoBeat = loop?.attacks[0]?.onsetBeat ?? loop?.startBeat ?? 0;
   const encodedLocalTempo = score?.tempoChanges.filter((change) => change.beat <= localTempoBeat + 1e-7).at(-1)?.bpm ?? score?.tempoBpm ?? 72;
   const practiceTempo = Math.max(20, Math.round(encodedLocalTempo * tempoPercent / 100));
   const evaluationState = useMemo(() => {
     if (!score) return { evaluation: null, error: null, paused: false };
     const targetCount = loop?.attacks.length ?? 0;
-    if (captureState === "armed" && targetCount > MAX_LIVE_FEEDBACK_ATTACKS) return { evaluation: null, error: null, paused: true };
+    if (captureState !== "review" && targetCount > MAX_LIVE_FEEDBACK_ATTACKS) return { evaluation: null, error: null, paused: true };
     try {
       if (targetCount * Math.max(1, takeEvents.length) > MAX_UI_ALIGNMENT_CELLS) throw new Error("This take and loop exceed the browser-safe comparison bound.");
       return {
@@ -863,7 +940,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const liveEvaluationPaused = evaluationState.paused;
 
   useEffect(() => {
-    if (captureState !== "armed" || latestLiveEventId < 0 || latestLiveEventId <= settledThroughEventId) return;
+    if (captureState === "review" || latestLiveEventId < 0 || latestLiveEventId <= settledThroughEventId) return;
     // Match the evaluator's non-transitive grouping: every chord window is
     // anchored to its first unsettled attack, not restarted by each new note.
     const unsettled = liveTakeEvents.filter((event) => Number(event.id) > settledThroughEventId);
@@ -902,6 +979,19 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     }, 420);
     return () => window.clearTimeout(task);
   }, [captureState, evaluation?.complete, pressedNotes.length, takeEvents]);
+
+  useEffect(() => {
+    if (captureState !== "idle" || !takeEvents.length || !evaluation?.complete || pressedNotes.length || latestLiveEventId < 0) return;
+    // Live follow is deliberately repeatable. Leave the final receipt visible
+    // briefly, then put the cursor back at landing one without storing a take.
+    const completedBoundaryId = latestLiveEventId;
+    const task = window.setTimeout(() => {
+      setAttemptAfterId(completedBoundaryId);
+      setSettledThroughEventId(completedBoundaryId);
+      setCaptureNotice("Live follow restarted at landing one. Start a review take whenever you want the next pass frozen and retained.");
+    }, 1_050);
+    return () => window.clearTimeout(task);
+  }, [captureState, evaluation?.complete, latestLiveEventId, pressedNotes.length, takeEvents.length]);
 
   useEffect(() => {
     if (captureState !== "review" || !score || !evaluation?.complete || !reviewTakeEvents?.length) return;
@@ -946,7 +1036,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     setCaptureState("armed");
     setCaptureNotice((loop?.attacks.length ?? 0) > MAX_LIVE_FEEDBACK_ATTACKS
       ? `Long take armed. To protect the browser, live alignment pauses above ${MAX_LIVE_FEEDBACK_ATTACKS} written landings; play the loop, then choose Stop + diagnose for one frozen evaluation.`
-      : "Take armed. The first new MIDI or on-screen attack becomes the timing anchor; MIDI remains silent.");
+      : "Review take started. The first new MIDI or on-screen attack becomes its boundary; live feedback stays provisional until the take freezes. MIDI remains silent.");
   };
 
   const reviewTake = () => {
@@ -958,7 +1048,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       : "Take stopped. The HUD now separates pitch, interval, chord, pulse, and release evidence.");
   };
 
-  const resetTake = useCallback((notice = "Take cleared. Study the next relationship, then arm again.") => {
+  const resetTake = useCallback((notice = "Take cleared. Live follow is ready at the new boundary; start a review take only when you want to retain one pass.") => {
     stopReference("Reference stopped for the new practice boundary. MIDI remains silent.");
     setAttemptAfterId(newestEventId(events));
     setSettledThroughEventId(newestEventId(events));
@@ -998,7 +1088,8 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const evaluatedCurrentIndex = captureState === "review"
     ? evaluation?.firstDivergence?.expectedIndex ?? evaluation?.progress.nextExpectedIndex ?? loop?.attacks.length ?? 0
     : evaluation?.progress.nextExpectedIndex ?? (evaluation?.complete ? loop?.attacks.length ?? 0 : 0);
-  const gatheringComparison = captureState === "armed" && latestLiveEventId > settledThroughEventId && evaluatedCurrentIndex > 0
+  const arrivalWindowOpen = captureState !== "review" && latestLiveEventId > settledThroughEventId;
+  const gatheringComparison = arrivalWindowOpen && evaluatedCurrentIndex > 0
     ? evaluation?.comparisons[evaluatedCurrentIndex - 1] ?? null
     : null;
   const gatheringPreviousChord = Boolean(gatheringComparison
@@ -1009,6 +1100,8 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     && !evaluation?.extraClusters.length);
   const currentIndex = gatheringPreviousChord ? evaluatedCurrentIndex - 1 : evaluatedCurrentIndex;
   const nextAttack = loop?.attacks[currentIndex] ?? null;
+  const liveAttackEventIds = useMemo(() => new Set((liveAttack?.events ?? []).map((event) => String(event.id))), [liveAttack]);
+  const liveAttackComparison = useMemo(() => evaluation?.comparisons.findLast((comparison) => comparison.actual?.events.some((event) => liveAttackEventIds.has(String(event.id)))) ?? null, [evaluation?.comparisons, liveAttackEventIds]);
   const contextAttack = nextAttack ?? loop?.attacks.at(-1) ?? null;
   const baseAttackIndexById = useMemo(() => new Map((measureLoop?.attacks ?? []).map((attack, index) => [attack.id, index])), [measureLoop]);
   const baseCurrentIndex = nextAttack
@@ -1248,6 +1341,14 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     }
     return "Replay the smallest surrounding relationship. Keep correct pitches intact and change only the named pulse or key-release boundary.";
   })();
+  const inputState = frozen ? "paused" : liveAttack ? "received" : midiConnected ? "ready" : "disconnected";
+  const inputHeadline = frozen
+    ? "Trace paused"
+    : liveAttack
+      ? `${liveAttack.notes.length} key${liveAttack.notes.length === 1 ? "" : "s"} received now`
+      : midiConnected
+        ? "MIDI ready · play any key"
+        : "MIDI is not connected";
 
   return <section className={styles.shell} aria-labelledby="score-flow-title">
     <header className={styles.scoreHeader}>
@@ -1280,15 +1381,21 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     </details>
 
     <div className={styles.sessionBar}>
-      <div><span>{captureState === "idle" ? "study" : captureState === "armed" ? liveEvaluationPaused ? "long take" : evaluation?.complete && pressedNotes.length ? "release to finish" : takeEvents.length ? "capturing" : "armed" : "review"}</span><strong>{loop?.attacks.length ?? 0} written landing{loop?.attacks.length === 1 ? "" : "s"} · {selectedChunk ? `chunk ${selectedChunk.ordinal + 1} selected` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`}</strong><small role="status" aria-live="polite" aria-atomic="true">{evaluationError ? "Evaluation paused until the loop is shortened." : !hasPracticeAttacks ? "This selection contains no landing targets for the chosen staff focus. Include a measure with notes or change the staff focus." : captureState === "armed" && evaluation?.complete && pressedNotes.length ? "All written landings have arrived. Release the pressed keys so key-up lengths can enter the frozen review; pedal-sustained tones do not block review." : captureNotice}</small>{evaluationError ? <small role="alert">{evaluationError} Choose a shorter measure loop, then arm a fresh take.</small> : null}</div>
-      <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}<button type="button" disabled={!hasPracticeAttacks} aria-pressed={audioState === "playing"} onClick={() => audioState === "playing" ? stopReference() : void playReference()}>{audioState === "playing" ? "Stop reference" : "Hear from cursor · audio"}</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper")}>Hear upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass")}>Hear bass route</button>{captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose</button> : <button type="button" className={styles.primaryAction} disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Try chunk again" : "Try loop again" : selectedChunk ? "Arm chunk take" : "Arm silent take"}</button>}</div>
+      <div className={styles.sessionSummary}>
+        <span>{captureState === "idle" ? liveAttack ? "live follow" : "live follow · waiting" : captureState === "armed" ? liveEvaluationPaused ? "long review take" : evaluation?.complete && pressedNotes.length ? "release to finish" : takeEvents.length ? "recording review take" : "review take ready" : "frozen review"}</span>
+        <strong>{loop?.attacks.length ?? 0} written landing{loop?.attacks.length === 1 ? "" : "s"} · {selectedChunk ? `chunk ${selectedChunk.ordinal + 1} selected` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`}</strong>
+        <div className={styles.inputReadiness} data-state={inputState}><i aria-hidden="true" /><div><span>Silent input</span><strong>{inputHeadline}</strong><small>{midiStatus}</small></div></div>
+        <small role="status" aria-live="polite" aria-atomic="true">{frozen ? "The shared trace is paused. Resume it to let new attacks enter live follow; held keys may still light." : evaluationError ? "Evaluation paused until the loop is shortened." : !hasPracticeAttacks ? "This selection contains no landing targets for the chosen staff focus. Include a measure with notes or change the staff focus." : captureState === "armed" && evaluation?.complete && pressedNotes.length ? "All written landings have arrived. Release the pressed keys so key-up lengths can enter the frozen review; pedal-sustained tones do not block review." : captureState === "idle" && liveAttack ? "MIDI received. Live follow is comparing this pass now; no Arm step is required." : captureNotice}</small>
+        {evaluationError ? <small role="alert">{evaluationError} Choose a shorter measure loop; raw input receipt remains active.</small> : null}
+      </div>
+      <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}{frozen ? <button type="button" className={styles.primaryAction} onClick={onResumeCapture}>Resume live trace</button> : null}{!midiConnected ? <button type="button" onClick={onConnectMidi}>Connect / retry MIDI</button> : null}<button type="button" disabled={!hasPracticeAttacks} aria-pressed={audioState === "playing"} onClick={() => audioState === "playing" ? stopReference() : void playReference()}>{audioState === "playing" ? "Stop reference" : "Hear from cursor · audio"}</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper")}>Hear upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass")}>Hear bass route</button>{captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose</button> : <button type="button" className={styles.primaryAction} disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Try chunk again" : "Try loop again" : selectedChunk ? "Start chunk review take" : "Start review take"}</button>}</div>
       <p className={styles.audioNotice} role="status" aria-live="polite">{audioNotice}{timingMode === "pulse" ? ` Fixed-pulse is a constant ${practiceTempo} BPM drill from the latest numeric tempo at this boundary: your first landing is beat zero, and later tempo changes, rubato words, or fermatas do not move its clock.` : ""}</p>
     </div>
 
     {loop ? <div className={styles.immersionOverview}>
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveHudMessage}</p>
       {measureLoop ? <ScoreJourney loop={measureLoop} chunks={readingChunks} chunkProgress={chunkProgress} chunkMemory={chunkMemoryById} comparisons={journeyComparisonsByExpectedIndex} currentIndex={baseCurrentIndex} extraCount={visibleEvaluation?.extraClusters.length ?? 0} captureState={captureState} veiled={scoreVeiled} selectedChunkId={selectedChunk?.id ?? null} onSelectChunk={selectPracticeChunk} /> : null}
-      <FocusLanding attack={nextAttack} comparison={focusComparison} currentIndex={currentIndex} totalAttacks={loop.attacks.length} activeNotes={pressedNotes} veiled={scoreVeiled} showConventions={showConventions} prefer={prefer} arrivalWindowMs={clusterWindow} arrivalWindowOpen={latestLiveEventId > settledThroughEventId} captureState={captureState} />
+      <FocusLanding attack={nextAttack} comparison={focusComparison} currentIndex={currentIndex} totalAttacks={loop.attacks.length} activeNotes={pressedNotes} veiled={scoreVeiled} showConventions={showConventions} prefer={prefer} arrivalWindowMs={clusterWindow} arrivalWindowOpen={arrivalWindowOpen} captureState={captureState} liveAttack={liveAttack} liveComparison={liveAttackComparison} />
       <ReadingChunkFocus chunk={currentChunk} progress={currentChunkProgress} memory={currentChunkMemory} loop={loop} comparisons={comparisonsByExpectedIndex} currentIndex={currentIndex} veiled={scoreVeiled} showConventions={showConventions} notationById={notationById} directionText={currentDirections.length ? currentDirections.map((direction) => direction.text).join(" · ") : null} activeLens={scoreVeiled ? "rhythm" : activeReadingLens} recommendedLens={recommendedReadingLens} onLensChange={setManualReadingLens} />
       <CollectionFocus analysis={localCollection} showConventions={showConventions} prefer={prefer} veiled={scoreVeiled} />
     </div> : null}
@@ -1302,7 +1409,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
 
       <section className={styles.diagnosis} aria-labelledby="score-diagnosis-title">
         <header><div><span>First useful difference</span><h4 id="score-diagnosis-title">{evaluationError ? "Shorten the loop to keep the diagnosis responsive." : liveEvaluationPaused ? "Long take is recording without repeated heavy alignment." : captureState === "review" ? evaluation?.firstDivergence ? `Repair measure ${evaluation.firstDivergence.measureNumber ?? "near the cursor"}.` : "The selected evidence aligned." : takeEvents.length ? "Follow the live cursor, not a score total." : "Launch only when the whole next shape is prepared."}</h4></div></header>
-        {evaluationError ? <div className={styles.divergenceCard} role="alert"><span>Evaluation boundary</span><strong>{evaluationError}</strong><p>The score remains loaded and no evidence was discarded. Select fewer measures, then arm a fresh take.</p></div> : liveEvaluationPaused ? <div className={styles.liveInstruction}><strong>{takeEvents.length} key attack{takeEvents.length === 1 ? "" : "s"} captured behind a fixed boundary.</strong><p>Keep playing from the source page. Stop + diagnose freezes this take and runs the expensive alignment once; no automatic finish or moving cursor is attempted during a long capture.</p></div> : captureState === "review" ? evaluation?.firstDivergence ? <div className={styles.divergenceCard}>
+        {evaluationError ? <div className={styles.divergenceCard} role="alert"><span>Evaluation boundary</span><strong>{evaluationError}</strong><p>The score remains loaded and no evidence was discarded. Select fewer measures; raw MIDI receipt continues even while the comparison is paused.</p></div> : liveEvaluationPaused ? <div className={styles.liveInstruction}><strong>{takeEvents.length} key attack{takeEvents.length === 1 ? "" : "s"} received behind a browser-safe boundary.</strong><p>Raw key blooms remain live. Select a shorter loop for a moving comparison, or start a review take and use Stop + diagnose for one bounded frozen alignment.</p></div> : captureState === "review" ? evaluation?.firstDivergence ? <div className={styles.divergenceCard}>
           <span>{evaluation.firstDivergence.kind.replace("-", " ")}</span><strong>{evaluation.firstDivergence.message}</strong>
           <p>{repairInstruction}</p>
           {divergenceComparison?.expectedSpacing.adjacentSemitones.length || divergenceComparison?.actualSpacing?.adjacentSemitones.length ? <div className={styles.spacingComparison}>

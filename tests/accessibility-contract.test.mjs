@@ -58,7 +58,7 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
 
   assert.match(piano, /\{ id: "score-flow", label: "Score Flow · upload music"/);
   assert.match(piano, /focusLens === "score-flow" \? <PianoScoreFlowHud/);
-  assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*onResumeCapture=\{\(\) => setFrozen\(false\)\}/);
+  assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*midiConnected=\{midi\.inputs\.length > 0\}[\s\S]*onResumeCapture=\{resumeTrace\}/);
   assert.match(piano, /pressedNotes=\{pressedNoteNumbers\}/);
   assert.match(piano, /focusLens === "score-flow"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
   assert.match(piano, /The score stays in this browser tab\. MIDI stays silent; only the explicit score-reference button makes sound\./);
@@ -81,7 +81,7 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.doesNotMatch(scoreFlow, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
 
   assert.match(scoreFlow, /Reference audio is off\. MIDI remains silent\./);
-  assert.match(scoreFlow, /Take armed\.[^"`]*MIDI remains silent\./);
+  assert.match(scoreFlow, /Review take started\.[^"`]*MIDI remains silent\./);
   assert.match(scoreFlow, /aria-pressed=\{audioState === "playing"\}[\s\S]*audioState === "playing" \? "Stop reference" : "Hear from cursor · audio"/);
   assert.match(scoreFlow, /const playReference = useCallback\(async \(voice: ReferenceVoice = "full"\) => \{[\s\S]*new AudioContextConstructor[\s\S]*createOscillator\(\)/);
   assert.match(scoreFlow, /captureState === "review" \? selectedChunk \? "Try chunk again" : "Try loop again"/);
@@ -186,6 +186,48 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlowCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(scoreFlowCss, /@media \(forced-colors: active\)/);
   assert.doesNotMatch(scoreFlowCss, /forced-color-adjust:\s*none/);
+});
+
+test("Score Flow follows raw MIDI in study and capture while keeping review frozen", async () => {
+  const [piano, scoreFlow] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoScoreFlowHud.tsx", import.meta.url), "utf8"),
+  ]);
+
+  const takeEventsStart = scoreFlow.indexOf("const takeEvents = useMemo");
+  const takeEventsEnd = scoreFlow.indexOf("const scoreVeiled", takeEventsStart);
+  assert.ok(takeEventsStart >= 0 && takeEventsEnd > takeEventsStart, "Score Flow needs one inspectable live/review event boundary");
+  const takeEventsContract = scoreFlow.slice(takeEventsStart, takeEventsEnd);
+  assert.match(takeEventsContract, /captureState\s*===\s*["']review["'][\s\S]*reviewTakeEvents/, "review must read its frozen event copy");
+  assert.match(takeEventsContract, /liveTakeEvents/, "study and armed modes must continue following post-boundary live events");
+  assert.doesNotMatch(takeEventsContract, /:\s*\[\]\s*,?\s*\[/, "idle study must not silently replace fresh MIDI with an empty take");
+
+  assert.match(scoreFlow, /\.filter\(\(event\)\s*=>\s*event\.id\s*>\s*attemptAfterId\)/, "only events strictly after the current attempt boundary may enter the live view");
+  assert.match(scoreFlow, /function\s+LiveAttackEcho\s*\(/, "raw key receipt needs a dedicated view independent of formal diagnosis");
+  const echoStart = scoreFlow.indexOf("function LiveAttackEcho");
+  const echoEnd = scoreFlow.indexOf("function ", echoStart + "function LiveAttackEcho".length);
+  const echoContract = scoreFlow.slice(echoStart, echoEnd > echoStart ? echoEnd : scoreFlow.length);
+  for (const state of ["received", "gathering", "aligned", "repair"]) {
+    assert.match(echoContract, new RegExp(`\\b${state}\\b`, "i"), `LiveAttackEcho needs a visible ${state} label, not color alone`);
+  }
+  assert.match(echoContract, /role=["']status["']/, "raw attack receipt needs status semantics");
+  assert.match(echoContract, /aria-live=["']polite["']/, "raw attack receipt must be announced without moving focus");
+  assert.match(echoContract, /veil/i, "LiveAttackEcho must explicitly handle concealed-score practice");
+  assert.match(echoContract, /veil(?:ed)?\s*\?[\s\S]{0,320}(?:anonymous|identity\s+(?:is\s+)?hidden|pitch(?:es)?\s+(?:is\s+|are\s+)?hidden|key attack)/i, "the veiled branch must acknowledge input without exposing pitch identity");
+
+  const echoUseStart = scoreFlow.indexOf("<LiveAttackEcho");
+  const echoUseEnd = scoreFlow.indexOf("/>", echoUseStart);
+  assert.ok(echoUseStart >= 0 && echoUseEnd > echoUseStart, "the raw attack echo must be mounted in the Score Flow HUD");
+  const echoUseContract = scoreFlow.slice(echoUseStart, echoUseEnd + 2);
+  assert.match(echoUseContract, /liveTakeEvents|liveAttack|received/i, "the receipt view must consume raw post-boundary input rather than review-only evaluation");
+
+  const controlsStart = piano.indexOf('<div className="piano-hud-controls"');
+  const controlsEnd = piano.indexOf('<div className="piano-hud-statebar">', controlsStart);
+  assert.ok(controlsStart >= 0 && controlsEnd > controlsStart, "the shared HUD needs a central controls region");
+  const midiControls = piano.slice(controlsStart, controlsEnd);
+  assert.match(midiControls, /role=["']status["']/, "MIDI connection state must be exposed centrally");
+  assert.match(midiControls, /onClick=\{midi\.connect\}/, "the central HUD must offer MIDI permission/connection");
+  assert.match(midiControls, /Retry MIDI[\s\S]*Connect MIDI|Connect MIDI[\s\S]*Retry MIDI/, "the same central affordance must support first connection and retry");
 });
 
 test("EchoKey preserves an ear-first boundary while keeping every later representation explicit", async () => {

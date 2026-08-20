@@ -162,6 +162,7 @@ type MidiAccessLike = { inputs: Map<string, MidiInputLike>; onstatechange: (() =
 type NavigatorWithMidi = Navigator & {
   requestMIDIAccess?: (options?: { sysex?: boolean }) => Promise<MidiAccessLike>;
 };
+const MIDI_SESSION_CONNECT_KEY = "music-with-no-names:midi-connected:v1";
 type HudNoteEvent = {
   id: number;
   note: number;
@@ -900,13 +901,43 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
       setSupported(true);
       refreshInputs(access);
       access.onstatechange = () => refreshInputs(access);
+      try { window.sessionStorage.setItem(MIDI_SESSION_CONNECT_KEY, "1"); } catch { /* MIDI remains connected for this page. */ }
     } catch {
       setStatus("MIDI permission was not granted. Retry, or use the silent on-screen keys.");
     }
   }, [refreshInputs]);
 
   useEffect(() => {
-    const input = accessRef.current?.inputs.get(selectedInputId);
+    const request = (navigator as NavigatorWithMidi).requestMIDIAccess;
+    if (!request) {
+      const task = window.setTimeout(() => {
+        setSupported(false);
+        setStatus("This browser does not expose MIDI input. The silent on-screen keys still work.");
+      }, 0);
+      return () => window.clearTimeout(task);
+    }
+    let cancelled = false;
+    const reconnect = (() => {
+      try { return window.sessionStorage.getItem(MIDI_SESSION_CONNECT_KEY) === "1"; }
+      catch { return false; }
+    })();
+    if (reconnect) {
+      const task = window.setTimeout(() => { if (!cancelled) void connect(); }, 0);
+      return () => { cancelled = true; window.clearTimeout(task); };
+    }
+    const permissions = navigator.permissions;
+    if (!permissions) return () => { cancelled = true; };
+    void permissions.query({ name: "midi", sysex: false } as unknown as PermissionDescriptor)
+      .then((permission) => {
+        if (!cancelled && permission.state === "granted") void connect();
+      })
+      .catch(() => { /* Some MIDI-capable browsers do not expose a queryable MIDI permission. */ });
+    return () => { cancelled = true; };
+  }, [connect]);
+
+  useEffect(() => {
+    const input = inputs.find((candidate) => candidate.id === selectedInputId)
+      ?? accessRef.current?.inputs.get(selectedInputId);
     if (!input) return;
     clear();
     setStatus(`Visualizing ${input.name || "MIDI input"}. No sound is generated or recorded.`);
@@ -939,7 +970,7 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
       }
     };
     return () => { input.onmidimessage = null; };
-  }, [clear, publish, selectedInputId]);
+  }, [clear, inputs, publish, selectedInputId]);
 
   useEffect(() => () => { if (accessRef.current) accessRef.current.onstatechange = null; }, []);
 
@@ -4236,6 +4267,13 @@ export function PianoLab() {
 
   useEffect(() => { frozenRef.current = frozen; }, [frozen]);
 
+  const resumeTrace = useCallback(() => {
+    // The event writer consults the ref synchronously. Clear it before React's
+    // state update so the first fast key after Resume/Start is never dropped.
+    frozenRef.current = false;
+    setFrozen(false);
+  }, []);
+
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
       const currentNow = currentHudTime();
@@ -5772,7 +5810,13 @@ export function PianoLab() {
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
           {focusLens === "score-flow" ? <label htmlFor="score-flow-view"><span>Piano view</span><select id="score-flow-view" value={focusLens} onChange={(event) => selectFocusLens(event.target.value as FocusLens)}>{FOCUS_LENSES.map((lens) => <option key={lens.id} value={lens.id}>{lens.label}</option>)}</select></label> : null}
           {focusLens !== "echo-key" && focusLens !== "score-flow" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label> : null}
-          <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{phraseCompareSession ? "Trace live for A/B" : frozen ? "Resume trace" : "Freeze trace"}</button>
+          <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={() => {
+            setFrozen((current) => {
+              const next = !current;
+              frozenRef.current = next;
+              return next;
+            });
+          }}>{phraseCompareSession ? "Trace live for A/B" : frozen ? "Resume trace" : "Freeze trace"}</button>
           {focusLens !== "echo-key" && focusLens !== "score-flow" ? <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button> : null}
           <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>Theory names</span></label>
           <button type="button" onClick={clearAll}>Clear</button>
@@ -5850,7 +5894,7 @@ export function PianoLab() {
         scale={scale}
         showConventions={showConventions}
         frozen={frozen}
-        onResumeCapture={() => setFrozen(false)}
+        onResumeCapture={resumeTrace}
       /> : null}
 
       {focusLens === "score-flow" ? <PianoScoreFlowHud
@@ -5860,7 +5904,10 @@ export function PianoLab() {
         chordWindowMs={chordWindowMs}
         showConventions={showConventions}
         frozen={frozen}
-        onResumeCapture={() => setFrozen(false)}
+        midiConnected={midi.inputs.length > 0}
+        midiStatus={midi.status}
+        onConnectMidi={midi.connect}
+        onResumeCapture={resumeTrace}
       /> : null}
 
       {focusLens === "sight-shapes" ? <PianoSightReadingHud
@@ -5872,7 +5919,7 @@ export function PianoLab() {
         chordWindowMs={chordWindowMs}
         showConventions={showConventions}
         frozen={frozen}
-        onResumeCapture={() => setFrozen(false)}
+        onResumeCapture={resumeTrace}
       /> : null}
 
       {focusLens === "research" ? <PianoResearchHud
