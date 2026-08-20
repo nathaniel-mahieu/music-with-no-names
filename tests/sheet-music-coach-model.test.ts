@@ -165,6 +165,40 @@ test("selects inclusive measure loops, isolates hands, and re-attacks a boundary
   assert.deepEqual(withoutTie.attacks.map((attack) => attack.midiNotes), [[65]]);
 });
 
+test("selects and evaluates one exact inclusive attack range inside containing measures", () => {
+  const normalized = score();
+  const containing = selectSheetMusicLoop(normalized, { startMeasureIndex: 0, endMeasureIndex: 1, hand: "both" });
+  const startAttackId = containing.attacks[1].id;
+  const endAttackId = containing.attacks[3].id;
+  const exact = selectSheetMusicLoop(normalized, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 1,
+    hand: "both",
+    startAttackId,
+    endAttackId,
+  });
+  assert.deepEqual(exact.attacks.map((attack) => attack.id), containing.attacks.slice(1, 4).map((attack) => attack.id));
+  assert.deepEqual(exact.attacks.map((attack) => attack.midiNotes), [[62], [64], [65]]);
+
+  const result = evaluateSheetMusicPerformance(normalized, exactTake().slice(3, 6), {
+    startMeasureIndex: 0,
+    endMeasureIndex: 1,
+    hand: "both",
+    startAttackId,
+    endAttackId,
+    finalize: true,
+  });
+  assert.equal(result.complete, true);
+  assert.equal(result.passed, true);
+  assert.equal(result.comparisons.length, 3);
+  assert.deepEqual(result.comparisons.map((comparison) => comparison.status), ["correct", "correct", "correct"]);
+  assert.equal(result.firstDivergence, null, "attacks outside the exact range must not become misses");
+
+  assert.throws(() => selectSheetMusicLoop(normalized, { startAttackId }), /both startAttackId and endAttackId/);
+  assert.throws(() => selectSheetMusicLoop(normalized, { startAttackId: "missing", endAttackId }), /must exist/);
+  assert.throws(() => selectSheetMusicLoop(normalized, { startAttackId: endAttackId, endAttackId: startAttackId }), /earlier attack ID/);
+});
+
 test("integrates score tempo changes and permits a fixed slow-practice tempo", () => {
   const input = scoreInput();
   input.tempoChanges = [{ beat: 2, bpm: 60 }];
@@ -408,6 +442,90 @@ test("aligns an inserted attack without shifting every later score comparison", 
   assert.equal(result.metrics.pitch.accuracy, 1);
 });
 
+test("anchors leading, middle, and trailing extra attacks to the nearest written repair location", () => {
+  const placementScore = normalizeSheetMusicScore({
+    id: "extra-placement",
+    title: "Extra placement",
+    tempoBpm: 120,
+    measures: [
+      {
+        number: 10,
+        durationBeats: 2,
+        events: [60, 62].map((midi, index) => ({
+          kind: "note" as const,
+          id: `m10-${index}`,
+          offsetBeats: index,
+          durationBeats: 1,
+          midi,
+        })),
+      },
+      {
+        number: 11,
+        durationBeats: 2,
+        events: [64, 65].map((midi, index) => ({
+          kind: "note" as const,
+          id: `m11-${index}`,
+          offsetBeats: index,
+          durationBeats: 1,
+          midi,
+        })),
+      },
+    ],
+  });
+  const exact = [
+    { midi: 60, onsetMs: 100 },
+    { midi: 62, onsetMs: 600 },
+    { midi: 64, onsetMs: 1_100 },
+    { midi: 65, onsetMs: 1_600 },
+  ];
+  const cases = [
+    {
+      label: "leading",
+      take: [{ midi: 80, onsetMs: 0 }, ...exact],
+      expectedIndex: 0,
+      measureNumber: "10",
+      measureIndex: 0,
+      copy: /before the first/,
+    },
+    {
+      label: "middle tie",
+      take: [...exact.slice(0, 2), { midi: 80, onsetMs: 850 }, ...exact.slice(2)],
+      expectedIndex: 2,
+      measureNumber: "11",
+      measureIndex: 1,
+      copy: /between written landings/,
+    },
+    {
+      label: "trailing",
+      take: [...exact, { midi: 80, onsetMs: 1_900 }],
+      expectedIndex: 3,
+      measureNumber: "11",
+      measureIndex: 1,
+      copy: /after the final/,
+    },
+    {
+      label: "first of two middle extras",
+      take: [...exact.slice(0, 2), { midi: 80, onsetMs: 750 }, { midi: 81, onsetMs: 900 }, ...exact.slice(2)],
+      expectedIndex: 1,
+      measureNumber: "10",
+      measureIndex: 0,
+      copy: /between written landings/,
+    },
+  ];
+
+  cases.forEach((item) => {
+    const result = evaluateSheetMusicPerformance(placementScore, item.take, { finalize: true });
+    assert.equal(result.firstDivergence?.kind, "extra-attack", item.label);
+    assert.equal(result.firstDivergence?.expectedIndex, item.expectedIndex, item.label);
+    assert.equal(result.firstDivergence?.measureNumber, item.measureNumber, item.label);
+    assert.deepEqual(result.firstDivergence?.expectedNotes, [], item.label);
+    assert.deepEqual(result.firstDivergence?.actualNotes, [80], item.label);
+    assert.match(result.firstDivergence?.message ?? "", item.copy, item.label);
+    assert.equal(repairLoopAroundFirstDivergence(placementScore, result, 0)?.startMeasureIndex, item.measureIndex, item.label);
+    assert.equal(repairLoopAroundFirstDivergence(placementScore, result, 0)?.endMeasureIndex, item.measureIndex, item.label);
+  });
+});
+
 test("separates right-note rhythm errors from pitch correctness", () => {
   const take = exactTake();
   take[3] = { ...take[3], onsetMs: 1_900, releaseMs: 2_400 };
@@ -598,6 +716,32 @@ test("chunks a score at musical boundaries and names scalar, repeated, and chord
   assert.equal(selected.length, 1);
   assert.deepEqual(selected[0].attackIndexes, [4, 5, 6, 7], "attack-range chunks retain loop-local comparison indexes");
   assert.throws(() => buildSheetMusicReadingChunks(readingChunkScore(), { minAttacks: 1 }), /2 through 8/);
+});
+
+test("keeps chunk identity stable across containing measure loops and exact attack selection", () => {
+  const normalized = readingChunkScore();
+  const full = buildSheetMusicReadingChunks(normalized, { startMeasureIndex: 0, endMeasureIndex: 2 });
+  const repeatedFromFull = full[1];
+  const measureOnly = buildSheetMusicReadingChunks(normalized, { startMeasureIndex: 1, endMeasureIndex: 1 });
+  assert.equal(measureOnly.length, 1);
+  assert.equal(measureOnly[0].id, repeatedFromFull.id);
+  assert.equal(measureOnly[0].startAttackId, repeatedFromFull.startAttackId);
+  assert.equal(measureOnly[0].endAttackId, repeatedFromFull.endAttackId);
+
+  const exactRange = buildSheetMusicReadingChunks(normalized, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 2,
+    startAttackId: repeatedFromFull.startAttackId,
+    endAttackId: repeatedFromFull.endAttackId,
+  });
+  assert.equal(exactRange.length, 1);
+  assert.equal(exactRange[0].id, repeatedFromFull.id);
+  assert.deepEqual(exactRange[0].attackIndexes, [0, 1, 2, 3], "indexes are local to the exact selected practice loop");
+  assert.throws(() => buildSheetMusicReadingChunks(normalized, {
+    startAttackId: repeatedFromFull.startAttackId,
+    endAttackId: repeatedFromFull.endAttackId,
+    startAttackIndex: 0,
+  }), /either stable attack IDs or loop-local attack indexes/);
 });
 
 test("a written rest creates a chunk boundary without producing a fake attack", () => {

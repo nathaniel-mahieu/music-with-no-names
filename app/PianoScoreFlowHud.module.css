@@ -240,6 +240,7 @@
 }
 
 .measureMap button { display: grid; flex: 0 0 42px; min-height: 42px; place-content: center; border: 1px solid transparent; color: #788496; background: transparent; font-size: .6875rem; cursor: pointer; }
+.measureGap { display: grid; flex: 0 0 22px; place-content: center; color: var(--flow-muted); font-family: var(--font-mono), monospace; }
 .measureMap small { font-size: .625rem; }
 .measureMap em { min-height: .72rem; color: currentColor; font-size: .58rem; font-style: normal; line-height: 1; }
 .measureMap .isInLoop { color: #c4ccd8; border-color: var(--flow-line); background: rgba(219, 228, 242, .025); }
@@ -277,7 +278,7 @@
 
 .focusLanding,
 .chunkFocus,
-.collectionFocus { min-width: 0; padding: 20px clamp(16px, 2vw, 28px); }
+.collectionFocus { grid-row: 2; min-width: 0; padding: 20px clamp(16px, 2vw, 28px); }
 .focusLanding,
 .chunkFocus { border-right: 1px solid var(--flow-line); }
 
@@ -378,6 +379,14 @@
 .chunkFocus > header > div { display: grid; gap: 4px; }
 .chunkCue { max-width: 70ch; margin: 12px 0 8px; color: #c4cbd6; font-family: var(--font-display), Georgia, serif; font-size: clamp(1rem, 1.55vw, 1.28rem); line-height: 1.35; }
 .chunkDirection { display: flex; gap: 9px; margin: 0 0 12px; color: var(--flow-muted); font-size: .75rem; }
+.chunkMemory { display: grid; gap: 6px; margin: 10px 0 12px; padding: 9px 0; border-top: 1px solid var(--flow-line); border-bottom: 1px solid var(--flow-line); }
+.chunkMemory > div { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.chunkMemory > div > span { margin-right: auto; color: var(--flow-blue); font-family: var(--font-mono), monospace; font-size: .75rem; letter-spacing: .075em; text-transform: uppercase; }
+.chunkMemory i { display: inline-flex; min-height: 28px; gap: 4px; align-items: center; padding: 3px 7px; border: 1px solid var(--flow-line); color: var(--flow-muted); font-family: var(--font-mono), monospace; font-size: .72rem; font-style: normal; }
+.chunkMemory i.isClean { color: var(--flow-mint); border-color: rgba(139, 215, 180, .4); }
+.chunkMemory i.needsRepair { color: var(--flow-coral); border-color: rgba(241, 141, 126, .45); }
+.chunkMemory i small { color: currentColor; font-size: .68rem; }
+.chunkMemory > strong { color: #c5ccd7; font-size: .75rem; font-weight: 520; }
 .chunkAttackRail { display: flex; min-height: 150px; gap: 5px; align-items: stretch; padding: 11px 0; border-top: 1px solid var(--flow-line); border-bottom: 1px solid var(--flow-line); }
 .chunkAttackPair { display: flex; flex: var(--rhythm-space) 1 74px; min-width: 58px; gap: 5px; align-items: center; }
 .chunkMove { display: grid; flex: 0 0 27px; width: 27px; height: 27px; place-content: center; border: 1px solid color-mix(in srgb, var(--interval-color), transparent 46%); border-radius: 50%; color: var(--interval-color); background: color-mix(in srgb, var(--interval-color), transparent 92%); font-family: var(--font-mono), monospace; font-size: .7rem; font-style: normal; box-shadow: 0 0 15px color-mix(in srgb, var(--interval-color), transparent 72%); }
@@ -395,9 +404,15 @@
 .chunkAttack.isWrong { border-color: rgba(241, 141, 126, .64); }
 .chunkAttack.isWrong > em { color: var(--flow-coral); }
 .notationFlags { color: var(--flow-blue) !important; }
-.readingLayers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; margin-top: 11px; }
-.readingLayers > div { display: grid; min-width: 0; gap: 3px; padding: 8px 0; border-bottom: 1px solid var(--flow-line); }
-.readingLayers strong { color: #c5ccd7; font-size: .75rem; font-weight: 520; line-height: 1.35; }
+.readingLensSelectors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-top: 11px; }
+.readingLensSelectors button { display: grid; min-width: 0; min-height: 44px; gap: 2px; place-content: center; border: 1px solid var(--flow-line); color: var(--flow-muted); background: rgba(8, 12, 19, .45); cursor: pointer; text-align: center; }
+.readingLensSelectors button[aria-pressed="true"] { color: var(--flow-gold); border-color: var(--flow-gold); background: rgba(239, 199, 107, .07); }
+.readingLensSelectors button span { font-size: .75rem; }
+.readingLensSelectors button small { color: currentColor; font-size: .68rem; }
+.readingLensFocus { display: grid; min-height: 85px; gap: 4px; align-content: center; padding: 10px 0; border-bottom: 1px solid var(--flow-line); }
+.readingLensFocus span { color: var(--flow-blue); font-family: var(--font-mono), monospace; font-size: .75rem; letter-spacing: .075em; text-transform: uppercase; }
+.readingLensFocus strong { color: #c5ccd7; font-size: .8rem; font-weight: 550; line-height: 1.35; }
+.readingLensFocus small { color: var(--flow-muted); font-size: .72rem; line-height: 1.4; }
 
 .signatureContext { display: grid; gap: 4px; margin-top: 13px; padding: 10px 0; border-top: 1px solid var(--flow-line); border-bottom: 1px solid var(--flow-line); }
 .signatureContext strong { font-size: .78rem; line-height: 1.35; }
@@ -425,7 +440,7 @@
 .collectionVeil { min-height: 285px; align-content: center; justify-items: center; text-align: center; }
 .collectionVeil > i { display: grid; width: 52px; height: 52px; place-content: center; border: 1px dashed var(--flow-blue); border-radius: 50%; color: var(--flow-blue); font-size: 1.3rem; font-style: normal; }
 
-.scoreJourney { grid-column: 1 / -1; min-width: 0; padding: 13px clamp(18px, 3vw, 38px) 15px; border-top: 1px solid var(--flow-line); background: rgba(3, 5, 9, .45); }
+.scoreJourney { grid-column: 1 / -1; grid-row: 1; min-width: 0; padding: 13px clamp(18px, 3vw, 38px) 15px; border-bottom: 1px solid var(--flow-line); background: rgba(3, 5, 9, .45); }
 .scoreJourney > header { align-items: end; }
 .scoreJourney > header > div:first-child { display: grid; gap: 3px; }
 .journeyCounts { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: flex-end; color: var(--flow-muted); font-size: .75rem; }
@@ -437,12 +452,18 @@
 .journeyTrack > i.isRepair { height: 11px; border-color: var(--flow-coral); background: transparent; box-shadow: inset 0 0 0 1px var(--flow-coral); }
 .journeyTrack > i.isMixed { background: linear-gradient(90deg, var(--flow-mint) 50%, rgba(219, 228, 242, .06) 50%); }
 .journeyTrack > i.isCursor::after { position: absolute; top: -10px; left: 50%; width: 7px; height: 7px; border-radius: 50%; background: var(--flow-gold); box-shadow: 0 0 16px rgba(239, 199, 107, .72); content: ""; transform: translateX(-50%); }
-.chunkJourney { display: flex; min-width: 0; gap: 4px; align-items: stretch; }
-.chunkJourney > span { display: flex; flex: var(--chunk-grow) 1 0; min-width: 26px; gap: 4px; align-items: center; justify-content: center; padding: 4px; border: 1px solid var(--flow-line); color: var(--flow-muted); font-family: var(--font-mono), monospace; font-size: .7rem; }
-.chunkJourney > span small { font-size: .68rem; }
-.chunkJourney > span.isSecure { color: var(--flow-mint); border-color: rgba(139, 215, 180, .42); }
-.chunkJourney > span.isRepair { color: var(--flow-coral); border-color: rgba(241, 141, 126, .48); }
-.chunkJourney > span.isCursor { outline: 2px solid var(--flow-gold); outline-offset: -2px; color: var(--flow-gold); }
+.chunkJourneyNav { display: flex; min-height: 44px; gap: 10px; align-items: center; justify-content: space-between; margin: 1px 0 4px; color: var(--flow-muted); font-size: .72rem; }
+.chunkJourneyNav button { min-height: 44px; padding: 7px 12px; border: 1px solid var(--flow-line); color: var(--flow-text); background: rgba(8, 12, 19, .5); cursor: pointer; }
+.chunkJourneyNav button:disabled { color: var(--flow-muted); cursor: not-allowed; opacity: .58; }
+.chunkJourney { display: flex; min-width: 0; gap: 4px; align-items: stretch; overflow-x: auto; padding: 2px; scrollbar-color: rgba(119, 209, 223, .3) transparent; }
+.chunkJourney > button { display: flex; flex: var(--chunk-grow) 1 0; min-width: 44px; min-height: 44px; gap: 4px; align-items: center; justify-content: center; padding: 5px; border: 1px solid var(--flow-line); color: var(--flow-muted); background: rgba(8, 12, 19, .36); font-family: var(--font-mono), monospace; font-size: .7rem; cursor: pointer; }
+.chunkJourney > button small { font-size: .68rem; }
+.chunkJourney > button b { color: currentColor; font-size: .61rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.chunkJourney > button em { color: currentColor; font-size: .65rem; font-style: normal; }
+.chunkJourney > button.isSecure { color: var(--flow-mint); border-color: rgba(139, 215, 180, .42); }
+.chunkJourney > button.isRepair { color: var(--flow-coral); border-color: rgba(241, 141, 126, .48); }
+.chunkJourney > button.isCursor { box-shadow: inset 0 -3px 0 var(--flow-gold); color: var(--flow-gold); }
+.chunkJourney > button.isSelected { outline: 2px solid var(--flow-gold); outline-offset: -2px; background: rgba(239, 199, 107, .09); }
 .chunkJourney > em { align-self: center; color: var(--flow-muted); font-size: .7rem; font-style: normal; }
 .scoreJourney > p { margin: 7px 0 0; color: var(--flow-muted); font-size: .72rem; }
 
@@ -642,7 +663,7 @@
   .practiceControls label:nth-child(n + 5) { border-top: 1px solid var(--flow-line); }
   .immersionOverview { grid-template-columns: minmax(280px, .9fr) minmax(380px, 1.1fr); }
   .chunkFocus { border-right: 0; }
-  .collectionFocus { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(220px, .7fr) 190px minmax(300px, 1.3fr); gap: 0 22px; align-items: center; border-top: 1px solid var(--flow-line); }
+  .collectionFocus { display: grid; grid-column: 1 / -1; grid-row: 3; grid-template-columns: minmax(220px, .7fr) 190px minmax(300px, 1.3fr); gap: 0 22px; align-items: center; border-top: 1px solid var(--flow-line); }
   .collectionFocus > header,
   .collectionFocus > p { grid-column: 1; }
   .collectionFocus .signatureContext { grid-column: 1; }
@@ -691,10 +712,14 @@
   .territorySplit > section + section { border-top: 1px solid var(--flow-line); border-left: 0; }
   .immersionOverview { grid-template-columns: 1fr; }
   .focusLanding,
+  .chunkFocus,
+  .collectionFocus,
+  .scoreJourney { grid-row: auto; }
+  .focusLanding,
   .chunkFocus { border-right: 0; border-bottom: 1px solid var(--flow-line); }
   .collectionFocus { display: block; grid-column: 1; }
-  .landingFacts,
-  .readingLayers { grid-template-columns: 1fr; }
+  .landingFacts { grid-template-columns: 1fr; }
+  .readingLensSelectors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scoreJourney > header { display: grid; }
   .journeyCounts { justify-content: flex-start; }
   .chunkAttackRail { overflow-x: auto; }
@@ -709,6 +734,9 @@
 @media (max-width: 430px) {
   .practiceControls { grid-template-columns: 1fr; }
   .practiceControls label { border-right: 0 !important; }
+  .chunkJourneyNav { flex-wrap: wrap; }
+  .chunkJourneyNav span { order: -1; width: 100%; text-align: center; }
+  .chunkJourneyNav button { flex: 1 1 130px; }
   .keyboardTerritory { padding-right: 10px; padding-left: 10px; }
   .keyboardLegend em { width: 100%; margin-left: 0; }
 }
@@ -749,5 +777,7 @@
   .chunkAttack.isWrong,
   .journeyTrack > i.isRepair { border: 3px dashed Highlight; background: Canvas; }
   .chunkAttack.isCurrent,
-  .journeyTrack > i.isCursor { outline: 3px solid Highlight; }
+  .journeyTrack > i.isCursor,
+  .chunkJourney > button.isCursor,
+  .chunkJourney > button.isSelected { outline: 3px solid Highlight; }
 }

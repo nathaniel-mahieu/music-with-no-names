@@ -42,8 +42,16 @@ import {
 } from "@/lib/sheet-music-coach-model";
 import { configureSafetyCompressor, SYNTH_MASTER_GAIN } from "@/lib/audio-level";
 import { frequencyFromMidi } from "@/lib/piano-model";
+import {
+  appendBoundedSheetTakeHistory,
+  sheetTakeEvidenceFromEvaluation,
+  summarizeSheetChunkMemory,
+  type SheetChunkMemory,
+  type SheetTakeEvidence,
+} from "@/lib/sheet-music-practice-memory";
 
 const SCORE_FLOW_STORAGE_KEY = "music-with-no-names:score-flow:v1";
+const SCORE_FLOW_HISTORY_STORAGE_KEY = "music-with-no-names:score-flow-history:v1";
 const MAX_LIVE_FEEDBACK_ATTACKS = 160;
 const MAX_UI_ALIGNMENT_CELLS = 1_250_000;
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -67,6 +75,8 @@ type ScoreHudEvent = {
 type PianoScoreFlowHudProps = {
   events: ScoreHudEvent[];
   activeNotes: number[];
+  /** Keys physically down now. Pedal-sustained tones remain in activeNotes only. */
+  pressedNotes: number[];
   chordWindowMs: number;
   showConventions: boolean;
   frozen: boolean;
@@ -77,6 +87,7 @@ type ReadingMode = "read" | "ear" | "memory";
 type TimingMode = "self-paced" | "pulse";
 type CaptureState = "idle" | "armed" | "review";
 type ReferenceVoice = "full" | "upper" | "bass";
+type ReadingLens = "landmark" | "motion" | "vertical" | "rhythm";
 type AudioContextWindow = Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
 
 function cx(...values: Array<string | false | null | undefined>) {
@@ -328,6 +339,21 @@ function rhythmLabel(values: number[]) {
   return values.map((value) => `${Math.round(value * 100) / 100}`).join(" · ") + " beats";
 }
 
+function defaultReadingLens(chunk: SheetReadingChunk | null): ReadingLens {
+  if (!chunk) return "landmark";
+  if (chunk.strategy === "chord-shapes" || chunk.strategy === "chord-anchor" || chunk.strategy === "hand-coordination") return "vertical";
+  if (chunk.strategy === "scale-fragment" || chunk.strategy === "interval-chain" || chunk.strategy === "repeated-shape" || chunk.strategy === "landmark-contour") return "motion";
+  return "landmark";
+}
+
+function evidenceReadingLens(comparison: SheetEventComparison | null, timingMode: TimingMode, fallback: ReadingLens): ReadingLens {
+  if (!comparison || comparison.status === "pending" || comparison.status === "correct") return fallback;
+  if (!comparison.pitchMatch) return comparison.expectedNotes.length > 1 || comparison.actualNotes.length > 1 ? "vertical" : "landmark";
+  if (comparison.arpeggiationMatch === false || comparison.spacingMatch === false) return "vertical";
+  if (timingMode === "pulse" && (comparison.timingMatch === false || comparison.durationMatch === false)) return "rhythm";
+  return "motion";
+}
+
 function FocusLanding({
   attack,
   comparison,
@@ -366,11 +392,10 @@ function FocusLanding({
   const spacing = chordSpacing(attack.midiNotes);
   const hypothesis = chordHypothesis(attack.midiNotes, prefer, attack.notes);
   const activeTargetCount = [...new Set(activeNotes.filter((note) => attack.midiNotes.includes(note)))].length;
-  const activeExtraCount = activeNotes.filter((note) => !attack.midiNotes.includes(note)).length;
   const capturedTargetCount = [...new Set((comparison?.actualNotes ?? []).filter((note) => attack.midiNotes.includes(note)))].length;
   const capturedExtraCount = [...new Set(comparison?.extraNotes ?? [])].length;
   const gatheredTargetCount = Math.min(attack.midiNotes.length, Math.max(activeTargetCount, capturedTargetCount));
-  const gathering = captureState === "armed" && arrivalWindowOpen && attack.midiNotes.length > 1 && activeExtraCount === 0 && capturedExtraCount === 0
+  const gathering = captureState === "armed" && arrivalWindowOpen && attack.midiNotes.length > 1 && capturedExtraCount === 0
     && ((gatheredTargetCount > 0 && gatheredTargetCount < attack.midiNotes.length) || Boolean(comparison?.missingNotes.length && !comparison.extraNotes.length));
   const revealOutcome = !veiled && !gathering;
   const status = veiled ? `${attack.midiNotes.length}-note landing · feedback veiled` : gathering ? `gathering ${gatheredTargetCount} of ${attack.midiNotes.length} · ${arrivalWindowMs} ms lens` : attackStatusLabel(comparison, true);
@@ -408,6 +433,7 @@ function FocusLanding({
 function ReadingChunkFocus({
   chunk,
   progress,
+  memory,
   loop,
   comparisons,
   currentIndex,
@@ -415,9 +441,13 @@ function ReadingChunkFocus({
   showConventions,
   notationById,
   directionText,
+  activeLens,
+  recommendedLens,
+  onLensChange,
 }: {
   chunk: SheetReadingChunk | null;
   progress: SheetReadingChunkProgress | null;
+  memory: SheetChunkMemory | null;
   loop: SheetMusicPracticeLoop;
   comparisons: Map<number, SheetEventComparison>;
   currentIndex: number;
@@ -425,6 +455,9 @@ function ReadingChunkFocus({
   showConventions: boolean;
   notationById: Map<string, ImportedMusicXmlNote>;
   directionText: string | null;
+  activeLens: ReadingLens;
+  recommendedLens: ReadingLens;
+  onLensChange: (lens: ReadingLens) => void;
 }) {
   if (!chunk) return <section className={styles.chunkFocus}><header><span>Chunk · read shapes</span><strong>No playable chunk in this loop.</strong></header></section>;
   const chordSummary = veiled
@@ -433,9 +466,13 @@ function ReadingChunkFocus({
     ? chunk.chordSpacings.map((shape) => shape.adjacentSemitones.map((gap) => `${gap}`).join("–")).join(" / ") + " st"
     : "no vertical chord inside this chunk";
   return <section className={cx(styles.chunkFocus, progress?.status === "secure" && styles.isChunkSecure, progress?.status === "repair" && styles.isChunkRepair)} aria-labelledby="reading-chunk-title">
-    <header><div><span>Suggested chunk {chunk.ordinal + 1} · {chunk.attackCount} landings</span><strong id="reading-chunk-title">{chunk.label}</strong></div><em>{progress?.status === "secure" ? "✓ all matched this take" : progress?.status === "repair" ? `${progress.needsRepair} repair` : progress?.status === "in-progress" ? `${progress.successes} right · continue` : "up next"}</em></header>
+    <header><div><span>Suggested chunk {chunk.ordinal + 1} · {chunk.attackCount} landings</span><strong id="reading-chunk-title">{veiled ? "Hidden reading shape" : chunk.label}</strong></div><em>{progress?.status === "secure" ? "✓ all matched this take" : progress?.status === "repair" ? `${progress.needsRepair} repair` : progress?.status === "in-progress" ? `${progress.successes} right · continue` : "up next"}</em></header>
     <p className={styles.chunkCue}>{veiled ? "Keep the number of simultaneous notes and the rhythm cell in memory; exact pitch routes return in review." : chunk.cue}</p>
     {directionText && !veiled ? <p className={styles.chunkDirection}><span>Authored direction</span>{directionText}</p> : null}
+    {!veiled && memory?.recentTakes.length ? <div className={styles.chunkMemory} aria-label="Recent repetitions of this reading chunk">
+      <div><span>Recent evidence</span>{memory.recentTakes.slice(0, 3).map((take, index) => <i key={take.takeId} className={take.clean ? styles.isClean : take.needsRepair ? styles.needsRepair : undefined}>{take.clean ? "✓" : take.needsRepair ? "×" : "○"}<small>{take.completeCoverage ? index ? `${index + 1} back` : "latest" : "partial"}</small></i>)}</div>
+      <strong>{memory.evidencePhrases[0] ?? `${memory.recentTakes.length} frozen take${memory.recentTakes.length === 1 ? "" : "s"} retained as separate evidence.`}</strong>
+    </div> : null}
     <div className={styles.chunkAttackRail} role="list" aria-label={`Reading chunk from landing ${chunk.startAttackIndex + 1} through ${chunk.endAttackIndex + 1}`}>
       {chunk.attackIndexes.map((attackIndex, index) => {
         const attack = loop.attacks[attackIndex];
@@ -458,11 +495,22 @@ function ReadingChunkFocus({
         </div>;
       })}
     </div>
-    <div className={styles.readingLayers}>
-      <div><span>1 · Landmark</span><strong>{veiled ? `${chunk.noteCount} notes across ${chunk.attackCount} hidden landings` : showConventions ? chunk.noteSummary : `${chunk.handSummary.replace("both hands", "both staves").replace("right hand", "upper staff").replace("left hand", "lower staff")} · ${chunk.rangeSemitones} st range`}</strong></div>
-      <div><span>2 · Top-note path</span><strong>{veiled ? "exact direction and width veiled" : patternLabel(chunk.semitonePattern)}</strong></div>
-      <div><span>3 · Vertical shape</span><strong>{chordSummary}</strong></div>
-      <div><span>4 · Rhythm cell</span><strong>{rhythmLabel(chunk.rhythmPatternBeats)}</strong></div>
+    <div className={styles.readingLensSelectors} role="group" aria-label="Choose one way to read this chunk">
+      {([
+        ["landmark", "Landmark"],
+        ["motion", "Motion"],
+        ["vertical", "Vertical"],
+        ["rhythm", "Rhythm"],
+      ] as const).map(([lens, label]) => {
+        const unavailableWhileVeiled = veiled && lens !== "rhythm";
+        return <button key={lens} type="button" disabled={unavailableWhileVeiled} aria-pressed={activeLens === lens} onClick={() => onLensChange(lens)}><span>{label}</span><small>{unavailableWhileVeiled ? "after reveal" : !veiled && recommendedLens === lens ? "suggested" : "view"}</small></button>;
+      })}
+    </div>
+    <div className={styles.readingLensFocus}>
+      {activeLens === "landmark" ? <><span>Landmark · prepare the territory</span><strong>{veiled ? `${chunk.noteCount} notes across ${chunk.attackCount} hidden landings` : showConventions ? chunk.noteSummary : `${chunk.handSummary.replace("both hands", "both staves").replace("right hand", "upper staff").replace("left hand", "lower staff")} · ${chunk.rangeSemitones} st range`}</strong><small>Find the outside register and recurring landing before decoding every interior note.</small></> : null}
+      {activeLens === "motion" ? <><span>Motion · follow the top-note path</span><strong>{veiled ? "exact direction and width veiled" : patternLabel(chunk.semitonePattern)}</strong><small>Keep rise, fall, repeat, and exact semitone width as separate clues.</small></> : null}
+      {activeLens === "vertical" ? <><span>Vertical · gather simultaneous notes</span><strong>{chordSummary}</strong><small>Read the outside span first, then the adjacent semitone gaps inside it.</small></> : null}
+      {activeLens === "rhythm" ? <><span>Rhythm · feel the attack spacing</span><strong>{rhythmLabel(chunk.rhythmPatternBeats)}</strong><small>One slot is one landing; several notes inside a slot still share one attack boundary.</small></> : null}
     </div>
   </section>;
 }
@@ -471,15 +519,15 @@ function CollectionFocus({ analysis, showConventions, prefer, veiled }: { analys
   const kindLabel = (kind: string) => kind === "natural-minor" ? "natural minor" : kind.replace("-", " ");
   const fitGap = (analysis.candidates[0]?.fitScore ?? 0) - (analysis.candidates[1]?.fitScore ?? 0);
   const evidenceHeadline = analysis.evidence === "thin"
-    ? "Too few distinct pitches to orient a scale"
+    ? "Too few nearby pitches to orient a scale"
     : analysis.evidence === "usable"
-      ? "This chunk fits several collections"
+      ? "Nearby notes fit several collections"
       : fitGap >= .08
-        ? "One collection is the stronger local fit"
-        : "Several collections remain plausible";
+        ? "One collection is the stronger nearby fit"
+        : "Several nearby collections remain plausible";
   return <section className={styles.collectionFocus} aria-labelledby="collection-focus-title">
-    <header><span>Local collection · scale context</span><strong id="collection-focus-title">{veiled ? "Scale context hidden during this pass" : evidenceHeadline}</strong></header>
-    {veiled ? <div className={styles.collectionVeil}><i aria-hidden="true">?</i><strong>Pitch collection is veiled.</strong><small>Rhythm slots and simultaneous-note counts remain; signature, pitch classes, and scale candidates return in review.</small></div> : <>
+    <header><span>Local collection · chromatic pitch ring</span><strong id="collection-focus-title">{veiled ? "Scale context hidden during this pass" : evidenceHeadline}</strong></header>
+    {veiled ? <div className={styles.collectionVeil}><i aria-hidden="true">?</i><strong>Pitch collection is veiled.</strong><small>Rhythm slots, neutral chunk boundaries, and simultaneous-note counts remain; signature, pitch classes, and scale candidates return in review.</small></div> : <>
     <div className={styles.signatureContext}><span>Written context</span><strong>{analysis.authored.label}</strong>{analysis.authored.relativePossibilities.length ? <small>Signature relatives: {analysis.authored.relativePossibilities.join(" / ")}</small> : null}</div>
     <div className={styles.pitchClassOrbit} role="img" aria-label={`${analysis.observedPitchClasses.length} distinct pitch classes in the nearby reading window`}>
       {Array.from({ length: 12 }, (_, pitchClass) => <i key={pitchClass} className={analysis.observedPitchClasses.includes(pitchClass) ? styles.isObserved : undefined} style={{ "--pitch-angle": `${pitchClass * 30}deg` } as CSSProperties}><span>{showConventions && analysis.observedPitchClasses.includes(pitchClass) ? pitchClassName(pitchClass + 60, prefer).replace(/\d+$/, "") : ""}</span></i>)}
@@ -499,18 +547,26 @@ function ScoreJourney({
   loop,
   chunks,
   chunkProgress,
+  chunkMemory,
   comparisons,
   currentIndex,
   extraCount,
   captureState,
+  veiled,
+  selectedChunkId,
+  onSelectChunk,
 }: {
   loop: SheetMusicPracticeLoop;
   chunks: SheetReadingChunk[];
   chunkProgress: SheetReadingChunkProgress[];
+  chunkMemory: Map<string, SheetChunkMemory>;
   comparisons: Map<number, SheetEventComparison>;
   currentIndex: number;
   extraCount: number;
   captureState: CaptureState;
+  veiled: boolean;
+  selectedChunkId: string | null;
+  onSelectChunk: (chunk: SheetReadingChunk) => void;
 }) {
   const exactLimit = 96;
   const binSize = Math.max(1, Math.ceil(loop.attacks.length / exactLimit));
@@ -527,16 +583,34 @@ function ScoreJourney({
   const successCount = [...comparisons.values()].filter((comparison) => comparison.status === "correct").length;
   const missCount = [...comparisons.values()].filter((comparison) => comparison.status === "incorrect" || comparison.status === "missed").length;
   const progressById = new Map(chunkProgress.map((progress) => [progress.chunkId, progress]));
+  const chunkPageSize = 40;
+  const selectedChunkIndex = selectedChunkId ? chunks.findIndex((chunk) => chunk.id === selectedChunkId) : -1;
+  const cursorChunkIndex = chunks.findIndex((chunk) => currentIndex >= chunk.startAttackIndex && currentIndex <= chunk.endAttackIndex);
+  const anchorChunkIndex = selectedChunkIndex >= 0 ? selectedChunkIndex : cursorChunkIndex >= 0 ? cursorChunkIndex : Math.max(0, chunks.length - 1);
+  const desiredChunkPage = Math.floor(anchorChunkIndex / chunkPageSize);
+  const chunkPageScope = `${chunks[0]?.id ?? "none"}:${chunks.at(-1)?.id ?? "none"}:${chunks.length}:${chunks[anchorChunkIndex]?.id ?? "none"}`;
+  const [chunkPageOverride, setChunkPageOverride] = useState<{ scope: string; page: number } | null>(null);
+  const chunkPageCount = Math.max(1, Math.ceil(chunks.length / chunkPageSize));
+  const chunkPage = chunkPageOverride?.scope === chunkPageScope ? chunkPageOverride.page : desiredChunkPage;
+  const safeChunkPage = Math.min(chunkPageCount - 1, chunkPage);
+  const visibleChunkStart = safeChunkPage * chunkPageSize;
+  const visibleChunks = chunks.slice(visibleChunkStart, visibleChunkStart + chunkPageSize);
   return <section className={styles.scoreJourney} aria-labelledby="score-journey-title">
     <header><div><span>Form · loop journey</span><strong id="score-journey-title">{loop.attacks.length} written landings in {chunks.length} reading chunks</strong></div><div className={styles.journeyCounts}><span className={styles.successCount}>✓ {successCount} right</span><span className={styles.missCount}>× {missCount} repair</span><span>○ {Math.max(0, loop.attacks.length - successCount - missCount)} waiting</span>{extraCount ? <span>+ {extraCount} extra landing{extraCount === 1 ? "" : "s"}</span> : null}</div></header>
     <div className={styles.journeyTrack} role="img" aria-label={`${successCount} correct, ${missCount} needing repair, ${Math.max(0, loop.attacks.length - successCount - missCount)} waiting${extraCount ? `, and ${extraCount} extra landings` : ""}`}>
       {bins.map((bin) => <i key={bin.start} className={cx(bin.state === "secure" && styles.isSecure, bin.state === "repair" && styles.isRepair, bin.state === "mixed" && styles.isMixed, bin.current && styles.isCursor)} title={`Landings ${bin.start + 1}–${bin.end}: ${bin.correct} right, ${bin.wrong} repair`} />)}
     </div>
-    <div className={styles.chunkJourney} aria-label="Reading chunk status">{chunks.slice(0, 40).map((chunk) => {
+    {chunkPageCount > 1 ? <div className={styles.chunkJourneyNav} aria-label="Reading chunk pages"><button type="button" disabled={safeChunkPage === 0} onClick={() => setChunkPageOverride({ scope: chunkPageScope, page: Math.max(0, safeChunkPage - 1) })}>← Previous chunks</button><span>Chunks {visibleChunkStart + 1}–{Math.min(chunks.length, visibleChunkStart + visibleChunks.length)} of {chunks.length}</span><button type="button" disabled={safeChunkPage >= chunkPageCount - 1} onClick={() => setChunkPageOverride({ scope: chunkPageScope, page: Math.min(chunkPageCount - 1, safeChunkPage + 1) })}>Next chunks →</button></div> : null}
+    <div className={styles.chunkJourney} aria-label="Select a reading chunk to practice">{visibleChunks.map((chunk) => {
       const progress = progressById.get(chunk.id);
-      return <span key={chunk.id} className={cx(progress?.status === "secure" && styles.isSecure, progress?.status === "repair" && styles.isRepair, currentIndex >= chunk.startAttackIndex && currentIndex <= chunk.endAttackIndex && styles.isCursor)} style={{ "--chunk-grow": chunk.attackCount } as CSSProperties}>{chunk.ordinal + 1}<small>{progress?.status === "secure" ? "✓" : progress?.status === "repair" ? "×" : "○"}</small></span>;
-    })}{chunks.length > 40 ? <em>+{chunks.length - 40} more chunks</em> : null}</div>
-    <p>{captureState === "review" ? "Frozen review: ✓ and × are definitive for this take." : captureState === "armed" ? "Live alignment is provisional; a later landing can clarify an earlier match." : "Arm a silent take to turn the neutral journey into note-by-note evidence."}</p>
+      const memory = veiled ? null : chunkMemory.get(chunk.id);
+      const selected = selectedChunkId === chunk.id;
+      const live = currentIndex >= chunk.startAttackIndex && currentIndex <= chunk.endAttackIndex;
+      const outcome = progress?.status === "secure" ? "all matched this take" : progress?.status === "repair" ? "needs repair this take" : "waiting this take";
+      const repetition = veiled ? "repeat evidence veiled" : memory?.consecutiveCleanTakes ? `${memory.consecutiveCleanTakes} aligned in a row` : memory?.repeatedRepairLandingIds.length ? `same repair at ${memory.repeatedRepairLandingIds.length} landing${memory.repeatedRepairLandingIds.length === 1 ? "" : "s"}` : "no repeat pattern yet";
+      return <button key={chunk.id} type="button" className={cx(progress?.status === "secure" && styles.isSecure, progress?.status === "repair" && styles.isRepair, live && styles.isCursor, selected && styles.isSelected)} style={{ "--chunk-grow": chunk.attackCount } as CSSProperties} aria-pressed={selected} aria-current={live ? "step" : undefined} aria-label={`Practice chunk ${chunk.ordinal + 1}, measures ${chunk.measureNumbers.join(" to ")}, ${chunk.attackCount} landings${live ? ", current" : ""}, ${outcome}, ${repetition}`} onClick={() => onSelectChunk(chunk)}><span>{chunk.ordinal + 1}</span><small>{progress?.status === "secure" ? "✓" : progress?.status === "repair" ? "×" : "○"}</small>{live ? <b aria-hidden="true">now</b> : null}{memory?.recentTakes.length ? <em>{memory.consecutiveCleanTakes >= 2 ? "2×✓" : memory.repeatedRepairLandingIds.length ? "repeat ×" : `${memory.recentTakes.length} take${memory.recentTakes.length === 1 ? "" : "s"}`}</em> : null}</button>;
+    })}</div>
+    <p>{veiled ? "Chunk boundaries and landing counts remain visible; pitch, outcomes, and repetition evidence return in review." : selectedChunkId ? "A selected chunk becomes the exact practice target; surrounding measure landings stay visible here but are not marked missed." : captureState === "review" ? "Frozen review: ✓ and × are definitive for this take. Select a chunk to repeat only that reading unit." : captureState === "armed" ? "Live alignment is provisional; a later landing can clarify an earlier match." : "Choose a chunk for a short repetition, or arm the full measure loop."}</p>
   </section>;
 }
 
@@ -553,7 +627,7 @@ function stopAudioContext(context: AudioContext | null, master: GainNode | null)
   } catch { void context.close(); }
 }
 
-export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConventions, frozen, onResumeCapture }: PianoScoreFlowHudProps) {
+export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWindowMs, showConventions, frozen, onResumeCapture }: PianoScoreFlowHudProps) {
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
   const [fileState, setFileState] = useState<"empty" | "loading" | "ready" | "error">("empty");
@@ -565,6 +639,9 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
   const [timingMode, setTimingMode] = useState<TimingMode>("self-paced");
   const [tempoPercent, setTempoPercent] = useState(70);
   const [clusterWindow, setClusterWindow] = useState(() => chordWindowMs <= 80 ? 70 : chordWindowMs <= 160 ? 140 : 220);
+  const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null);
+  const [manualReadingLens, setManualReadingLens] = useState<ReadingLens | null>(null);
+  const [takeHistory, setTakeHistory] = useState<SheetTakeEvidence[]>([]);
   const [captureState, setCaptureState] = useState<CaptureState>("idle");
   const [reviewTakeEvents, setReviewTakeEvents] = useState<MidiPerformanceNote[] | null>(null);
   const [attemptAfterId, setAttemptAfterId] = useState(() => newestEventId(events));
@@ -578,6 +655,7 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
   const audioTimerRef = useRef<number | null>(null);
   const audioTokenRef = useRef(0);
   const eventsRef = useRef(events);
+  const recordedTakeRef = useRef<string | null>(null);
 
   useEffect(() => {
     eventsRef.current = events;
@@ -605,32 +683,81 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
     setLoopStart(0);
     setLoopEnd(Math.min(3, nextImported.measureCount - 1));
     setTempoPercent(70);
+    setSelectedChunkId(null);
+    setManualReadingLens(null);
+    setTakeHistory([]);
+    recordedTakeRef.current = null;
     setCaptureState("idle");
     setReviewTakeEvents(null);
     setAttemptAfterId(newestEventId(eventsRef.current));
     setSettledThroughEventId(newestEventId(eventsRef.current));
     setCaptureNotice("Score ready. Study the next written shape or arm a silent take.");
     if (persist) {
-      try { window.sessionStorage.setItem(SCORE_FLOW_STORAGE_KEY, JSON.stringify({ version: 1, fileName: nextImported.fileName, xml })); }
-      catch { setFileNotice(`${nextImported.measureCount} measures loaded in memory; this browser could not retain the upload after navigation.`); }
+      try {
+        // Never let an older score reappear if the new score exceeds the tab's
+        // storage quota. The in-memory import remains fully usable.
+        window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY);
+        window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY);
+        window.sessionStorage.setItem(SCORE_FLOW_STORAGE_KEY, JSON.stringify({ version: 1, fileName: nextImported.fileName, xml }));
+      }
+      catch {
+        try { window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY); window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY); } catch { /* The in-memory score remains usable. */ }
+        setFileNotice(`${nextImported.measureCount} measures loaded in memory; this browser could not retain the upload after navigation.`);
+      }
     }
+    return normalized;
   }, [stopReference]);
 
   useEffect(() => {
     const task = window.setTimeout(() => {
       try {
         const raw = window.sessionStorage.getItem(SCORE_FLOW_STORAGE_KEY);
-        if (!raw) return;
+        if (!raw) { window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY); return; }
         const saved = JSON.parse(raw) as { version?: unknown; fileName?: unknown; xml?: unknown };
-        if (saved.version !== 1 || typeof saved.fileName !== "string" || typeof saved.xml !== "string" || saved.xml.length > 16 * 1024 * 1024) return;
-        installScore(parseMusicXml(saved.xml, saved.fileName), saved.xml, false);
-        setFileNotice("Restored this tab’s on-device score. No file was uploaded to a server.");
+        if (saved.version !== 1 || typeof saved.fileName !== "string" || typeof saved.xml !== "string" || saved.xml.length > 16 * 1024 * 1024) {
+          window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY);
+          window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY);
+          return;
+        }
+        const normalized = installScore(parseMusicXml(saved.xml, saved.fileName), saved.xml, false);
+        let restoredHistory: SheetTakeEvidence[] = [];
+        try {
+          const historyRaw = window.sessionStorage.getItem(SCORE_FLOW_HISTORY_STORAGE_KEY);
+          if (historyRaw) {
+            if (historyRaw.length > 2 * 1024 * 1024) throw new RangeError("Saved repetition evidence is oversized.");
+            const savedHistory = JSON.parse(historyRaw) as { version?: unknown; scoreId?: unknown; takes?: unknown };
+            if (savedHistory.version !== 1 || savedHistory.scoreId !== normalized.id || !Array.isArray(savedHistory.takes) || savedHistory.takes.length > 32) throw new TypeError("Saved repetition evidence is malformed.");
+            for (const take of savedHistory.takes) restoredHistory = appendBoundedSheetTakeHistory(restoredHistory, take as SheetTakeEvidence);
+          }
+        } catch {
+          window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY);
+          restoredHistory = [];
+        }
+        setTakeHistory(restoredHistory);
+        setFileNotice(`Restored this tab’s on-device score${restoredHistory.length ? ` and ${restoredHistory.length} frozen take${restoredHistory.length === 1 ? "" : "s"}` : ""}. No file was uploaded to a server.`);
       } catch {
-        try { window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY); } catch { /* Continue with an empty importer. */ }
+        try { window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY); window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY); } catch { /* Continue with an empty importer. */ }
       }
     }, 0);
     return () => window.clearTimeout(task);
   }, [installScore]);
+
+  useEffect(() => {
+    if (!score) return;
+    const task = window.setTimeout(() => {
+      try {
+        if (!takeHistory.length) {
+          window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY);
+          return;
+        }
+        window.sessionStorage.setItem(SCORE_FLOW_HISTORY_STORAGE_KEY, JSON.stringify({ version: 1, scoreId: score.id, takes: takeHistory }));
+      } catch {
+        try { window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY); } catch { /* Current-view evidence remains usable. */ }
+        setCaptureNotice("Repetition evidence remains available in this Score Flow view, but tab storage is unavailable.");
+      }
+    }, 0);
+    return () => window.clearTimeout(task);
+  }, [score, takeHistory]);
 
   const acceptFile = useCallback(async (file: File) => {
     setFileState("loading");
@@ -664,12 +791,31 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
 
   const clearScore = () => {
     stopReference("Reference stopped. The local score was removed.");
-    setImported(null); setScore(null); setFileState("empty"); setCaptureState("idle"); setReviewTakeEvents(null);
+    setImported(null); setScore(null); setFileState("empty"); setCaptureState("idle"); setReviewTakeEvents(null); setSelectedChunkId(null); setManualReadingLens(null); setTakeHistory([]);
+    recordedTakeRef.current = null;
     setFileNotice("Score removed from this tab. Choose another MXL or MusicXML file.");
-    try { window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY); } catch { /* The in-memory score is still cleared. */ }
+    try { window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY); window.sessionStorage.removeItem(SCORE_FLOW_HISTORY_STORAGE_KEY); } catch { /* The in-memory score is still cleared. */ }
   };
 
-  const loop = useMemo(() => score ? selectSheetMusicLoop(score, { startMeasureIndex: loopStart, endMeasureIndex: loopEnd, hand: practiceHand, includeBoundaryTies: true }) : null, [loopEnd, loopStart, practiceHand, score]);
+  const readingChunks = useMemo(() => score ? buildSheetMusicReadingChunks(score, {
+    startMeasureIndex: loopStart,
+    endMeasureIndex: loopEnd,
+    hand: practiceHand,
+    includeBoundaryTies: true,
+    minAttacks: 2,
+    maxAttacks: 6,
+    targetAttacks: 4,
+  }) : [], [loopEnd, loopStart, practiceHand, score]);
+  const measureLoop = useMemo(() => score ? selectSheetMusicLoop(score, { startMeasureIndex: loopStart, endMeasureIndex: loopEnd, hand: practiceHand, includeBoundaryTies: true }) : null, [loopEnd, loopStart, practiceHand, score]);
+  const selectedChunk = selectedChunkId ? readingChunks.find((chunk) => chunk.id === selectedChunkId) ?? null : null;
+  const loop = useMemo(() => score ? selectSheetMusicLoop(score, {
+    startMeasureIndex: loopStart,
+    endMeasureIndex: loopEnd,
+    hand: practiceHand,
+    includeBoundaryTies: true,
+    startAttackId: selectedChunk?.startAttackId,
+    endAttackId: selectedChunk?.endAttackId,
+  }) : null, [loopEnd, loopStart, practiceHand, score, selectedChunk?.endAttackId, selectedChunk?.startAttackId]);
   const liveTakeEvents = useMemo(() => events
     .filter((event) => event.id > attemptAfterId)
     .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id)
@@ -681,7 +827,9 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
       ? reviewTakeEvents ?? []
       : [], [captureState, liveTakeEvents, reviewTakeEvents]);
   const scoreVeiled = captureState !== "review" && (readingMode === "ear" || (readingMode === "memory" && captureState === "armed" && takeEvents.length > 0));
-  const practiceTempo = score ? Math.max(20, Math.round(score.tempoBpm * tempoPercent / 100)) : 72;
+  const localTempoBeat = loop?.attacks[0]?.onsetBeat ?? loop?.startBeat ?? 0;
+  const encodedLocalTempo = score?.tempoChanges.filter((change) => change.beat <= localTempoBeat + 1e-7).at(-1)?.bpm ?? score?.tempoBpm ?? 72;
+  const practiceTempo = Math.max(20, Math.round(encodedLocalTempo * tempoPercent / 100));
   const evaluationState = useMemo(() => {
     if (!score) return { evaluation: null, error: null, paused: false };
     const targetCount = loop?.attacks.length ?? 0;
@@ -694,6 +842,8 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
           endMeasureIndex: loopEnd,
           hand: practiceHand,
           includeBoundaryTies: true,
+          startAttackId: selectedChunk?.startAttackId,
+          endAttackId: selectedChunk?.endAttackId,
           clusterWindowMs: clusterWindow,
           arpeggioWindowMs: Math.min(500, Math.max(180, clusterWindow + 100)),
           timingToleranceMs: timingMode === "self-paced" ? 1_000_000_000 : undefined,
@@ -707,16 +857,28 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
     } catch (error) {
       return { evaluation: null, error: error instanceof Error ? error.message : "This take is too large to align safely.", paused: false };
     }
-  }, [captureState, clusterWindow, loop?.attacks.length, loopEnd, loopStart, practiceHand, practiceTempo, score, takeEvents, timingMode]);
+  }, [captureState, clusterWindow, loop?.attacks.length, loopEnd, loopStart, practiceHand, practiceTempo, score, selectedChunk?.endAttackId, selectedChunk?.startAttackId, takeEvents, timingMode]);
   const evaluation = evaluationState.evaluation;
   const evaluationError = evaluationState.error;
   const liveEvaluationPaused = evaluationState.paused;
 
   useEffect(() => {
     if (captureState !== "armed" || latestLiveEventId < 0 || latestLiveEventId <= settledThroughEventId) return;
-    const task = window.setTimeout(() => setSettledThroughEventId((current) => Math.max(current, latestLiveEventId)), clusterWindow + 12);
+    // Match the evaluator's non-transitive grouping: every chord window is
+    // anchored to its first unsettled attack, not restarted by each new note.
+    const unsettled = liveTakeEvents.filter((event) => Number(event.id) > settledThroughEventId);
+    const anchor = unsettled[0];
+    if (!anchor) return;
+    const deadlineMs = anchor.onsetMs + clusterWindow;
+    const delayMs = Math.max(0, deadlineMs - performance.now()) + 12;
+    const task = window.setTimeout(() => {
+      const throughId = unsettled
+        .filter((event) => event.onsetMs <= deadlineMs + 0.001)
+        .reduce((latest, event) => Math.max(latest, Number(event.id)), Number(anchor.id));
+      setSettledThroughEventId((current) => Math.max(current, throughId));
+    }, delayMs);
     return () => window.clearTimeout(task);
-  }, [captureState, clusterWindow, latestLiveEventId, settledThroughEventId]);
+  }, [captureState, clusterWindow, latestLiveEventId, liveTakeEvents, settledThroughEventId]);
 
   useEffect(() => {
     const newest = newestEventId(events);
@@ -732,14 +894,44 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
   }, [attemptAfterId, events]);
 
   useEffect(() => {
-    if (captureState !== "armed" || !takeEvents.length || !evaluation?.complete || activeNotes.length) return;
+    if (captureState !== "armed" || !takeEvents.length || !evaluation?.complete || pressedNotes.length) return;
     const task = window.setTimeout(() => {
       setReviewTakeEvents(takeEvents.map((event) => ({ ...event })));
       setCaptureState("review");
       setCaptureNotice("The selected loop has enough landings to review. Evidence is frozen at this attempt boundary.");
     }, 420);
     return () => window.clearTimeout(task);
-  }, [activeNotes.length, captureState, evaluation?.complete, takeEvents]);
+  }, [captureState, evaluation?.complete, pressedNotes.length, takeEvents]);
+
+  useEffect(() => {
+    if (captureState !== "review" || !score || !evaluation?.complete || !reviewTakeEvents?.length) return;
+    const firstId = String(reviewTakeEvents[0].id ?? "first");
+    const lastId = String(reviewTakeEvents.at(-1)?.id ?? "last");
+    const takeBoundaryKey = `${score.id}:${practiceHand}:${attemptAfterId}:${firstId}:${lastId}`;
+    if (recordedTakeRef.current === takeBoundaryKey) return;
+    const finishedAt = Date.now();
+    const takeId = `${takeBoundaryKey}:${finishedAt}`;
+    // Persist an epoch timestamp rather than the page-relative MIDI clock, so
+    // restored evidence still sorts correctly after performance.now() resets.
+    try {
+      const evidence = sheetTakeEvidenceFromEvaluation(evaluation, {
+        scoreId: score.id,
+        takeId,
+        finishedAt,
+        hand: practiceHand,
+        clockEvidence: timingMode === "pulse" ? "fixed-pulse" : "unscored",
+      });
+      const task = window.setTimeout(() => {
+        if (recordedTakeRef.current === takeBoundaryKey) return;
+        recordedTakeRef.current = takeBoundaryKey;
+        setTakeHistory((current) => appendBoundedSheetTakeHistory(current, evidence));
+      }, 0);
+      return () => window.clearTimeout(task);
+    } catch {
+      // An incomplete/oversized take remains reviewable even when it is not
+      // eligible for the deliberately bounded repetition memory.
+    }
+  }, [attemptAfterId, captureState, evaluation, practiceHand, reviewTakeEvents, score, timingMode]);
 
   const armTake = () => {
     if (!score || !loop?.attacks.length) return;
@@ -761,8 +953,8 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
     if (!takeEvents.length) { setCaptureNotice("No new landings have crossed this take boundary yet."); return; }
     setReviewTakeEvents(takeEvents.map((event) => ({ ...event })));
     setCaptureState("review");
-    setCaptureNotice(activeNotes.length
-      ? `Take stopped while ${activeNotes.length} key${activeNotes.length === 1 ? " was" : "s were"} still sounding; those unfinished release lengths remain unscored.`
+    setCaptureNotice(pressedNotes.length
+      ? `Take stopped while ${pressedNotes.length} key${pressedNotes.length === 1 ? " was" : "s were"} still pressed; those unfinished key-up lengths remain unscored.`
       : "Take stopped. The HUD now separates pitch, interval, chord, pulse, and release evidence.");
   };
 
@@ -779,14 +971,27 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
     if (!score) return;
     const nextStart = Math.max(0, Math.min(score.measures.length - 1, start));
     const nextEnd = Math.max(nextStart, Math.min(score.measures.length - 1, end));
-    setLoopStart(nextStart); setLoopEnd(nextEnd); resetTake(`Loop moved to measures ${score.measures[nextStart].number}–${score.measures[nextEnd].number}.`);
+    setLoopStart(nextStart); setLoopEnd(nextEnd); setSelectedChunkId(null); setManualReadingLens(null); resetTake(`Loop moved to measures ${score.measures[nextStart].number}–${score.measures[nextEnd].number}.`);
+  };
+
+  const selectPracticeChunk = (chunk: SheetReadingChunk) => {
+    setSelectedChunkId(chunk.id);
+    setManualReadingLens(null);
+    resetTake(`Chunk ${chunk.ordinal + 1} selected: ${chunk.attackCount} exact landings across measure${chunk.measureNumbers.length === 1 ? "" : "s"} ${chunk.measureNumbers.join("–")}. Surrounding notes will not be counted as misses.`);
+  };
+
+  const clearPracticeChunk = () => {
+    if (!selectedChunkId) return;
+    setSelectedChunkId(null);
+    setManualReadingLens(null);
+    resetTake(`Returned to the full measure loop: measures ${score?.measures[loopStart].number ?? ""}–${score?.measures[loopEnd].number ?? ""}.`);
   };
 
   const installRepairLoop = () => {
     if (!score || !evaluation) return;
     const repair = repairLoopAroundFirstDivergence(score, evaluation, 1);
     if (!repair || repair.startMeasureIndex == null || repair.endMeasureIndex == null) return;
-    setLoopStart(repair.startMeasureIndex); setLoopEnd(repair.endMeasureIndex); setPracticeHand(repair.hand ?? "both");
+    setLoopStart(repair.startMeasureIndex); setLoopEnd(repair.endMeasureIndex); setPracticeHand(repair.hand ?? "both"); setSelectedChunkId(null); setManualReadingLens(null);
     resetTake(`Repair loop narrowed around the first divergence: measures ${score.measures[repair.startMeasureIndex].number}–${score.measures[repair.endMeasureIndex].number}.`);
   };
 
@@ -800,10 +1005,17 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
     && gatheringComparison.expected.midiNotes.length > 1
     && gatheringComparison.status === "incorrect"
     && gatheringComparison.missingNotes.length
-    && !gatheringComparison.extraNotes.length);
+    && !gatheringComparison.extraNotes.length
+    && !evaluation?.extraClusters.length);
   const currentIndex = gatheringPreviousChord ? evaluatedCurrentIndex - 1 : evaluatedCurrentIndex;
   const nextAttack = loop?.attacks[currentIndex] ?? null;
   const contextAttack = nextAttack ?? loop?.attacks.at(-1) ?? null;
+  const baseAttackIndexById = useMemo(() => new Map((measureLoop?.attacks ?? []).map((attack, index) => [attack.id, index])), [measureLoop]);
+  const baseCurrentIndex = nextAttack
+    ? baseAttackIndexById.get(nextAttack.id) ?? 0
+    : selectedChunk
+      ? selectedChunk.endAttackIndex
+      : measureLoop?.attacks.length ?? 0;
   const priorComparison = evaluation?.comparisons.slice(0, currentIndex).findLast((comparison) => comparison.actual != null) ?? null;
   const priorAttack = currentIndex > 0 ? loop?.attacks[currentIndex - 1] ?? null : null;
   const previousNotes = priorComparison?.actualNotes ?? priorAttack?.midiNotes ?? [];
@@ -811,26 +1023,46 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
   const currentMeasureIndex = contextAttack?.measureIndex ?? loopEnd;
   const prefer = (imported?.measures[currentMeasureIndex]?.keyFifths ?? score?.keyFifths ?? 0) > 0 ? "sharps" as const : "flats" as const;
   const notationById = useMemo(() => new Map((imported?.notes ?? []).map((note) => [note.id, note])), [imported]);
-  const readingChunks = useMemo(() => score ? buildSheetMusicReadingChunks(score, {
-    startMeasureIndex: loopStart,
-    endMeasureIndex: loopEnd,
-    hand: practiceHand,
-    includeBoundaryTies: true,
-    minAttacks: 2,
-    maxAttacks: 6,
-    targetAttacks: 4,
-  }) : [], [loopEnd, loopStart, practiceHand, score]);
   const visibleComparisons = useMemo(() => {
     if (scoreVeiled) return [];
     const comparisons = evaluation?.comparisons ?? [];
     return gatheringPreviousChord ? comparisons.filter((comparison) => comparison.expectedIndex !== currentIndex) : comparisons;
   }, [currentIndex, evaluation?.comparisons, gatheringPreviousChord, scoreVeiled]);
-  const chunkProgress = useMemo(() => summarizeSheetReadingChunkProgress(readingChunks, visibleComparisons), [readingChunks, visibleComparisons]);
-  const currentChunk = readingChunks.find((chunk) => currentIndex >= chunk.startAttackIndex && currentIndex <= chunk.endAttackIndex)
-    ?? (currentIndex >= (loop?.attacks.length ?? 0) ? readingChunks.at(-1) : readingChunks[0])
+  const journeyComparisons = useMemo(() => visibleComparisons.flatMap((comparison) => {
+    const baseIndex = baseAttackIndexById.get(comparison.expected.id);
+    return baseIndex == null ? [] : [{ ...comparison, expectedIndex: baseIndex }];
+  }), [baseAttackIndexById, visibleComparisons]);
+  const chunkProgress = useMemo(() => summarizeSheetReadingChunkProgress(readingChunks, journeyComparisons), [journeyComparisons, readingChunks]);
+  const baseCurrentChunk = selectedChunk
+    ?? readingChunks.find((chunk) => baseCurrentIndex >= chunk.startAttackIndex && baseCurrentIndex <= chunk.endAttackIndex)
+    ?? (baseCurrentIndex >= (measureLoop?.attacks.length ?? 0) ? readingChunks.at(-1) : readingChunks[0])
     ?? null;
-  const currentChunkProgress = currentChunk ? chunkProgress.find((progress) => progress.chunkId === currentChunk.id) ?? null : null;
+  const currentChunk = useMemo(() => {
+    if (!baseCurrentChunk || !measureLoop || !loop) return null;
+    const activeIndexById = new Map(loop.attacks.map((attack, index) => [attack.id, index]));
+    const localIndexes = baseCurrentChunk.attackIndexes.flatMap((baseIndex) => {
+      const attack = measureLoop.attacks[baseIndex];
+      const localIndex = attack ? activeIndexById.get(attack.id) : undefined;
+      return localIndex == null ? [] : [localIndex];
+    });
+    if (!localIndexes.length) return null;
+    return { ...baseCurrentChunk, attackIndexes: localIndexes, startAttackIndex: localIndexes[0], endAttackIndex: localIndexes.at(-1)! };
+  }, [baseCurrentChunk, loop, measureLoop]);
+  const currentChunkProgress = baseCurrentChunk ? chunkProgress.find((progress) => progress.chunkId === baseCurrentChunk.id) ?? null : null;
+  const chunkMemoryById = useMemo(() => {
+    const memory = new Map<string, SheetChunkMemory>();
+    if (!score || !measureLoop) return memory;
+    for (const chunk of readingChunks) {
+      const landingIds = chunk.attackIndexes.map((index) => measureLoop.attacks[index]?.id).filter((id): id is string => Boolean(id));
+      if (!landingIds.length) continue;
+      try { memory.set(chunk.id, summarizeSheetChunkMemory(landingIds, takeHistory, { scoreId: score.id, hand: practiceHand })); }
+      catch { /* Oversized identifiers disable repetition memory, not score practice. */ }
+    }
+    return memory;
+  }, [measureLoop, practiceHand, readingChunks, score, takeHistory]);
+  const currentChunkMemory = baseCurrentChunk ? chunkMemoryById.get(baseCurrentChunk.id) ?? null : null;
   const comparisonsByExpectedIndex = useMemo(() => new Map(visibleComparisons.map((comparison) => [comparison.expectedIndex, comparison])), [visibleComparisons]);
+  const journeyComparisonsByExpectedIndex = useMemo(() => new Map(journeyComparisons.map((comparison) => [comparison.expectedIndex, comparison])), [journeyComparisons]);
   const comparisonsByMeasureIndex = useMemo(() => {
     const grouped = new Map<number, SheetEventComparison[]>();
     for (const comparison of visibleComparisons) {
@@ -842,11 +1074,17 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
   }, [visibleComparisons]);
   const localMeasureContext = imported?.measures[currentMeasureIndex] ?? null;
   const localCollectionAttacks = useMemo(() => {
-    if (!currentChunk || !loop) return [];
-    const position = readingChunks.findIndex((chunk) => chunk.id === currentChunk.id);
+    if (!baseCurrentChunk || !measureLoop || !imported) return [];
+    const position = readingChunks.findIndex((chunk) => chunk.id === baseCurrentChunk.id);
     const indexes = readingChunks.slice(Math.max(0, position - 1), position + 2).flatMap((chunk) => chunk.attackIndexes);
-    return indexes.map((index) => loop.attacks[index]).filter(Boolean);
-  }, [currentChunk, loop, readingChunks]);
+    return indexes
+      .map((index) => measureLoop.attacks[index])
+      .filter((attack): attack is SheetMusicPracticeAttack => Boolean(attack))
+      .filter((attack) => {
+        const measure = imported.measures[attack.measureIndex];
+        return measure?.keyFifths === localMeasureContext?.keyFifths && measure?.keyMode === localMeasureContext?.keyMode;
+      });
+  }, [baseCurrentChunk, imported, localMeasureContext?.keyFifths, localMeasureContext?.keyMode, measureLoop, readingChunks]);
   const localCollection = useMemo(() => analyzeLocalPitchCollections(
     localCollectionAttacks,
     { keyFifths: localMeasureContext?.keyFifths ?? null, keyMode: localMeasureContext?.keyMode ?? null, maxCandidates: 3 },
@@ -873,7 +1111,8 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
       audioMasterRef.current = master;
       master.gain.setValueAtTime(SYNTH_MASTER_GAIN, now);
       compressor.connect(master).connect(context.destination);
-      const startIndex = Math.max(0, currentIndex);
+      const restartFromBeginning = currentIndex >= loop.attacks.length;
+      const startIndex = restartFromBeginning ? 0 : Math.max(0, currentIndex);
       const source = loop.attacks.slice(startIndex, startIndex + 14);
       const baseBeat = source[0]?.onsetBeat ?? loop.startBeat;
       const secondsPerBeat = 60 / practiceTempo;
@@ -915,7 +1154,7 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
       setAudioState("playing");
       const voiceLabel = voice === "upper" ? "upper path" : voice === "bass" ? "bass route" : "full written field";
       const bounds = [denseFieldClipped ? "dense fields are transparently limited to 12 tones" : null, longDurationCapped ? "very long tones are capped at 6 seconds" : null].filter(Boolean).join("; ");
-      setAudioNotice(`Playing the ${voiceLabel} for up to ${bounded.length} landing${bounded.length === 1 ? "" : "s"} from the cursor at ${practiceTempo} BPM. Each voice keeps its own tied duration${bounds ? `; ${bounds}` : ""}. MIDI input is still silent.`);
+      setAudioNotice(`Playing the ${voiceLabel} for up to ${bounded.length} landing${bounded.length === 1 ? "" : "s"} ${restartFromBeginning ? "from the loop start after completed review" : "from the cursor"} at ${practiceTempo} BPM. Each voice keeps its own tied duration${bounds ? `; ${bounds}` : ""}. MIDI input is still silent.`);
       audioTimerRef.current = window.setTimeout(() => {
         if (audioTokenRef.current !== token) return;
         if (context?.state !== "closed") void context?.close();
@@ -945,6 +1184,9 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
     <div className={styles.importTruth}><article><span>Private by design</span><strong>Parsing happens in this tab.</strong><p>The score never leaves this browser. A tab-local copy is kept until you remove it or the tab session ends.</p></article><article><span>What is evaluated</span><strong>Written landings become targets.</strong><p>A landing is one or more notes that start together. Tied continuations stay held; simultaneous staff voices merge at one onset.</p></article><article><span>What remains human</span><strong>Expression is not reduced to correctness.</strong><p>Dynamics, pedaling, tone, rubato, intention, and enjoyment exceed silent MIDI. This HUD keeps the evidence it does have separate.</p></article></div>
   </section>;
 
+  const navigatorStart = Math.max(0, loopStart - 6);
+  const navigatorEnd = Math.min(score.measures.length - 1, loopEnd + 6);
+  const navigatorMeasures = score.measures.slice(navigatorStart, navigatorEnd + 1);
   const currentDirections = imported.directions
     .filter((direction) => direction.measureIndex === currentMeasureIndex && direction.kind !== "tempo" && direction.onsetBeats <= (contextAttack?.onsetBeat ?? Number.POSITIVE_INFINITY) + 1e-7)
     .slice(-3);
@@ -960,8 +1202,20 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
   const latestBassRelationship = bassMetric?.comparisons.at(-1) ?? null;
   const hasPracticeAttacks = Boolean(loop?.attacks.length);
   const focusComparison = evaluation?.comparisons.find((comparison) => comparison.expectedIndex === currentIndex) ?? null;
+  const divergenceComparison = evaluation?.firstDivergence?.expectedIndex == null
+    ? null
+    : evaluation.comparisons.find((comparison) => comparison.expectedIndex === evaluation.firstDivergence?.expectedIndex) ?? null;
+  const recommendedReadingLens = evidenceReadingLens(captureState === "review" ? divergenceComparison : focusComparison, timingMode, defaultReadingLens(baseCurrentChunk));
+  const activeReadingLens = manualReadingLens ?? recommendedReadingLens;
+  const divergenceAttack = divergenceComparison?.expected ?? null;
+  const divergenceBaseIndex = divergenceAttack ? baseAttackIndexById.get(divergenceAttack.id) ?? null : null;
+  const repairChunk = divergenceBaseIndex == null ? null : readingChunks.find((chunk) => divergenceBaseIndex >= chunk.startAttackIndex && divergenceBaseIndex <= chunk.endAttackIndex) ?? null;
+  const installRepairChunk = () => {
+    if (!repairChunk) return;
+    selectPracticeChunk(repairChunk);
+  };
   const announcedGatheredCount = nextAttack ? Math.min(nextAttack.midiNotes.length, new Set([
-    ...activeNotes.filter((note) => nextAttack.midiNotes.includes(note)),
+    ...pressedNotes.filter((note) => nextAttack.midiNotes.includes(note)),
     ...(focusComparison?.actualNotes ?? []).filter((note) => nextAttack.midiNotes.includes(note)),
   ]).size) : 0;
   const liveHudMessage = scoreVeiled && nextAttack
@@ -970,14 +1224,14 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
       ? `Gathering ${announcedGatheredCount} of ${nextAttack.midiNotes.length} notes inside the ${clusterWindow} millisecond togetherness window.`
       : nextAttack
         ? `${attackStatusLabel(focusComparison, true)}. Next landing has ${nextAttack.notes.length} note${nextAttack.notes.length === 1 ? "" : "s"}${showConventions ? `: ${nextAttack.notes.map((note) => note.pitch.label).join(" plus ")}` : ""}.`
-        : captureState === "armed" ? "Every written landing has arrived. Release any held keys to finish the take." : "Loop complete. Review this take or move the loop.";
-  const divergenceComparison = evaluation?.firstDivergence?.expectedIndex == null
-    ? null
-    : evaluation.comparisons.find((comparison) => comparison.expectedIndex === evaluation.firstDivergence?.expectedIndex) ?? null;
+        : captureState === "armed" ? "Every written landing has arrived. Release any pressed keys to finish the take." : "Loop complete. Review this take or move the loop.";
   const authoredLabelForMidi = (midi: number) => divergenceComparison?.expected.notes.find((note) => note.pitch.midi === midi)?.pitch.label ?? pitchClassName(midi, prefer);
   const repairInstruction = (() => {
     const divergence = evaluation?.firstDivergence;
     if (!divergence) return "";
+    if (divergence.kind === "extra-attack") return "Omit the extra attack while preserving any notes already held across this boundary. Then replay the adjacent written landing without changing its correct tones.";
+    if (divergence.kind === "missing-attack") return `Add the missing written landing${divergence.measureNumber ? ` in measure ${divergence.measureNumber}` : ""}; connect the landing before and after it as one short repair fragment.`;
+    if (divergence.kind === "arpeggiation") return "Keep the written pitch set, but reverse or clarify the marked roll direction. Rehearse the outer notes first, then insert the interior tones.";
     if (divergence.signedSemitoneCorrection != null) return `Key correction: move ${divergence.signedSemitoneCorrection > 0 ? "right" : "left"} ${Math.abs(divergence.signedSemitoneCorrection)} semitone${Math.abs(divergence.signedSemitoneCorrection) === 1 ? "" : "s"}. Preserve the surrounding contour and every already-correct tone.`;
     if (divergenceComparison?.missingNotes.length && !divergenceComparison.extraNotes.length) {
       const retained = divergenceComparison.expectedNotes.filter((midi) => divergenceComparison.actualNotes.includes(midi)).map(authoredLabelForMidi);
@@ -992,9 +1246,6 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
       const extras = divergenceComparison.extraNotes.map((midi) => pitchClassName(midi, prefer));
       return `${retained.length ? `Keep ${retained.join(" + ")}; ` : ""}remove ${extras.join(" + ")}. Re-form the written field before the next attack.`;
     }
-    if (divergence.kind === "arpeggiation") return "Keep the written pitch set, but reverse or clarify the marked roll direction. Rehearse the outer notes first, then insert the interior tones.";
-    if (divergence.kind === "missing-attack") return `Add the missing written landing${divergence.measureNumber ? ` in measure ${divergence.measureNumber}` : ""}; connect the landing before and after it as one short repair fragment.`;
-    if (divergence.kind === "extra-attack") return "Omit the extra attack while preserving any notes already held across this boundary.";
     return "Replay the smallest surrounding relationship. Keep correct pitches intact and change only the named pulse or key-release boundary.";
   })();
 
@@ -1006,44 +1257,45 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
     </header>
 
     <details className={styles.practiceSetup}>
-      <summary><span>Practice setup</span><strong>m.{score.measures[loopStart].number}–{score.measures[loopEnd].number} · {practiceHand === "both" ? "both staves" : practiceHand === "right" ? "upper staff" : "lower staff"} · {readingMode === "read" ? "score visible" : readingMode === "memory" ? "memory fade" : "ear-first veil"} · {timingMode === "self-paced" ? `self-paced · ${practiceTempo} BPM reference` : `fixed pulse · ${practiceTempo} BPM`}</strong><small>Change loop, visibility, timing, tempo, or togetherness tolerance</small></summary>
+      <summary><span>Practice setup</span><strong>{selectedChunk ? `chunk ${selectedChunk.ordinal + 1} · ${selectedChunk.attackCount} exact landings` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`} · {practiceHand === "both" ? "both staves" : practiceHand === "right" ? "upper staff" : "lower staff"} · {readingMode === "read" ? "score visible" : readingMode === "memory" ? "memory fade" : "ear-first veil"} · {timingMode === "self-paced" ? `self-paced · ${practiceTempo} BPM reference` : `fixed pulse · ${practiceTempo} BPM`}</strong><small>Change loop, visibility, timing, tempo, or togetherness tolerance</small></summary>
       <div className={styles.practiceControls} aria-label="Score practice controls">
         <label><span>From measure</span><select value={loopStart} onChange={(event) => changeLoop(Number(event.target.value), Math.max(Number(event.target.value), loopEnd))}>{score.measures.map((measure) => <option key={measure.id} value={measure.index}>{measure.number}</option>)}</select></label>
         <label><span>Through measure</span><select value={loopEnd} onChange={(event) => changeLoop(Math.min(loopStart, Number(event.target.value)), Number(event.target.value))}>{score.measures.map((measure) => <option key={measure.id} value={measure.index} disabled={measure.index < loopStart}>{measure.number}</option>)}</select></label>
-        <label><span>Staff focus</span><select value={practiceHand} onChange={(event) => { setPracticeHand(event.target.value as PracticeHand); resetTake("Staff focus changed. The score boundary is fresh."); }}><option value="both">Both staves</option><option value="right">Upper staff</option><option value="left">Lower staff</option></select></label>
+        <label><span>Staff focus</span><select value={practiceHand} onChange={(event) => { setPracticeHand(event.target.value as PracticeHand); setSelectedChunkId(null); setManualReadingLens(null); resetTake("Staff focus changed. The score boundary is fresh."); }}><option value="both">Both staves</option><option value="right">Upper staff</option><option value="left">Lower staff</option></select></label>
         <label><span>Reading layer</span><select value={readingMode} onChange={(event) => setReadingMode(event.target.value as ReadingMode)}><option value="read">Pitch-position horizon</option><option value="memory">Fade after launch</option><option value="ear">Ear first · veil pitches</option></select></label>
         <label><span>Timing lens</span><select value={timingMode} onChange={(event) => { setTimingMode(event.target.value as TimingMode); resetTake("Timing lens changed. Arm a fresh take."); }}><option value="self-paced">Self-paced · pitch first</option><option value="pulse">Fixed-pulse drill</option></select></label>
-        <label><span>Practice tempo</span><select value={tempoPercent} onChange={(event) => { setTempoPercent(Number(event.target.value)); resetTake("Tempo changed. Arm a fresh take."); }}><option value={50}>50% · {Math.max(20, Math.round(score.tempoBpm * .5))} BPM</option><option value={70}>70% · {Math.max(20, Math.round(score.tempoBpm * .7))} BPM</option><option value={85}>85% · {Math.max(20, Math.round(score.tempoBpm * .85))} BPM</option><option value={100}>100% · {Math.round(score.tempoBpm)} BPM</option></select></label>
+        <label><span>Practice tempo</span><select value={tempoPercent} onChange={(event) => { setTempoPercent(Number(event.target.value)); resetTake("Tempo changed. Arm a fresh take."); }}><option value={50}>50% · {Math.max(20, Math.round(encodedLocalTempo * .5))} BPM</option><option value={70}>70% · {Math.max(20, Math.round(encodedLocalTempo * .7))} BPM</option><option value={85}>85% · {Math.max(20, Math.round(encodedLocalTempo * .85))} BPM</option><option value={100}>100% · {Math.round(encodedLocalTempo)} BPM</option></select></label>
         <label><span>Notes count as together</span><select value={clusterWindow} onChange={(event) => { setClusterWindow(Number(event.target.value)); resetTake("Togetherness lens changed. Arm a fresh take."); }}><option value={70}>Tight · 70 ms</option><option value={140}>Relaxed · 140 ms</option><option value={220}>Rolled · 220 ms</option></select></label>
       </div>
-      <div className={styles.measureMap} aria-label="Measure navigator">{score.measures.map((measure) => {
+      <div className={styles.measureMap} aria-label={`Measure navigator showing ${navigatorStart + 1} through ${navigatorEnd + 1} of ${score.measures.length} measures`}>{navigatorStart > 0 ? <span className={styles.measureGap} aria-hidden="true">…</span> : null}{navigatorMeasures.map((measure) => {
         const comparisons = comparisonsByMeasureIndex.get(measure.index) ?? [];
         const wrong = comparisons.some((comparison) => comparison.status === "incorrect" || comparison.status === "missed");
         const correct = comparisons.length > 0 && comparisons.every((comparison) => comparison.status === "correct");
         const inLoop = measure.index >= loopStart && measure.index <= loopEnd;
         const current = measure.index === currentMeasureIndex;
-        const state = wrong ? "needs repair" : correct ? "aligned" : current ? "current" : inLoop ? "in loop" : "outside loop";
-        return <button key={measure.id} type="button" className={cx(inLoop && styles.isInLoop, current && styles.isCurrentMeasure, wrong && styles.hasWrong, correct && styles.isMeasureCorrect)} aria-label={`Measure ${measure.number}, ${imported.measures[measure.index]?.timeSignatureDisplay ?? `${measure.beats}/${measure.beatType}`}, ${state}`} aria-current={current ? "location" : undefined} onClick={() => changeLoop(measure.index, Math.min(score.measures.length - 1, measure.index + Math.max(0, loopEnd - loopStart)))}><span>{measure.number}</span><small>{imported.measures[measure.index]?.timeSignatureDisplay ?? `${measure.beats}/${measure.beatType}`}</small><em>{wrong ? "repair" : correct ? "aligned" : current ? "current" : inLoop ? "loop" : ""}</em></button>;
-      })}</div>
+        const evidenceScope = selectedChunk ? "selected chunk" : "measure";
+        const state = wrong ? `${evidenceScope} needs repair` : correct ? `${evidenceScope} aligned` : current ? "current" : inLoop ? "in loop" : "outside loop";
+        return <button key={measure.id} type="button" className={cx(inLoop && styles.isInLoop, current && styles.isCurrentMeasure, wrong && styles.hasWrong, correct && styles.isMeasureCorrect)} aria-label={`Measure ${measure.number}, ${imported.measures[measure.index]?.timeSignatureDisplay ?? `${measure.beats}/${measure.beatType}`}, ${state}`} aria-current={current ? "location" : undefined} onClick={() => changeLoop(measure.index, Math.min(score.measures.length - 1, measure.index + Math.max(0, loopEnd - loopStart)))}><span>{measure.number}</span><small>{imported.measures[measure.index]?.timeSignatureDisplay ?? `${measure.beats}/${measure.beatType}`}</small><em>{wrong ? selectedChunk ? "chunk repair" : "repair" : correct ? selectedChunk ? "chunk aligned" : "aligned" : current ? "current" : inLoop ? "loop" : ""}</em></button>;
+      })}{navigatorEnd < score.measures.length - 1 ? <span className={styles.measureGap} aria-hidden="true">…</span> : null}</div>
     </details>
 
     <div className={styles.sessionBar}>
-      <div><span>{captureState === "idle" ? "study" : captureState === "armed" ? liveEvaluationPaused ? "long take" : evaluation?.complete && activeNotes.length ? "release to finish" : takeEvents.length ? "capturing" : "armed" : "review"}</span><strong>{loop?.attacks.length ?? 0} written landing{loop?.attacks.length === 1 ? "" : "s"} · m.{score.measures[loopStart].number}–{score.measures[loopEnd].number}</strong><small role="status" aria-live="polite" aria-atomic="true">{evaluationError ? "Evaluation paused until the loop is shortened." : !hasPracticeAttacks ? "This selection contains no landing targets for the chosen staff focus. Include a measure with notes or change the staff focus." : captureState === "armed" && evaluation?.complete && activeNotes.length ? "All written landings have arrived. Release the held keys so key-release lengths can enter the frozen review." : captureNotice}</small>{evaluationError ? <small role="alert">{evaluationError} Choose a shorter measure loop, then arm a fresh take.</small> : null}</div>
-      <div className={styles.sessionActions}>{audioState === "playing" ? <button type="button" onClick={() => stopReference()}>Stop reference</button> : <><button type="button" disabled={!hasPracticeAttacks} onClick={() => void playReference()}>Hear from cursor · audio</button><button type="button" disabled={!hasPracticeAttacks} onClick={() => void playReference("upper")}>Hear upper path</button><button type="button" disabled={!hasPracticeAttacks} onClick={() => void playReference("bass")}>Hear bass route</button></>}{captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose</button> : <button type="button" className={styles.primaryAction} disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? "Try loop again" : "Arm silent take"}</button>}</div>
-      <p className={styles.audioNotice}>{audioNotice}{timingMode === "pulse" ? ` Fixed-pulse is a literal ${practiceTempo} BPM drill: your first landing is beat zero, and encoded rubato words or fermatas do not move its clock.` : ""}</p>
+      <div><span>{captureState === "idle" ? "study" : captureState === "armed" ? liveEvaluationPaused ? "long take" : evaluation?.complete && pressedNotes.length ? "release to finish" : takeEvents.length ? "capturing" : "armed" : "review"}</span><strong>{loop?.attacks.length ?? 0} written landing{loop?.attacks.length === 1 ? "" : "s"} · {selectedChunk ? `chunk ${selectedChunk.ordinal + 1} selected` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`}</strong><small role="status" aria-live="polite" aria-atomic="true">{evaluationError ? "Evaluation paused until the loop is shortened." : !hasPracticeAttacks ? "This selection contains no landing targets for the chosen staff focus. Include a measure with notes or change the staff focus." : captureState === "armed" && evaluation?.complete && pressedNotes.length ? "All written landings have arrived. Release the pressed keys so key-up lengths can enter the frozen review; pedal-sustained tones do not block review." : captureNotice}</small>{evaluationError ? <small role="alert">{evaluationError} Choose a shorter measure loop, then arm a fresh take.</small> : null}</div>
+      <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}<button type="button" disabled={!hasPracticeAttacks} aria-pressed={audioState === "playing"} onClick={() => audioState === "playing" ? stopReference() : void playReference()}>{audioState === "playing" ? "Stop reference" : "Hear from cursor · audio"}</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper")}>Hear upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass")}>Hear bass route</button>{captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose</button> : <button type="button" className={styles.primaryAction} disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Try chunk again" : "Try loop again" : selectedChunk ? "Arm chunk take" : "Arm silent take"}</button>}</div>
+      <p className={styles.audioNotice} role="status" aria-live="polite">{audioNotice}{timingMode === "pulse" ? ` Fixed-pulse is a constant ${practiceTempo} BPM drill from the latest numeric tempo at this boundary: your first landing is beat zero, and later tempo changes, rubato words, or fermatas do not move its clock.` : ""}</p>
     </div>
 
     {loop ? <div className={styles.immersionOverview}>
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveHudMessage}</p>
-      <FocusLanding attack={nextAttack} comparison={focusComparison} currentIndex={currentIndex} totalAttacks={loop.attacks.length} activeNotes={activeNotes} veiled={scoreVeiled} showConventions={showConventions} prefer={prefer} arrivalWindowMs={clusterWindow} arrivalWindowOpen={latestLiveEventId > settledThroughEventId} captureState={captureState} />
-      <ReadingChunkFocus chunk={currentChunk} progress={currentChunkProgress} loop={loop} comparisons={comparisonsByExpectedIndex} currentIndex={currentIndex} veiled={scoreVeiled} showConventions={showConventions} notationById={notationById} directionText={currentDirections.length ? currentDirections.map((direction) => direction.text).join(" · ") : null} />
+      {measureLoop ? <ScoreJourney loop={measureLoop} chunks={readingChunks} chunkProgress={chunkProgress} chunkMemory={chunkMemoryById} comparisons={journeyComparisonsByExpectedIndex} currentIndex={baseCurrentIndex} extraCount={visibleEvaluation?.extraClusters.length ?? 0} captureState={captureState} veiled={scoreVeiled} selectedChunkId={selectedChunk?.id ?? null} onSelectChunk={selectPracticeChunk} /> : null}
+      <FocusLanding attack={nextAttack} comparison={focusComparison} currentIndex={currentIndex} totalAttacks={loop.attacks.length} activeNotes={pressedNotes} veiled={scoreVeiled} showConventions={showConventions} prefer={prefer} arrivalWindowMs={clusterWindow} arrivalWindowOpen={latestLiveEventId > settledThroughEventId} captureState={captureState} />
+      <ReadingChunkFocus chunk={currentChunk} progress={currentChunkProgress} memory={currentChunkMemory} loop={loop} comparisons={comparisonsByExpectedIndex} currentIndex={currentIndex} veiled={scoreVeiled} showConventions={showConventions} notationById={notationById} directionText={currentDirections.length ? currentDirections.map((direction) => direction.text).join(" · ") : null} activeLens={scoreVeiled ? "rhythm" : activeReadingLens} recommendedLens={recommendedReadingLens} onLensChange={setManualReadingLens} />
       <CollectionFocus analysis={localCollection} showConventions={showConventions} prefer={prefer} veiled={scoreVeiled} />
-      <ScoreJourney loop={loop} chunks={readingChunks} chunkProgress={chunkProgress} comparisons={comparisonsByExpectedIndex} currentIndex={currentIndex} extraCount={visibleEvaluation?.extraClusters.length ?? 0} captureState={captureState} />
     </div> : null}
 
     <div className={styles.hudGrid}>
       <section className={styles.handCompass} aria-labelledby="hand-compass-title">
-        <header><div><span>Keyboard route</span><h4 id="hand-compass-title">Put the focused landing under the hands.</h4></div><p>{scoreVeiled ? "Destination, played pitches, and prior-score territory stay dark until review." : "White outline = held · gold = destination · blue edge = last landing. Finger numbers are never silently presented as authored."}</p></header>
+        <header><div><span>Keyboard route</span><h4 id="hand-compass-title">Put the focused landing under the hands.</h4></div><p>{scoreVeiled ? "Destination, played pitches, and prior-score territory stay dark until review." : "White outline = sounding now (pressed or pedal) · gold = destination · blue edge = last landing. Finger numbers are never silently presented as authored."}</p></header>
         <KeyboardTerritory next={scoreVeiled ? null : nextAttack} previousNotes={scoreVeiled ? [] : previousNotes} activeNotes={scoreVeiled ? [] : activeNotes} showConventions={scoreVeiled ? false : showConventions} prefer={prefer} />
         {scoreVeiled ? <div className={styles.emptyField}><strong>Destination territory is veiled.</strong><span>Hear or imagine the landing, play the route, then stop the take to reveal exact semitones, physical key travel, and suggested fingers.</span></div> : <DistanceField next={nextAttack} previousByHand={previousByHand} showConventions={showConventions} prefer={prefer} />}
       </section>
@@ -1058,8 +1310,8 @@ export function PianoScoreFlowHud({ events, activeNotes, chordWindowMs, showConv
             <b>→</b>
             <div><span>Played gaps</span><strong>{divergenceComparison.actualSpacing?.adjacentSemitones.length ? divergenceComparison.actualSpacing.adjacentSemitones.map((gap) => `${gap} st`).join(" · ") : divergenceComparison.actualNotes.length ? "single tone" : "no landing"}</strong></div>
           </div> : null}
-          {repairAvailable ? <button type="button" onClick={installRepairLoop}>Make a ±1 measure repair loop</button> : null}
-        </div> : <div className={styles.secureCard}><span>No first divergence</span><strong>Pitch, chord, and selected timing evidence aligned for this loop.</strong><p>This is not a musicality or expression score. Move the loop, fade notation, or sing one voice before replaying it.</p></div> : scoreVeiled ? <div className={styles.liveInstruction}><strong>Hold the heard or imagined route without searching for a lit destination.</strong><p>The score preserves only rhythm slots and chord size while this layer is veiled. Stop the take to reveal the exact written landing and the smallest physical correction.</p></div> : <div className={styles.liveInstruction}><strong>{nextAttack ? `${nextAttack.midiNotes.length > 1 ? "Prepare the full vertical span" : "Orient the next finger"} before attacking.` : "The loop has no attack targets."}</strong><p>{nextAttack && previousNotes.length ? nextAttack.midiNotes.map((target) => { const from = [...previousNotes].sort((a, b) => Math.abs(target - a) - Math.abs(target - b))[0]; const distance = fingerDistance(from, target); return `${signed(distance.signedSemitones)} st / ${Math.round(distance.whiteKeyWidths * 10) / 10} key widths`; }).join(" · ") : "Use the staff and keyboard territory together; then look slightly ahead of the current landing."}</p></div>}
+          {repairAvailable ? <button type="button" onClick={repairChunk ? installRepairChunk : installRepairLoop}>{repairChunk ? `Practice chunk ${repairChunk.ordinal + 1} · ${repairChunk.attackCount} landings` : "Make a ±1 measure repair loop"}</button> : null}
+        </div> : <div className={styles.secureCard}><span>No first divergence</span><strong>Pitch, chord, and selected timing evidence aligned for this loop.</strong><p>This is not a musicality or expression score. Move the loop, fade notation, or sing one voice before replaying it.</p></div> : scoreVeiled ? <div className={styles.liveInstruction}><strong>Hold the heard or imagined route without searching for a lit destination.</strong><p>The score preserves rhythm slots, simultaneous-note counts, and neutral chunk boundaries while this layer is veiled. Stop the take to reveal the exact written landing and the smallest physical correction.</p></div> : <div className={styles.liveInstruction}><strong>{nextAttack ? `${nextAttack.midiNotes.length > 1 ? "Prepare the full vertical span" : "Orient the next finger"} before attacking.` : "The loop has no attack targets."}</strong><p>{nextAttack && previousNotes.length ? nextAttack.midiNotes.map((target) => { const from = [...previousNotes].sort((a, b) => Math.abs(target - a) - Math.abs(target - b))[0]; const distance = fingerDistance(from, target); return `${signed(distance.signedSemitones)} st / ${Math.round(distance.whiteKeyWidths * 10) / 10} key widths`; }).join(" · ") : "Use the staff and keyboard territory together; then look slightly ahead of the current landing."}</p></div>}
         {captureState === "review" && evaluation ? <div className={styles.relationshipEvidence} aria-label="Most recent directed interval evidence">
           <RelationshipEvidence label="Latest upper link" comparison={latestUpperRelationship} />
           <RelationshipEvidence label="Latest bass link" comparison={latestBassRelationship} />

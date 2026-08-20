@@ -4666,6 +4666,7 @@ export function PianoLab() {
     return combined;
   }, [latchedNotes, midi.notes]);
   const activeNoteNumbers = useMemo(() => uniqueSorted(Array.from(activeNotesMap.keys())), [activeNotesMap]);
+  const pressedNoteNumbers = useMemo(() => uniqueSorted(Array.from(midi.pressed)), [midi.pressed]);
   const immersionTimeBucket = activeNoteNumbers.length ? Math.floor(nowMs / 500) : 0;
   const immersionGravityCandidates = useMemo(() => {
     const latestEvidenceMs = immersionHistoryEvents.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), immersionHistoryEvents.at(-1)?.onsetMs ?? 0);
@@ -5855,6 +5856,7 @@ export function PianoLab() {
       {focusLens === "score-flow" ? <PianoScoreFlowHud
         events={phraseEvents}
         activeNotes={activeNoteNumbers}
+        pressedNotes={pressedNoteNumbers}
         chordWindowMs={chordWindowMs}
         showConventions={showConventions}
         frozen={frozen}

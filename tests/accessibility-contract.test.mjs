@@ -45,12 +45,13 @@ test("Sight Shapes keeps notation, interval, keyboard, and learner-report channe
 });
 
 test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidence explicit", async () => {
-  const [piano, scoreFlow, scoreFlowCss, importer, model, session, ratio] = await Promise.all([
+  const [piano, scoreFlow, scoreFlowCss, importer, model, memory, session, ratio] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoScoreFlowHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoScoreFlowHud.module.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/musicxml-import.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/sheet-music-coach-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/sheet-music-practice-memory.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-session.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
   ]);
@@ -58,6 +59,7 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(piano, /\{ id: "score-flow", label: "Score Flow · upload music"/);
   assert.match(piano, /focusLens === "score-flow" \? <PianoScoreFlowHud/);
   assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*onResumeCapture=\{\(\) => setFrozen\(false\)\}/);
+  assert.match(piano, /pressedNotes=\{pressedNoteNumbers\}/);
   assert.match(piano, /focusLens === "score-flow"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
   assert.match(piano, /The score stays in this browser tab\. MIDI stays silent; only the explicit score-reference button makes sound\./);
   assert.match(session, /"score-flow"/);
@@ -71,16 +73,23 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /Nothing leaves this browser tab/);
   assert.match(scoreFlow, /window\.sessionStorage\.setItem\(SCORE_FLOW_STORAGE_KEY/);
   assert.match(scoreFlow, /window\.sessionStorage\.removeItem\(SCORE_FLOW_STORAGE_KEY/);
+  assert.match(scoreFlow, /window\.sessionStorage\.setItem\(SCORE_FLOW_HISTORY_STORAGE_KEY/);
+  assert.match(scoreFlow, /historyRaw\.length > 2 \* 1024 \* 1024/);
+  assert.ok(scoreFlow.indexOf("window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY);") < scoreFlow.indexOf("window.sessionStorage.setItem(SCORE_FLOW_STORAGE_KEY"), "a failed replacement cannot leave a stale score behind");
   assert.match(importer, /new Uint8Array\(await file\.arrayBuffer\(\)\)/);
   assert.ok(importer.indexOf("if (file.size > MAX_ARCHIVE_BYTES)") < importer.indexOf("await file.arrayBuffer()"), "oversized score files must fail before browser allocation");
   assert.doesNotMatch(scoreFlow, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
 
   assert.match(scoreFlow, /Reference audio is off\. MIDI remains silent\./);
   assert.match(scoreFlow, /Take armed\.[^"`]*MIDI remains silent\./);
-  assert.match(scoreFlow, /onClick=\{\(\) => void playReference\(\)\}>Hear from cursor · audio<\/button>/);
+  assert.match(scoreFlow, /aria-pressed=\{audioState === "playing"\}[\s\S]*audioState === "playing" \? "Stop reference" : "Hear from cursor · audio"/);
   assert.match(scoreFlow, /const playReference = useCallback\(async \(voice: ReferenceVoice = "full"\) => \{[\s\S]*new AudioContextConstructor[\s\S]*createOscillator\(\)/);
-  assert.match(scoreFlow, /captureState === "review" \? "Try loop again" : "Arm silent take"/);
+  assert.match(scoreFlow, /captureState === "review" \? selectedChunk \? "Try chunk again" : "Try loop again"/);
   assert.match(scoreFlow, /event\.keyReleaseMs \?\? event\.releaseMs/);
+  assert.match(scoreFlow, /const deadlineMs = anchor\.onsetMs \+ clusterWindow/);
+  assert.match(scoreFlow, /!evaluation\?\.extraClusters\.length/);
+  assert.match(scoreFlow, /evaluation\?\.complete \|\| pressedNotes\.length/);
+  assert.match(scoreFlow, /const restartFromBeginning = currentIndex >= loop\.attacks\.length/);
   assert.match(scoreFlow, /MAX_LIVE_FEEDBACK_ATTACKS = 160[\s\S]*live alignment pauses/);
   assert.match(scoreFlow, /This piano release evaluates one MusicXML part at a time/);
 
@@ -92,10 +101,13 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /function ReadingChunkFocus\(/);
   assert.match(scoreFlow, /Suggested chunk \{chunk\.ordinal \+ 1\}/);
   assert.match(scoreFlow, /"--rhythm-space": Math\.max\(1, Math\.min\(4,/);
-  assert.match(scoreFlow, /1 · Landmark/);
-  assert.match(scoreFlow, /2 · Top-note path/);
-  assert.match(scoreFlow, /3 · Vertical shape/);
-  assert.match(scoreFlow, /4 · Rhythm cell/);
+  assert.match(scoreFlow, /aria-label="Choose one way to read this chunk"/);
+  assert.match(scoreFlow, /\["landmark", "Landmark"\]/);
+  assert.match(scoreFlow, /\["motion", "Motion"\]/);
+  assert.match(scoreFlow, /\["vertical", "Vertical"\]/);
+  assert.match(scoreFlow, /\["rhythm", "Rhythm"\]/);
+  assert.match(scoreFlow, /recommendedLens === lens \? "suggested" : "view"/);
+  assert.match(scoreFlow, /disabled=\{unavailableWhileVeiled\}/);
 
   assert.match(scoreFlow, /function CollectionFocus\(/);
   assert.match(scoreFlow, /analysis\.evidence === "thin"/);
@@ -117,6 +129,19 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /× \{missCount\} repair/);
   assert.match(scoreFlow, /○ \{Math\.max\(0, loop\.attacks\.length - successCount - missCount\)\} waiting/);
   assert.match(scoreFlow, /aria-label=\{`\$\{successCount\} correct, \$\{missCount\} needing repair/);
+  assert.match(scoreFlow, /aria-label="Select a reading chunk to practice"/);
+  assert.match(scoreFlow, /aria-pressed=\{selected\}/);
+  assert.match(scoreFlow, /aria-current=\{live \? "step" : undefined\}/);
+  assert.match(scoreFlow, /const chunkPageSize = 40/);
+  assert.match(scoreFlow, /aria-label="Reading chunk pages"/);
+  assert.match(scoreFlow, /startAttackId: selectedChunk\?\.startAttackId/);
+  assert.match(scoreFlow, /Surrounding notes will not be counted as misses/);
+  assert.match(scoreFlow, /sheetTakeEvidenceFromEvaluation/);
+  assert.match(scoreFlow, /appendBoundedSheetTakeHistory/);
+  assert.match(scoreFlow, /const finishedAt = Date\.now\(\)/);
+  assert.match(memory, /SHEET_PRACTICE_DIMENSIONS/);
+  assert.match(memory, /summarizeSheetChunkMemory/);
+  assert.doesNotMatch(memory, /\b(?:mastery|musicality|confidence|overallScore|blendedScore)\s*:/);
 
   assert.match(scoreFlow, /<details className=\{styles\.reviewEvidence\} open=\{captureState === "review"\}>/);
   assert.match(scoreFlow, /Right keys, note relationships, pulse, and release remain separate/);
@@ -133,8 +158,11 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" \? <RouteSelector/);
 
   assert.match(scoreFlow, /aria-label=\{`Measure \$\{measure\.number\}[\s\S]*\$\{state\}`\}/);
+  assert.match(scoreFlow, /const navigatorStart = Math\.max\(0, loopStart - 6\)/);
+  assert.match(scoreFlow, /const navigatorEnd = Math\.min\(score\.measures\.length - 1, loopEnd \+ 6\)/);
   assert.match(scoreFlow, /Latest upper link[\s\S]*Latest bass link/);
   assert.match(scoreFlow, /This is not a musicality or expression score/);
+  assert.ok(scoreFlow.indexOf('divergence.kind === "extra-attack"') < scoreFlow.indexOf("divergence.signedSemitoneCorrection != null"), "extra attacks must keep their own repair instruction before adjacent chord evidence");
   assert.match(scoreFlow, /synchronized attack map rather than authoritative engraving/);
   assert.match(model, /Metrics stay separate:[\s\S]*no blended “musicality score”/);
   assert.doesNotMatch(model, /emotionScore|goodnessScore|musicalityScore|overallScore|blendedScore/);
@@ -146,6 +174,8 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlowCss, /\.landingNote\.isMissing::after[^}]*content: "−"/);
   assert.match(scoreFlowCss, /\.landingNote\.isExtra::after[^}]*content: "\+"/);
   assert.match(scoreFlowCss, /\.chunkAttackPair[^}]*var\(--rhythm-space\)/);
+  assert.match(scoreFlowCss, /\.readingLensSelectors button[^}]*min-height: 44px/);
+  assert.match(scoreFlowCss, /\.chunkJourney > button[^}]*min-height: 44px/);
   assert.match(scoreFlowCss, /\.shell button,[\s\S]*\.shell label:has\(input\[type="file"\]\) \{ min-height: 44px; \}/);
   assert.match(scoreFlowCss, /\.practiceSetup > summary[^}]*min-height: 52px/);
   assert.match(scoreFlowCss, /\.reviewEvidence > summary[^}]*min-height: 48px/);

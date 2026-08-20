@@ -4,7 +4,13 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Score Flow · Immersive Reading Field v2.17**. It provides:
+The current milestone is **Score Flow · Adaptive Chunk Practice v2.18**. It provides:
+
+- Selectable reading chunks as exact practice units. Each numbered chunk in the form journey is a keyboard-accessible target: selecting one arms only its stable first-to-last landing IDs, so notes elsewhere in the containing measures cannot become fabricated misses. A first divergence now offers the smallest containing chunk before falling back to a measure repair loop.
+
+- Bounded cross-take evidence for the current browser session. Up to twelve frozen repetitions retain pitch, chord membership, semitone spacing, marked roll, fixed-pulse timing, and key-up duration as separate marks. The HUD may say that two recent takes aligned or that the same landing needed repair again; it never converts those observations into mastery, confidence, musicality, or an overall score.
+
+- One active reading lens per chunk. `Landmark`, `Motion`, `Vertical`, and `Rhythm` remain one click apart, while the current chunk shape or first repair recommends the most proximal lens. The other views stay compact instead of competing as four equal summaries.
 
 - A `Score Flow` section inside the persistent Piano companion. A learner can drop an MXL, MusicXML, or XML score, select an inclusive measure loop and upper/lower staff focus, and align silent MIDI landings with the score's written pitch spelling, voices, onset groups, ties, durations, meter, tempo, fingerings, and explicit arpeggiation. Parsing and practice state stay inside the browser tab; the score is never uploaded.
 
@@ -20,9 +26,9 @@ The current milestone is **Score Flow · Immersive Reading Field v2.17**. It pro
 
 - Target-aware performance alignment. Fast written notes remain separate inside a relaxed togetherness window; an incomplete chord stays on the current landing while its selected 70–220 ms gathering window is open, and only an explicitly marked arpeggio receives the wider roll window. Right keys, notes together, semitone spacing, written roll direction, top-note shape and width, bottom-note path, pulse, and key-up length remain separate inside a review disclosure instead of becoming a blended score.
 
-- First-divergence repair expressed on the same landing the learner was reading: expected and performed authored/contextual pitch labels, filled match nodes, hollow missing nodes, extra-note satellites, left/right semitone correction, approximate physical key travel, and an optional ±1-measure repair loop. A stopped or auto-completed take snapshots its evidence so later playing cannot rewrite the diagnosis.
+- First-divergence repair expressed on the same landing the learner was reading: expected and performed authored/contextual pitch labels, filled match nodes, hollow missing nodes, extra-note satellites, left/right semitone correction, approximate physical key travel, and an exact suggested-chunk repair target (with a ±1-measure fallback). Extra attacks retain their adjacent written location instead of teleporting repair to the end. A stopped or auto-completed take snapshots its evidence so later playing cannot rewrite the diagnosis.
 
-- A hardened browser importer that resolves ordinary MXL containers without network, DTD, or external-entity access; rejects unsafe archive paths, encryption, unsupported compression, invalid CRCs, excessive expansion, excessive nesting, and oversized scores; handles nonsequential voices, backup/forward cursors, cross-staff simultaneity, boundary ties, dotted metronome units, meter changes, tuplets, and missing key mode without silently inventing a key.
+- A hardened browser importer that resolves ordinary MXL containers without network, DTD, or external-entity access; rejects unsafe archive paths, encryption, unsupported compression, invalid CRCs, excessive expansion, excessive nesting, and oversized scores; handles nonsequential voices, backup/forward cursors, cross-staff simultaneity, boundary ties, dotted metronome units, meter changes, tuplets, and missing key mode without silently inventing a key. Normalization indexes notes and rests once rather than rescanning the whole score for every measure, while the measure navigator renders only a bounded neighborhood.
 
 - An original project-authored `Orbit Study` demo. The supplied Breathtaker score was used only as a local compatibility fixture—55 measures and 618 written landings—and is not redistributed because its upload did not provide a reusable license.
 

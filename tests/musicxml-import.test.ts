@@ -183,6 +183,50 @@ test("normalization qualifies voices by part so equal pitches cannot steal anoth
   assert.equal(tiedStop?.kind === "note" && tiedStop.isAttack, false);
 });
 
+test("normalization groups multipart notes and rests with one linear scan", () => {
+  const measureCount = 48;
+  const partOneMeasures = Array.from({ length: measureCount }, (_, index) => `<measure number="${index + 1}">
+    ${index === 0 ? "<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>" : ""}
+    <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><staff>1</staff></note>
+    <note><rest/><duration>3</duration><voice>1</voice><staff>1</staff></note>
+  </measure>`).join("");
+  const partTwoMeasures = Array.from({ length: measureCount }, (_, index) => `<measure number="${index + 1}">
+    ${index === 0 ? "<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>" : ""}
+    <note><pitch><step>G</step><octave>3</octave></pitch><duration>4</duration><voice>2</voice><staff>2</staff></note>
+  </measure>`).join("");
+  const imported = parseMusicXml(`<score-partwise><part-list>
+    <score-part id="P1"><part-name>Upper</part-name></score-part>
+    <score-part id="P2"><part-name>Lower</part-name></score-part>
+  </part-list><part id="P1">${partOneMeasures}</part><part id="P2">${partTwoMeasures}</part></score-partwise>`, "many-measures.musicxml");
+
+  let noteReads = 0;
+  let restReads = 0;
+  const countIndexedReads = <Item>(items: Item[], onRead: () => void) => new Proxy(items, {
+    get(target, property, receiver) {
+      if (typeof property === "string" && /^\d+$/.test(property)) onRead();
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const sourceNotes = imported.notes;
+  const sourceRests = imported.rests;
+  imported.notes = countIndexedReads(sourceNotes, () => { noteReads += 1; });
+  imported.rests = countIndexedReads(sourceRests, () => { restReads += 1; });
+
+  const normalized = normalizeImportedMusicXmlScore(imported);
+
+  assert.equal(noteReads, sourceNotes.length, "each imported note should be visited exactly once while grouping measures");
+  assert.equal(restReads, sourceRests.length, "each imported rest should be visited exactly once while grouping measures");
+  assert.equal(normalized.measures.length, measureCount);
+  normalized.measures.forEach((measure, index) => {
+    assert.deepEqual(measure.events.map((event) => event.id), [
+      `P1:m${index}:n0`,
+      `P2:m${index}:n0`,
+      `P1:m${index}:n1`,
+    ]);
+    assert.deepEqual(measure.events.map((event) => event.onsetBeat - measure.startBeat), [0, 0, 1]);
+  });
+});
+
 test("plain XML bytes stay local and decode without an archive", async () => {
   const bytes = new TextEncoder().encode(ORBIT_STUDY_MUSICXML);
   assert.equal(await musicXmlTextFromBytes(bytes, "orbit-study.musicxml"), ORBIT_STUDY_MUSICXML);
