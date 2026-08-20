@@ -8732,6 +8732,29 @@ footer a {
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
 
+/* Score Flow keeps the playing surface above the fold: one compact shell, then the score HUD. */
+.piano-hud.is-score-flow .piano-hud-header {
+  grid-template-columns: minmax(220px, .55fr) minmax(560px, 1.45fr);
+  gap: 18px 30px;
+  align-items: center;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.piano-hud.is-score-flow .piano-hud-header h2 { max-width: none; margin: 3px 0 5px; font-size: clamp(1.2rem, 2vw, 1.65rem); letter-spacing: -.025em; }
+.piano-hud.is-score-flow .piano-hud-header > div:first-child > p:last-child { max-width: 60ch; font-size: .72rem; line-height: 1.4; }
+.piano-hud.is-score-flow .piano-hud-controls .midi-status { flex: 1 1 210px; }
+.piano-hud.is-score-flow .piano-hud-statebar,
+.piano-hud.is-score-flow .piano-focus-lenses { display: none; }
+
+@media (max-width: 900px) {
+  .piano-hud.is-score-flow .piano-hud-header { grid-template-columns: 1fr; }
+  .piano-hud.is-score-flow .piano-hud-controls { justify-content: flex-start; }
+}
+
+@media (max-width: 620px) {
+  .piano-hud.is-score-flow .piano-hud-header > div:first-child > p:last-child { display: none; }
+}
+
 /* Piano HUD v2.11: exact semitone spacing as a live color/place memory. */
 .piano-interval-glow {
   --interval-0: #f4f0e7;
