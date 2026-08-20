@@ -84,16 +84,74 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /MAX_LIVE_FEEDBACK_ATTACKS = 160[\s\S]*live alignment pauses/);
   assert.match(scoreFlow, /This piano release evaluates one MusicXML part at a time/);
 
-  assert.match(scoreFlow, /Pitch landings[\s\S]*Chord gathering[\s\S]*Chord voicing shape[\s\S]*Marked roll direction[\s\S]*Upper contour[\s\S]*Upper interval width[\s\S]*Bass route[\s\S]*Pulse proportions[\s\S]*Release lengths[\s\S]*Progress/);
-  assert.match(scoreFlow, /Abstract score horizon[\s\S]*not a facsimile of the engraved page/);
+  assert.match(scoreFlow, /function FocusLanding\(/);
+  assert.match(scoreFlow, /One landing = one or more notes that begin together\./);
+  assert.match(scoreFlow, /attack\.midiNotes\.length >= 3 \? "Chord shape" : attack\.midiNotes\.length === 2 \? "Vertical shape" : "Attack shape"/);
+  assert.match(scoreFlow, /<span>Smallest correction<\/span>/);
+
+  assert.match(scoreFlow, /function ReadingChunkFocus\(/);
+  assert.match(scoreFlow, /Suggested chunk \{chunk\.ordinal \+ 1\}/);
+  assert.match(scoreFlow, /"--rhythm-space": Math\.max\(1, Math\.min\(4,/);
+  assert.match(scoreFlow, /1 · Landmark/);
+  assert.match(scoreFlow, /2 · Top-note path/);
+  assert.match(scoreFlow, /3 · Vertical shape/);
+  assert.match(scoreFlow, /4 · Rhythm cell/);
+
+  assert.match(scoreFlow, /function CollectionFocus\(/);
+  assert.match(scoreFlow, /analysis\.evidence === "thin"/);
+  assert.match(scoreFlow, /Scale context hidden during this pass/);
+  assert.match(scoreFlow, /Pitch collection is veiled\./);
+  assert.match(scoreFlow, /note coverage—not confidence/);
+  assert.match(scoreFlow, /const contextAttack = nextAttack \?\? loop\?\.attacks\.at\(-1\)/);
+  assert.match(scoreFlow, /const localMeasureContext = imported\?\.measures\[currentMeasureIndex\]/);
+  assert.match(scoreFlow, /keyFifths: localMeasureContext\?\.keyFifths \?\? null, keyMode: localMeasureContext\?\.keyMode \?\? null/);
+
+  assert.match(scoreFlow, /evaluation\?\.progress\.nextExpectedIndex \?\? \(evaluation\?\.complete \? loop\?\.attacks\.length/);
+  assert.match(scoreFlow, /if \(scoreVeiled\) return \[\]/);
+  assert.match(scoreFlow, /"--node-rise": veiled \? "0px"/);
+  assert.match(scoreFlow, /!veiled && matched && styles\.isMatched/);
+  assert.match(scoreFlow, /previousNotes=\{scoreVeiled \? \[\] : previousNotes\}/);
+
+  assert.match(scoreFlow, /function ScoreJourney\(/);
+  assert.match(scoreFlow, /✓ \{successCount\} right/);
+  assert.match(scoreFlow, /× \{missCount\} repair/);
+  assert.match(scoreFlow, /○ \{Math\.max\(0, loop\.attacks\.length - successCount - missCount\)\} waiting/);
+  assert.match(scoreFlow, /aria-label=\{`\$\{successCount\} correct, \$\{missCount\} needing repair/);
+
+  assert.match(scoreFlow, /<details className=\{styles\.reviewEvidence\} open=\{captureState === "review"\}>/);
+  assert.match(scoreFlow, /Right keys, note relationships, pulse, and release remain separate/);
+  assert.match(scoreFlow, /eyebrow="Notes \+ chords"/);
+  assert.match(scoreFlow, /eyebrow="Motion"/);
+  assert.match(scoreFlow, /eyebrow="Time \+ journey"/);
+
+  assert.match(scoreFlow, /<span>Staff focus<\/span><select value=\{practiceHand\}/);
+  assert.match(scoreFlow, /<option value="both">Both staves<\/option>/);
+  assert.match(scoreFlow, /<option value="right">Upper staff<\/option>/);
+  assert.match(scoreFlow, /<option value="left">Lower staff<\/option>/);
+  assert.match(piano, /focusLens === "score-flow" \? <label htmlFor="score-flow-view">/);
+  assert.match(piano, /<select id="score-flow-view" value=\{focusLens\}/);
+  assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" \? <RouteSelector/);
+
   assert.match(scoreFlow, /aria-label=\{`Measure \$\{measure\.number\}[\s\S]*\$\{state\}`\}/);
   assert.match(scoreFlow, /Latest upper link[\s\S]*Latest bass link/);
-  assert.match(scoreFlow, /Not an overall score; simply aligned attack moments/);
   assert.match(scoreFlow, /This is not a musicality or expression score/);
+  assert.match(scoreFlow, /synchronized attack map rather than authoritative engraving/);
   assert.match(model, /Metrics stay separate:[\s\S]*no blended “musicality score”/);
   assert.doesNotMatch(model, /emotionScore|goodnessScore|musicalityScore|overallScore|blendedScore/);
 
+  assert.match(scoreFlow, /if \(comparison\?\.status === "correct"\) return "✓ right landing"/);
+  assert.match(scoreFlow, /if \(comparison\?\.status === "missed"\) return "− missed landing"/);
+  assert.match(scoreFlow, /return "× wrong key set"/);
+  assert.match(scoreFlowCss, /\.landingNote\.isMatched::after[^}]*content: "✓"/);
+  assert.match(scoreFlowCss, /\.landingNote\.isMissing::after[^}]*content: "−"/);
+  assert.match(scoreFlowCss, /\.landingNote\.isExtra::after[^}]*content: "\+"/);
+  assert.match(scoreFlowCss, /\.chunkAttackPair[^}]*var\(--rhythm-space\)/);
   assert.match(scoreFlowCss, /\.shell button,[\s\S]*\.shell label:has\(input\[type="file"\]\) \{ min-height: 44px; \}/);
+  assert.match(scoreFlowCss, /\.practiceSetup > summary[^}]*min-height: 52px/);
+  assert.match(scoreFlowCss, /\.reviewEvidence > summary[^}]*min-height: 48px/);
+  assert.match(scoreFlowCss, /\.shell button:focus-visible,/);
+  assert.match(scoreFlowCss, /\.shell select:focus-visible,/);
+  assert.match(scoreFlowCss, /\.shell summary:focus-visible,/);
   assert.match(scoreFlowCss, /\.shell label:has\(input\[type="file"\]:focus-visible\) \{ outline: 3px/);
   assert.match(scoreFlowCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(scoreFlowCss, /@media \(forced-colors: active\)/);

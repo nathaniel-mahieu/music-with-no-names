@@ -4,21 +4,27 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Score Flow · Local MusicXML Coach v2.16**. It provides:
+The current milestone is **Score Flow · Immersive Reading Field v2.17**. It provides:
 
-- A new `Score Flow` section inside the persistent Piano companion. A learner can drop an MXL, MusicXML, or XML score, select an inclusive measure loop and hand, and align silent MIDI attacks with the score's written pitch spelling, voices, attack moments, ties, durations, meter, tempo, fingerings, and explicit arpeggiation. Parsing and practice state stay inside the browser tab; the score is never uploaded.
+- A `Score Flow` section inside the persistent Piano companion. A learner can drop an MXL, MusicXML, or XML score, select an inclusive measure loop and upper/lower staff focus, and align silent MIDI landings with the score's written pitch spelling, voices, onset groups, ties, durations, meter, tempo, fingerings, and explicit arpeggiation. Parsing and practice state stay inside the browser tab; the score is never uploaded.
 
-- One coordinated score-to-hand HUD: a moving grand-staff projection, measure navigator, real piano-key geometry, current/previous/held territory, exact adjacent chord gaps, signed semitone travel, approximate white-key-width travel, and clearly labeled authored-versus-suggested fingers. The projection is deliberately not a facsimile engraving and discloses its treble/staff-1 and bass/later-staff assumption.
+- One three-scale playing HUD. `Form` compresses the loop into a bounded success/repair/waiting journey; `Chunk` groups two through eight written landings into a suggested reading shape with rhythm-proportional spacing; `Now` gathers every same-onset note into one illuminated field. The focused object carries note membership, vertical semitone gaps, inferred chord-shape context, explicit missing/extra glyphs, and the smallest signed physical correction instead of repeating the event across unrelated cards.
 
-- Read, fade-after-launch, and genuinely pitch-veiled ear-first layers. The veiled layer retains only attack timing slots and simultaneous-note count; exact staff height, keyboard destination, semitone distance, and fingering return only after review. A bounded, explicit reference button may sound the written route, while incoming MIDI and the on-screen practice keyboard remain silent.
+- A deterministic reading-grammar model that suggests scalar fragments, repeated shapes, chord anchors, hand/staff coordination, interval chains, and landmark-plus-contour chunks. These are transparently heuristic reading groups—not authored phrases. Each chunk exposes a landmark, highest-note semitone path, vertical spacing, rhythm cell, encoded tuplet/tie/slur-edge/fermata cues, and separate matched/repair/pending evidence.
 
-- Target-aware performance alignment. Fast written notes remain separate even inside a relaxed chord window; only a written chord may gather nearby MIDI attacks, and only an explicitly marked arpeggio receives the wider roll window. Written roll direction, block-chord membership, duplicate attacks, pitch, upper contour, exact upper interval, bass route, pulse, and release evidence remain separate instead of becoming a blended score.
+- A cautious local scale compass. Nearby written pitch classes are compared with major, natural-minor, major-pentatonic, and minor-pentatonic collections while the current measure's authored signature and mode remain primary. Thin evidence suppresses candidate cards; a mode-less two-flat signature stays explicitly compatible with B-flat major and G natural minor rather than becoming a fabricated key claim. Coverage is labeled as fit, never confidence or musical quality.
 
-- First-divergence repair expressed as the smallest actionable change: expected and performed authored/contextual pitch labels, left/right semitone correction, approximate physical key travel, and an optional ±1-measure repair loop. A stopped or auto-completed take snapshots its evidence so later playing cannot rewrite the diagnosis.
+- A compact score-to-hand route beneath the central field: real piano-key geometry, current/previous/held territory, exact signed semitone and approximate white-key-width travel, and per-note fingering provenance. `score 3` means authored, `~3` means an advisory chord-shape suggestion, and `?` means passage context is required.
+
+- Read, fade-after-launch, and genuinely pitch-veiled ear-first layers. The veiled layer retains only landing timing slots and simultaneous-note count; note labels, pitch routes, key signature, local collection, keyboard destination, semitone distance, and fingering return only after review. A bounded, explicit reference button may sound the written route, while incoming MIDI and the on-screen practice keyboard remain silent.
+
+- Target-aware performance alignment. Fast written notes remain separate inside a relaxed togetherness window; an incomplete chord stays on the current landing while its selected 70–220 ms gathering window is open, and only an explicitly marked arpeggio receives the wider roll window. Right keys, notes together, semitone spacing, written roll direction, top-note shape and width, bottom-note path, pulse, and key-up length remain separate inside a review disclosure instead of becoming a blended score.
+
+- First-divergence repair expressed on the same landing the learner was reading: expected and performed authored/contextual pitch labels, filled match nodes, hollow missing nodes, extra-note satellites, left/right semitone correction, approximate physical key travel, and an optional ±1-measure repair loop. A stopped or auto-completed take snapshots its evidence so later playing cannot rewrite the diagnosis.
 
 - A hardened browser importer that resolves ordinary MXL containers without network, DTD, or external-entity access; rejects unsafe archive paths, encryption, unsupported compression, invalid CRCs, excessive expansion, excessive nesting, and oversized scores; handles nonsequential voices, backup/forward cursors, cross-staff simultaneity, boundary ties, dotted metronome units, meter changes, tuplets, and missing key mode without silently inventing a key.
 
-- An original project-authored `Orbit Study` demo. The supplied Breathtaker score was used only as a local compatibility fixture—55 measures and 618 attack moments—and is not redistributed because its upload did not provide a reusable license.
+- An original project-authored `Orbit Study` demo. The supplied Breathtaker score was used only as a local compatibility fixture—55 measures and 618 written landings—and is not redistributed because its upload did not provide a reusable license.
 
 The prior **EchoKey Ear-First Path v2.15** remains available and provides:
 
