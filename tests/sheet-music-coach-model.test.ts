@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  analyzeLocalPitchCollections,
+  buildSheetMusicReadingChunks,
   chordSpacing,
   clusterMidiPerformance,
   evaluateSheetMusicPerformance,
@@ -13,6 +15,7 @@ import {
   repairLoopAroundFirstDivergence,
   scoreBeatSpanToMs,
   selectSheetMusicLoop,
+  summarizeSheetReadingChunkProgress,
   type MidiPerformanceNote,
   type SheetMusicScoreInput,
 } from "../lib/sheet-music-coach-model.ts";
@@ -534,4 +537,164 @@ test("a rest-only loop is a valid empty exercise", () => {
   assert.equal(result.passed, true);
   assert.equal(result.progress.percent, 1);
   assert.equal(result.metrics.pitch.accuracy, null);
+});
+
+function readingChunkScore() {
+  return normalizeSheetMusicScore({
+    id: "reading-chunks",
+    title: "Three ways to see",
+    tempoBpm: 96,
+    keyFifths: -2,
+    measures: [
+      {
+        number: 1,
+        durationBeats: 4,
+        events: [60, 62, 64, 65].map((midi, index) => ({
+          kind: "note" as const,
+          id: `scale-${index}`,
+          offsetBeats: index,
+          durationBeats: 1,
+          midi,
+          staff: 1,
+        })),
+      },
+      {
+        number: 2,
+        durationBeats: 4,
+        events: [60, 64, 60, 64].map((midi, index) => ({
+          kind: "note" as const,
+          id: `repeat-${index}`,
+          offsetBeats: index,
+          durationBeats: 1,
+          midi,
+          staff: 1,
+        })),
+      },
+      {
+        number: 3,
+        durationBeats: 4,
+        events: [
+          ...[48, 52, 55].map((midi, index) => ({ kind: "note" as const, id: `chord-a-${index}`, offsetBeats: 0, durationBeats: 2, midi, staff: 2 })),
+          ...[50, 53, 57].map((midi, index) => ({ kind: "note" as const, id: `chord-b-${index}`, offsetBeats: 2, durationBeats: 2, midi, staff: 2 })),
+        ],
+      },
+    ],
+  });
+}
+
+test("chunks a score at musical boundaries and names scalar, repeated, and chord reading strategies", () => {
+  const chunks = buildSheetMusicReadingChunks(readingChunkScore());
+  assert.deepEqual(chunks.map((chunk) => chunk.attackIndexes), [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]);
+  assert.deepEqual(chunks.map((chunk) => chunk.strategy), ["scale-fragment", "repeated-shape", "chord-shapes"]);
+  assert.deepEqual(chunks[0].semitonePattern, [2, 2, 1]);
+  assert.equal(chunks[0].handSummary, "right hand");
+  assert.match(chunks[0].noteSummary, /C4.*D4.*E4.*F4/);
+  assert.equal(chunks[1].label, "Repeat the 2-attack shape");
+  assert.deepEqual(chunks[2].chordSpacings.map((spacing) => spacing.adjacentSemitones), [[4, 3], [3, 4]]);
+  assert.equal(chunks[2].rangeSemitones, 9);
+  assert.ok(chunks.every((chunk) => chunk.attackCount >= 2 && chunk.attackCount <= 8));
+
+  const selected = buildSheetMusicReadingChunks(readingChunkScore(), { startAttackIndex: 4, endAttackIndex: 7 });
+  assert.equal(selected.length, 1);
+  assert.deepEqual(selected[0].attackIndexes, [4, 5, 6, 7], "attack-range chunks retain loop-local comparison indexes");
+  assert.throws(() => buildSheetMusicReadingChunks(readingChunkScore(), { minAttacks: 1 }), /2 through 8/);
+});
+
+test("a written rest creates a chunk boundary without producing a fake attack", () => {
+  const withRest = normalizeSheetMusicScore({
+    id: "rest-chunk",
+    title: "Two gestures",
+    tempoBpm: 90,
+    measures: [{
+      number: 1,
+      durationBeats: 4,
+      events: [
+        { kind: "note", id: "a", offsetBeats: 0, durationBeats: 0.5, midi: 60 },
+        { kind: "note", id: "b", offsetBeats: 0.5, durationBeats: 0.5, midi: 62 },
+        { kind: "rest", id: "breath", offsetBeats: 1, durationBeats: 1 },
+        { kind: "note", id: "c", offsetBeats: 2, durationBeats: 1, midi: 67 },
+        { kind: "note", id: "d", offsetBeats: 3, durationBeats: 1, midi: 65 },
+      ],
+    }],
+  });
+  assert.deepEqual(buildSheetMusicReadingChunks(withRest).map((chunk) => chunk.attackIndexes), [[0, 1], [2, 3]]);
+});
+
+test("summarizes chunk successes, misses, and pending attacks without blending a grade", () => {
+  const chunks = buildSheetMusicReadingChunks(readingChunkScore());
+  const progress = summarizeSheetReadingChunkProgress(chunks, [
+    { expectedIndex: 0, status: "correct" },
+    { expectedIndex: 1, status: "correct" },
+    { expectedIndex: 2, status: "correct" },
+    { expectedIndex: 3, status: "correct" },
+    { expectedIndex: 4, status: "correct" },
+    { expectedIndex: 5, status: "incorrect" },
+    { expectedIndex: 6, status: "missed" },
+  ]);
+  assert.deepEqual(progress[0], {
+    chunkId: chunks[0].id,
+    attackIndexes: [0, 1, 2, 3],
+    successes: 4,
+    incorrect: 0,
+    missed: 0,
+    pending: 0,
+    attempted: 4,
+    needsRepair: 0,
+    status: "secure",
+    firstRepairAttackIndex: null,
+  });
+  assert.equal(progress[1].status, "repair");
+  assert.equal(progress[1].successes, 1);
+  assert.equal(progress[1].incorrect, 1);
+  assert.equal(progress[1].missed, 1);
+  assert.equal(progress[1].pending, 1);
+  assert.equal(progress[1].firstRepairAttackIndex, 5);
+  assert.equal(progress[2].status, "pending");
+  assert.equal(progress[2].pending, 2);
+  assert.equal("score" in progress[0], false);
+});
+
+test("ranks local pitch-collection candidates while keeping a mode-less two-flat signature uncertain", () => {
+  const pentatonic = normalizeSheetMusicScore({
+    id: "collection-window",
+    title: "Five-tone window",
+    tempoBpm: 80,
+    keyFifths: -2,
+    measures: [{
+      number: 1,
+      durationBeats: 5,
+      events: [60, 62, 64, 67, 69].map((midi, index) => ({
+        kind: "note" as const,
+        id: `tone-${index}`,
+        offsetBeats: index,
+        durationBeats: 1,
+        midi,
+      })),
+    }],
+  });
+  const analysis = analyzeLocalPitchCollections(pentatonic.attacks, { keyFifths: -2, keyMode: null, maxCandidates: 4 });
+  assert.equal(analysis.evidence, "rich");
+  assert.equal(analysis.authored.status, "signature-only");
+  assert.equal(analysis.authored.label, "2-flat signature · mode not encoded");
+  assert.deepEqual(analysis.authored.relativePossibilities, ["B♭ major", "G natural minor"]);
+  assert.equal(analysis.authored.tonicLabel, null, "the signature alone must not invent a tonic");
+  assert.equal(analysis.candidates[0].label, "C major pentatonic");
+  assert.equal(analysis.candidates[0].fit, "compatible");
+  assert.equal(analysis.candidates[0].distinctCoverage, 1);
+  assert.match(analysis.caveat, /not a detected key, tonal center, or judgment/);
+
+  const explicit = analyzeLocalPitchCollections(pentatonic.attacks, { keyFifths: -2, keyMode: "major" });
+  assert.equal(explicit.authored.status, "explicit-major");
+  assert.equal(explicit.authored.tonicLabel, "B♭");
+  assert.match(explicit.authored.label, /encoded/);
+});
+
+test("marks one- and two-note collection windows as thin evidence", () => {
+  const analysis = analyzeLocalPitchCollections([{ midiNotes: [60, 67] }], { keyFifths: null });
+  assert.equal(analysis.evidence, "thin");
+  assert.equal(analysis.authored.status, "not-encoded");
+  assert.ok(analysis.candidates.every((candidate) => candidate.fit === "thin"));
+  assert.match(analysis.caveat, /candidates/);
+  assert.throws(() => analyzeLocalPitchCollections([{ midiNotes: [128] }]), /0 through 127/);
+  assert.throws(() => analyzeLocalPitchCollections([], { maxCandidates: 9 }), /1 through 8/);
 });
