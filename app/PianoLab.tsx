@@ -147,6 +147,7 @@ import { PianoResearchHud } from "@/app/PianoResearchHud";
 import { PianoScaleGravityHud } from "@/app/PianoScaleGravityHud";
 import { PianoSightReadingHud } from "@/app/PianoSightReadingHud";
 import { PianoEchoKeyHud } from "@/app/PianoEchoKeyHud";
+import { PianoScoreFlowHud } from "@/app/PianoScoreFlowHud";
 import { ECHO_KEY_LESSON_STORAGE_KEY } from "@/lib/echo-key-model";
 import { IMMERSION_HISTORY_ATTACKS, IMMERSION_MAX_FIELD_NOTES, immersionHistory } from "@/lib/piano-immersion-model";
 
@@ -199,7 +200,7 @@ type ChordMeasure = {
   commonPitchClassCount: number;
 };
 type FrameMode = "discover" | "locked";
-type FocusLens = "echo-key" | "explore" | "immersion" | "interval-glow" | "sight-shapes" | "research" | "gravity" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
+type FocusLens = "echo-key" | "score-flow" | "explore" | "immersion" | "interval-glow" | "sight-shapes" | "research" | "gravity" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type MotionFocusMode = "pulse" | "touch" | "voices" | "motif" | "breath";
 type ChordFocusMode = "cause" | "change" | "echo";
 type ExperienceOrigin = "phrase" | "interval-echo" | "chord-change" | "chord-voicing-echo" | "chord-motion-echo" | "resolution-fork" | "motif-return" | "landmark-path";
@@ -363,6 +364,7 @@ const FIFTHS_ORDER = fifthsCircle();
 const EVENT_X = (slot: number) => 84 + slot * 88;
 const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }> = [
   { id: "echo-key", label: "EchoKey · ear-first path", description: "Hear, hold, find, diagnose, repair, read, and transfer one short relationship." },
+  { id: "score-flow", label: "Score Flow · upload music", description: "Align a MusicXML score with your silent playing, hands, intervals, and repair loops." },
   { id: "explore", label: "Explore", description: "See the whole phrase across every representation." },
   { id: "immersion", label: "Immersion", description: "Let register, fifths, intervals, timing, chords, and pull become one living sky." },
   { id: "interval-glow", label: "Interval Glow", description: "Make each exact semitone spacing a stable place, color, and phrase trace." },
@@ -688,7 +690,7 @@ function isFrozenPhraseSpecimen(value: unknown, maximumLength = 12): value is Hu
 }
 
 function isPersistedHudEventList(value: unknown): value is HudNoteEvent[] {
-  if (!Array.isArray(value) || value.length > 256) return false;
+  if (!Array.isArray(value) || value.length > 4096) return false;
   const ids = new Set<number>();
   return value.every((candidate) => {
     if (!candidate || typeof candidate !== "object") return false;
@@ -4180,7 +4182,7 @@ export function PianoLab() {
   const [focusLens, setFocusLens] = useState<FocusLens>("explore");
   const [sightShapesResetVersion, setSightShapesResetVersion] = useState(0);
   const [echoKeyResetVersion, setEchoKeyResetVersion] = useState(0);
-  const isShortHudFocus = focusLens === "echo-key" || focusLens === "immersion" || focusLens === "interval-glow" || focusLens === "sight-shapes" || focusLens === "research" || focusLens === "gravity";
+  const isShortHudFocus = focusLens === "echo-key" || focusLens === "score-flow" || focusLens === "immersion" || focusLens === "interval-glow" || focusLens === "sight-shapes" || focusLens === "research" || focusLens === "gravity";
   const [intervalEchoTarget, setIntervalEchoTarget] = useState<IntervalEchoTarget | null>(null);
   const [ghostChord, setGhostChord] = useState<NearbyChord | null>(null);
   const [ghostNotes, setGhostNotes] = useState<number[]>([]);
@@ -4226,6 +4228,7 @@ export function PianoLab() {
   const applyCapturedDoRef = useRef<(pitchClass: number) => void>(() => {});
   const eventsRef = useRef<HudNoteEvent[]>([]);
   const phraseEventsRef = useRef<HudNoteEvent[]>([]);
+  const persistedPianoSessionRef = useRef<PersistedPianoSession | null>(null);
   const landmarkLastMatchIdRef = useRef(0);
   const [rememberedFrame, setRememberedFrame] = useState<ScaleCandidate | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -4391,8 +4394,29 @@ export function PianoLab() {
   useEffect(() => {
     if (!hydrated) return;
     const session: PersistedPianoSession = { version: 25, phraseEvents, chordWindowMs, boundaryCorrections, membershipCorrections, focusLens, showConventions, frameMode, lockedScaleId, lockedDoMidi, ghostChord, ghostNotes, resolutionTarget, resolutionForkSet, landmarkPathId, landmarkStepIndex, landmarkTransposeSession, landmarkCounterfactualSession, landmarkPerformanceCapture, landmarkRouteCompareSession, soundModelId, scaleWalkSession, scaleFingerprintSession, gravityCounterfactualSession, controlledSonoritySession, chordFocusMode, chordVoicingEchoSession, chordMotionEchoSession, motionFocusMode, pulseMirrorSession, motifEchoSession, phraseCompareSession };
-    try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
+    persistedPianoSessionRef.current = session;
+    const task = window.setTimeout(() => {
+      if (persistedPianoSessionRef.current !== session) return;
+      try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
+    }, focusLens === "score-flow" ? 900 : 120);
+    return () => window.clearTimeout(task);
   }, [boundaryCorrections, chordFocusMode, chordMotionEchoSession, chordVoicingEchoSession, chordWindowMs, controlledSonoritySession, focusLens, frameMode, ghostChord, ghostNotes, gravityCounterfactualSession, hydrated, landmarkCounterfactualSession, landmarkPathId, landmarkPerformanceCapture, landmarkRouteCompareSession, landmarkStepIndex, landmarkTransposeSession, lockedDoMidi, lockedScaleId, membershipCorrections, motifEchoSession, motionFocusMode, phraseCompareSession, phraseEvents, pulseMirrorSession, resolutionForkSet, resolutionTarget, scaleFingerprintSession, scaleWalkSession, showConventions, soundModelId]);
+
+  useEffect(() => {
+    const flushPianoSession = () => {
+      const session = persistedPianoSessionRef.current;
+      if (!session) return;
+      try { window.sessionStorage.setItem(PIANO_SESSION_KEY, JSON.stringify(session)); } catch { /* Continue without persistence when storage is unavailable. */ }
+    };
+    const flushWhenHidden = () => { if (document.visibilityState === "hidden") flushPianoSession(); };
+    window.addEventListener("pagehide", flushPianoSession);
+    document.addEventListener("visibilitychange", flushWhenHidden);
+    return () => {
+      window.removeEventListener("pagehide", flushPianoSession);
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+      flushPianoSession();
+    };
+  }, []);
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -4439,7 +4463,9 @@ export function PianoLab() {
     const event: HudNoteEvent = { id: nextIdRef.current, note, velocity, channel, source, onsetMs: atMs, keyReleaseMs: null, releaseMs: null, releaseReason: null, fieldNotes: uniqueSorted(fieldNotes) };
     nextIdRef.current += 1;
     const nextEvents = pushRollingNoteEvent(eventsRef.current, event, 7);
-    const nextPhraseEvents = pushPhraseEvent(phraseEventsRef.current, event, 60_000, 256);
+    const nextPhraseEvents = focusLens === "score-flow"
+      ? pushPhraseEvent(phraseEventsRef.current, event, 30 * 60_000, 4096)
+      : pushPhraseEvent(phraseEventsRef.current, event, 60_000, 256);
     phraseEventsRef.current = nextPhraseEvents;
     setPhraseEvents(nextPhraseEvents);
     eventsRef.current = nextEvents;
@@ -4451,7 +4477,7 @@ export function PianoLab() {
     if (nextStable) setRememberedFrame(nextStable);
     setFocusedId(event.id);
     setNowMs(atMs);
-  }, []);
+  }, [focusLens]);
 
   const captureArmedDoAttack = useCallback((note: number) => {
     if (!doCaptureArmedRef.current) return;
@@ -5255,7 +5281,7 @@ export function PianoLab() {
       setResolutionForkSet(null);
       landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
     }
-    if (lens === "echo-key" && latchedNotes.size) {
+    if ((lens === "echo-key" || lens === "score-flow") && latchedNotes.size) {
       const atMs = currentHudTime();
       latchedNotes.forEach((_, note) => releaseEvent(note, 0, "screen", atMs, false));
       setLatchedNotes(new Map());
@@ -5687,6 +5713,8 @@ export function PianoLab() {
   const renderKey = (note: number, black: boolean) => {
     const context = noteContext(note, doMidi, scale);
     const echoKeyBlind = focusLens === "echo-key";
+    const scoreFlowInput = focusLens === "score-flow";
+    const relationshipBlind = echoKeyBlind || scoreFlowInput;
     const echoKeyPosition = VISIBLE_NOTES.indexOf(note) + 1;
     const active = activeNotesMap.has(note);
     const pressed = midi.pressed.has(note);
@@ -5710,16 +5738,16 @@ export function PianoLab() {
           : [];
     const sonorityGhost = focusLens === "chords" && sonorityReferenceNotes.includes(note);
     const ghost = chordGhost || resolutionGhost || landmarkGhost || sonorityGhost;
-    const home = !echoKeyBlind && context.stepsWithinOctave === 0;
-    const className = ["piano-key", black ? "is-black" : "is-white", !echoKeyBlind && context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", !echoKeyBlind && focused ? "is-focused" : "", !echoKeyBlind && attacked ? "is-chord-member" : "", !echoKeyBlind && inherited && chordMember ? "is-inherited" : "", !echoKeyBlind && inheritedExcluded ? "is-excluded" : "", !echoKeyBlind && ghost ? "is-ghost" : "", !echoKeyBlind && sonorityGhost ? "is-sonority-target" : "", !echoKeyBlind && scaleWalkTarget ? "is-scale-walk-target" : "", !echoKeyBlind && scaleFingerprintTarget ? "is-scale-builder-target" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
+    const home = !relationshipBlind && context.stepsWithinOctave === 0;
+    const className = ["piano-key", black ? "is-black" : "is-white", !relationshipBlind && context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", !relationshipBlind && focused ? "is-focused" : "", !relationshipBlind && attacked ? "is-chord-member" : "", !relationshipBlind && inherited && chordMember ? "is-inherited" : "", !relationshipBlind && inheritedExcluded ? "is-excluded" : "", !relationshipBlind && ghost ? "is-ghost" : "", !relationshipBlind && sonorityGhost ? "is-sonority-target" : "", !relationshipBlind && scaleWalkTarget ? "is-scale-walk-target" : "", !relationshipBlind && scaleFingerprintTarget ? "is-scale-builder-target" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
       "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
       "--key-width": `${100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
-    const keyLabel = echoKeyBlind
-      ? `Silent ${black ? "raised" : "lower"} key, physical position ${echoKeyPosition} of ${VISIBLE_NOTES.length} from the left${active ? ", active" : ""}${sustained ? ", sustained by pedal" : ""}; EchoKey reveals relationship labels in its Read step`
+    const keyLabel = relationshipBlind
+      ? `Silent ${black ? "raised" : "lower"} key, physical position ${echoKeyPosition} of ${VISIBLE_NOTES.length} from the left${active ? ", active" : ""}${sustained ? ", sustained by pedal" : ""}; ${echoKeyBlind ? "EchoKey reveals relationship labels in its Read step" : "Score Flow compares this momentary attack with the imported notation"}`
       : `${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)} under the A4=440 reference${showConventions ? `, ${conventionalPitchName(note, framePitchPreference)}` : ""}${sustained ? ", sustained by pedal" : ""}${attacked ? ", attacked in selected chord" : inheritedExcluded ? ", sounding but excluded from selected chord interpretation" : inherited ? ", inherited and included in selected chord interpretation" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : sonorityGhost ? ", silent controlled sonority reference" : scaleWalkTarget ? ", silent guided scale-walk target" : scaleFingerprintTarget ? ", silent performed fingerprint target" : ""}`;
-    return <button key={note} type="button" className={className} style={style} aria-pressed={echoKeyBlind ? undefined : active} aria-label={keyLabel} onClick={() => echoKeyBlind ? strikeEchoScreenKey(note) : toggleScreenKey(note)}><span>{echoKeyBlind ? active ? "●" : "" : context.inScale || active || home || ghost || scaleWalkTarget || scaleFingerprintTarget ? context.syllable : "·"}</span>{showConventions && !echoKeyBlind ? <small>{conventionalPitchName(note, framePitchPreference)}</small> : null}</button>;
+    return <button key={note} type="button" className={className} style={style} aria-pressed={relationshipBlind ? undefined : active} aria-label={keyLabel} onClick={() => relationshipBlind ? strikeEchoScreenKey(note) : toggleScreenKey(note)}><span>{relationshipBlind ? active ? "●" : "" : context.inScale || active || home || ghost || scaleWalkTarget || scaleFingerprintTarget ? context.syllable : "·"}</span>{showConventions && !relationshipBlind ? <small>{conventionalPitchName(note, framePitchPreference)}</small> : null}</button>;
   };
 
   const exactChord = chordCandidates.find((candidate) => candidate.exact);
@@ -5737,13 +5765,13 @@ export function PianoLab() {
   return (
     <section className="advanced-lab piano-lab piano-hud" aria-labelledby="piano-hud-title">
       <header className="piano-hud-header">
-        <div><p className="section-kicker">MIDI relationship companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "echo-key" ? "Hear a short relationship before names or notation appear; sing or imagine it, find it anywhere on the keyboard, repair one divergence, then reveal and transfer the structure." : focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : focusLens === "interval-glow" ? "Every exact attack-to-attack and within-chord semitone spacing becomes a stable color and place around one live phrase thread." : focusLens === "sight-shapes" ? "Turn written intervals, lines, chord silhouettes, anchors, movement groups, and musical intention into one linked eyes–hands–ear practice loop." : focusLens === "research" ? "The same twelve pitch positions stay fixed while semitone, interval-orbit, thirds-lattice, and all-pairs maps expose different relationships—and their limits." : focusLens === "gravity" ? "A semitone-accurate major-scale landscape keeps degree location fixed while IV, V, and I reveal how one held pitch changes role without moving." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} {focusLens === "echo-key" ? "MIDI input stays silent; only clearly labeled reference and repair buttons play the teaching tone. Singing is a self-report in this first release." : "MIDI sends note data only. Sung-pitch practice now lives on the dedicated Voice page."}</p></div>
+        <div><p className="section-kicker">MIDI relationship companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "echo-key" ? "Hear a short relationship before names or notation appear; sing or imagine it, find it anywhere on the keyboard, repair one divergence, then reveal and transfer the structure." : focusLens === "score-flow" ? "Import MusicXML, select a short measure loop, and translate written pitch, rhythm, ties, voices, and chords into physical hand territory, ear prompts, and one repairable difference at a time." : focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : focusLens === "interval-glow" ? "Every exact attack-to-attack and within-chord semitone spacing becomes a stable color and place around one live phrase thread." : focusLens === "sight-shapes" ? "Turn written intervals, lines, chord silhouettes, anchors, movement groups, and musical intention into one linked eyes–hands–ear practice loop." : focusLens === "research" ? "The same twelve pitch positions stay fixed while semitone, interval-orbit, thirds-lattice, and all-pairs maps expose different relationships—and their limits." : focusLens === "gravity" ? "A semitone-accurate major-scale landscape keeps degree location fixed while IV, V, and I reveal how one held pitch changes role without moving." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} {focusLens === "echo-key" ? "MIDI input stays silent; only clearly labeled reference and repair buttons play the teaching tone. Singing is a self-report in this first release." : focusLens === "score-flow" ? "The score stays in this browser tab. MIDI stays silent; only the explicit score-reference button makes sound." : "MIDI sends note data only. Sung-pitch practice now lives on the dedicated Voice page."}</p></div>
         <div className="piano-hud-controls" aria-label="HUD controls">
           <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{midi.status}</strong></div></div>
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
-          {focusLens !== "echo-key" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label> : null}
+          {focusLens !== "echo-key" && focusLens !== "score-flow" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label> : null}
           <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={() => setFrozen((current) => !current)}>{phraseCompareSession ? "Trace live for A/B" : frozen ? "Resume trace" : "Freeze trace"}</button>
-          {focusLens !== "echo-key" ? <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button> : null}
+          {focusLens !== "echo-key" && focusLens !== "score-flow" ? <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button> : null}
           <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>Theory names</span></label>
           <button type="button" onClick={clearAll}>Clear</button>
         </div>
@@ -5755,6 +5783,11 @@ export function PianoLab() {
           <strong>Starting key, scale degrees, and notation stay hidden until Read.</strong>
           <small>Any-key mode grades the directed interval path; a later transfer round supplies one starting place.</small>
           <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} silent attacks available · each attempt owns a new boundary`}</em>
+        </> : focusLens === "score-flow" ? <>
+          <span>Imported score frame</span>
+          <strong>The file supplies notation; this take supplies silent MIDI evidence.</strong>
+          <small>Pitch, interval, chord, pulse, and release remain separate. Suggested fingerings are clearly marked when the score has none.</small>
+          <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} silent score-practice attacks retained`}</em>
         </> : <>
           <span className={frameMode === "locked" ? "is-locked" : ""}>{frameMode === "locked" ? "Locked frame" : "Discovering frame"}</span>
           <strong>Do reference · {formatHz(frequencyFromMidi(doMidi))}{showConventions ? ` · ${conventionalPitchName(doMidi, framePitchPreference)}` : ""}</strong>
@@ -5763,7 +5796,7 @@ export function PianoLab() {
         </>}
       </div>
 
-      {focusLens !== "echo-key" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
+      {focusLens !== "echo-key" && focusLens !== "score-flow" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
 
       {!isShortHudFocus ? <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} /> : null}
 
@@ -5813,6 +5846,15 @@ export function PianoLab() {
         activeNotes={activeNoteNumbers}
         doMidi={doMidi}
         scale={scale}
+        showConventions={showConventions}
+        frozen={frozen}
+        onResumeCapture={() => setFrozen(false)}
+      /> : null}
+
+      {focusLens === "score-flow" ? <PianoScoreFlowHud
+        events={phraseEvents}
+        activeNotes={activeNoteNumbers}
+        chordWindowMs={chordWindowMs}
         showConventions={showConventions}
         frozen={frozen}
         onResumeCapture={() => setFrozen(false)}
@@ -5884,7 +5926,7 @@ export function PianoLab() {
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}
 
       {isShortHudFocus ? <details className="piano-immersion-keyboard">
-        <summary><span>{focusLens === "echo-key" ? "Open the blank silent hand horizon" : "Open the silent hand horizon"}</span><small>{focusLens === "echo-key" ? "Optional on-screen input without MIDI. Positions stay visually blank; screen readers receive only left-to-right physical position. Each activation records one momentary melodic attack, so repeated keys need no extra release click. Nothing here makes sound." : "Optional on-screen keys for testing without MIDI. Tap once to hold, again to release; repeated attacks need a release between them. Nothing here makes sound."}</small></summary>
+        <summary><span>{focusLens === "echo-key" ? "Open the blank silent hand horizon" : "Open the silent hand horizon"}</span><small>{focusLens === "echo-key" ? "Optional on-screen input without MIDI. Positions stay visually blank; screen readers receive only left-to-right physical position. Each activation records one momentary melodic attack, so repeated keys need no extra release click. Nothing here makes sound." : focusLens === "score-flow" ? "Optional on-screen input for score testing without MIDI. Each activation records one momentary attack, including repeated notes; Score Flow compares it with the imported notation. Nothing here makes sound." : "Optional on-screen keys for testing without MIDI. Tap once to hold, again to release; repeated attacks need a release between them. Nothing here makes sound."}</small></summary>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{VISIBLE_NOTES.map((note) => renderKey(note, !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))))}</div>
       </details> : <div className="piano-hud-keyboard-wrap">
         <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>gold attacked · dotted inherited member · crossed inherited exclusion · dashed silent target · double mark Do</small></div>
