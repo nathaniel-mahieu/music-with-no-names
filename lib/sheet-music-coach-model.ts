@@ -331,6 +331,123 @@ export type SheetPracticeProgress = {
   nextMeasureNumber: string | null;
 };
 
+export type SheetReadingStrategy =
+  | "chord-shapes"
+  | "chord-anchor"
+  | "scale-fragment"
+  | "repeated-shape"
+  | "hand-coordination"
+  | "interval-chain"
+  | "landmark-contour";
+
+export type SheetReadingChordSpacing = ChordSpacing & {
+  attackIndex: number;
+  noteLabels: string[];
+};
+
+/**
+ * A short, deterministic unit for reading the page as a shape rather than as
+ * a queue of unrelated note names. Attack indexes are local to the selected
+ * practice loop, so they line up directly with performance comparisons.
+ */
+export type SheetReadingChunk = {
+  id: string;
+  ordinal: number;
+  attackIndexes: number[];
+  startAttackIndex: number;
+  endAttackIndex: number;
+  attackCount: number;
+  noteCount: number;
+  measureNumbers: string[];
+  startBeat: number;
+  endBeat: number;
+  durationBeats: number;
+  hands: SheetHand[];
+  handSummary: string;
+  attackLabels: string[];
+  noteSummary: string;
+  strategy: SheetReadingStrategy;
+  label: string;
+  cue: string;
+  /** Signed movement of the upper note from one attack to the next. */
+  semitonePattern: number[];
+  /** Score-beat spacing between successive attacks. */
+  rhythmPatternBeats: number[];
+  chordSpacings: SheetReadingChordSpacing[];
+  rangeSemitones: number;
+};
+
+export type SheetReadingChunkOptions = SheetMusicLoopSelection & {
+  /** Inclusive indexes inside the selected loop. */
+  startAttackIndex?: number;
+  endAttackIndex?: number;
+  /** Bounds are deliberately capped at 2–8 to keep a chunk glanceable. */
+  minAttacks?: number;
+  maxAttacks?: number;
+  targetAttacks?: number;
+};
+
+export type SheetReadingChunkProgress = {
+  chunkId: string;
+  attackIndexes: number[];
+  successes: number;
+  incorrect: number;
+  missed: number;
+  pending: number;
+  attempted: number;
+  needsRepair: number;
+  status: "pending" | "in-progress" | "secure" | "repair";
+  firstRepairAttackIndex: number | null;
+};
+
+export type SheetPitchCollectionKind = "major" | "natural-minor" | "major-pentatonic" | "minor-pentatonic";
+export type SheetPitchCollectionEvidence = "thin" | "usable" | "rich";
+export type SheetPitchCollectionTonicEvidence = "none" | "present" | "edge" | "edge-and-repeated";
+
+export type SheetAuthoredKeyContext = {
+  keyFifths: number | null;
+  keyMode: string | null;
+  status: "not-encoded" | "signature-only" | "explicit-major" | "explicit-minor" | "other-mode";
+  label: string;
+  tonicPitchClass: number | null;
+  tonicLabel: string | null;
+  /** Major/minor collections that share the authored signature; these are possibilities, not a detected key. */
+  relativePossibilities: string[];
+};
+
+export type SheetPitchCollectionCandidate = {
+  kind: SheetPitchCollectionKind;
+  label: string;
+  tonicPitchClass: number;
+  tonicLabel: string;
+  pitchClasses: number[];
+  matchedPitchClasses: number[];
+  outsidePitchClasses: number[];
+  occurrenceCoverage: number;
+  distinctCoverage: number;
+  collectionCompleteness: number;
+  tonicEvidence: SheetPitchCollectionTonicEvidence;
+  signatureCompatible: boolean;
+  fitScore: number;
+  fit: "compatible" | "partial" | "thin";
+  reason: string;
+};
+
+export type SheetPitchCollectionAnalysis = {
+  observedPitchClasses: number[];
+  observedNoteCount: number;
+  evidence: SheetPitchCollectionEvidence;
+  authored: SheetAuthoredKeyContext;
+  candidates: SheetPitchCollectionCandidate[];
+  caveat: string;
+};
+
+export type SheetPitchCollectionOptions = {
+  keyFifths?: number | null;
+  keyMode?: string | null;
+  maxCandidates?: number;
+};
+
 export type SheetPerformanceEvaluation = {
   loop: SheetMusicPracticeLoop;
   clusters: MidiAttackCluster[];
@@ -392,6 +509,29 @@ const MAX_MIDI_EVENTS = 10_000;
 const MAX_ALIGNMENT_CELLS = 4_000_000;
 const MAX_ATOMS_PER_CHORD = 16;
 const EPSILON = 1e-7;
+
+const PITCH_COLLECTION_PATTERNS: ReadonlyArray<{ kind: SheetPitchCollectionKind; intervals: readonly number[] }> = [
+  { kind: "major", intervals: [0, 2, 4, 5, 7, 9, 11] },
+  { kind: "natural-minor", intervals: [0, 2, 3, 5, 7, 8, 10] },
+  { kind: "major-pentatonic", intervals: [0, 2, 4, 7, 9] },
+  { kind: "minor-pentatonic", intervals: [0, 3, 5, 7, 10] },
+] as const;
+
+const MAJOR_KEYS_BY_FIFTHS = [
+  { pitchClass: 11, label: "C♭" }, { pitchClass: 6, label: "G♭" }, { pitchClass: 1, label: "D♭" },
+  { pitchClass: 8, label: "A♭" }, { pitchClass: 3, label: "E♭" }, { pitchClass: 10, label: "B♭" },
+  { pitchClass: 5, label: "F" }, { pitchClass: 0, label: "C" }, { pitchClass: 7, label: "G" },
+  { pitchClass: 2, label: "D" }, { pitchClass: 9, label: "A" }, { pitchClass: 4, label: "E" },
+  { pitchClass: 11, label: "B" }, { pitchClass: 6, label: "F♯" }, { pitchClass: 1, label: "C♯" },
+] as const;
+
+const MINOR_KEYS_BY_FIFTHS = [
+  { pitchClass: 8, label: "A♭" }, { pitchClass: 3, label: "E♭" }, { pitchClass: 10, label: "B♭" },
+  { pitchClass: 5, label: "F" }, { pitchClass: 0, label: "C" }, { pitchClass: 7, label: "G" },
+  { pitchClass: 2, label: "D" }, { pitchClass: 9, label: "A" }, { pitchClass: 4, label: "E" },
+  { pitchClass: 11, label: "B" }, { pitchClass: 6, label: "F♯" }, { pitchClass: 1, label: "C♯" },
+  { pitchClass: 8, label: "G♯" }, { pitchClass: 3, label: "D♯" }, { pitchClass: 10, label: "A♯" },
+] as const;
 
 function assertFinite(value: number, label: string) {
   if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite.`);
@@ -808,6 +948,496 @@ export function selectSheetMusicLoop(score: SheetMusicScore, selection: SheetMus
     hand,
     measureNumbers: score.measures.slice(startMeasureIndex, endMeasureIndex + 1).map((measure) => measure.number),
     attacks,
+  };
+}
+
+function attackUpperNote(attack: SheetMusicAttack) {
+  return attack.midiNotes.at(-1)!;
+}
+
+function attackLowerNote(attack: SheetMusicAttack) {
+  return attack.midiNotes[0];
+}
+
+function attackLabel(attack: SheetMusicAttack) {
+  return attack.notes
+    .slice()
+    .sort((first, second) => first.pitch.midi - second.pitch.midi || first.id.localeCompare(second.id))
+    .map((note) => note.pitch.label)
+    .join(" + ");
+}
+
+function shortAttackSequence(labels: string[]) {
+  if (labels.length <= 5) return labels.join(" → ");
+  return `${labels.slice(0, 2).join(" → ")} → … → ${labels.slice(-2).join(" → ")}`;
+}
+
+function handSummary(hands: SheetHand[]) {
+  const known = hands.filter((hand) => hand !== "unknown");
+  if (known.includes("left") && known.includes("right")) return "both hands";
+  if (known[0] === "left") return "left hand";
+  if (known[0] === "right") return "right hand";
+  return "hand not encoded";
+}
+
+function repeatedShapePeriod(attacks: SheetMusicAttack[]) {
+  if (attacks.length < 4) return null;
+  const shape = (block: SheetMusicAttack[]) => {
+    const firstUpper = attackUpperNote(block[0]);
+    const firstLower = attackLowerNote(block[0]);
+    return JSON.stringify(block.map((attack) => ({
+      upper: attackUpperNote(attack) - firstUpper,
+      lower: attackLowerNote(attack) - firstLower,
+      chord: chordSpacing(attack.midiNotes).adjacentSemitones,
+      hands: [...attack.hands].sort(),
+    })));
+  };
+  for (let period = 2; period <= Math.floor(attacks.length / 2); period += 1) {
+    if (attacks.length % period !== 0) continue;
+    const source = shape(attacks.slice(0, period));
+    let repeated = true;
+    for (let start = period; start < attacks.length; start += period) {
+      if (shape(attacks.slice(start, start + period)) !== source) {
+        repeated = false;
+        break;
+      }
+    }
+    if (repeated) return period;
+  }
+  return null;
+}
+
+function readingStrategy(attacks: SheetMusicAttack[], semitones: number[]) {
+  const chordCount = attacks.filter((attack) => attack.midiNotes.length > 1).length;
+  const compactChordCount = attacks.filter((attack) => {
+    const spacing = chordSpacing(attack.midiNotes);
+    return attack.midiNotes.length > 1 && spacing.spanSemitones <= 12;
+  }).length;
+  const repeatedPeriod = repeatedShapePeriod(attacks);
+  const movingIntervals = semitones.filter((interval) => interval !== 0);
+  const stepwise = movingIntervals.length >= 2
+    && movingIntervals.every((interval) => Math.abs(interval) <= 2)
+    && movingIntervals.every((interval) => Math.sign(interval) === Math.sign(movingIntervals[0]));
+  const hands = new Set(attacks.flatMap((attack) => attack.hands).filter((hand) => hand !== "unknown"));
+  const coordinated = hands.has("left") && hands.has("right");
+  const intervalText = semitones.length ? semitones.map((interval) => `${interval > 0 ? "+" : ""}${interval}`).join(" · ") : "hold the same landing";
+
+  if (chordCount >= 2 && chordCount >= Math.ceil(attacks.length / 2)) {
+    return {
+      strategy: "chord-shapes" as const,
+      label: "Read the chord shapes",
+      cue: `Land ${chordCount} chord attacks as spacing shapes; the upper path moves ${intervalText} semitones.`,
+    };
+  }
+  if (compactChordCount) {
+    const anchorIndex = attacks.findIndex((attack) => attack.midiNotes.length > 1 && chordSpacing(attack.midiNotes).spanSemitones <= 12);
+    return {
+      strategy: "chord-anchor" as const,
+      label: "Anchor on the compact chord",
+      cue: `Set the ${anchorIndex === 0 ? "opening" : `attack ${anchorIndex + 1}`} chord shape, then read the path around it.`,
+    };
+  }
+  if (repeatedPeriod !== null) {
+    return {
+      strategy: "repeated-shape" as const,
+      label: `Repeat the ${repeatedPeriod}-attack shape`,
+      cue: "Notice the same contour and chord spacing returning from a new or repeated landing.",
+    };
+  }
+  if (stepwise) {
+    const rising = movingIntervals[0] > 0;
+    return {
+      strategy: "scale-fragment" as const,
+      label: `Read one ${rising ? "rising" : "falling"} step shape`,
+      cue: `Keep the direction; the successive moves are ${intervalText} semitones.`,
+    };
+  }
+  if (coordinated) {
+    return {
+      strategy: "hand-coordination" as const,
+      label: "Pair the two hand landmarks",
+      cue: "See each upper and lower landing as one coordinated attack, then trace their shared motion.",
+    };
+  }
+  if (semitones.length) {
+    return {
+      strategy: "interval-chain" as const,
+      label: "Read the interval chain",
+      cue: `Move the upper line ${intervalText} semitones instead of decoding every note again.`,
+    };
+  }
+  return {
+    strategy: "landmark-contour" as const,
+    label: "Place one landmark",
+    cue: "Locate this landing on the staff and keyboard before looking ahead.",
+  };
+}
+
+function restBoundaryBetween(score: SheetMusicScore, hand: PracticeHand, previous: SheetMusicAttack, next: SheetMusicAttack) {
+  if (next.onsetBeat - previous.onsetBeat <= 0.5 + EPSILON) return false;
+  return score.events.some((event) => event.kind === "rest"
+    && event.onsetBeat > previous.onsetBeat + EPSILON
+    && event.onsetBeat + event.durationBeats <= next.onsetBeat + EPSILON
+    && (hand === "both" || event.hand === hand || event.hand === "unknown"));
+}
+
+function readingBoundaryScore(
+  score: SheetMusicScore,
+  loop: SheetMusicPracticeLoop,
+  indexed: Array<{ attack: SheetMusicPracticeAttack; index: number }>,
+  position: number,
+) {
+  const previous = indexed[position - 1].attack;
+  const next = indexed[position].attack;
+  let value = 0;
+  if (previous.measureIndex !== next.measureIndex) value += 10;
+  if (restBoundaryBetween(score, loop.hand, previous, next)) value += 8;
+  const silence = next.onsetBeat - (previous.onsetBeat + previous.soundingDurationBeats);
+  if (silence >= 0.5 - EPSILON) value += 6;
+  else if (next.onsetBeat - previous.onsetBeat >= 2 - EPSILON) value += 2;
+  const previousHands = previous.hands.filter((hand) => hand !== "unknown");
+  const nextHands = next.hands.filter((hand) => hand !== "unknown");
+  if (previousHands.length === 1 && nextHands.length === 1 && previousHands[0] !== nextHands[0]) value += 5;
+  if (next.midiNotes.length > 1 && previous.midiNotes.length === 1) value += 3;
+  if (position >= 2) {
+    const earlier = indexed[position - 2].attack;
+    const before = attackUpperNote(previous) - attackUpperNote(earlier);
+    const after = attackUpperNote(next) - attackUpperNote(previous);
+    if (before !== 0 && after !== 0 && Math.sign(before) !== Math.sign(after)) value += 1;
+  }
+  return value;
+}
+
+function readingChunkSegments(
+  score: SheetMusicScore,
+  loop: SheetMusicPracticeLoop,
+  indexed: Array<{ attack: SheetMusicPracticeAttack; index: number }>,
+  minAttacks: number,
+  maxAttacks: number,
+  targetAttacks: number,
+) {
+  const segments: Array<Array<{ attack: SheetMusicPracticeAttack; index: number }>> = [];
+  let start = 0;
+  while (start < indexed.length) {
+    const remaining = indexed.length - start;
+    if (remaining === 1) {
+      const previous = segments.at(-1);
+      if (previous && previous.length < maxAttacks) previous.push(indexed[start]);
+      else segments.push([indexed[start]]);
+      break;
+    }
+
+    const upper = Math.min(indexed.length - minAttacks, start + maxAttacks);
+    const lower = start + minAttacks;
+    const candidates: Array<{ position: number; boundary: number; targetDistance: number }> = [];
+    for (let position = lower; position <= upper; position += 1) {
+      candidates.push({
+        position,
+        boundary: readingBoundaryScore(score, loop, indexed, position),
+        targetDistance: Math.abs(position - start - targetAttacks),
+      });
+    }
+
+    if (remaining <= maxAttacks) {
+      const strong = candidates
+        .filter((candidate) => candidate.boundary >= 6)
+        .sort((first, second) => second.boundary - first.boundary || first.targetDistance - second.targetDistance || first.position - second.position)[0];
+      if (!strong) {
+        segments.push(indexed.slice(start));
+        break;
+      }
+      segments.push(indexed.slice(start, strong.position));
+      start = strong.position;
+      continue;
+    }
+
+    const chosen = candidates.sort((first, second) => second.boundary - first.boundary || first.targetDistance - second.targetDistance || first.position - second.position)[0];
+    if (!chosen) throw new Error("Unable to divide score attacks into readable chunks.");
+    segments.push(indexed.slice(start, chosen.position));
+    start = chosen.position;
+  }
+  return segments;
+}
+
+/**
+ * Divide a selected practice loop into short reading shapes. Bar lines, real
+ * rests, hand changes, and chord anchors influence the boundaries, while the
+ * 2–8 attack bounds prevent either isolated glyphs or cognitively heavy runs.
+ */
+export function buildSheetMusicReadingChunks(score: SheetMusicScore, options: SheetReadingChunkOptions = {}): SheetReadingChunk[] {
+  const minAttacks = options.minAttacks ?? 2;
+  const maxAttacks = options.maxAttacks ?? 6;
+  const targetAttacks = options.targetAttacks ?? 4;
+  if (!Number.isInteger(minAttacks) || !Number.isInteger(maxAttacks) || minAttacks < 2 || maxAttacks > 8 || minAttacks > maxAttacks) {
+    throw new RangeError("Reading chunks need integer bounds from 2 through 8 attacks.");
+  }
+  if (!Number.isInteger(targetAttacks) || targetAttacks < minAttacks || targetAttacks > maxAttacks) {
+    throw new RangeError("Reading-chunk target must fall inside its minimum and maximum bounds.");
+  }
+  const loop = selectSheetMusicLoop(score, options);
+  if (!loop.attacks.length) return [];
+  const startAttackIndex = options.startAttackIndex ?? 0;
+  const endAttackIndex = options.endAttackIndex ?? loop.attacks.length - 1;
+  if (!Number.isInteger(startAttackIndex) || !Number.isInteger(endAttackIndex)
+    || startAttackIndex < 0 || endAttackIndex >= loop.attacks.length || startAttackIndex > endAttackIndex) {
+    throw new RangeError("Reading-chunk attack indexes must form a valid inclusive range inside the selected loop.");
+  }
+  const indexed = loop.attacks
+    .map((attack, index) => ({ attack, index }))
+    .slice(startAttackIndex, endAttackIndex + 1);
+  const segments = readingChunkSegments(score, loop, indexed, minAttacks, maxAttacks, targetAttacks);
+  return segments.map((segment, ordinal): SheetReadingChunk => {
+    const attacks = segment.map((item) => item.attack);
+    const attackIndexes = segment.map((item) => item.index);
+    const labels = attacks.map(attackLabel);
+    const semitonePattern = attacks.slice(1).map((attack, index) => attackUpperNote(attack) - attackUpperNote(attacks[index]));
+    const rhythmPatternBeats = attacks.slice(1).map((attack, index) => attack.onsetBeat - attacks[index].onsetBeat);
+    const strategy = readingStrategy(attacks, semitonePattern);
+    const hands = [...new Set(attacks.flatMap((attack) => attack.hands))].sort();
+    const allNotes = attacks.flatMap((attack) => attack.midiNotes);
+    const startBeat = attacks[0].onsetBeat;
+    const endBeat = Math.max(...attacks.map((attack) => attack.onsetBeat + attack.soundingDurationBeats));
+    return {
+      id: `reading-chunk-${attackIndexes[0]}-${attackIndexes.at(-1)}`,
+      ordinal,
+      attackIndexes,
+      startAttackIndex: attackIndexes[0],
+      endAttackIndex: attackIndexes.at(-1)!,
+      attackCount: attacks.length,
+      noteCount: attacks.reduce((sum, attack) => sum + attack.midiNotes.length, 0),
+      measureNumbers: [...new Set(attacks.map((attack) => attack.measureNumber))],
+      startBeat,
+      endBeat,
+      durationBeats: endBeat - startBeat,
+      hands,
+      handSummary: handSummary(hands),
+      attackLabels: labels,
+      noteSummary: shortAttackSequence(labels),
+      strategy: strategy.strategy,
+      label: strategy.label,
+      cue: strategy.cue,
+      semitonePattern,
+      rhythmPatternBeats,
+      chordSpacings: segment.flatMap(({ attack, index }) => attack.midiNotes.length > 1 ? [{
+        attackIndex: index,
+        noteLabels: attack.notes.slice().sort((first, second) => first.pitch.midi - second.pitch.midi).map((note) => note.pitch.label),
+        ...chordSpacing(attack.midiNotes),
+      }] : []),
+      rangeSemitones: allNotes.length ? Math.max(...allNotes) - Math.min(...allNotes) : 0,
+    };
+  });
+}
+
+/** Keep success, repair, and pending evidence separate instead of blending a score. */
+export function summarizeSheetReadingChunkProgress(
+  chunks: SheetReadingChunk[],
+  comparisons: ReadonlyArray<Pick<SheetEventComparison, "expectedIndex" | "status">>,
+): SheetReadingChunkProgress[] {
+  const byIndex = new Map(comparisons.map((comparison) => [comparison.expectedIndex, comparison.status]));
+  return chunks.map((chunk) => {
+    const statuses = chunk.attackIndexes.map((index) => byIndex.get(index) ?? "pending");
+    const successes = statuses.filter((status) => status === "correct").length;
+    const incorrect = statuses.filter((status) => status === "incorrect").length;
+    const missed = statuses.filter((status) => status === "missed").length;
+    const pending = statuses.filter((status) => status === "pending").length;
+    const needsRepair = incorrect + missed;
+    const firstRepairOffset = statuses.findIndex((status) => status === "incorrect" || status === "missed");
+    const status: SheetReadingChunkProgress["status"] = needsRepair
+      ? "repair"
+      : pending === 0 && successes === chunk.attackCount
+        ? "secure"
+        : successes > 0
+          ? "in-progress"
+          : "pending";
+    return {
+      chunkId: chunk.id,
+      attackIndexes: [...chunk.attackIndexes],
+      successes,
+      incorrect,
+      missed,
+      pending,
+      attempted: successes + incorrect + missed,
+      needsRepair,
+      status,
+      firstRepairAttackIndex: firstRepairOffset < 0 ? null : chunk.attackIndexes[firstRepairOffset],
+    };
+  });
+}
+
+function pitchClass(value: number) {
+  return ((value % 12) + 12) % 12;
+}
+
+function authoredKeyContext(keyFifths: number | null, rawMode: string | null): SheetAuthoredKeyContext {
+  if (keyFifths === null) {
+    return {
+      keyFifths: null,
+      keyMode: rawMode,
+      status: "not-encoded",
+      label: rawMode ? `${rawMode} mode text is present, but no key signature was encoded` : "key signature and mode not encoded",
+      tonicPitchClass: null,
+      tonicLabel: null,
+      relativePossibilities: [],
+    };
+  }
+  const major = MAJOR_KEYS_BY_FIFTHS[keyFifths + 7];
+  const minor = MINOR_KEYS_BY_FIFTHS[keyFifths + 7];
+  const count = Math.abs(keyFifths);
+  const signature = keyFifths === 0
+    ? "no-sharp/no-flat signature"
+    : `${count}-${keyFifths > 0 ? "sharp" : "flat"} signature`;
+  const mode = rawMode?.trim().toLowerCase() || null;
+  const relativePossibilities = [`${major.label} major`, `${minor.label} natural minor`];
+  if (mode === "major") {
+    return {
+      keyFifths, keyMode: mode, status: "explicit-major", label: `${signature} · ${major.label} major encoded`,
+      tonicPitchClass: major.pitchClass, tonicLabel: major.label, relativePossibilities,
+    };
+  }
+  if (mode === "minor" || mode === "natural minor") {
+    return {
+      keyFifths, keyMode: mode, status: "explicit-minor", label: `${signature} · ${minor.label} minor encoded`,
+      tonicPitchClass: minor.pitchClass, tonicLabel: minor.label, relativePossibilities,
+    };
+  }
+  if (mode) {
+    return {
+      keyFifths, keyMode: mode, status: "other-mode", label: `${signature} · ${mode} mode encoded`,
+      tonicPitchClass: null, tonicLabel: null, relativePossibilities,
+    };
+  }
+  return {
+    keyFifths, keyMode: null, status: "signature-only", label: `${signature} · mode not encoded`,
+    tonicPitchClass: null, tonicLabel: null, relativePossibilities,
+  };
+}
+
+function collectionKindLabel(kind: SheetPitchCollectionKind) {
+  return kind === "natural-minor" ? "natural minor" : kind.replace("-", " ");
+}
+
+/**
+ * Rank collections compatible with a short attack window. This deliberately
+ * does not return a detected key: an unordered pitch subset cannot establish
+ * tonic, mode, harmonic function, or musical quality by itself.
+ */
+export function analyzeLocalPitchCollections(
+  attacks: ReadonlyArray<Pick<SheetMusicAttack, "midiNotes">>,
+  options: SheetPitchCollectionOptions = {},
+): SheetPitchCollectionAnalysis {
+  if (!Array.isArray(attacks)) throw new TypeError("Local collection analysis needs an array of score attacks.");
+  const keyFifths = options.keyFifths ?? null;
+  if (keyFifths !== null && (!Number.isInteger(keyFifths) || keyFifths < -7 || keyFifths > 7)) {
+    throw new RangeError("Collection context key fifths must be an integer from -7 through 7.");
+  }
+  if (options.keyMode !== undefined && options.keyMode !== null && typeof options.keyMode !== "string") {
+    throw new TypeError("Collection context mode must be text when supplied.");
+  }
+  const maxCandidates = options.maxCandidates ?? 3;
+  if (!Number.isInteger(maxCandidates) || maxCandidates < 1 || maxCandidates > 8) {
+    throw new RangeError("Return from 1 through 8 local collection candidates.");
+  }
+  const authored = authoredKeyContext(keyFifths, options.keyMode?.trim() || null);
+  const occurrences = attacks.flatMap((attack, attackIndex) => {
+    if (!Array.isArray(attack.midiNotes)) throw new TypeError(`Attack ${attackIndex + 1} needs a MIDI-note array.`);
+    return (attack.midiNotes as number[]).map((midi) => {
+      assertMidi(midi, `Attack ${attackIndex + 1} MIDI note`);
+      return pitchClass(midi);
+    });
+  });
+  const observedPitchClasses = uniqueSorted(occurrences);
+  const evidence: SheetPitchCollectionEvidence = observedPitchClasses.length <= 2 ? "thin" : observedPitchClasses.length <= 4 ? "usable" : "rich";
+  if (!occurrences.length) {
+    return {
+      observedPitchClasses,
+      observedNoteCount: 0,
+      evidence,
+      authored,
+      candidates: [],
+      caveat: "No played or written pitches are present in this window, so no pitch-collection candidates are shown.",
+    };
+  }
+  const firstPitchClasses = new Set(attacks[0]?.midiNotes.map(pitchClass) ?? []);
+  const lastPitchClasses = new Set(attacks.at(-1)?.midiNotes.map(pitchClass) ?? []);
+  const preferredNames = (keyFifths ?? 0) > 0 ? SHARP_NAMES : FLAT_NAMES;
+  const majorSignature = keyFifths === null ? null : MAJOR_KEYS_BY_FIFTHS[keyFifths + 7];
+  const minorSignature = keyFifths === null ? null : MINOR_KEYS_BY_FIFTHS[keyFifths + 7];
+
+  const candidates = PITCH_COLLECTION_PATTERNS.flatMap(({ kind, intervals }) => Array.from({ length: 12 }, (_, tonicPitchClass): SheetPitchCollectionCandidate => {
+    const pitchClasses = intervals.map((interval) => pitchClass(tonicPitchClass + interval));
+    const pitchClassSet = new Set(pitchClasses);
+    const matchedPitchClasses = observedPitchClasses.filter((value) => pitchClassSet.has(value));
+    const outsidePitchClasses = observedPitchClasses.filter((value) => !pitchClassSet.has(value));
+    const matchedOccurrences = occurrences.filter((value) => pitchClassSet.has(value)).length;
+    const occurrenceCoverage = matchedOccurrences / occurrences.length;
+    const distinctCoverage = matchedPitchClasses.length / observedPitchClasses.length;
+    const collectionCompleteness = matchedPitchClasses.length / pitchClasses.length;
+    const tonicOccurrences = occurrences.filter((value) => value === tonicPitchClass).length;
+    const tonicAtEdge = firstPitchClasses.has(tonicPitchClass) || lastPitchClasses.has(tonicPitchClass);
+    const tonicEvidence: SheetPitchCollectionTonicEvidence = tonicAtEdge && tonicOccurrences > 1
+      ? "edge-and-repeated"
+      : tonicAtEdge
+        ? "edge"
+        : tonicOccurrences
+          ? "present"
+          : "none";
+    const signatureCompatible = (kind === "major" || kind === "major-pentatonic")
+      ? majorSignature?.pitchClass === tonicPitchClass
+      : minorSignature?.pitchClass === tonicPitchClass;
+    const tonicScore = tonicOccurrences ? 0.05 : 0;
+    const edgeScore = tonicAtEdge ? 0.08 : 0;
+    const fitScore = Math.round((occurrenceCoverage * 0.56
+      + distinctCoverage * 0.14
+      + collectionCompleteness * 0.13
+      + tonicScore
+      + edgeScore
+      + (signatureCompatible ? 0.04 : 0)) * 10_000) / 10_000;
+    const tonicLabel = tonicPitchClass === majorSignature?.pitchClass
+      ? majorSignature.label
+      : tonicPitchClass === minorSignature?.pitchClass
+        ? minorSignature.label
+        : preferredNames[tonicPitchClass];
+    const coverageText = outsidePitchClasses.length
+      ? `${matchedPitchClasses.length} of ${observedPitchClasses.length} local pitch classes fit`
+      : `all ${observedPitchClasses.length} local pitch classes fit`;
+    const tonicText = tonicEvidence === "edge-and-repeated"
+      ? "the candidate tonic occurs at an edge and repeats"
+      : tonicEvidence === "edge"
+        ? "the candidate tonic occurs at a window edge"
+        : tonicEvidence === "present"
+          ? "the candidate tonic is present away from the edges"
+          : "the candidate tonic is not present";
+    return {
+      kind,
+      label: `${tonicLabel} ${collectionKindLabel(kind)}`,
+      tonicPitchClass,
+      tonicLabel,
+      pitchClasses,
+      matchedPitchClasses,
+      outsidePitchClasses,
+      occurrenceCoverage,
+      distinctCoverage,
+      collectionCompleteness,
+      tonicEvidence,
+      signatureCompatible,
+      fitScore,
+      fit: evidence === "thin" ? "thin" : outsidePitchClasses.length === 0 ? "compatible" : "partial",
+      reason: `${coverageText}; ${tonicText}${signatureCompatible ? "; it also agrees with the authored signature" : ""}.`,
+    };
+  })).sort((first, second) => second.fitScore - first.fitScore
+    || first.outsidePitchClasses.length - second.outsidePitchClasses.length
+    || second.collectionCompleteness - first.collectionCompleteness
+    || first.kind.localeCompare(second.kind)
+    || first.tonicPitchClass - second.tonicPitchClass)
+    .slice(0, maxCandidates);
+
+  return {
+    observedPitchClasses,
+    observedNoteCount: occurrences.length,
+    evidence,
+    authored,
+    candidates,
+    caveat: "These are pitch-collection candidates for this short window—not a detected key, tonal center, or judgment of musical quality.",
   };
 }
 
