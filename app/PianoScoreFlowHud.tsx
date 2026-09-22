@@ -21,12 +21,14 @@ import {
 } from "@/lib/musicxml-import";
 import {
   analyzeLocalPitchCollections,
+  buildScoreReferencePlan,
   buildSheetMusicReadingChunks,
   chordSpacing,
   clusterMidiPerformance,
   evaluateSheetMusicPerformance,
   fingerDistance,
   repairLoopAroundFirstDivergence,
+  scoreReferenceFrameAt,
   selectSheetMusicLoop,
   summarizeSheetReadingChunkProgress,
   type PracticeHand,
@@ -39,10 +41,11 @@ import {
   type SheetMusicPracticeLoop,
   type SheetMusicNote,
   type SheetMusicPracticeAttack,
+  type SheetReferencePlan,
   type SheetMusicScore,
   type RelationshipComparison,
 } from "@/lib/sheet-music-coach-model";
-import { configureSafetyCompressor, SYNTH_MASTER_GAIN } from "@/lib/audio-level";
+import { configureSafetyCompressor, loudnessControlGain } from "@/lib/audio-level";
 import { frequencyFromMidi } from "@/lib/piano-model";
 import {
   appendBoundedSheetTakeHistory,
@@ -56,6 +59,7 @@ const SCORE_FLOW_STORAGE_KEY = "music-with-no-names:score-flow:v1";
 const SCORE_FLOW_HISTORY_STORAGE_KEY = "music-with-no-names:score-flow-history:v1";
 const MAX_LIVE_FEEDBACK_ATTACKS = 160;
 const MAX_UI_ALIGNMENT_CELLS = 1_250_000;
+const MAX_REFERENCE_VOICES = 256;
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const INTERVAL_COLORS = [
   "#f4f0e7", "#ff8f86", "#f5a46f", "#edc66a", "#c9d875", "#85d6a0",
@@ -92,8 +96,44 @@ type ReadingMode = "read" | "ear" | "memory";
 type TimingMode = "self-paced" | "pulse";
 type CaptureState = "idle" | "armed" | "review";
 type ReferenceVoice = "full" | "upper" | "bass";
+type ReferencePhase = "idle" | "count-in" | "playing" | "complete" | "unavailable";
+type ReferencePlaybackView = {
+  phase: ReferencePhase;
+  voice: ReferenceVoice;
+  playAlong: boolean;
+  currentIndex: number | null;
+  cursorIndex: number | null;
+  sounding: boolean;
+  cueCount: number;
+  progress: number;
+  countdown: number | null;
+  truncated: boolean;
+};
 type ReadingLens = "landmark" | "motion" | "vertical" | "rhythm";
 type AudioContextWindow = Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+
+const EMPTY_REFERENCE_VIEW: ReferencePlaybackView = {
+  phase: "idle",
+  voice: "full",
+  playAlong: false,
+  currentIndex: null,
+  cursorIndex: null,
+  sounding: false,
+  cueCount: 0,
+  progress: 0,
+  countdown: null,
+  truncated: false,
+};
+
+const DIATONIC_STEP_INDEX: Record<SheetMusicNote["pitch"]["step"], number> = {
+  C: 0,
+  D: 1,
+  E: 2,
+  F: 3,
+  G: 4,
+  A: 5,
+  B: 6,
+};
 
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -117,6 +157,77 @@ function pitchClassName(midi: number, prefer: "flats" | "sharps") {
 
 function writtenLabel(note: SheetMusicNote, showConventions: boolean) {
   return showConventions ? note.pitch.label : `${note.hand === "left" ? "lower" : "upper"} key`;
+}
+
+function scoreStaffY(note: SheetMusicNote) {
+  const diatonic = note.pitch.octave * 7 + DIATONIC_STEP_INDEX[note.pitch.step];
+  // Upper E4 and lower G2 are the bottom lines of the two compact staves.
+  const bottomLine = note.hand === "left" ? 18 : 30;
+  const bottomY = note.hand === "left" ? 164 : 78;
+  return Math.max(13, Math.min(187, bottomY - (diatonic - bottomLine) * 5));
+}
+
+function audioTimeToPerformanceMs(context: AudioContext, contextTime: number) {
+  try {
+    const timestamp = context.getOutputTimestamp();
+    const timestampContextTime = timestamp.contextTime;
+    const timestampPerformanceTime = timestamp.performanceTime;
+    const projectedNow = typeof timestampContextTime === "number" && typeof timestampPerformanceTime === "number"
+      ? timestampPerformanceTime + (context.currentTime - timestampContextTime) * 1_000
+      : Number.NaN;
+    if (typeof timestampContextTime === "number" && typeof timestampPerformanceTime === "number"
+      && Number.isFinite(timestampContextTime) && Number.isFinite(timestampPerformanceTime)
+      && timestampPerformanceTime > 0 && Math.abs(timestampContextTime - context.currentTime) < 2
+      && Math.abs(projectedNow - performance.now()) < 250) {
+      return timestampPerformanceTime + (contextTime - timestampContextTime) * 1_000;
+    }
+  } catch {
+    // Safari versions without a stable output timestamp use the latency-aware fallback.
+  }
+  const outputLatency = Number.isFinite(context.outputLatency) ? context.outputLatency : context.baseLatency;
+  return performance.now() + Math.max(0, contextTime - context.currentTime) * 1_000 + Math.max(0, outputLatency) * 1_000;
+}
+
+function capturedScoreEvents(
+  events: ScoreHudEvent[],
+  afterId: number,
+  earliestOnsetMs = Number.NEGATIVE_INFINITY,
+  latestOnsetMs = Number.POSITIVE_INFINITY,
+): MidiPerformanceNote[] {
+  return events
+    .filter((event) => event.id > afterId && event.onsetMs >= earliestOnsetMs && event.onsetMs <= latestOnsetMs)
+    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id)
+    .map((event) => ({
+      id: event.id,
+      midi: event.note,
+      onsetMs: event.onsetMs,
+      velocity: event.velocity,
+      releaseMs: event.keyReleaseMs ?? event.releaseMs ?? undefined,
+    }));
+}
+
+function referenceLevelGain(percent: number) {
+  return percent <= 0 ? 0.0001 : loudnessControlGain(percent);
+}
+
+function playAlongCountIn(loop: SheetMusicPracticeLoop, score: SheetMusicScore) {
+  const firstMeasure = score.measures[loop.attacks[0]?.measureIndex ?? 0];
+  const measureBeats = Math.max(1, firstMeasure?.durationBeats ?? 4);
+  const signatureBeats = Math.max(1, firstMeasure?.beats ?? 4);
+  const signatureBeatType = Math.max(1, firstMeasure?.beatType ?? 4);
+  const compoundPulses = signatureBeatType === 8 && signatureBeats >= 6 && signatureBeats % 3 === 0
+    ? signatureBeats / 3
+    : signatureBeats;
+  const pulseCount = Math.max(2, Math.min(4, Math.round(compoundPulses)));
+  return {
+    measureBeats,
+    pulseOffsetsBeats: Array.from({ length: pulseCount }, (_, index) => index * measureBeats / pulseCount),
+  };
+}
+
+function closestSinglePitchCorrection(comparison: SheetEventComparison | null) {
+  if (!comparison || comparison.expectedNotes.length !== 1 || comparison.actualNotes.length !== 1) return null;
+  return comparison.expectedNotes[0] - comparison.actualNotes[0];
 }
 
 function keySignatureLabel(score: Pick<ImportedMusicXmlScore, "keyFifths" | "keyMode">) {
@@ -689,6 +800,125 @@ function ScoreJourney({
   </section>;
 }
 
+function PlayAlongField({ view, loop, comparison, readingMode, showConventions, activeNotes, audioPlaying, canPlay, onToggle }: {
+  view: ReferencePlaybackView;
+  loop: SheetMusicPracticeLoop;
+  comparison: SheetEventComparison | null;
+  readingMode: ReadingMode;
+  showConventions: boolean;
+  activeNotes: number[];
+  audioPlaying: boolean;
+  canPlay: boolean;
+  onToggle: () => void;
+}) {
+  const exactReveal = readingMode !== "ear" || view.phase === "complete";
+  const heardAttack = view.currentIndex == null ? null : loop.attacks[view.currentIndex] ?? null;
+  const heardNotes = heardAttack
+    ? view.voice === "upper"
+      ? [...heardAttack.notes].sort((first, second) => second.pitch.midi - first.pitch.midi).slice(0, 1)
+      : view.voice === "bass"
+        ? [...heardAttack.notes].sort((first, second) => first.pitch.midi - second.pitch.midi).slice(0, 1)
+        : heardAttack.notes.slice(0, 12)
+    : [];
+  const noteCount = heardNotes.length;
+  const learnerComparison = view.playAlong ? comparison : null;
+  const pitchCorrection = closestSinglePitchCorrection(learnerComparison);
+  const timingError = learnerComparison?.timingErrorMs ?? null;
+  const timingPosition = timingError == null || learnerComparison?.timingMatch ? 50 : exactReveal
+    ? Math.max(6, Math.min(94, 50 + timingError / 420 * 44))
+    : timingError < 0 ? 24 : 76;
+  const pitchPosition = pitchCorrection == null || pitchCorrection === 0 ? 50 : exactReveal
+    ? Math.max(8, Math.min(92, 50 - pitchCorrection / 12 * 42))
+    : pitchCorrection > 0 ? 24 : 76;
+  const heardOrdinal = view.currentIndex == null ? null : view.currentIndex + 1;
+  const cursorOrdinal = view.cursorIndex == null ? null : view.cursorIndex + 1;
+  const phaseTitle = view.phase === "count-in"
+    ? `Starting in ${view.countdown ?? "…"}`
+    : view.phase === "playing"
+      ? view.sounding
+        ? `Reference sounding · landing ${heardOrdinal ?? "…"}`
+        : `Rest · pulse continues after landing ${cursorOrdinal ?? "…"}`
+      : view.phase === "complete"
+        ? view.playAlong ? "Play-along complete · take frozen for review" : "Preview complete · no take recorded"
+        : view.phase === "unavailable"
+          ? "Audio unavailable · silent practice remains ready"
+          : "Press Play along to join ear, eye, and hands";
+  const voiceLabel = view.voice === "upper" ? "upper path" : view.voice === "bass" ? "bass route" : "full score field";
+  const targetLabel = heardAttack
+    ? exactReveal
+      ? heardNotes.map((note) => writtenLabel(note, showConventions)).join(" + ")
+      : `${noteCount}-note ${noteCount > 1 ? "shape" : "attack"}`
+    : "No pitch is revealed before it sounds";
+  const pitchFeedback = !learnerComparison?.actual
+    ? "Your played landing appears after attack"
+    : learnerComparison.pitchMatch
+      ? exactReveal ? "Pitch aligned · no key correction" : "Shape aligned"
+      : pitchCorrection != null
+        ? exactReveal
+          ? `${Math.abs(pitchCorrection)} semitone${Math.abs(pitchCorrection) === 1 ? "" : "s"} ${pitchCorrection > 0 ? "low · move right" : "high · move left"}`
+          : pitchCorrection > 0 ? "Played lower than heard" : "Played higher than heard"
+        : exactReveal
+          ? `${learnerComparison.missingNotes.length} missing · ${learnerComparison.extraNotes.length} extra`
+          : "Pitch shape differs";
+  const timingFeedback = timingError == null
+    ? "The center will catch your attack"
+    : learnerComparison?.timingMatch
+      ? exactReveal ? `${Math.round(Math.abs(timingError))} ms from the pulse · aligned` : "On the pulse"
+      : exactReveal
+        ? `${Math.round(Math.abs(timingError))} ms ${timingError < 0 ? "early" : "late"}`
+        : timingError < 0 ? "Early" : "Late";
+  const heardMidi = heardNotes.map((note) => note.pitch.midi);
+  const pressedTargetCount = exactReveal ? new Set(activeNotes.filter((note) => heardMidi.includes(note))).size : 0;
+  const scalarFeedback = Boolean(learnerComparison?.actual && (pitchCorrection != null || learnerComparison.pitchMatch));
+  const chordShapeFeedback = Boolean(learnerComparison?.actual && pitchCorrection == null && !learnerComparison.pitchMatch);
+
+  return <section className={styles.playAlongField} data-phase={view.phase} data-reading={readingMode} aria-labelledby="play-along-field-title">
+    <header>
+      <div><span>Shared musical now · synthesized score reference</span><strong id="play-along-field-title">{phaseTitle}</strong></div>
+      <div className={styles.playbackHeaderActions}><div className={styles.playbackBadges}><span>{readingMode === "read" ? "Easy · unveil" : readingMode === "memory" ? "Memory · fade" : "Hard · silhouette"}</span><span>{voiceLabel}</span></div><button type="button" className={styles.fieldPlayAction} disabled={!canPlay} aria-pressed={audioPlaying && view.playAlong} onClick={onToggle}>{audioPlaying ? view.playAlong ? "Stop + review" : "Stop preview" : "Play along · count in"}</button></div>
+    </header>
+    <div className={styles.referenceTimeline} style={{ "--reference-progress": `${Math.round(view.progress * 1000) / 10}%` } as CSSProperties} role="progressbar" aria-label="Reference playback position" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(view.progress * 100)}>
+      <i />
+      <b key={view.phase === "count-in" ? `count-${view.countdown}` : "playhead"} aria-hidden="true" />
+      <span>{view.phase === "count-in" ? `count ${view.countdown ?? "…"}` : cursorOrdinal ? `${cursorOrdinal} / ${loop.attacks.length}` : `${loop.attacks.length} landings ready`}</span>
+    </div>
+    <div className={styles.sensoryBridge}>
+      <article className={styles.earBeacon}>
+        <div className={styles.soundOrb} aria-hidden="true"><i /><i /><i />{view.phase === "playing" && view.sounding ? <b key={view.currentIndex ?? "sound"} /> : null}</div>
+        <span>Ear · hear this instant</span>
+        <strong>{view.phase === "playing" ? view.sounding ? targetLabel : "Rest · keep the shared pulse inside" : view.phase === "count-in" ? "Feel the pulse before touching a key" : view.phase === "complete" ? "The reference has released" : "The score stays silent until you start"}</strong>
+        <small>{heardAttack ? `Measure ${heardAttack.measureNumber} · ${noteCount > 1 ? `${noteCount} tones begin together` : "one tone begins"}` : view.phase === "playing" ? "No scheduled reference tone is sounding in this gap." : "A visible count-in will establish the shared clock."}</small>
+      </article>
+
+      <article className={styles.heardStaff} aria-label={heardAttack ? exactReveal ? `Heard landing on the staff: ${heardNotes.map((note) => writtenLabel(note, showConventions)).join(" plus ")}` : `Heard ${noteCount}-note landing; pitch positions hidden in hard mode` : "Staff reveal waiting for reference playback"}>
+        <span>Eye · unveil what begins now</span>
+        <div className={cx(styles.playbackStaff, !exactReveal && styles.isPlaybackVeiled)} key={`${view.currentIndex ?? "waiting"}-${readingMode}`} aria-hidden="true">
+          <i className={styles.playbackTrebleLines} /><i className={styles.playbackBassLines} /><b className={styles.staffBrace}>{"}"}</b>
+          {heardAttack && exactReveal ? heardNotes.map((note, index) => <em key={note.id} className={styles.playbackNote} style={{ "--staff-y": `${scoreStaffY(note)}px`, "--staff-left": `${50 + (index - (heardNotes.length - 1) / 2) * 7}%` } as CSSProperties}><small>{showConventions ? note.pitch.label : note.hand === "left" ? "lower" : "upper"}</small></em>) : null}
+          {heardAttack && !exactReveal ? Array.from({ length: Math.min(8, noteCount) }, (_, index) => <em key={index} className={styles.silhouetteNote} style={{ "--staff-left": `${50 + (index - (noteCount - 1) / 2) * 8}%` } as CSSProperties} />) : null}
+          {!heardAttack ? <strong>{view.phase === "count-in" ? view.countdown : view.phase === "playing" ? "𝄽" : "○"}</strong> : null}
+        </div>
+        <small>{readingMode === "read" ? "Easy mode places the heard landing on the staff now—not several beats early." : readingMode === "memory" ? "The heard position blooms, then fades so your inner image carries it." : "Hard mode reveals attack size and pulse, but withholds staff position and note identity."}</small>
+      </article>
+
+      <article className={styles.handFeedback}>
+        <span>Hands · {learnerComparison?.actual ? `last attack vs landing ${learnerComparison.expectedIndex + 1}` : "compare the keys you touch"}</span>
+        <div className={styles.feedbackCompass} aria-label={`${pitchFeedback}. ${timingFeedback}.`}>
+          {scalarFeedback ? <i className={styles.feedbackPoint} style={{ "--feedback-x": `${timingPosition}%`, "--feedback-y": `${pitchPosition}%` } as CSSProperties} /> : null}
+          {chordShapeFeedback ? <i className={styles.feedbackTimingMark} style={{ "--feedback-x": `${timingPosition}%` } as CSSProperties} /> : null}
+          <b className={styles.feedbackCenter} aria-hidden="true" />
+          <small className={styles.earlyLabel}>early</small><small className={styles.lateLabel}>late</small>
+          <small className={styles.higherLabel}>move higher</small><small className={styles.lowerLabel}>move lower</small>
+        </div>
+        <strong>{pitchFeedback}</strong>
+        <small>{timingFeedback}{heardAttack && pressedTargetCount ? ` · ${pressedTargetCount} of ${noteCount} target key${noteCount === 1 ? "" : "s"} down now` : ""}</small>
+      </article>
+    </div>
+    <p className="sr-only" role="status" aria-live={view.phase === "playing" ? "off" : "polite"} aria-atomic="true">{phaseTitle}{heardAttack ? `. ${targetLabel}. ${pitchFeedback}. ${timingFeedback}.` : "."}</p>
+    {view.truncated ? <p className={styles.referenceBoundary}>This audition is browser-bounded; choose a shorter reading chunk to hear the complete unit.</p> : null}
+  </section>;
+}
+
 function stopAudioContext(context: AudioContext | null, master: GainNode | null) {
   if (!context || context.state === "closed") return;
   try {
@@ -724,11 +954,25 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const [captureNotice, setCaptureNotice] = useState("Load a score, then play: live follow begins without arming. Start a review take only when you want to freeze one pass.");
   const [isDragging, setIsDragging] = useState(false);
   const [audioState, setAudioState] = useState<"idle" | "playing" | "unavailable">("idle");
-  const [audioNotice, setAudioNotice] = useState("Reference audio is off. MIDI remains silent.");
+  const [audioNotice, setAudioNotice] = useState("Synthesized score reference is ready. MIDI input remains silent.");
+  const [referenceVolume, setReferenceVolume] = useState(78);
+  const [referencePlayback, setReferencePlayback] = useState<ReferencePlaybackView>(EMPTY_REFERENCE_VIEW);
+  const [referenceTimingClock, setReferenceTimingClock] = useState<{ scoreBeat: number; performanceTimeMs: number } | null>(null);
+  const [referenceReviewRange, setReferenceReviewRange] = useState<{ startAttackId: string; endAttackId: string } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioMasterRef = useRef<GainNode | null>(null);
   const audioTimerRef = useRef<number | null>(null);
+  const audioFrameRef = useRef<number | null>(null);
   const audioTokenRef = useRef(0);
+  const visualUpdateMsRef = useRef(0);
+  const referenceSessionRef = useRef<{
+    afterId: number;
+    earliestOnsetMs: number;
+    latestOnsetMs: number;
+    playAlong: boolean;
+    startAttackId: string;
+    heardEndAttackId: string | null;
+  } | null>(null);
   const eventsRef = useRef(events);
   const recordedTakeRef = useRef<string | null>(null);
 
@@ -736,14 +980,45 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     eventsRef.current = events;
   }, [events]);
 
-  const stopReference = useCallback((notice = "Reference stopped. MIDI remains silent.") => {
+  const stopReference = useCallback((notice = "Reference stopped. MIDI remains silent.", preserveClock = false, freezeTake = false, preserveReviewRange = false) => {
     audioTokenRef.current += 1;
     if (audioTimerRef.current != null) window.clearTimeout(audioTimerRef.current);
+    if (audioFrameRef.current != null) window.cancelAnimationFrame(audioFrameRef.current);
     audioTimerRef.current = null;
+    audioFrameRef.current = null;
     stopAudioContext(audioContextRef.current, audioMasterRef.current);
     audioContextRef.current = null;
     audioMasterRef.current = null;
+    const session = referenceSessionRef.current;
+    const freezeHeardRange = freezeTake && session?.playAlong && session.heardEndAttackId;
+    if (freezeHeardRange && session) {
+      const captured = capturedScoreEvents(
+        eventsRef.current,
+        session.afterId,
+        session.earliestOnsetMs,
+        Math.min(performance.now(), session.latestOnsetMs),
+      );
+      setReferenceReviewRange({ startAttackId: session.startAttackId, endAttackId: session.heardEndAttackId! });
+      setReviewTakeEvents(captured);
+      setCaptureState("review");
+      setCaptureNotice(captured.length ? "Play-along stopped. Only the heard prefix is frozen for synchronized review." : "Play-along stopped after the reference began, but no MIDI attack arrived. Only the heard prefix is shown as missed.");
+    } else if (freezeTake && session?.playAlong) {
+      setReferenceReviewRange(null);
+      setCaptureState("idle");
+      setCaptureNotice("Play-along stopped during the count-in; no score landing was marked missed.");
+    } else if (!preserveReviewRange) {
+      setReferenceReviewRange(null);
+    }
+    referenceSessionRef.current = null;
     setAudioState("idle");
+    setReferencePlayback((current) => freezeHeardRange
+      ? { ...current, phase: "complete", currentIndex: null, sounding: false, countdown: null }
+      : EMPTY_REFERENCE_VIEW);
+    // The audible clock is meaningful only when a synchronized take survives.
+    // In particular, Stop during count-in must not poison later live-follow
+    // timing, while a later upper/bass preview must preserve frozen evidence.
+    const cancelledPlayAlongBeforeSound = Boolean(freezeTake && session?.playAlong && !freezeHeardRange);
+    if (!preserveClock || cancelledPlayAlongBeforeSound) setReferenceTimingClock(null);
     setAudioNotice(notice);
   }, []);
 
@@ -891,11 +1166,12 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     startAttackId: selectedChunk?.startAttackId,
     endAttackId: selectedChunk?.endAttackId,
   }) : null, [loopEnd, loopStart, practiceHand, score, selectedChunk?.endAttackId, selectedChunk?.startAttackId]);
-  const liveTakeEvents = useMemo(() => events
-    .filter((event) => event.id > attemptAfterId)
-    .sort((first, second) => first.onsetMs - second.onsetMs || first.id - second.id)
-    .map((event) => ({ id: event.id, midi: event.note, onsetMs: event.onsetMs, velocity: event.velocity, releaseMs: event.keyReleaseMs ?? event.releaseMs ?? undefined })), [attemptAfterId, events]);
-  const latestLiveEventId = liveTakeEvents.at(-1)?.id ?? -1;
+  const liveTakeEvents = useMemo(() => capturedScoreEvents(
+    events,
+    attemptAfterId,
+    referenceTimingClock ? referenceTimingClock.performanceTimeMs - 500 : Number.NEGATIVE_INFINITY,
+  ), [attemptAfterId, events, referenceTimingClock]);
+  const latestLiveEventId = Number(liveTakeEvents.at(-1)?.id ?? -1);
   // Study and armed states both follow the post-boundary stream. Only Review
   // substitutes its frozen copy; therefore playing never looks inert merely
   // because the learner did not discover an Arm button first.
@@ -903,7 +1179,11 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     ? reviewTakeEvents ?? []
     : liveTakeEvents, [captureState, liveTakeEvents, reviewTakeEvents]);
   const liveAttack = useMemo(() => clusterMidiPerformance(liveTakeEvents.slice(-32), clusterWindow).at(-1) ?? null, [clusterWindow, liveTakeEvents]);
-  const scoreVeiled = captureState !== "review" && (readingMode === "ear" || (readingMode === "memory" && takeEvents.length > 0));
+  const synchronizedRevealActive = audioState === "playing" && referencePlayback.playAlong;
+  const scoreVeiled = captureState !== "review" && (
+    readingMode === "ear"
+    || (readingMode === "memory" && (takeEvents.length > 0 || synchronizedRevealActive))
+  );
   const localTempoBeat = loop?.attacks[0]?.onsetBeat ?? loop?.startBeat ?? 0;
   const encodedLocalTempo = score?.tempoChanges.filter((change) => change.beat <= localTempoBeat + 1e-7).at(-1)?.bpm ?? score?.tempoBpm ?? 72;
   const practiceTempo = Math.max(20, Math.round(encodedLocalTempo * tempoPercent / 100));
@@ -919,13 +1199,14 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
           endMeasureIndex: loopEnd,
           hand: practiceHand,
           includeBoundaryTies: true,
-          startAttackId: selectedChunk?.startAttackId,
-          endAttackId: selectedChunk?.endAttackId,
+          startAttackId: referenceReviewRange?.startAttackId ?? selectedChunk?.startAttackId,
+          endAttackId: referenceReviewRange?.endAttackId ?? selectedChunk?.endAttackId,
           clusterWindowMs: clusterWindow,
           arpeggioWindowMs: Math.min(500, Math.max(180, clusterWindow + 100)),
-          timingToleranceMs: timingMode === "self-paced" ? 1_000_000_000 : undefined,
-          durationToleranceMs: timingMode === "self-paced" ? 1_000_000_000 : undefined,
+          timingToleranceMs: !referenceTimingClock && timingMode === "self-paced" ? 1_000_000_000 : undefined,
+          durationToleranceMs: !referenceTimingClock && timingMode === "self-paced" ? 1_000_000_000 : undefined,
           tempoBpm: practiceTempo,
+          timingClock: referenceTimingClock ?? undefined,
           finalize: captureState === "review",
         }),
         error: null,
@@ -934,7 +1215,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     } catch (error) {
       return { evaluation: null, error: error instanceof Error ? error.message : "This take is too large to align safely.", paused: false };
     }
-  }, [captureState, clusterWindow, loop?.attacks.length, loopEnd, loopStart, practiceHand, practiceTempo, score, selectedChunk?.endAttackId, selectedChunk?.startAttackId, takeEvents, timingMode]);
+  }, [captureState, clusterWindow, loop?.attacks.length, loopEnd, loopStart, practiceHand, practiceTempo, referenceReviewRange?.endAttackId, referenceReviewRange?.startAttackId, referenceTimingClock, score, selectedChunk?.endAttackId, selectedChunk?.startAttackId, takeEvents, timingMode]);
   const evaluation = evaluationState.evaluation;
   const evaluationError = evaluationState.error;
   const liveEvaluationPaused = evaluationState.paused;
@@ -971,14 +1252,14 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   }, [attemptAfterId, events]);
 
   useEffect(() => {
-    if (captureState !== "armed" || !takeEvents.length || !evaluation?.complete || pressedNotes.length) return;
+    if (captureState !== "armed" || !takeEvents.length || !evaluation?.complete || pressedNotes.length || (audioState === "playing" && referencePlayback.playAlong)) return;
     const task = window.setTimeout(() => {
       setReviewTakeEvents(takeEvents.map((event) => ({ ...event })));
       setCaptureState("review");
       setCaptureNotice("The selected loop has enough landings to review. Evidence is frozen at this attempt boundary.");
     }, 420);
     return () => window.clearTimeout(task);
-  }, [captureState, evaluation?.complete, pressedNotes.length, takeEvents]);
+  }, [audioState, captureState, evaluation?.complete, pressedNotes.length, referencePlayback.playAlong, takeEvents]);
 
   useEffect(() => {
     if (captureState !== "idle" || !takeEvents.length || !evaluation?.complete || pressedNotes.length || latestLiveEventId < 0) return;
@@ -1009,7 +1290,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
         takeId,
         finishedAt,
         hand: practiceHand,
-        clockEvidence: timingMode === "pulse" ? "fixed-pulse" : "unscored",
+        clockEvidence: referenceTimingClock || timingMode === "pulse" ? "fixed-pulse" : "unscored",
       });
       const task = window.setTimeout(() => {
         if (recordedTakeRef.current === takeBoundaryKey) return;
@@ -1021,7 +1302,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       // An incomplete/oversized take remains reviewable even when it is not
       // eligible for the deliberately bounded repetition memory.
     }
-  }, [attemptAfterId, captureState, evaluation, practiceHand, reviewTakeEvents, score, timingMode]);
+  }, [attemptAfterId, captureState, evaluation, practiceHand, referenceTimingClock, reviewTakeEvents, score, timingMode]);
 
   const armTake = () => {
     if (!score || !loop?.attacks.length) return;
@@ -1029,6 +1310,8 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       setCaptureNotice("Release every held or sustained key before arming. This keeps the first score boundary unambiguous.");
       return;
     }
+    stopReference("Silent review take ready. Synthesized reference is off.");
+    setReferenceReviewRange(null);
     if (frozen) onResumeCapture();
     setAttemptAfterId(newestEventId(events));
     setSettledThroughEventId(newestEventId(events));
@@ -1041,6 +1324,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
 
   const reviewTake = () => {
     if (!takeEvents.length) { setCaptureNotice("No new landings have crossed this take boundary yet."); return; }
+    if (audioState === "playing") stopReference("Play-along stopped at this review boundary.", true);
     setReviewTakeEvents(takeEvents.map((event) => ({ ...event })));
     setCaptureState("review");
     setCaptureNotice(pressedNotes.length
@@ -1050,6 +1334,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
 
   const resetTake = useCallback((notice = "Take cleared. Live follow is ready at the new boundary; start a review take only when you want to retain one pass.") => {
     stopReference("Reference stopped for the new practice boundary. MIDI remains silent.");
+    setReferenceReviewRange(null);
     setAttemptAfterId(newestEventId(events));
     setSettledThroughEventId(newestEventId(events));
     setReviewTakeEvents(null);
@@ -1109,6 +1394,12 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     : selectedChunk
       ? selectedChunk.endAttackIndex
       : measureLoop?.attacks.length ?? 0;
+  const referenceAttack = referencePlayback.cursorIndex == null
+    ? referencePlayback.phase === "count-in" ? loop?.attacks[0] ?? null : null
+    : loop?.attacks[referencePlayback.cursorIndex] ?? null;
+  const journeyCurrentIndex = (referencePlayback.phase === "count-in" || referencePlayback.phase === "playing") && referenceAttack
+    ? baseAttackIndexById.get(referenceAttack.id) ?? baseCurrentIndex
+    : baseCurrentIndex;
   const priorComparison = evaluation?.comparisons.slice(0, currentIndex).findLast((comparison) => comparison.actual != null) ?? null;
   const priorAttack = currentIndex > 0 ? loop?.attacks[currentIndex - 1] ?? null : null;
   const previousNotes = priorComparison?.actualNotes ?? priorAttack?.midiNotes ?? [];
@@ -1183,16 +1474,71 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     { keyFifths: localMeasureContext?.keyFifths ?? null, keyMode: localMeasureContext?.keyMode ?? null, maxCandidates: 3 },
   ), [localCollectionAttacks, localMeasureContext?.keyFifths, localMeasureContext?.keyMode]);
 
-  const playReference = useCallback(async (voice: ReferenceVoice = "full") => {
-    if (!loop?.attacks.length) return;
-    stopReference("Preparing score reference…");
+  const playReference = useCallback(async (voice: ReferenceVoice = "full", playAlong = voice === "full") => {
+    if (!score || !loop?.attacks.length) return;
+    if (playAlong && activeNotes.length) {
+      setAudioNotice("Release held or sustained keys before Play along so the first hand boundary is unambiguous.");
+      return;
+    }
+    stopReference("Preparing the synthesized score reference…", !playAlong, false, !playAlong);
     const AudioContextConstructor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
-    if (!AudioContextConstructor) { setAudioState("unavailable"); setAudioNotice("Reference audio is unavailable here. The silent score coach still works."); return; }
+    if (!AudioContextConstructor) {
+      setAudioState("unavailable");
+      setReferencePlayback({ ...EMPTY_REFERENCE_VIEW, phase: "unavailable" });
+      setAudioNotice("Reference audio is unavailable here. The silent score coach still works.");
+      return;
+    }
     const token = audioTokenRef.current + 1;
     audioTokenRef.current = token;
+    const afterId = newestEventId(eventsRef.current);
+    if (playAlong) {
+      if (frozen) onResumeCapture();
+      setReferenceReviewRange(null);
+      setAttemptAfterId(afterId);
+      setSettledThroughEventId(afterId);
+      setReviewTakeEvents(null);
+      setCaptureState("armed");
+      setCaptureNotice("Play-along armed. Wait through the count-in, then place each silent MIDI attack against the synthesized score.");
+    }
     let context: AudioContext | null = null;
     let master: GainNode | null = null;
     try {
+      const restartFromBeginning = currentIndex >= loop.attacks.length;
+      const startIndex = playAlong || restartFromBeginning ? 0 : Math.max(0, currentIndex);
+      const plan: SheetReferencePlan = buildScoreReferencePlan(loop, {
+        startIndex,
+        tempoBpm: practiceTempo,
+        maxLandings: playAlong ? 96 : 24,
+        maxDurationMs: playAlong ? 30_000 : 14_000,
+        noteDurationScale: 1,
+        maxNoteDurationMs: 30_000,
+      });
+      if (!plan.cues.length) throw new Error("No playable reference cue is available in this loop.");
+      let denseFieldClipped = false;
+      let scheduledVoiceCount = 0;
+      const playbackCues: SheetReferencePlan["cues"] = [];
+      for (const cue of plan.cues) {
+        const available = cue.notes;
+        const notes = voice === "upper"
+          ? [...available].sort((first, second) => second.midi - first.midi).slice(0, 1).map((note) => ({ ...note, durationMs: note.durationMs + note.onsetOffsetMs, onsetOffsetMs: 0 }))
+          : voice === "bass"
+            ? [...available].sort((first, second) => first.midi - second.midi).slice(0, 1).map((note) => ({ ...note, durationMs: note.durationMs + note.onsetOffsetMs, onsetOffsetMs: 0 }))
+            : available.slice(0, 12);
+        if (voice === "full" && available.length > notes.length) denseFieldClipped = true;
+        if (playbackCues.length && scheduledVoiceCount + notes.length > MAX_REFERENCE_VOICES) break;
+        scheduledVoiceCount += notes.length;
+        playbackCues.push({
+          ...cue,
+          notes,
+          endMs: cue.onsetMs + Math.max(80, ...notes.map((note) => note.onsetOffsetMs + note.durationMs + 80)),
+        });
+      }
+      const playbackPlan: SheetReferencePlan = {
+        ...plan,
+        cues: playbackCues,
+        totalDurationMs: Math.max(...playbackCues.map((cue) => cue.endMs)),
+        truncated: plan.truncated || playbackCues.length < plan.cues.length,
+      };
       context = new AudioContextConstructor({ latencyHint: "interactive" });
       audioContextRef.current = context;
       await context.resume();
@@ -1202,64 +1548,174 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       configureSafetyCompressor(compressor, now);
       master = context.createGain();
       audioMasterRef.current = master;
-      master.gain.setValueAtTime(SYNTH_MASTER_GAIN, now);
-      compressor.connect(master).connect(context.destination);
-      const restartFromBeginning = currentIndex >= loop.attacks.length;
-      const startIndex = restartFromBeginning ? 0 : Math.max(0, currentIndex);
-      const source = loop.attacks.slice(startIndex, startIndex + 14);
-      const baseBeat = source[0]?.onsetBeat ?? loop.startBeat;
+      master.gain.setValueAtTime(referenceLevelGain(referenceVolume), now);
+      // Trim before the safety compressor. The previous reversed order compressed
+      // a full-scale oscillator and then attenuated it again, making Score Flow
+      // substantially quieter than the other listening labs.
+      master.connect(compressor).connect(context.destination);
+
       const secondsPerBeat = 60 / practiceTempo;
-      const bounded = source.filter((attack) => (attack.onsetBeat - baseBeat) * secondsPerBeat <= 9);
-      let latestStop = now + 0.2;
-      let denseFieldClipped = false;
-      let longDurationCapped = false;
-      bounded.forEach((attack) => {
-        const attackStart = now + 0.065 + (attack.onsetBeat - baseBeat) * secondsPerBeat;
-        const ordered = [...attack.notes].sort((first, second) => first.pitch.midi - second.pitch.midi);
-        const voiceNotes = voice === "upper"
-          ? ordered.slice(-1)
-          : voice === "bass"
-            ? ordered.slice(0, 1)
-            : attack.arpeggiate === "down"
-              ? ordered.reverse().slice(0, 12)
-              : ordered.slice(0, 12);
-        if (voice === "full" && attack.notes.length > voiceNotes.length) denseFieldClipped = true;
-        const voiceGain = 0.68 / Math.sqrt(Math.max(1, voiceNotes.length));
-        voiceNotes.forEach((writtenNote, noteIndex) => {
-          const rollDelay = voice === "full" && attack.arpeggiate ? noteIndex * 0.055 : 0;
-          const start = attackStart + rollDelay;
-          const rawDuration = Math.max(0.14, writtenNote.soundingDurationBeats * secondsPerBeat * 0.82);
-          const duration = Math.min(6, rawDuration);
-          if (rawDuration > duration) longDurationCapped = true;
-          const oscillator = context!.createOscillator();
-          const envelope = context!.createGain();
-          oscillator.type = "sine";
-          oscillator.frequency.setValueAtTime(frequencyFromMidi(writtenNote.pitch.midi), start);
-          envelope.gain.setValueAtTime(0.0001, start);
-          envelope.gain.exponentialRampToValueAtTime(voiceGain, start + 0.018);
-          envelope.gain.setValueAtTime(voiceGain, start + Math.max(0.04, duration - 0.07));
-          envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-          oscillator.connect(envelope).connect(compressor);
-          oscillator.start(start); oscillator.stop(start + duration + 0.03);
-          latestStop = Math.max(latestStop, start + duration + 0.08);
-        });
+      const countIn = playAlong ? playAlongCountIn(loop, score) : { measureBeats: 0, pulseOffsetsBeats: [] as number[] };
+      const countInDuration = countIn.measureBeats * secondsPerBeat;
+      const audioStart = now + 0.12 + countInDuration;
+      const firstPerformanceMs = audioTimeToPerformanceMs(context, audioStart);
+      const earliestOnsetMs = firstPerformanceMs - 500;
+      const latestOnsetMs = firstPerformanceMs + playbackPlan.totalDurationMs;
+      referenceSessionRef.current = {
+        afterId,
+        earliestOnsetMs,
+        latestOnsetMs,
+        playAlong,
+        startAttackId: playbackPlan.cues[0].attackId,
+        heardEndAttackId: null,
+      };
+      if (playAlong) setReferenceTimingClock({ scoreBeat: playbackPlan.cues[0].scoreBeat, performanceTimeMs: firstPerformanceMs });
+
+      countIn.pulseOffsetsBeats.forEach((beatOffset, pulseIndex) => {
+        const start = now + 0.12 + beatOffset * secondsPerBeat;
+        const oscillator = context!.createOscillator();
+        const envelope = context!.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(pulseIndex === 0 ? 1_320 : 880, start);
+        envelope.gain.setValueAtTime(0.0001, start);
+        envelope.gain.exponentialRampToValueAtTime(pulseIndex === 0 ? 0.62 : 0.42, start + 0.004);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, start + 0.055);
+        oscillator.connect(envelope).connect(master!);
+        oscillator.start(start);
+        oscillator.stop(start + 0.065);
       });
+
+      let latestStop = audioStart + 0.1;
+      for (const cue of playbackPlan.cues) {
+        const voiceGain = 0.72 / Math.sqrt(Math.max(1, cue.notes.length));
+        for (const note of cue.notes) {
+          const start = audioStart + (cue.onsetMs + note.onsetOffsetMs) / 1_000;
+          const duration = note.durationMs / 1_000;
+          const oscillator = context.createOscillator();
+          const envelope = context.createGain();
+          oscillator.type = "triangle";
+          oscillator.frequency.setValueAtTime(frequencyFromMidi(note.midi), start);
+          envelope.gain.setValueAtTime(0.0001, start);
+          envelope.gain.exponentialRampToValueAtTime(voiceGain, start + 0.014);
+          envelope.gain.setValueAtTime(voiceGain, start + Math.max(0.035, duration - 0.075));
+          envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+          oscillator.connect(envelope).connect(master);
+          oscillator.start(start);
+          oscillator.stop(start + duration + 0.035);
+          latestStop = Math.max(latestStop, start + duration + 0.09);
+        }
+      }
+
       setAudioState("playing");
-      const voiceLabel = voice === "upper" ? "upper path" : voice === "bass" ? "bass route" : "full written field";
-      const bounds = [denseFieldClipped ? "dense fields are transparently limited to 12 tones" : null, longDurationCapped ? "very long tones are capped at 6 seconds" : null].filter(Boolean).join("; ");
-      setAudioNotice(`Playing the ${voiceLabel} for up to ${bounded.length} landing${bounded.length === 1 ? "" : "s"} ${restartFromBeginning ? "from the loop start after completed review" : "from the cursor"} at ${practiceTempo} BPM. Each voice keeps its own tied duration${bounds ? `; ${bounds}` : ""}. MIDI input is still silent.`);
+      setReferencePlayback({
+        phase: playAlong ? "count-in" : "playing",
+        voice,
+        playAlong,
+        currentIndex: playAlong ? null : playbackPlan.cues[0].expectedIndex,
+        cursorIndex: playbackPlan.cues[0].expectedIndex,
+        sounding: !playAlong,
+        cueCount: playbackPlan.cues.length,
+        progress: 0,
+        countdown: playAlong ? countIn.pulseOffsetsBeats.length : null,
+        truncated: playbackPlan.truncated,
+      });
+      const voiceLabel = voice === "upper" ? "upper path" : voice === "bass" ? "bass route" : "full score field";
+      const densityNotice = denseFieldClipped ? " Written fields above 12 tones are transparently capped for safe reference synthesis." : "";
+      const durationNotice = playbackPlan.cues.length < plan.cues.length ? ` Playback is capped at ${MAX_REFERENCE_VOICES} scheduled tones for browser stability; choose a shorter chunk for the full phrase.` : "";
+      setAudioNotice(playAlong
+        ? `Count-in started. The ${voiceLabel}, moving score reveal, and MIDI timing share one ${practiceTempo} BPM clock. Reference level is ${referenceVolume}%. MIDI input itself remains silent.${densityNotice}${durationNotice}`
+        : `Previewing the ${voiceLabel} from the learner cursor at ${practiceTempo} BPM. The moving reveal follows the exact synthesized cue; MIDI input remains silent.${densityNotice}${durationNotice}`);
+
+      visualUpdateMsRef.current = 0;
+      const pulseMs = countIn.pulseOffsetsBeats.length ? countInDuration * 1_000 / countIn.pulseOffsetsBeats.length : 0;
+      const updateVisual = () => {
+        if (audioTokenRef.current !== token) return;
+        // Use the same performance clock as Web MIDI and the audio timestamp.
+        // A requestAnimationFrame timestamp can come from a document timeline
+        // with a different origin after a restored/navigation session.
+        const visualNow = performance.now();
+        if (visualNow - visualUpdateMsRef.current >= 45) {
+          visualUpdateMsRef.current = visualNow;
+          const elapsedMs = visualNow - firstPerformanceMs;
+          if (elapsedMs < 0 && playAlong) {
+            setReferencePlayback((current) => ({
+              ...current,
+              phase: "count-in",
+              currentIndex: null,
+              cursorIndex: playbackPlan.cues[0].expectedIndex,
+              sounding: false,
+              progress: 0,
+              countdown: Math.max(1, Math.min(countIn.pulseOffsetsBeats.length, Math.ceil(-elapsedMs / Math.max(1, pulseMs)))),
+            }));
+          } else {
+            const audibleElapsed = Math.max(0, elapsedMs);
+            const frame = scoreReferenceFrameAt(playbackPlan, audibleElapsed + 8);
+            const cursorCue = playbackPlan.cues.find((candidate) => candidate.expectedIndex === frame.cursorIndex) ?? playbackPlan.cues[0];
+            if (referenceSessionRef.current?.playAlong) referenceSessionRef.current.heardEndAttackId = cursorCue.attackId;
+            setReferencePlayback((current) => ({
+              ...current,
+              phase: "playing",
+              currentIndex: frame.soundingIndex,
+              cursorIndex: frame.cursorIndex,
+              sounding: frame.soundingIndex != null,
+              progress: Math.max(0, Math.min(1, audibleElapsed / Math.max(1, playbackPlan.totalDurationMs))),
+              countdown: null,
+            }));
+          }
+        }
+        audioFrameRef.current = window.requestAnimationFrame(updateVisual);
+      };
+      audioFrameRef.current = window.requestAnimationFrame(updateVisual);
+
       audioTimerRef.current = window.setTimeout(() => {
         if (audioTokenRef.current !== token) return;
+        if (audioFrameRef.current != null) window.cancelAnimationFrame(audioFrameRef.current);
+        audioFrameRef.current = null;
         if (context?.state !== "closed") void context?.close();
-        audioContextRef.current = null; audioMasterRef.current = null; audioTimerRef.current = null;
-        setAudioState("idle"); setAudioNotice(voice === "full" ? "Reference finished. Isolate the upper path or bass route next, then reproduce the relationship on the keys." : `The ${voiceLabel} finished. Sing or imagine it once without the keys, then find it inside the full texture.`);
-      }, Math.max(180, (latestStop - now) * 1000));
+        audioContextRef.current = null;
+        audioMasterRef.current = null;
+        audioTimerRef.current = null;
+        referenceSessionRef.current = null;
+        setAudioState("idle");
+        setReferencePlayback({
+          phase: "complete",
+          voice,
+          playAlong,
+          currentIndex: null,
+          cursorIndex: playbackPlan.cues.at(-1)?.expectedIndex ?? null,
+          sounding: false,
+          cueCount: playbackPlan.cues.length,
+          progress: 1,
+          countdown: null,
+          truncated: playbackPlan.truncated,
+        });
+        if (playAlong) {
+          const captured = capturedScoreEvents(eventsRef.current, afterId, earliestOnsetMs, latestOnsetMs);
+          setReferenceReviewRange({ startAttackId: playbackPlan.cues[0].attackId, endAttackId: playbackPlan.cues.at(-1)!.attackId });
+          setReviewTakeEvents(captured);
+          setCaptureState("review");
+          setCaptureNotice(captured.length
+            ? "The audible reference ended. Your synchronized take is frozen: inspect successes, misses, semitone correction, and pulse distance."
+            : "The audible reference ended without a MIDI attack. The written landings are frozen as misses so the starting point remains visible.");
+          setAudioNotice(`Play-along finished at ${practiceTempo} BPM. The heard score and your silent MIDI take now share one review timeline${playbackPlan.truncated ? "; select a shorter chunk for an untruncated pass" : ""}.`);
+        } else {
+          setAudioNotice(`The ${voiceLabel} preview finished. Sing or imagine it once, then locate it inside the full score field.`);
+        }
+      }, Math.max(220, (latestStop - now) * 1_000));
     } catch {
+      const cancelled = audioTokenRef.current !== token || (context != null && audioContextRef.current !== context);
       stopAudioContext(context, master);
-      audioContextRef.current = null; audioMasterRef.current = null;
-      setAudioState("unavailable"); setAudioNotice("Reference playback could not start. Check site audio permission; score and MIDI visualization remain available.");
+      if (audioContextRef.current === context) audioContextRef.current = null;
+      if (audioMasterRef.current === master) audioMasterRef.current = null;
+      if (cancelled) return;
+      referenceSessionRef.current = null;
+      setAudioState("unavailable");
+      setReferencePlayback({ ...EMPTY_REFERENCE_VIEW, phase: "unavailable", voice, playAlong });
+      if (playAlong) setCaptureState("idle");
+      setReferenceTimingClock(null);
+      setAudioNotice("Reference playback could not start. Check site audio permission; score and MIDI visualization remain available.");
     }
-  }, [currentIndex, loop, practiceTempo, stopReference]);
+  }, [activeNotes.length, currentIndex, frozen, loop, onResumeCapture, practiceTempo, referenceVolume, score, stopReference]);
 
   useEffect(() => () => stopReference(), [stopReference]);
 
@@ -1285,6 +1741,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     .slice(-3);
   const repairAvailable = captureState === "review" && evaluation?.firstDivergence != null;
   const visibleEvaluation = scoreVeiled || gatheringPreviousChord ? null : evaluation;
+  const hasTimingEvidence = Boolean(referenceTimingClock || timingMode === "pulse");
   const pitchMetric = visibleEvaluation?.metrics.pitch;
   const chordMetric = visibleEvaluation?.metrics.chords;
   const contourMetric = visibleEvaluation?.metrics.soprano;
@@ -1295,6 +1752,11 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const latestBassRelationship = bassMetric?.comparisons.at(-1) ?? null;
   const hasPracticeAttacks = Boolean(loop?.attacks.length);
   const focusComparison = evaluation?.comparisons.find((comparison) => comparison.expectedIndex === currentIndex) ?? null;
+  const referenceComparison = referencePlayback.cursorIndex == null
+    ? null
+    : evaluation?.comparisons.slice(0, referencePlayback.cursorIndex + 1).findLast((comparison) => comparison.actual != null)
+      ?? evaluation?.comparisons[referencePlayback.cursorIndex]
+      ?? null;
   const divergenceComparison = evaluation?.firstDivergence?.expectedIndex == null
     ? null
     : evaluation.comparisons.find((comparison) => comparison.expectedIndex === evaluation.firstDivergence?.expectedIndex) ?? null;
@@ -1349,23 +1811,36 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       : midiConnected
         ? "MIDI ready · play any key"
         : "MIDI is not connected";
+  const togglePlayAlong = () => {
+    if (audioState === "playing") {
+      stopReference(
+        referencePlayback.playAlong ? "Play-along stopped. The synchronized evidence so far is frozen for review." : "Preview stopped. The frozen play-along review is unchanged.",
+        true,
+        referencePlayback.playAlong,
+        !referencePlayback.playAlong,
+      );
+    } else {
+      void playReference("full", true);
+    }
+  };
 
   return <section className={styles.shell} aria-labelledby="score-flow-title">
     <header className={styles.scoreHeader}>
-      <div><span>Score Flow · uploaded music</span><h3 id="score-flow-title">{imported.title}</h3><p>{imported.composer ? `${imported.composer} · ` : ""}{imported.partNames.join(" + ")} · {imported.fileName}</p></div>
+      <div><span>Score Flow · uploaded score</span><h3 id="score-flow-title">{imported.title}</h3><p>{imported.composer ? `${imported.composer} · ` : ""}{imported.partNames.join(" + ")} · {imported.fileName}</p></div>
       <div className={styles.scoreFacts}><span>{imported.measureCount} measures</span><span>{score.attacks.length} landings</span><span>{scoreVeiled ? "key context veiled" : keySignatureLabel(localMeasureContext ?? imported)}</span><span>{meterSummary(imported)}</span><span>{imported.tempoBpm ? `opening ${Math.round(imported.tempoBpm)} BPM` : "tempo not encoded · using 72"}</span><span>{scoreVeiled ? "pitch range veiled" : imported.lowestMidi != null && imported.highestMidi != null ? `${pitchClassName(imported.lowestMidi, prefer)}–${pitchClassName(imported.highestMidi, prefer)}` : "range unavailable"}</span></div>
       <button type="button" className={styles.removeScore} onClick={clearScore}>Remove local score</button>
     </header>
 
     <details className={styles.practiceSetup}>
-      <summary><span>Practice setup</span><strong>{selectedChunk ? `chunk ${selectedChunk.ordinal + 1} · ${selectedChunk.attackCount} exact landings` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`} · {practiceHand === "both" ? "both staves" : practiceHand === "right" ? "upper staff" : "lower staff"} · {readingMode === "read" ? "score visible" : readingMode === "memory" ? "memory fade" : "ear-first veil"} · {timingMode === "self-paced" ? `self-paced · ${practiceTempo} BPM reference` : `fixed pulse · ${practiceTempo} BPM`}</strong><small>Change loop, visibility, timing, tempo, or togetherness tolerance</small></summary>
+      <summary><span>Practice setup</span><strong>{selectedChunk ? `chunk ${selectedChunk.ordinal + 1} · ${selectedChunk.attackCount} exact landings` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`} · {practiceHand === "both" ? "both staves" : practiceHand === "right" ? "upper staff" : "lower staff"} · {readingMode === "read" ? "easy reveal" : readingMode === "memory" ? "memory fade" : "hard silhouette"} · {timingMode === "self-paced" ? `self-paced study · ${practiceTempo} BPM reference` : `fixed pulse · ${practiceTempo} BPM`}</strong><small>Change loop, disclosure, tempo, loudness, or togetherness tolerance</small></summary>
       <div className={styles.practiceControls} aria-label="Score practice controls">
         <label><span>From measure</span><select value={loopStart} onChange={(event) => changeLoop(Number(event.target.value), Math.max(Number(event.target.value), loopEnd))}>{score.measures.map((measure) => <option key={measure.id} value={measure.index}>{measure.number}</option>)}</select></label>
         <label><span>Through measure</span><select value={loopEnd} onChange={(event) => changeLoop(Math.min(loopStart, Number(event.target.value)), Number(event.target.value))}>{score.measures.map((measure) => <option key={measure.id} value={measure.index} disabled={measure.index < loopStart}>{measure.number}</option>)}</select></label>
         <label><span>Staff focus</span><select value={practiceHand} onChange={(event) => { setPracticeHand(event.target.value as PracticeHand); setSelectedChunkId(null); setManualReadingLens(null); resetTake("Staff focus changed. The score boundary is fresh."); }}><option value="both">Both staves</option><option value="right">Upper staff</option><option value="left">Lower staff</option></select></label>
-        <label><span>Reading layer</span><select value={readingMode} onChange={(event) => setReadingMode(event.target.value as ReadingMode)}><option value="read">Pitch-position horizon</option><option value="memory">Fade after launch</option><option value="ear">Ear first · veil pitches</option></select></label>
+        <label><span>Reveal difficulty</span><select value={readingMode} onChange={(event) => setReadingMode(event.target.value as ReadingMode)}><option value="read">Easy · unveil heard landing</option><option value="memory">Memory · unveil then fade</option><option value="ear">Hard · pulse + silhouette</option></select></label>
         <label><span>Timing lens</span><select value={timingMode} onChange={(event) => { setTimingMode(event.target.value as TimingMode); resetTake("Timing lens changed. Arm a fresh take."); }}><option value="self-paced">Self-paced · pitch first</option><option value="pulse">Fixed-pulse drill</option></select></label>
         <label><span>Practice tempo</span><select value={tempoPercent} onChange={(event) => { setTempoPercent(Number(event.target.value)); resetTake("Tempo changed. Arm a fresh take."); }}><option value={50}>50% · {Math.max(20, Math.round(encodedLocalTempo * .5))} BPM</option><option value={70}>70% · {Math.max(20, Math.round(encodedLocalTempo * .7))} BPM</option><option value={85}>85% · {Math.max(20, Math.round(encodedLocalTempo * .85))} BPM</option><option value={100}>100% · {Math.round(encodedLocalTempo)} BPM</option></select></label>
+        <label className={styles.volumeControl}><span>Reference level · {referenceVolume}%</span><input type="range" min={0} max={100} step={1} value={referenceVolume} aria-label="Synthesized score reference volume" aria-valuetext={`${referenceVolume} percent`} onChange={(event) => { const value = Number(event.target.value); setReferenceVolume(value); const context = audioContextRef.current; const master = audioMasterRef.current; if (context && master && context.state !== "closed") master.gain.setTargetAtTime(referenceLevelGain(value), context.currentTime, .025); }} /></label>
         <label><span>Notes count as together</span><select value={clusterWindow} onChange={(event) => { setClusterWindow(Number(event.target.value)); resetTake("Togetherness lens changed. Arm a fresh take."); }}><option value={70}>Tight · 70 ms</option><option value={140}>Relaxed · 140 ms</option><option value={220}>Rolled · 220 ms</option></select></label>
       </div>
       <div className={styles.measureMap} aria-label={`Measure navigator showing ${navigatorStart + 1} through ${navigatorEnd + 1} of ${score.measures.length} measures`}>{navigatorStart > 0 ? <span className={styles.measureGap} aria-hidden="true">…</span> : null}{navigatorMeasures.map((measure) => {
@@ -1388,13 +1863,16 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
         <small role="status" aria-live="polite" aria-atomic="true">{frozen ? "The shared trace is paused. Resume it to let new attacks enter live follow; held keys may still light." : evaluationError ? "Evaluation paused until the loop is shortened." : !hasPracticeAttacks ? "This selection contains no landing targets for the chosen staff focus. Include a measure with notes or change the staff focus." : captureState === "armed" && evaluation?.complete && pressedNotes.length ? "All written landings have arrived. Release the pressed keys so key-up lengths can enter the frozen review; pedal-sustained tones do not block review." : captureState === "idle" && liveAttack ? "MIDI received. Live follow is comparing this pass now; no Arm step is required." : captureNotice}</small>
         {evaluationError ? <small role="alert">{evaluationError} Choose a shorter measure loop; raw input receipt remains active.</small> : null}
       </div>
-      <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}{frozen ? <button type="button" className={styles.primaryAction} onClick={onResumeCapture}>Resume live trace</button> : null}{!midiConnected ? <button type="button" onClick={onConnectMidi}>Connect / retry MIDI</button> : null}<button type="button" disabled={!hasPracticeAttacks} aria-pressed={audioState === "playing"} onClick={() => audioState === "playing" ? stopReference() : void playReference()}>{audioState === "playing" ? "Stop reference" : "Hear from cursor · audio"}</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper")}>Hear upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass")}>Hear bass route</button>{captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose</button> : <button type="button" className={styles.primaryAction} disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Try chunk again" : "Try loop again" : selectedChunk ? "Start chunk review take" : "Start review take"}</button>}</div>
-      <p className={styles.audioNotice} role="status" aria-live="polite">{audioNotice}{timingMode === "pulse" ? ` Fixed-pulse is a constant ${practiceTempo} BPM drill from the latest numeric tempo at this boundary: your first landing is beat zero, and later tempo changes, rubato words, or fermatas do not move its clock.` : ""}</p>
+      <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}{frozen ? <button type="button" className={styles.primaryAction} onClick={onResumeCapture}>Resume live trace</button> : null}{!midiConnected ? <button type="button" onClick={onConnectMidi}>Connect / retry MIDI</button> : null}<button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper", false)}>Preview upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass", false)}>Preview bass route</button>{audioState === "playing" && referencePlayback.playAlong ? null : captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose silent take</button> : <button type="button" disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Record chunk without audio" : "Record loop without audio" : selectedChunk ? "Record silent chunk" : "Record silent take"}</button>}</div>
+      <p className={styles.audioNotice} role="status" aria-live="polite">{audioNotice}{referenceTimingClock ? ` This review measures attacks from the audible start; ${timingMode === "self-paced" ? "the Play-along clock temporarily replaces self-paced timing" : "the fixed-pulse lens uses the same clock"}.` : timingMode === "pulse" ? ` Fixed-pulse is a constant ${practiceTempo} BPM drill from the latest numeric tempo at this boundary: your first landing is beat zero, and later tempo changes, rubato words, or fermatas do not move its clock.` : ""}</p>
     </div>
+
+    {loop ? <PlayAlongField view={referencePlayback} loop={loop} comparison={referenceComparison} readingMode={readingMode} showConventions={showConventions} activeNotes={pressedNotes} audioPlaying={audioState === "playing"} canPlay={hasPracticeAttacks} onToggle={togglePlayAlong} /> : null}
+    {synchronizedRevealActive ? <p className={styles.alignmentKey}><strong>One clock · two useful positions.</strong> The luminous field above is what the reference is sounding now. The panels below follow where your received MIDI currently aligns; the distance between them is your lead or lag.</p> : null}
 
     {loop ? <div className={styles.immersionOverview}>
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveHudMessage}</p>
-      {measureLoop ? <ScoreJourney loop={measureLoop} chunks={readingChunks} chunkProgress={chunkProgress} chunkMemory={chunkMemoryById} comparisons={journeyComparisonsByExpectedIndex} currentIndex={baseCurrentIndex} extraCount={visibleEvaluation?.extraClusters.length ?? 0} captureState={captureState} veiled={scoreVeiled} selectedChunkId={selectedChunk?.id ?? null} onSelectChunk={selectPracticeChunk} /> : null}
+      {measureLoop ? <ScoreJourney loop={measureLoop} chunks={readingChunks} chunkProgress={chunkProgress} chunkMemory={chunkMemoryById} comparisons={journeyComparisonsByExpectedIndex} currentIndex={journeyCurrentIndex} extraCount={visibleEvaluation?.extraClusters.length ?? 0} captureState={captureState} veiled={scoreVeiled} selectedChunkId={selectedChunk?.id ?? null} onSelectChunk={selectPracticeChunk} /> : null}
       <FocusLanding attack={nextAttack} comparison={focusComparison} currentIndex={currentIndex} totalAttacks={loop.attacks.length} activeNotes={pressedNotes} veiled={scoreVeiled} showConventions={showConventions} prefer={prefer} arrivalWindowMs={clusterWindow} arrivalWindowOpen={arrivalWindowOpen} captureState={captureState} liveAttack={liveAttack} liveComparison={liveAttackComparison} />
       <ReadingChunkFocus chunk={currentChunk} progress={currentChunkProgress} memory={currentChunkMemory} loop={loop} comparisons={comparisonsByExpectedIndex} currentIndex={currentIndex} veiled={scoreVeiled} showConventions={showConventions} notationById={notationById} directionText={currentDirections.length ? currentDirections.map((direction) => direction.text).join(" · ") : null} activeLens={scoreVeiled ? "rhythm" : activeReadingLens} recommendedLens={recommendedReadingLens} onLensChange={setManualReadingLens} />
       <CollectionFocus analysis={localCollection} showConventions={showConventions} prefer={prefer} veiled={scoreVeiled} />
@@ -1438,8 +1916,8 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
             { label: "Bottom-note path", value: bassMetric ? metricLabel(bassMetric.intervalAccuracy, bassMetric.intervalCompared) : "waiting", detail: "Exact lowest-note semitone links" },
           ]} />
           <EvidenceGroup eyebrow="Time + journey" title="Did the landing and release boundaries align?" items={[
-            { label: "Pulse proportions", value: timingMode === "self-paced" ? "not scored · self-paced" : visibleEvaluation ? metricLabel(visibleEvaluation.metrics.rhythm.accuracy, visibleEvaluation.metrics.rhythm.compared) : "waiting", detail: timingMode === "self-paced" ? "No clock judgment" : `Literal ${practiceTempo} BPM drill; qualitative rubato stays human` },
-            { label: "Release lengths · key-up", value: timingMode === "self-paced" ? "not scored · self-paced" : visibleEvaluation ? metricLabel(visibleEvaluation.metrics.duration.accuracy, visibleEvaluation.metrics.duration.compared) : "waiting", detail: timingMode === "self-paced" ? "Written lengths remain visible but ungraded" : "Physical key-up time; expressive holds still need human judgment" },
+            { label: "Pulse proportions", value: !hasTimingEvidence ? "not scored · self-paced" : visibleEvaluation ? metricLabel(visibleEvaluation.metrics.rhythm.accuracy, visibleEvaluation.metrics.rhythm.compared) : "waiting", detail: !hasTimingEvidence ? "No clock judgment" : referenceTimingClock ? `Synchronized to the audible ${practiceTempo} BPM reference; qualitative rubato stays human` : `Literal ${practiceTempo} BPM drill; qualitative rubato stays human` },
+            { label: "Release lengths · key-up", value: !hasTimingEvidence ? "not scored · self-paced" : visibleEvaluation ? metricLabel(visibleEvaluation.metrics.duration.accuracy, visibleEvaluation.metrics.duration.compared) : "waiting", detail: !hasTimingEvidence ? "Written lengths remain visible but ungraded" : "Physical key-up time against the shared clock; expressive holds still need human judgment" },
           ]} />
           </div>
         </details>

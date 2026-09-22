@@ -201,7 +201,7 @@
 
 .practiceControls {
   display: grid;
-  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  grid-template-columns: repeat(8, minmax(118px, 1fr));
   border-top: 1px solid var(--flow-line);
   background: rgba(9, 13, 20, .84);
 }
@@ -210,6 +210,8 @@
 .practiceControls label:last-child { border-right: 0; }
 .practiceControls span { color: var(--flow-muted); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
 .practiceControls select { width: 100%; min-width: 0; min-height: 34px; padding: 4px 22px 4px 0; border: 0; color: var(--flow-text); background: transparent; font-size: .72rem; }
+.practiceControls input[type="range"] { width: 100%; min-height: 34px; margin: 0; accent-color: var(--flow-gold); cursor: pointer; }
+.volumeControl { background: linear-gradient(180deg, rgba(239, 199, 107, .055), transparent); }
 
 .sessionBar {
   display: grid;
@@ -238,6 +240,136 @@
 .sessionActions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
 .sessionActions .primaryAction { color: #090b10; border-color: var(--flow-gold); background: var(--flow-gold); font-weight: 700; }
 .audioNotice { grid-column: 1 / -1; margin: 0; color: #8793a5; font-size: .7rem; line-height: 1.45; }
+
+.playAlongField {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--flow-line);
+  background:
+    radial-gradient(circle at 16% 44%, rgba(119, 209, 223, .09), transparent 24rem),
+    radial-gradient(circle at 52% 24%, rgba(239, 199, 107, .07), transparent 25rem),
+    radial-gradient(circle at 87% 52%, rgba(157, 156, 232, .08), transparent 22rem),
+    linear-gradient(155deg, rgba(5, 8, 14, .98), rgba(10, 14, 23, .94));
+}
+
+.playAlongField::before {
+  position: absolute;
+  inset: 0;
+  opacity: .2;
+  background-image: radial-gradient(circle, rgba(241, 243, 247, .65) 0 1px, transparent 1.3px);
+  background-position: 11px 17px;
+  background-size: 91px 73px;
+  content: "";
+  mask-image: linear-gradient(90deg, transparent, #000 24%, #000 76%, transparent);
+  pointer-events: none;
+}
+
+.playAlongField[data-phase="count-in"] { box-shadow: inset 0 3px 0 rgba(239, 199, 107, .72); }
+.playAlongField[data-phase="playing"] { box-shadow: inset 0 3px 0 rgba(119, 209, 223, .86), inset 0 28px 70px rgba(119, 209, 223, .025); }
+.playAlongField[data-phase="complete"] { box-shadow: inset 0 3px 0 rgba(139, 215, 180, .7); }
+
+.playAlongField > header {
+  display: flex;
+  position: relative;
+  z-index: 1;
+  gap: 18px;
+  align-items: start;
+  justify-content: space-between;
+  padding: 20px clamp(18px, 3vw, 38px) 12px;
+}
+
+.playAlongField > header > div:first-child { display: grid; gap: 5px; }
+.playAlongField > header > div:first-child > span,
+.sensoryBridge article > span {
+  color: var(--flow-blue);
+  font-family: var(--font-mono), monospace;
+  font-size: .6875rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.playAlongField > header strong { font-family: var(--font-display), Georgia, serif; font-size: clamp(1.2rem, 2.2vw, 2rem); font-weight: 400; line-height: 1.06; }
+.playbackBadges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.playbackBadges span { padding: 5px 9px; border: 1px solid var(--flow-line); border-radius: 999px; color: #b9c3d1; font-size: .65rem; white-space: nowrap; }
+.playbackHeaderActions { display: grid; gap: 9px; justify-items: end; }
+.fieldPlayAction { min-width: 168px; padding: 10px 15px; border: 1px solid rgba(239, 199, 107, .55); border-radius: 999px; color: #071018; background: linear-gradient(135deg, var(--flow-gold), #f5dfaa); box-shadow: 0 0 24px rgba(239, 199, 107, .15); font: 700 .7rem/1 var(--font-mono), monospace; letter-spacing: .04em; cursor: pointer; }
+.fieldPlayAction:hover:not(:disabled) { border-color: #fff0c8; box-shadow: 0 0 30px rgba(239, 199, 107, .28); transform: translateY(-1px); }
+.fieldPlayAction:disabled { opacity: .45; cursor: not-allowed; }
+.playAlongField[data-phase="playing"] .fieldPlayAction,
+.playAlongField[data-phase="count-in"] .fieldPlayAction { color: #dbe4f2; border-color: rgba(241, 141, 126, .48); background: rgba(241, 141, 126, .11); }
+
+.referenceTimeline {
+  position: relative;
+  z-index: 1;
+  height: 29px;
+  margin: 0 clamp(18px, 3vw, 38px) 12px;
+  overflow: hidden;
+  border: 1px solid var(--flow-line);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(119, 209, 223, .025), rgba(239, 199, 107, .035));
+}
+.referenceTimeline::before { position: absolute; top: 50%; right: 10px; left: 10px; border-top: 1px solid rgba(219, 228, 242, .18); content: ""; }
+.referenceTimeline > i { position: absolute; top: 50%; left: 10px; width: min(calc(100% - 20px), var(--reference-progress)); height: 3px; border-radius: 999px; background: linear-gradient(90deg, var(--flow-gold), var(--flow-blue)); box-shadow: 0 0 16px rgba(119, 209, 223, .45); transform: translateY(-50%); }
+.referenceTimeline > b { position: absolute; top: 50%; left: clamp(10px, var(--reference-progress), calc(100% - 10px)); width: 11px; height: 11px; border: 2px solid #071018; border-radius: 50%; background: var(--flow-blue); box-shadow: 0 0 0 2px var(--flow-blue), 0 0 22px rgba(119, 209, 223, .72); transform: translate(-50%, -50%); }
+.playAlongField[data-phase="count-in"] .referenceTimeline > b { left: 10px; background: var(--flow-gold); box-shadow: 0 0 0 2px var(--flow-gold), 0 0 22px rgba(239, 199, 107, .72); animation: countBeacon .34s ease-out both; }
+.referenceTimeline > span { position: absolute; top: 50%; right: 13px; padding-left: 8px; color: var(--flow-muted); background: #090d16; font-family: var(--font-mono), monospace; font-size: .625rem; transform: translateY(-50%); }
+
+.sensoryBridge { display: grid; position: relative; z-index: 1; grid-template-columns: .8fr 1.25fr .95fr; min-width: 0; border-top: 1px solid var(--flow-line); }
+.sensoryBridge article { display: grid; min-width: 0; gap: 7px; align-content: start; padding: 20px clamp(16px, 2.4vw, 30px) 24px; }
+.sensoryBridge article + article { border-left: 1px solid var(--flow-line); }
+.sensoryBridge article > strong { font-family: var(--font-display), Georgia, serif; font-size: clamp(1rem, 1.5vw, 1.28rem); font-weight: 400; line-height: 1.2; }
+.sensoryBridge article > small { color: var(--flow-muted); font-size: .68rem; line-height: 1.45; }
+
+.earBeacon { justify-items: center; text-align: center; }
+.soundOrb { position: relative; width: 132px; height: 132px; margin: 3px auto 5px; border: 1px solid rgba(119, 209, 223, .18); border-radius: 50%; background: radial-gradient(circle, rgba(119, 209, 223, .15), rgba(119, 209, 223, .025) 39%, transparent 70%); }
+.soundOrb i { position: absolute; border: 1px solid rgba(119, 209, 223, .22); border-radius: 50%; }
+.soundOrb i:nth-child(1) { inset: 0; border-color: rgba(119, 209, 223, .28); }
+.soundOrb i:nth-child(2) { inset: 19px; }
+.soundOrb i:nth-child(3) { inset: 38px; border-color: rgba(119, 209, 223, .16); }
+.soundOrb b { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--flow-blue); box-shadow: 0 0 12px var(--flow-blue), 0 0 42px rgba(119, 209, 223, .72); transform: translate(-50%, -50%); animation: soundBloom .34s ease-out both; }
+.playAlongField[data-phase="count-in"] .soundOrb { border-color: rgba(239, 199, 107, .42); background: radial-gradient(circle, rgba(239, 199, 107, .16), transparent 67%); }
+
+.heardStaff { border-color: rgba(239, 199, 107, .07); }
+.playbackStaff { position: relative; height: 202px; margin-top: 4px; overflow: hidden; border: 1px solid rgba(219, 228, 242, .11); border-radius: 52% 48% 49% 51% / 12% 12% 16% 16%; background: radial-gradient(ellipse at center, rgba(239, 199, 107, .055), transparent 66%); }
+.playbackTrebleLines,
+.playbackBassLines { position: absolute; right: 14px; left: 25px; height: 41px; background: repeating-linear-gradient(to bottom, rgba(219, 228, 242, .29) 0 1px, transparent 1px 10px); }
+.playbackTrebleLines { top: 38px; }
+.playbackBassLines { top: 124px; }
+.playbackStaff::after { position: absolute; top: 101px; right: 18px; left: 25px; border-top: 1px dashed rgba(119, 209, 223, .15); content: ""; }
+.staffBrace { position: absolute; top: 50%; left: 7px; color: rgba(219, 228, 242, .4); font-family: Georgia, serif; font-size: 6rem; font-weight: 400; line-height: .9; transform: translateY(-50%) scaleX(.52); }
+.playbackNote,
+.silhouetteNote { position: absolute; top: var(--staff-y); left: var(--staff-left); width: 17px; height: 11px; border-radius: 50%; background: var(--flow-gold); box-shadow: 0 0 0 1px #080b12, 0 0 18px rgba(239, 199, 107, .55); transform: translate(-50%, -50%) rotate(-13deg); animation: noteArrival .28s ease-out both; }
+.playbackNote::after { position: absolute; right: -2px; bottom: 4px; width: 1px; height: 25px; background: rgba(241, 243, 247, .78); content: ""; transform: rotate(13deg); transform-origin: bottom; }
+.playbackNote small { position: absolute; top: 15px; left: 50%; color: var(--flow-gold); font-family: var(--font-mono), monospace; font-size: .58rem; font-style: normal; white-space: nowrap; transform: translateX(-50%) rotate(13deg); }
+.playbackStaff > strong { display: grid; position: absolute; inset: 0; place-content: center; color: var(--flow-gold); font-family: var(--font-display), Georgia, serif; font-size: 3.2rem; font-weight: 400; text-shadow: 0 0 28px rgba(239, 199, 107, .5); }
+.silhouetteNote { top: 50%; width: 14px; height: 14px; border: 1px dashed var(--flow-blue); background: rgba(119, 209, 223, .08); box-shadow: 0 0 15px rgba(119, 209, 223, .28); transform: translate(-50%, -50%); }
+.isPlaybackVeiled .playbackTrebleLines,
+.isPlaybackVeiled .playbackBassLines { opacity: .18; filter: blur(2px); }
+.playAlongField[data-reading="memory"] .playbackNote { animation: noteMemory 1.45s ease both; }
+
+.handFeedback { text-align: center; }
+.feedbackCompass { position: relative; width: min(100%, 290px); height: 174px; margin: 5px auto 2px; border: 1px solid rgba(119, 209, 223, .18); border-radius: 48% 52% 50% 50% / 44% 46% 54% 56%; background: radial-gradient(circle at center, rgba(139, 215, 180, .1), transparent 18%, rgba(119, 209, 223, .025) 58%, transparent 70%); }
+.feedbackCompass::before { position: absolute; top: 50%; right: 11%; left: 11%; border-top: 1px solid rgba(219, 228, 242, .16); content: ""; }
+.feedbackCompass::after { position: absolute; top: 12%; bottom: 12%; left: 50%; border-left: 1px solid rgba(219, 228, 242, .16); content: ""; }
+.feedbackCenter { position: absolute; top: 50%; left: 50%; width: 25px; height: 25px; border: 1px solid rgba(139, 215, 180, .72); border-radius: 50%; box-shadow: 0 0 22px rgba(139, 215, 180, .23); transform: translate(-50%, -50%); }
+.feedbackPoint { position: absolute; top: var(--feedback-y); left: var(--feedback-x); z-index: 2; width: 13px; height: 13px; border: 2px solid #071018; border-radius: 50%; background: var(--flow-gold); box-shadow: 0 0 0 2px var(--flow-gold), 0 0 19px rgba(239, 199, 107, .62); transform: translate(-50%, -50%); transition: top .16s ease, left .16s ease; }
+.feedbackTimingMark { position: absolute; top: 22%; bottom: 22%; left: var(--feedback-x); z-index: 2; width: 2px; border-radius: 999px; background: var(--flow-coral); box-shadow: 0 0 14px rgba(241, 141, 126, .55); transform: translateX(-50%); transition: left .16s ease; }
+.feedbackCompass > small { position: absolute; color: #9ba9bc; font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase; }
+.earlyLabel { top: 52%; left: 8px; }
+.lateLabel { top: 52%; right: 8px; }
+.higherLabel { top: 5px; left: 50%; transform: translateX(-50%); }
+.lowerLabel { bottom: 5px; left: 50%; transform: translateX(-50%); }
+.handFeedback > strong { color: var(--flow-text); }
+.handFeedback > small { color: var(--flow-blue) !important; }
+.playAlongField[data-reading="ear"] .feedbackCompass > small { opacity: .62; }
+.referenceBoundary { position: relative; z-index: 1; margin: 0; padding: 8px clamp(18px, 3vw, 38px); border-top: 1px solid rgba(241, 141, 126, .2); color: var(--flow-coral); font-size: .65rem; text-align: center; }
+.alignmentKey { margin: 0; padding: 10px clamp(18px, 3vw, 38px); border-top: 1px solid rgba(119, 209, 223, .18); color: var(--flow-muted); background: rgba(119, 209, 223, .035); font-size: .7rem; line-height: 1.5; text-align: center; }
+.alignmentKey strong { color: var(--flow-blue); font-weight: 700; }
+
+@keyframes countBeacon { from { opacity: .45; transform: translate(-50%, -50%) scale(.72); } to { opacity: 1; transform: translate(-50%, -50%) scale(1.12); } }
+@keyframes soundBloom { from { opacity: .35; transform: translate(-50%, -50%) scale(.62); } to { opacity: 1; transform: translate(-50%, -50%) scale(1.14); } }
+@keyframes noteArrival { from { opacity: 0; filter: blur(5px); transform: translate(-50%, -50%) rotate(-13deg) scale(.45); } to { opacity: 1; filter: none; transform: translate(-50%, -50%) rotate(-13deg) scale(1); } }
+@keyframes noteMemory { 0% { opacity: 0; filter: blur(5px); transform: translate(-50%, -50%) rotate(-13deg) scale(.45); } 22% { opacity: 1; filter: none; transform: translate(-50%, -50%) rotate(-13deg) scale(1); } 100% { opacity: .2; filter: blur(2px); transform: translate(-50%, -50%) rotate(-13deg) scale(.84); } }
 
 .measureMap {
   display: flex;
@@ -719,6 +851,8 @@
   .collectionFocus .collectionVeil { grid-column: 2 / -1; grid-row: 1 / span 4; min-height: 180px; }
   .distanceField { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .evidenceGroups { grid-template-columns: 1fr; }
+  .sensoryBridge { grid-template-columns: .82fr 1.18fr; }
+  .handFeedback { grid-column: 1 / -1; border-top: 1px solid var(--flow-line); border-left: 0 !important; }
 }
 
 @media (max-width: 900px) {
@@ -746,6 +880,15 @@
   .sessionBar { grid-template-columns: 1fr; }
   .sessionActions { justify-content: stretch; }
   .sessionActions button { flex: 1 1 150px; }
+  .playAlongField > header { display: grid; }
+  .playbackBadges { justify-content: flex-start; }
+  .playbackHeaderActions { justify-items: start; }
+  .fieldPlayAction { width: 100%; }
+  .sensoryBridge { grid-template-columns: 1fr 1fr; }
+  .earBeacon { grid-column: 1 / -1; grid-template-columns: 90px 1fr; justify-items: start; text-align: left; }
+  .earBeacon .soundOrb { grid-row: 1 / span 3; width: 76px; height: 76px; margin: 0; }
+  .heardStaff { border-top: 1px solid var(--flow-line); border-left: 0 !important; }
+  .handFeedback { grid-column: auto; border-top: 1px solid var(--flow-line); border-left: 1px solid var(--flow-line) !important; }
   .scoreHorizon > header,
   .handCompass > header { display: grid; }
   .scoreHorizon header p,
@@ -785,6 +928,10 @@
   .chunkJourneyNav button { flex: 1 1 130px; }
   .keyboardTerritory { padding-right: 10px; padding-left: 10px; }
   .keyboardLegend em { width: 100%; margin-left: 0; }
+  .sensoryBridge { grid-template-columns: 1fr; }
+  .earBeacon { grid-column: 1; }
+  .handFeedback { grid-column: 1; border-left: 0 !important; }
+  .sensoryBridge article + article { border-top: 1px solid var(--flow-line); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -793,6 +940,11 @@
   .measureMap,
   .scoreRail { scroll-behavior: auto; }
   .attackEchoPulse { animation: none; transform: none; }
+  .soundOrb b,
+  .playbackNote,
+  .silhouetteNote,
+  .referenceTimeline > b { animation: none; }
+  .feedbackPoint { transition: none; }
 }
 
 @media (forced-colors: active) {
@@ -811,6 +963,10 @@
   .divergenceCard,
   .secureCard,
   .liveInstruction { background: Canvas; }
+  .playAlongField,
+  .playbackStaff,
+  .feedbackCompass,
+  .referenceTimeline { background: Canvas; }
   .notehead { border-color: CanvasText; background: CanvasText; box-shadow: none; }
   .notehead.isOpen { background: Canvas; }
   .whiteKey,
@@ -830,5 +986,7 @@
   .chunkJourney > button.isCursor,
   .chunkJourney > button.isSelected { outline: 3px solid Highlight; }
   .attackEchoPulse,
-  .inputReadiness > i { border: 3px solid Highlight; background: Canvas; box-shadow: none; }
+  .inputReadiness > i,
+  .feedbackPoint,
+  .referenceTimeline > b { border: 3px solid Highlight; background: Canvas; box-shadow: none; }
 }
