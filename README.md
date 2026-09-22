@@ -4,9 +4,17 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Score Flow · Live Response v2.19**. It provides:
+The current milestone is **Score Flow · Ear–Eye–Hands Play Along v2.20**. It provides:
 
-- Always-on provisional score following. Once a score is loaded, new MIDI or silent on-screen attacks cross a fresh boundary and move the landing, chunk, and journey views without requiring an Arm step. A completed live-follow loop leaves its result visible briefly, then returns to landing one for another repetition; `Start review take` remains the explicit way to freeze and retain one pass.
+- One audible and visible start. `Play along · count in` gives a meter-aware click count, then drives the synthesized score, moving timeline, heard-note staff reveal, form cursor, and MIDI evaluator from one shared clock. The first played note no longer defines its own timing origin; early and late distance are measured against the cue the learner actually heard.
+
+- A compact sensory bridge. `Ear` shows whether a reference tone is sounding, `Eye` unveils the landing that begins at the current cue, and `Hands` places the learner's attack in one pitch-versus-time field. Written gaps become explicit rests rather than visually sustaining the previous attack. Easy mode reveals staff position plus exact semitone and millisecond correction; Memory mode lets the heard staff image decay; Hard mode keeps only pulse, note-count silhouette, higher/lower, and early/late categories until review.
+
+- A safer, more audible reference path. Score Flow now trims each synthesized field before the safety compressor instead of compressing a full-scale oscillator and attenuating it afterward. A bounded reference-level control defaults above the former level and reaches true mute at 0%, while equal-power voice mixing, safety compression, dense-field limits, and silent MIDI input remain intact.
+
+- A browser-bounded cue plan shared by sound, visuals, and evaluation. Full play-along schedules up to 96 landings, 30 seconds of attack onsets, and 256 synthesized tones per selected loop; shorter upper and bass previews begin from the learner cursor. Stopping freezes only the prefix that was actually heard, while natural completion freezes successes, misses, pitch differences, and pulse differences on the same timeline.
+
+- Always-on provisional score following. Once a score is loaded, new MIDI or silent on-screen attacks cross a fresh boundary and move the landing, chunk, and journey views without requiring an Arm step. A completed live-follow loop leaves its result visible briefly, then returns to landing one for another repetition; `Record silent take` remains the explicit no-reference way to freeze and retain one pass.
 
 - A focal `Played now` echo inside the illuminated landing field. Every raw attack produces an immediate, non-judgmental bloom; a chord then moves through `Received` or `Gathering` before the selected togetherness window resolves to a written `✓ Aligned` or `× Repair` result. Ear-first and memory veils preserve only anonymous attack count and receipt, never pitch identity or correctness.
 
@@ -28,7 +36,7 @@ The current milestone is **Score Flow · Live Response v2.19**. It provides:
 
 - A compact score-to-hand route beneath the central field: real piano-key geometry, current/previous/held territory, exact signed semitone and approximate white-key-width travel, and per-note fingering provenance. `score 3` means authored, `~3` means an advisory chord-shape suggestion, and `?` means passage context is required.
 
-- Read, fade-after-launch, and genuinely pitch-veiled ear-first layers. The veiled layer retains only landing timing slots and simultaneous-note count; note labels, pitch routes, key signature, local collection, keyboard destination, semitone distance, and fingering return only after review. A bounded, explicit reference button may sound the written route, while incoming MIDI and the on-screen practice keyboard remain silent.
+- Easy-reveal, Memory-fade, and genuinely pitch-veiled Hard layers. The hard layer retains only landing timing slots and simultaneous-note count while the reference sounds; note labels, pitch routes, key signature, local collection, keyboard destination, semitone distance, and fingering return only after review. Explicit Play-along and preview controls may synthesize the written route, while incoming MIDI and the on-screen practice keyboard remain silent.
 
 - Target-aware performance alignment. Fast written notes remain separate inside a relaxed togetherness window; an incomplete chord stays on the current landing while its selected 70–220 ms gathering window is open, and only an explicitly marked arpeggio receives the wider roll window. Right keys, notes together, semitone spacing, written roll direction, top-note shape and width, bottom-note path, pulse, and key-up length remain separate inside a review disclosure instead of becoming a blended score.
 

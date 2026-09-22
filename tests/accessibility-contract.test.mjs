@@ -56,12 +56,12 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(piano, /\{ id: "score-flow", label: "Score Flow · upload music"/);
+  assert.match(piano, /\{ id: "score-flow", label: "Score Flow · upload score"/);
   assert.match(piano, /focusLens === "score-flow" \? <PianoScoreFlowHud/);
   assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*midiConnected=\{midi\.inputs\.length > 0\}[\s\S]*onResumeCapture=\{resumeTrace\}/);
   assert.match(piano, /pressedNotes=\{pressedNoteNumbers\}/);
   assert.match(piano, /focusLens === "score-flow"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
-  assert.match(piano, /The score stays in this browser tab\. MIDI stays silent; only the explicit score-reference button makes sound\./);
+  assert.match(piano, /The score stays in this browser tab\. MIDI stays silent; only the explicit Play along and preview controls synthesize the written score\./);
   assert.match(session, /"score-flow"/);
   assert.match(ratio, /"score-flow": "uploaded-score coach"/);
 
@@ -80,11 +80,29 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.ok(importer.indexOf("if (file.size > MAX_ARCHIVE_BYTES)") < importer.indexOf("await file.arrayBuffer()"), "oversized score files must fail before browser allocation");
   assert.doesNotMatch(scoreFlow, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
 
-  assert.match(scoreFlow, /Reference audio is off\. MIDI remains silent\./);
+  assert.match(scoreFlow, /Synthesized score reference is ready\. MIDI input remains silent\./);
   assert.match(scoreFlow, /Review take started\.[^"`]*MIDI remains silent\./);
-  assert.match(scoreFlow, /aria-pressed=\{audioState === "playing"\}[\s\S]*audioState === "playing" \? "Stop reference" : "Hear from cursor · audio"/);
-  assert.match(scoreFlow, /const playReference = useCallback\(async \(voice: ReferenceVoice = "full"\) => \{[\s\S]*new AudioContextConstructor[\s\S]*createOscillator\(\)/);
-  assert.match(scoreFlow, /captureState === "review" \? selectedChunk \? "Try chunk again" : "Try loop again"/);
+  assert.match(scoreFlow, /aria-pressed=\{audioPlaying && view\.playAlong\}[\s\S]*"Play along · count in"/);
+  assert.match(scoreFlow, /const playReference = useCallback\(async \(voice: ReferenceVoice = "full", playAlong = voice === "full"\) => \{[\s\S]*new AudioContextConstructor[\s\S]*createOscillator\(\)/);
+  assert.match(scoreFlow, /captureState === "review" \? selectedChunk \? "Record chunk without audio" : "Record loop without audio"/);
+  assert.match(scoreFlow, /function PlayAlongField\(/);
+  assert.match(scoreFlow, /Shared musical now · synthesized score reference/);
+  assert.match(scoreFlow, /role="progressbar" aria-label="Reference playback position"/);
+  assert.match(scoreFlow, /Easy · unveil heard landing/);
+  assert.match(scoreFlow, /Hard · pulse \+ silhouette/);
+  assert.match(scoreFlow, /timingClock: referenceTimingClock \?\? undefined/);
+  assert.match(scoreFlow, /const hasTimingEvidence = Boolean\(referenceTimingClock \|\| timingMode === "pulse"\)/, "synchronized play-along timing must remain visible even when the setup lens says self-paced");
+  assert.match(scoreFlow, /master\.connect\(compressor\)\.connect\(context\.destination\)/);
+  assert.match(scoreFlow, /referenceLevelGain\(referenceVolume\)/);
+  assert.match(scoreFlow, /setTargetAtTime\(referenceLevelGain\(value\)/, "the live level control must share the same true-mute mapping as playback start");
+  assert.match(scoreFlow, /pressedNotes\.length \|\| \(audioState === "playing" && referencePlayback\.playAlong\)/, "active Play along must stay live until its audio ends or the learner stops it");
+  assert.match(scoreFlow, /scoreReferenceFrameAt\(playbackPlan, audibleElapsed \+ 8\)/, "the visible reveal must use the same bounded cue plan as the audible reference");
+  assert.match(scoreFlow, /currentIndex: frame\.soundingIndex[\s\S]*cursorIndex: frame\.cursorIndex[\s\S]*sounding: frame\.soundingIndex != null/);
+  assert.match(scoreFlow, /startAttackId: playbackPlan\.cues\[0\]\.attackId[\s\S]*endAttackId: playbackPlan\.cues\.at\(-1\)!\.attackId/, "frozen review must cover only the cues that were actually scheduled");
+  assert.match(scoreFlow, /cancelledPlayAlongBeforeSound[\s\S]*if \(!preserveClock \|\| cancelledPlayAlongBeforeSound\) setReferenceTimingClock\(null\)/, "count-in cancellation must clear a stale clock without erasing an existing review during previews");
+  assert.match(scoreFlow, /timingError < 0 \? 24 : 76/);
+  assert.match(scoreFlow, /const pressedTargetCount = exactReveal \?/);
+  assert.match(model, /export function buildScoreReferencePlan/);
   assert.match(scoreFlow, /event\.keyReleaseMs \?\? event\.releaseMs/);
   assert.match(scoreFlow, /const deadlineMs = anchor\.onsetMs \+ clusterWindow/);
   assert.match(scoreFlow, /!evaluation\?\.extraClusters\.length/);
@@ -202,7 +220,7 @@ test("Score Flow follows raw MIDI in study and capture while keeping review froz
   assert.match(takeEventsContract, /liveTakeEvents/, "study and armed modes must continue following post-boundary live events");
   assert.doesNotMatch(takeEventsContract, /:\s*\[\]\s*,?\s*\[/, "idle study must not silently replace fresh MIDI with an empty take");
 
-  assert.match(scoreFlow, /\.filter\(\(event\)\s*=>\s*event\.id\s*>\s*attemptAfterId\)/, "only events strictly after the current attempt boundary may enter the live view");
+  assert.match(scoreFlow, /function capturedScoreEvents[\s\S]*\.filter\(\(event\) => event\.id > afterId && event\.onsetMs >= earliestOnsetMs && event\.onsetMs <= latestOnsetMs\)/, "only events strictly after the current attempt boundary and inside the audible session may enter the live view");
   assert.match(scoreFlow, /function\s+LiveAttackEcho\s*\(/, "raw key receipt needs a dedicated view independent of formal diagnosis");
   const echoStart = scoreFlow.indexOf("function LiveAttackEcho");
   const echoEnd = scoreFlow.indexOf("function ", echoStart + "function LiveAttackEcho".length);
