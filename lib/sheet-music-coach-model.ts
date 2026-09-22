@@ -481,8 +481,55 @@ export type SheetPerformanceEvaluationOptions = SheetMusicLoopSelection & {
   durationToleranceMs?: number;
   /** Replaces all score tempo markings for slow-practice evaluation. */
   tempoBpm?: number;
+  /**
+   * Absolute playback clock for synchronized play-along. `performanceTimeMs`
+   * shares the same clock as MIDI onsetMs and names when `scoreBeat` is heard.
+   * When omitted, a self-paced take keeps anchoring itself to its first match.
+   */
+  timingClock?: { scoreBeat: number; performanceTimeMs: number };
   /** When false, untouched trailing score events remain pending. */
   finalize?: boolean;
+};
+
+export type SheetReferencePlanNote = {
+  noteId: string;
+  midi: number;
+  onsetOffsetMs: number;
+  durationMs: number;
+};
+
+export type SheetReferencePlanCue = {
+  expectedIndex: number;
+  attackId: string;
+  measureNumber: string;
+  scoreBeat: number;
+  onsetMs: number;
+  endMs: number;
+  notes: SheetReferencePlanNote[];
+};
+
+export type SheetReferencePlan = {
+  startIndex: number;
+  baseBeat: number;
+  tempoBpm: number;
+  cues: SheetReferencePlanCue[];
+  totalDurationMs: number;
+  truncated: boolean;
+};
+
+export type SheetReferenceFrame = {
+  cursorIndex: number | null;
+  soundingIndex: number | null;
+};
+
+export type SheetReferencePlanOptions = {
+  startIndex?: number;
+  tempoBpm: number;
+  maxLandings?: number;
+  maxDurationMs?: number;
+  noteDurationScale?: number;
+  maxNoteDurationMs?: number;
+  arpeggioStepMs?: number;
 };
 
 const STEP_PITCH_CLASS: Record<MusicXmlStep, number> = {
@@ -1532,6 +1579,95 @@ export function scoreBeatSpanToMs(score: SheetMusicScore, startBeat: number, end
   return total;
 }
 
+/**
+ * Build the single fixed-tempo cue plan used by Score Flow reference audio,
+ * its visual playhead, and its synchronized MIDI clock. Keeping these offsets
+ * together prevents the ear, eye, and evaluator from drifting apart.
+ */
+export function buildScoreReferencePlan(
+  loop: SheetMusicPracticeLoop,
+  options: SheetReferencePlanOptions,
+): SheetReferencePlan {
+  if (!loop || !Array.isArray(loop.attacks)) throw new TypeError("Reference playback needs a selected score loop.");
+  assertPositive(options.tempoBpm, "Reference tempo");
+  if (options.tempoBpm > 400) throw new RangeError("Reference tempo must not exceed 400 BPM.");
+  const startIndex = options.startIndex ?? 0;
+  if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= Math.max(1, loop.attacks.length)) {
+    throw new RangeError("Reference start index must identify a landing in the selected loop.");
+  }
+  const maxLandings = options.maxLandings ?? 96;
+  const maxDurationMs = options.maxDurationMs ?? 30_000;
+  // The synthesized release is part of the learner's timing evidence, so the
+  // default reference must preserve the written sounding length. Callers may
+  // still request a shorter detached preview explicitly.
+  const noteDurationScale = options.noteDurationScale ?? 1;
+  const maxNoteDurationMs = options.maxNoteDurationMs ?? 6_000;
+  const arpeggioStepMs = options.arpeggioStepMs ?? 55;
+  if (!Number.isInteger(maxLandings) || maxLandings < 1 || maxLandings > MAX_SCORE_EVENTS) throw new RangeError("Reference landing limit must be a positive bounded integer.");
+  assertPositive(maxDurationMs, "Reference duration limit");
+  assertPositive(noteDurationScale, "Reference note-duration scale");
+  assertPositive(maxNoteDurationMs, "Reference note-duration limit");
+  if (!Number.isFinite(arpeggioStepMs) || arpeggioStepMs < 0 || arpeggioStepMs > 500) throw new RangeError("Reference arpeggio step must be from 0 through 500 ms.");
+  if (!loop.attacks.length) return { startIndex: 0, baseBeat: loop.startBeat, tempoBpm: options.tempoBpm, cues: [], totalDurationMs: 0, truncated: false };
+
+  const secondsPerBeat = 60 / options.tempoBpm;
+  const source = loop.attacks.slice(startIndex, startIndex + maxLandings);
+  const baseBeat = source[0].onsetBeat;
+  const cues: SheetReferencePlanCue[] = [];
+  for (let sourceIndex = 0; sourceIndex < source.length; sourceIndex += 1) {
+    const attack = source[sourceIndex];
+    const onsetMs = (attack.onsetBeat - baseBeat) * secondsPerBeat * 1_000;
+    if (onsetMs > maxDurationMs && cues.length) break;
+    const ordered = [...attack.notes].sort((first, second) => first.pitch.midi - second.pitch.midi);
+    if (attack.arpeggiate === "down") ordered.reverse();
+    const notes = ordered.map((note, noteIndex): SheetReferencePlanNote => {
+      const onsetOffsetMs = attack.arpeggiate ? noteIndex * arpeggioStepMs : 0;
+      // Rolled notes share the written release boundary: later members begin
+      // later and therefore sound for less time than the first member.
+      const writtenDurationMs = note.soundingDurationBeats * secondsPerBeat * noteDurationScale * 1_000;
+      const rawDurationMs = Math.max(140, writtenDurationMs - onsetOffsetMs);
+      return {
+        noteId: note.id,
+        midi: note.pitch.midi,
+        onsetOffsetMs,
+        durationMs: Math.min(maxNoteDurationMs, rawDurationMs),
+      };
+    });
+    const endMs = onsetMs + Math.max(80, ...notes.map((note) => note.onsetOffsetMs + note.durationMs + 80));
+    cues.push({
+      expectedIndex: startIndex + sourceIndex,
+      attackId: attack.id,
+      measureNumber: attack.measureNumber,
+      scoreBeat: attack.onsetBeat,
+      onsetMs,
+      endMs,
+      notes,
+    });
+  }
+  const available = Math.max(0, loop.attacks.length - startIndex);
+  return {
+    startIndex,
+    baseBeat,
+    tempoBpm: options.tempoBpm,
+    cues,
+    totalDurationMs: cues.length ? Math.max(...cues.map((cue) => cue.endMs)) : 0,
+    truncated: cues.length < available,
+  };
+}
+
+/** Locate the score cursor and the latest cue that is physically sounding. */
+export function scoreReferenceFrameAt(plan: SheetReferencePlan, elapsedMs: number): SheetReferenceFrame {
+  if (!plan || !Array.isArray(plan.cues)) throw new TypeError("Reference frame needs a cue plan.");
+  assertFinite(elapsedMs, "Reference elapsed time");
+  if (elapsedMs < 0 || !plan.cues.length) return { cursorIndex: null, soundingIndex: null };
+  const cursor = plan.cues.findLast((cue) => cue.onsetMs <= elapsedMs + EPSILON) ?? null;
+  const sounding = plan.cues.findLast((cue) => cue.notes.some((note) => {
+    const start = cue.onsetMs + note.onsetOffsetMs;
+    return elapsedMs + EPSILON >= start && elapsedMs < start + note.durationMs - EPSILON;
+  })) ?? null;
+  return { cursorIndex: cursor?.expectedIndex ?? null, soundingIndex: sounding?.expectedIndex ?? null };
+}
+
 function scoreTempoAtBeat(score: SheetMusicScore, beat: number) {
   return [...score.tempoChanges].reverse().find((change) => change.beat <= beat + EPSILON)?.bpm ?? score.tempoBpm;
 }
@@ -1986,9 +2122,19 @@ export function evaluateSheetMusicPerformance(
   const { clusters, operations } = aligned;
   const paired = operations.filter((operation) => operation.kind === "paired");
   const firstPair = paired[0];
-  const timingAnchor = firstPair
-    ? clusters[firstPair.actualIndex!].onsetMs - scoreBeatSpanToMs(score, loop.startBeat, loop.attacks[firstPair.expectedIndex!].onsetBeat, options.tempoBpm)
-    : 0;
+  if (options.timingClock) {
+    assertFinite(options.timingClock.scoreBeat, "Playback clock score beat");
+    assertFinite(options.timingClock.performanceTimeMs, "Playback clock performance time");
+    if (options.timingClock.performanceTimeMs < 0) throw new RangeError("Playback clock performance time must be non-negative.");
+    if (options.timingClock.scoreBeat < loop.startBeat - EPSILON || options.timingClock.scoreBeat > loop.endBeat + EPSILON) {
+      throw new RangeError("Playback clock score beat must fall inside the selected loop.");
+    }
+  }
+  const timingAnchor = options.timingClock
+    ? options.timingClock.performanceTimeMs - scoreBeatSpanToMs(score, loop.startBeat, options.timingClock.scoreBeat, options.tempoBpm)
+    : firstPair
+      ? clusters[firstPair.actualIndex!].onsetMs - scoreBeatSpanToMs(score, loop.startBeat, loop.attacks[firstPair.expectedIndex!].onsetBeat, options.tempoBpm)
+      : 0;
   const baseBeatMs = 60_000 / (options.tempoBpm ?? scoreTempoAtBeat(score, loop.startBeat));
   const timingToleranceMs = options.timingToleranceMs ?? Math.max(85, baseBeatMs * 0.18);
   const durationToleranceMs = options.durationToleranceMs ?? Math.max(120, baseBeatMs * 0.25);

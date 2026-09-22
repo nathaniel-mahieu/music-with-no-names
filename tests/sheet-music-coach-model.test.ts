@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   analyzeLocalPitchCollections,
+  buildScoreReferencePlan,
   buildSheetMusicReadingChunks,
   chordSpacing,
   clusterMidiPerformance,
@@ -13,6 +14,7 @@ import {
   musicXmlPitch,
   normalizeSheetMusicScore,
   repairLoopAroundFirstDivergence,
+  scoreReferenceFrameAt,
   scoreBeatSpanToMs,
   selectSheetMusicLoop,
   summarizeSheetReadingChunkProgress,
@@ -207,6 +209,152 @@ test("integrates score tempo changes and permits a fixed slow-practice tempo", (
   assert.equal(scoreBeatSpanToMs(normalized, 1, 3), 1_500);
   assert.equal(scoreBeatSpanToMs(normalized, 0, 4, 120), 2_000);
   assert.throws(() => scoreBeatSpanToMs(normalized, -1, 1), /outside/);
+});
+
+test("builds one bounded reference plan for sound, playhead, and MIDI timing", () => {
+  const normalized = score();
+  const loop = selectSheetMusicLoop(normalized, { startMeasureIndex: 0, endMeasureIndex: 0, hand: "both" });
+  const plan = buildScoreReferencePlan(loop, { tempoBpm: 120 });
+
+  assert.equal(plan.baseBeat, 0);
+  assert.equal(plan.cues.length, 3);
+  assert.equal(plan.cues[0].onsetMs, 0);
+  assert.equal(plan.cues[1].onsetMs, 500);
+  assert.deepEqual(plan.cues[0].notes.map((note) => note.midi), [60, 64, 67]);
+  assert.equal(plan.cues[0].notes.every((note) => note.onsetOffsetMs === 0), true);
+  assert.equal(plan.cues[0].notes[0].durationMs, 500, "reference audio must preserve the written release by default");
+  assert.equal(plan.totalDurationMs > plan.cues.at(-1)!.onsetMs, true);
+  assert.equal(plan.truncated, false);
+  assert.deepEqual(scoreReferenceFrameAt(plan, 0), { cursorIndex: 0, soundingIndex: 0 });
+  const detachedPlan = buildScoreReferencePlan(loop, { tempoBpm: 120, noteDurationScale: .5 });
+  assert.deepEqual(scoreReferenceFrameAt(detachedPlan, 450), { cursorIndex: 0, soundingIndex: null }, "a released note must become an explicit rest before the next attack");
+  assert.deepEqual(scoreReferenceFrameAt(plan, 510), { cursorIndex: 1, soundingIndex: 1 });
+  assert.deepEqual(scoreReferenceFrameAt(plan, -1), { cursorIndex: null, soundingIndex: null });
+
+  const clipped = buildScoreReferencePlan(loop, { tempoBpm: 120, maxLandings: 1 });
+  assert.equal(clipped.cues.length, 1);
+  assert.equal(clipped.truncated, true);
+  assert.throws(() => buildScoreReferencePlan(loop, { tempoBpm: 0 }), /greater than zero/);
+});
+
+test("anchors a partial reference plan at a nonzero start and truncates by elapsed duration", () => {
+  const normalized = score();
+  const loop = selectSheetMusicLoop(normalized, { startMeasureIndex: 0, endMeasureIndex: 0, hand: "both" });
+  const plan = buildScoreReferencePlan(loop, {
+    startIndex: 1,
+    tempoBpm: 120,
+    maxDurationMs: 900,
+  });
+
+  assert.equal(plan.startIndex, 1);
+  assert.equal(plan.baseBeat, loop.attacks[1].onsetBeat);
+  assert.equal(plan.cues.length, 1, "the next landing begins 1,000 ms after the partial-plan origin and must be clipped");
+  assert.equal(plan.cues[0].expectedIndex, 1, "cue indexes remain addresses in the selected loop");
+  assert.equal(plan.cues[0].attackId, loop.attacks[1].id);
+  assert.equal(plan.cues[0].onsetMs, 0, "a partial plan starts its own audible clock at zero");
+  assert.equal(plan.truncated, true);
+});
+
+test("keeps rolled notes on one written release boundary", () => {
+  const rolled = normalizeSheetMusicScore({
+    id: "reference-roll",
+    title: "Reference roll",
+    tempoBpm: 120,
+    measures: [{
+      number: 1,
+      durationBeats: 2,
+      events: [60, 64, 67].map((midi, index) => ({
+        kind: "note" as const,
+        id: `reference-roll-${index}`,
+        offsetBeats: 0,
+        durationBeats: 1,
+        midi,
+        arpeggiate: "up" as const,
+      })),
+    }],
+  });
+  const loop = selectSheetMusicLoop(rolled);
+  const plan = buildScoreReferencePlan(loop, { tempoBpm: 120, arpeggioStepMs: 100 });
+  const notes = plan.cues[0].notes;
+
+  assert.deepEqual(notes.map((note) => note.onsetOffsetMs), [0, 100, 200]);
+  assert.deepEqual(notes.map((note) => note.durationMs), [500, 400, 300]);
+  assert.deepEqual(notes.map((note) => note.onsetOffsetMs + note.durationMs), [500, 500, 500], "later roll members shorten so every tone releases at the written boundary");
+});
+
+test("scores play-along timing against the audible reference clock instead of the first played note", () => {
+  const normalized = score();
+  const events: MidiPerformanceNote[] = [
+    { midi: 60, onsetMs: 1_120, releaseMs: 1_620 },
+    { midi: 64, onsetMs: 1_145, releaseMs: 1_645 },
+    { midi: 67, onsetMs: 1_170, releaseMs: 1_670 },
+    { midi: 62, onsetMs: 1_580, releaseMs: 2_080 },
+  ];
+  const synchronized = evaluateSheetMusicPerformance(normalized, events, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 0,
+    hand: "both",
+    tempoBpm: 120,
+    timingToleranceMs: 100,
+    timingClock: { scoreBeat: 0, performanceTimeMs: 1_000 },
+    finalize: false,
+  });
+  assert.equal(synchronized.comparisons[0].timingErrorMs, 120);
+  assert.equal(synchronized.comparisons[0].timingMatch, false);
+  assert.equal(synchronized.comparisons[1].timingErrorMs, 80);
+  assert.equal(synchronized.comparisons[1].timingMatch, true);
+
+  const selfPaced = evaluateSheetMusicPerformance(normalized, events, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 0,
+    hand: "both",
+    tempoBpm: 120,
+    timingToleranceMs: 100,
+    finalize: false,
+  });
+  assert.equal(selfPaced.comparisons[0].timingErrorMs, 0, "legacy takes still anchor their first paired landing");
+  assert.throws(() => evaluateSheetMusicPerformance(normalized, events, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 0,
+    timingClock: { scoreBeat: 0, performanceTimeMs: -1 },
+  }), /non-negative/);
+  assert.throws(() => evaluateSheetMusicPerformance(normalized, events, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 0,
+    timingClock: { scoreBeat: 9, performanceTimeMs: 1_000 },
+  }), /inside the selected loop/);
+});
+
+test("applies a nonzero score-beat clock inside one exact attack range", () => {
+  const normalized = score();
+  const containing = selectSheetMusicLoop(normalized, { startMeasureIndex: 0, endMeasureIndex: 1, hand: "both" });
+  const startAttackId = containing.attacks[1].id;
+  const endAttackId = containing.attacks[3].id;
+  const exact = selectSheetMusicLoop(normalized, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 1,
+    hand: "both",
+    startAttackId,
+    endAttackId,
+  });
+  const synchronized = evaluateSheetMusicPerformance(normalized, exactTake().slice(3, 6), {
+    startMeasureIndex: 0,
+    endMeasureIndex: 1,
+    hand: "both",
+    startAttackId,
+    endAttackId,
+    tempoBpm: 120,
+    timingToleranceMs: 50,
+    timingClock: {
+      scoreBeat: exact.attacks[1].onsetBeat,
+      performanceTimeMs: 2_600,
+    },
+    finalize: true,
+  });
+
+  assert.deepEqual(synchronized.comparisons.map((comparison) => comparison.expected.id), exact.attacks.map((attack) => attack.id), "attacks outside the exact range never enter synchronized review");
+  assert.deepEqual(synchronized.comparisons.map((comparison) => comparison.timingErrorMs), [-100, -100, -100], "an interior clock beat projects backward and forward across the exact range");
+  assert.deepEqual(synchronized.comparisons.map((comparison) => comparison.timingMatch), [false, false, false]);
 });
 
 test("clusters rolled chord attacks without transitive window creep", () => {
