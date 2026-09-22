@@ -86,6 +86,17 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /const playReference = useCallback\(async \(voice: ReferenceVoice = "full", playAlong = voice === "full"\) => \{[\s\S]*new AudioContextConstructor[\s\S]*createOscillator\(\)/);
   assert.match(scoreFlow, /captureState === "review" \? selectedChunk \? "Record chunk without audio" : "Record loop without audio"/);
   assert.match(scoreFlow, /function PlayAlongField\(/);
+  assert.match(scoreFlow, /function ListeningStaff\(/);
+  assert.match(scoreFlow, /Listening staff: heard notation is progressively revealed/);
+  assert.match(scoreFlow, /The grand staff stays visible\. Start the reference to uncover notation as each onset reaches the shared clock\./);
+  assert.match(scoreFlow, /view\.startIndex != null && view\.cursorIndex != null[\s\S]*index >= view\.startIndex && index <= view\.cursorIndex/, "the listening staff must reveal only the scheduled heard prefix");
+  assert.match(scoreFlow, /if \(!started \|\| !insideScheduledRange \|\| !cursorHasSounded\) return "veiled"/, "count-in and pre-audio frames must not expose pitch");
+  assert.match(scoreFlow, /if \(view\.phase === "complete" \|\| readingMode === "read"\) return "revealed"/, "voice previews must follow the selected reveal difficulty instead of bypassing it");
+  assert.match(scoreFlow, /index === view\.memoryRevealIndex \? "memory" : "shape"/, "Memory disclosure must be bounded by the shared audio clock");
+  assert.match(scoreFlow, /const exact = disclosure === "revealed" \|\| disclosure === "memory"[\s\S]*\{exact \? notes\.map/, "hidden staff slots must omit exact note positions from the rendered staff");
+  assert.match(scoreFlow, /disclosure === "veiled" \? "·" : `\$\{notes\.length\}×`/, "concealed staff slots use a position-neutral marker or attack count");
+  assert.match(scoreFlow, /Hard keeps staff height hidden during play; Stop \+ review reveals only the clock-reached prefix\./);
+  assert.match(scoreFlow, /function referenceNotesForAttack\([\s\S]*voice === "upper"[\s\S]*voice === "bass"/, "staff disclosure must follow the exact upper or bass preview voice");
   assert.match(scoreFlow, /Shared musical now · synthesized score reference/);
   assert.match(scoreFlow, /role="progressbar" aria-label="Reference playback position"/);
   assert.match(scoreFlow, /Easy · unveil heard landing/);
@@ -97,11 +108,13 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /setTargetAtTime\(referenceLevelGain\(value\)/, "the live level control must share the same true-mute mapping as playback start");
   assert.match(scoreFlow, /pressedNotes\.length \|\| \(audioState === "playing" && referencePlayback\.playAlong\)/, "active Play along must stay live until its audio ends or the learner stops it");
   assert.match(scoreFlow, /scoreReferenceFrameAt\(playbackPlan, audibleElapsed \+ 8\)/, "the visible reveal must use the same bounded cue plan as the audible reference");
-  assert.match(scoreFlow, /currentIndex: frame\.soundingIndex[\s\S]*cursorIndex: frame\.cursorIndex[\s\S]*sounding: frame\.soundingIndex != null/);
+  assert.match(scoreFlow, /currentIndex: frame\.cursorIndex[\s\S]*cursorIndex: frame\.cursorIndex[\s\S]*soundingIndex: frame\.soundingIndex[\s\S]*sounding: frame\.soundingIndex != null/, "the ear's onset identity must not regress when an older polyphonic tone keeps sounding");
+  assert.match(scoreFlow, /startIndex: playbackPlan\.cues\[0\]\.expectedIndex[\s\S]*currentIndex: null[\s\S]*cursorIndex: playbackPlan\.cues\[0\]\.expectedIndex[\s\S]*sounding: false/, "the staff must remain covered during the audio lead-in");
+  assert.match(scoreFlow, /audibleElapsed - cursorCue\.onsetMs < 1_450[\s\S]*memoryRevealIndex/, "Memory's brief reveal must expire from the audible clock rather than animation alone");
   assert.match(scoreFlow, /startAttackId: playbackPlan\.cues\[0\]\.attackId[\s\S]*endAttackId: playbackPlan\.cues\.at\(-1\)!\.attackId/, "frozen review must cover only the cues that were actually scheduled");
   assert.match(scoreFlow, /cancelledPlayAlongBeforeSound[\s\S]*if \(!preserveClock \|\| cancelledPlayAlongBeforeSound\) setReferenceTimingClock\(null\)/, "count-in cancellation must clear a stale clock without erasing an existing review during previews");
   assert.match(scoreFlow, /timingError < 0 \? 24 : 76/);
-  assert.match(scoreFlow, /const pressedTargetCount = exactReveal \?/);
+  assert.match(scoreFlow, /const pressedTargetCount = handExactReveal \?/);
   assert.match(model, /export function buildScoreReferencePlan/);
   assert.match(scoreFlow, /event\.keyReleaseMs \?\? event\.releaseMs/);
   assert.match(scoreFlow, /const deadlineMs = anchor\.onsetMs \+ clusterWindow/);
@@ -202,7 +215,11 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlowCss, /\.shell summary:focus-visible,/);
   assert.match(scoreFlowCss, /\.shell label:has\(input\[type="file"\]:focus-visible\) \{ outline: 3px/);
   assert.match(scoreFlowCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(scoreFlowCss, /\.listeningLanding\[data-disclosure="memory"\] \.staffSlotVeil \{ opacity: 0; \}/, "reduced motion must show the brief note without an animated fade");
+  assert.match(scoreFlowCss, /\.listeningLanding\[data-disclosure="memory"\] \.listeningNote \{ opacity: 1; \}/);
   assert.match(scoreFlowCss, /@media \(forced-colors: active\)/);
+  assert.match(scoreFlowCss, /\.listeningTrebleLines,[\s\S]*\.listeningBassLines::after \{ border-color: CanvasText; \}/, "forced-color staff lines must use five real system-color borders rather than gradients or shadows");
+  assert.match(scoreFlowCss, /\.staffSlotVeil \{[^}]*border: 2px dashed CanvasText;[^}]*background: transparent;/);
   assert.doesNotMatch(scoreFlowCss, /forced-color-adjust:\s*none/);
 });
 

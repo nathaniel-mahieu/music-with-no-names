@@ -101,8 +101,13 @@ type ReferencePlaybackView = {
   phase: ReferencePhase;
   voice: ReferenceVoice;
   playAlong: boolean;
+  startIndex: number | null;
   currentIndex: number | null;
   cursorIndex: number | null;
+  /** One cue whose exact staff position is briefly available in Memory mode. */
+  memoryRevealIndex: number | null;
+  /** Latest score cue with at least one synthesized tone still physically sounding. */
+  soundingIndex: number | null;
   sounding: boolean;
   cueCount: number;
   progress: number;
@@ -116,8 +121,11 @@ const EMPTY_REFERENCE_VIEW: ReferencePlaybackView = {
   phase: "idle",
   voice: "full",
   playAlong: false,
+  startIndex: null,
   currentIndex: null,
   cursorIndex: null,
+  memoryRevealIndex: null,
+  soundingIndex: null,
   sounding: false,
   cueCount: 0,
   progress: 0,
@@ -159,12 +167,99 @@ function writtenLabel(note: SheetMusicNote, showConventions: boolean) {
   return showConventions ? note.pitch.label : `${note.hand === "left" ? "lower" : "upper"} key`;
 }
 
+function ordinal(value: number) {
+  const remainder = value % 100;
+  if (remainder >= 11 && remainder <= 13) return `${value}th`;
+  if (value % 10 === 1) return `${value}st`;
+  if (value % 10 === 2) return `${value}nd`;
+  if (value % 10 === 3) return `${value}rd`;
+  return `${value}th`;
+}
+
+function staffPositionLabel(note: SheetMusicNote, source: ImportedMusicXmlNote | undefined) {
+  const diatonic = note.pitch.octave * 7 + DIATONIC_STEP_INDEX[note.pitch.step];
+  const bottomLine = note.hand === "left" ? 18 : 30;
+  const delta = diatonic - bottomLine;
+  const staff = note.hand === "left" ? "lower staff" : "upper staff";
+  const position = delta < 0
+    ? `${staff}, ${Math.abs(delta)} staff step${delta === -1 ? "" : "s"} below the bottom line`
+    : delta > 8
+      ? `${staff}, ${delta - 8} staff step${delta === 9 ? "" : "s"} above the top line`
+      : delta % 2 === 0
+    ? `${staff}, ${ordinal(delta / 2 + 1)} line`
+    : `${staff}, ${ordinal((delta + 1) / 2)} space`;
+  if (source?.accidental?.trim().toLowerCase() === "natural") return `${position}, natural`;
+  if (note.pitch.alter > 0) return `${position}, raised ${note.pitch.alter} semitone${note.pitch.alter === 1 ? "" : "s"}`;
+  if (note.pitch.alter < 0) return `${position}, lowered ${Math.abs(note.pitch.alter)} semitone${note.pitch.alter === -1 ? "" : "s"}`;
+  return position;
+}
+
 function scoreStaffY(note: SheetMusicNote) {
   const diatonic = note.pitch.octave * 7 + DIATONIC_STEP_INDEX[note.pitch.step];
   // Upper E4 and lower G2 are the bottom lines of the two compact staves.
   const bottomLine = note.hand === "left" ? 18 : 30;
   const bottomY = note.hand === "left" ? 164 : 78;
-  return Math.max(13, Math.min(187, bottomY - (diatonic - bottomLine) * 5));
+  let y = bottomY - (diatonic - bottomLine) * 5;
+  while (y < 13) y += 35;
+  while (y > 187) y -= 35;
+  return y;
+}
+
+function scoreStaffOctaveMark(note: SheetMusicNote) {
+  const diatonic = note.pitch.octave * 7 + DIATONIC_STEP_INDEX[note.pitch.step];
+  const bottomLine = note.hand === "left" ? 18 : 30;
+  const bottomY = note.hand === "left" ? 164 : 78;
+  const rawY = bottomY - (diatonic - bottomLine) * 5;
+  const octaves = rawY < 13 ? Math.ceil((13 - rawY) / 35) : rawY > 187 ? -Math.ceil((rawY - 187) / 35) : 0;
+  if (!octaves) return null;
+  if (octaves === 1) return "8va";
+  if (octaves === -1) return "8vb";
+  if (octaves === 2) return "15ma";
+  if (octaves === -2) return "15mb";
+  return octaves > 0 ? `${octaves} oct. above` : `${Math.abs(octaves)} oct. below`;
+}
+
+function explicitAccidentalGlyph(accidental: string | null | undefined) {
+  const normalized = accidental?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "flat-flat" || normalized === "double-flat") return "𝄫";
+  if (normalized === "flat") return "♭";
+  if (normalized === "natural") return "♮";
+  if (normalized === "sharp") return "♯";
+  if (normalized === "double-sharp" || normalized === "sharp-sharp") return "𝄪";
+  if (normalized === "natural-flat") return "♮♭";
+  if (normalized === "natural-sharp") return "♮♯";
+  return null;
+}
+
+function pitchLocatorAccidentalGlyph(note: SheetMusicNote, source: ImportedMusicXmlNote | undefined) {
+  const explicit = explicitAccidentalGlyph(source?.accidental);
+  if (explicit) return explicit;
+  if (note.pitch.alter <= -2) return "𝄫";
+  if (note.pitch.alter === -1) return "♭";
+  if (note.pitch.alter === 1) return "♯";
+  if (note.pitch.alter >= 2) return "𝄪";
+  return null;
+}
+
+function spreadStaffAttackPositions(rawPositions: number[], minimumGap = 13) {
+  if (rawPositions.length < 2) return rawPositions;
+  const positions = rawPositions.slice();
+  for (let index = 1; index < positions.length; index += 1) {
+    positions[index] = Math.max(positions[index], positions[index - 1] + minimumGap);
+  }
+  if (positions.at(-1)! <= 94) return positions;
+  positions[positions.length - 1] = 94;
+  for (let index = positions.length - 2; index >= 0; index -= 1) {
+    positions[index] = Math.min(positions[index], positions[index + 1] - minimumGap);
+  }
+  return positions;
+}
+
+function referenceNotesForAttack(attack: SheetMusicPracticeAttack, voice: ReferenceVoice) {
+  if (voice === "upper") return [...attack.notes].sort((first, second) => second.pitch.midi - first.pitch.midi).slice(0, 1);
+  if (voice === "bass") return [...attack.notes].sort((first, second) => first.pitch.midi - second.pitch.midi).slice(0, 1);
+  return attack.notes.slice(0, 12);
 }
 
 function audioTimeToPerformanceMs(context: AudioContext, contextTime: number) {
@@ -800,44 +895,196 @@ function ScoreJourney({
   </section>;
 }
 
-function PlayAlongField({ view, loop, comparison, readingMode, showConventions, activeNotes, audioPlaying, canPlay, onToggle }: {
+type ListeningStaffDisclosure = "veiled" | "revealed" | "memory" | "shape";
+
+function listeningStaffDisclosure(index: number, view: ReferencePlaybackView, readingMode: ReadingMode): ListeningStaffDisclosure {
+  const started = view.phase === "playing" || view.phase === "complete";
+  const insideScheduledRange = view.startIndex != null && view.cursorIndex != null
+    && index >= view.startIndex && index <= view.cursorIndex;
+  const cursorHasSounded = view.cursorIndex != null && (
+    index < view.cursorIndex
+    || index === view.currentIndex
+    || view.progress > 0
+    || view.phase === "complete"
+  );
+  if (!started || !insideScheduledRange || !cursorHasSounded) return "veiled";
+  if (view.phase === "complete" || readingMode === "read") return "revealed";
+  if (readingMode === "memory") return index === view.memoryRevealIndex ? "memory" : "shape";
+  return "shape";
+}
+
+function staffNoteNudge(notes: SheetMusicNote[], index: number) {
+  const current = notes[index];
+  const prior = notes[index - 1];
+  if (!current || !prior) return 0;
+  return Math.abs(scoreStaffY(current) - scoreStaffY(prior)) <= 5 ? (index % 2 ? 5 : -5) : 0;
+}
+
+function staffLedgerLines(note: SheetMusicNote) {
+  const y = scoreStaffY(note);
+  const top = note.hand === "left" ? 124 : 38;
+  const bottom = note.hand === "left" ? 164 : 78;
+  const lines: number[] = [];
+  if (y < top) for (let line = top - 10; line >= y - 1; line -= 10) lines.push(line);
+  if (y > bottom) for (let line = bottom + 10; line <= y + 1; line += 10) lines.push(line);
+  return lines;
+}
+
+function listeningStaffResult(comparison: SheetEventComparison | undefined, exact: boolean) {
+  if (!comparison || comparison.status === "pending") return "heard · waiting for your keys";
+  if (comparison.status === "correct") return "✓ found on the pulse";
+  if (comparison.status === "missed") return "× heard · no played landing";
+  if (!comparison.pitchMatch) {
+    const correction = closestSinglePitchCorrection(comparison);
+    if (correction == null) return "△ chord shape differs";
+    if (!exact) return correction > 0 ? "↑ your key was lower" : "↓ your key was higher";
+    return `${Math.abs(correction)} st ${correction > 0 ? "low · move right" : "high · move left"}`;
+  }
+  if (comparison.arpeggiationMatch === false) return "↕ change roll direction";
+  if (comparison.spacingMatch === false) return "△ chord spacing differs";
+  if (comparison.timingMatch === false) return comparison.timingErrorMs != null && comparison.timingErrorMs < 0 ? "← early attack" : "→ late attack";
+  if (comparison.durationMatch === false) return comparison.durationErrorMs != null && comparison.durationErrorMs < 0 ? "↓ released early" : "↑ released late";
+  return "△ needs another pass";
+}
+
+function ListeningStaff({ view, loop, comparisons, readingMode, showConventions, notationById, feedbackAttackId }: {
+  view: ReferencePlaybackView;
+  loop: SheetMusicPracticeLoop;
+  comparisons: ReadonlyMap<string, SheetEventComparison>;
+  readingMode: ReadingMode;
+  showConventions: boolean;
+  notationById: ReadonlyMap<string, ImportedMusicXmlNote>;
+  feedbackAttackId: string | null;
+}) {
+  const windowSize = Math.min(7, loop.attacks.length);
+  const anchor = Math.max(0, Math.min(loop.attacks.length - 1, view.cursorIndex ?? view.startIndex ?? 0));
+  const start = Math.max(0, Math.min(loop.attacks.length - windowSize, anchor - Math.floor(windowSize / 2)));
+  const attacks = loop.attacks.slice(start, start + windowSize);
+  const firstBeat = attacks[0]?.relativeOnsetBeat ?? 0;
+  const lastBeat = attacks.at(-1)?.relativeOnsetBeat ?? firstBeat;
+  const beatSpan = Math.max(.0001, lastBeat - firstBeat);
+  const attackPositions = spreadStaffAttackPositions(attacks.map((attack) => attacks.length === 1 ? 50 : 6 + (attack.relativeOnsetBeat - firstBeat) / beatSpan * 88));
+  const staffItems = attacks.map((attack, localIndex) => {
+    const attackIndex = start + localIndex;
+    const x = attackPositions[localIndex];
+    const cellLeft = localIndex === 0 ? 0 : (attackPositions[localIndex - 1] + x) / 2;
+    const cellRight = localIndex === attacks.length - 1 ? 100 : (x + attackPositions[localIndex + 1]) / 2;
+    const attackX = cellRight - cellLeft < .001 ? 50 : (x - cellLeft) / (cellRight - cellLeft) * 100;
+    const disclosure = listeningStaffDisclosure(attackIndex, view, readingMode);
+    return {
+      attack,
+      attackIndex,
+      attackX,
+      cellLeft,
+      cellWidth: cellRight - cellLeft,
+      comparison: view.playAlong ? comparisons.get(attack.id) : undefined,
+      disclosure,
+      notes: referenceNotesForAttack(attack, view.voice).sort((first, second) => first.pitch.midi - second.pitch.midi),
+    };
+  });
+  const visibleReachedCount = staffItems.filter((item) => item.disclosure !== "veiled").length;
+  const totalReachedCount = loop.attacks.reduce((count, _attack, index) => (
+    listeningStaffDisclosure(index, view, "read") === "veiled" ? count : count + 1
+  ), 0);
+  const revealedItems = staffItems.filter((item) => item.disclosure === "revealed" || item.disclosure === "memory");
+  const revealedSummary = revealedItems.length
+    ? revealedItems.map((item) => `measure ${item.attack.measureNumber}, ${item.notes.map((note) => showConventions ? writtenLabel(note, true) : staffPositionLabel(note, notationById.get(note.id))).join(" plus ")}, ${listeningStaffResult(item.comparison, true)}`).join(". ")
+    : "No pitch position is revealed yet.";
+  const reachedState = totalReachedCount === visibleReachedCount
+    ? `${totalReachedCount} clock-reached landing${totalReachedCount === 1 ? "" : "s"} in this window`
+    : `${totalReachedCount} clock-reached overall; ${visibleReachedCount} in this staff window`;
+  const staffState = view.phase === "count-in"
+    ? "Count-in: the staff is present, but every pitch-bearing landing stays covered."
+    : view.phase === "playing" && readingMode === "read"
+      ? `${reachedState} revealed; later pitch positions remain covered.`
+      : view.phase === "playing" && readingMode === "memory"
+        ? `The current onset appears briefly, then returns behind the veil. ${reachedState}.`
+        : view.phase === "playing"
+          ? `${reachedState}; pulse, attack size, and categorical direction are exposed until review.`
+          : view.phase === "complete"
+            ? `${reachedState} revealed for eye review; unreached landings remain covered.`
+            : "The grand staff stays visible. Start the reference to uncover notation as each onset reaches the shared clock.";
+
+  return <div className={styles.listeningStaffRegion} role="group" aria-label="Listening staff: heard notation is progressively revealed">
+    <div className={styles.listeningStaff} aria-hidden="true">
+      <i className={styles.listeningTrebleLines} /><i className={styles.listeningBassLines} />
+      <b className={styles.listeningBrace}>{"}"}</b><b className={styles.trebleClef}>𝄞</b><b className={styles.bassClef}>𝄢</b>
+      <span className={styles.staffNotationBoundary}>pitch-explicit ♯ ♭ ♮ · repeats intentional</span>
+      <div className={styles.listeningStaffTrack}>
+        {staffItems.map(({ attack, attackIndex, attackX, cellLeft, cellWidth, comparison, disclosure, notes }) => {
+          const exact = disclosure === "revealed" || disclosure === "memory";
+          const outcomeVisible = disclosure !== "veiled" && comparison != null;
+          const resultClass = outcomeVisible && comparison.status === "correct" ? styles.isStaffCorrect
+            : outcomeVisible && (comparison.status === "incorrect" || comparison.status === "missed") ? styles.isStaffWrong : null;
+          const isCursor = attackIndex === view.cursorIndex && (view.phase === "count-in" || view.phase === "playing");
+          const isSounding = attackIndex === view.soundingIndex && view.sounding;
+          const isFeedback = outcomeVisible && comparison.actual != null && attack.id === feedbackAttackId;
+          const priorAttack = loop.attacks[attackIndex - 1];
+          const measureStart = attackIndex === 0 || priorAttack?.measureIndex !== attack.measureIndex;
+          return <div key={attack.id} className={cx(styles.listeningLanding, isCursor && styles.isStaffCursor, isSounding && styles.isStaffSounding, isFeedback && styles.isStaffFeedback, measureStart && styles.isStaffMeasureStart, resultClass)} data-disclosure={disclosure} style={{ "--staff-cell-left": `${cellLeft}%`, "--staff-cell-width": `${cellWidth}%`, "--staff-attack-x": `${attackX}%` } as CSSProperties}>
+            {exact ? notes.map((note, noteIndex) => {
+              const accidental = pitchLocatorAccidentalGlyph(note, notationById.get(note.id));
+              const octaveMark = scoreStaffOctaveMark(note);
+              const nudge = staffNoteNudge(notes, noteIndex);
+              return <span key={note.id} className={styles.listeningNoteGroup} style={{ "--staff-y": `${scoreStaffY(note)}px`, "--note-nudge": `${nudge}px` } as CSSProperties}>
+                {staffLedgerLines(note).map((line) => <i key={line} className={styles.listeningLedger} style={{ "--ledger-y": `${line - scoreStaffY(note)}px` } as CSSProperties} />)}
+                {accidental ? <b className={styles.listeningAccidental}>{accidental}</b> : null}
+                <i className={styles.listeningNote} />
+                {octaveMark ? <small className={styles.listeningOctave}>{octaveMark}</small> : null}
+              </span>;
+            }) : null}
+            {disclosure !== "revealed" ? <span className={styles.staffSlotVeil}><b>{disclosure === "veiled" ? "·" : `${notes.length}×`}</b><small>{disclosure === "veiled" ? "covered" : disclosure === "memory" ? "remember" : "heard shape"}</small></span> : null}
+            <span className={styles.staffSlotCaption}><b>{measureStart ? `m.${attack.measureNumber}` : `+${Number((attack.relativeOnsetBeat - (priorAttack?.relativeOnsetBeat ?? attack.relativeOnsetBeat)).toFixed(2))} beat`}</b><small>{disclosure === "revealed" ? listeningStaffResult(comparison, true) : disclosure === "shape" ? listeningStaffResult(comparison, false) : disclosure === "memory" ? "hold the image" : "listen first"}</small>{disclosure === "revealed" && showConventions && isCursor ? <em>{notes.map((note) => note.pitch.label).join(" + ")}</em> : null}</span>
+          </div>;
+        })}
+      </div>
+    </div>
+    <p className="sr-only">{staffState} Visible revealed notation: {revealedSummary}</p>
+    {view.phase === "complete" ? <p className="sr-only" role="status" aria-live="polite">Listening-staff review ready. {revealedSummary}</p> : null}
+  </div>;
+}
+
+function PlayAlongField({ view, loop, comparison, comparisons, readingMode, showConventions, notationById, activeNotes, audioPlaying, canPlay, onToggle }: {
   view: ReferencePlaybackView;
   loop: SheetMusicPracticeLoop;
   comparison: SheetEventComparison | null;
+  comparisons: ReadonlyMap<string, SheetEventComparison>;
   readingMode: ReadingMode;
   showConventions: boolean;
+  notationById: ReadonlyMap<string, ImportedMusicXmlNote>;
   activeNotes: number[];
   audioPlaying: boolean;
   canPlay: boolean;
   onToggle: () => void;
 }) {
-  const exactReveal = readingMode !== "ear" || view.phase === "complete";
   const heardAttack = view.currentIndex == null ? null : loop.attacks[view.currentIndex] ?? null;
-  const heardNotes = heardAttack
-    ? view.voice === "upper"
-      ? [...heardAttack.notes].sort((first, second) => second.pitch.midi - first.pitch.midi).slice(0, 1)
-      : view.voice === "bass"
-        ? [...heardAttack.notes].sort((first, second) => first.pitch.midi - second.pitch.midi).slice(0, 1)
-        : heardAttack.notes.slice(0, 12)
-    : [];
+  const heardNotes = heardAttack ? referenceNotesForAttack(heardAttack, view.voice) : [];
   const noteCount = heardNotes.length;
   const learnerComparison = view.playAlong ? comparison : null;
+  const earExactReveal = readingMode === "read" || view.phase === "complete"
+    || (readingMode === "memory" && view.memoryRevealIndex != null && view.memoryRevealIndex === view.currentIndex);
+  const handExactReveal = readingMode === "read" || view.phase === "complete"
+    || (readingMode === "memory" && view.memoryRevealIndex != null && view.memoryRevealIndex === learnerComparison?.expectedIndex);
   const pitchCorrection = closestSinglePitchCorrection(learnerComparison);
   const timingError = learnerComparison?.timingErrorMs ?? null;
-  const timingPosition = timingError == null || learnerComparison?.timingMatch ? 50 : exactReveal
+  const timingPosition = timingError == null || learnerComparison?.timingMatch ? 50 : handExactReveal
     ? Math.max(6, Math.min(94, 50 + timingError / 420 * 44))
     : timingError < 0 ? 24 : 76;
-  const pitchPosition = pitchCorrection == null || pitchCorrection === 0 ? 50 : exactReveal
+  const pitchPosition = pitchCorrection == null || pitchCorrection === 0 ? 50 : handExactReveal
     ? Math.max(8, Math.min(92, 50 - pitchCorrection / 12 * 42))
     : pitchCorrection > 0 ? 24 : 76;
   const heardOrdinal = view.currentIndex == null ? null : view.currentIndex + 1;
   const cursorOrdinal = view.cursorIndex == null ? null : view.cursorIndex + 1;
+  const currentOnsetIsSounding = view.sounding && view.soundingIndex === view.currentIndex;
+  const earlierSustainIsSounding = view.sounding && view.soundingIndex != null && view.soundingIndex !== view.currentIndex;
   const phaseTitle = view.phase === "count-in"
     ? `Starting in ${view.countdown ?? "…"}`
     : view.phase === "playing"
-      ? view.sounding
+      ? currentOnsetIsSounding
         ? `Reference sounding · landing ${heardOrdinal ?? "…"}`
-        : `Rest · pulse continues after landing ${cursorOrdinal ?? "…"}`
+        : earlierSustainIsSounding
+          ? `Sustain ringing · after landing ${cursorOrdinal ?? "…"}`
+          : `Rest · pulse continues after landing ${cursorOrdinal ?? "…"}`
       : view.phase === "complete"
         ? view.playAlong ? "Play-along complete · take frozen for review" : "Preview complete · no take recorded"
         : view.phase === "unavailable"
@@ -845,30 +1092,31 @@ function PlayAlongField({ view, loop, comparison, readingMode, showConventions, 
           : "Press Play along to join ear, eye, and hands";
   const voiceLabel = view.voice === "upper" ? "upper path" : view.voice === "bass" ? "bass route" : "full score field";
   const targetLabel = heardAttack
-    ? exactReveal
+    ? earExactReveal
       ? heardNotes.map((note) => writtenLabel(note, showConventions)).join(" + ")
       : `${noteCount}-note ${noteCount > 1 ? "shape" : "attack"}`
     : "No pitch is revealed before it sounds";
   const pitchFeedback = !learnerComparison?.actual
     ? "Your played landing appears after attack"
     : learnerComparison.pitchMatch
-      ? exactReveal ? "Pitch aligned · no key correction" : "Shape aligned"
+      ? handExactReveal ? "Pitch aligned · no key correction" : "Shape aligned"
       : pitchCorrection != null
-        ? exactReveal
+        ? handExactReveal
           ? `${Math.abs(pitchCorrection)} semitone${Math.abs(pitchCorrection) === 1 ? "" : "s"} ${pitchCorrection > 0 ? "low · move right" : "high · move left"}`
           : pitchCorrection > 0 ? "Played lower than heard" : "Played higher than heard"
-        : exactReveal
+        : handExactReveal
           ? `${learnerComparison.missingNotes.length} missing · ${learnerComparison.extraNotes.length} extra`
           : "Pitch shape differs";
   const timingFeedback = timingError == null
     ? "The center will catch your attack"
     : learnerComparison?.timingMatch
-      ? exactReveal ? `${Math.round(Math.abs(timingError))} ms from the pulse · aligned` : "On the pulse"
-      : exactReveal
+      ? handExactReveal ? `${Math.round(Math.abs(timingError))} ms from the pulse · aligned` : "On the pulse"
+      : handExactReveal
         ? `${Math.round(Math.abs(timingError))} ms ${timingError < 0 ? "early" : "late"}`
         : timingError < 0 ? "Early" : "Late";
-  const heardMidi = heardNotes.map((note) => note.pitch.midi);
-  const pressedTargetCount = exactReveal ? new Set(activeNotes.filter((note) => heardMidi.includes(note))).size : 0;
+  const feedbackMidi = learnerComparison?.expectedNotes ?? heardNotes.map((note) => note.pitch.midi);
+  const feedbackNoteCount = feedbackMidi.length;
+  const pressedTargetCount = handExactReveal ? new Set(activeNotes.filter((note) => feedbackMidi.includes(note))).size : 0;
   const scalarFeedback = Boolean(learnerComparison?.actual && (pitchCorrection != null || learnerComparison.pitchMatch));
   const chordShapeFeedback = Boolean(learnerComparison?.actual && pitchCorrection == null && !learnerComparison.pitchMatch);
 
@@ -884,21 +1132,17 @@ function PlayAlongField({ view, loop, comparison, readingMode, showConventions, 
     </div>
     <div className={styles.sensoryBridge}>
       <article className={styles.earBeacon}>
-        <div className={styles.soundOrb} aria-hidden="true"><i /><i /><i />{view.phase === "playing" && view.sounding ? <b key={view.currentIndex ?? "sound"} /> : null}</div>
+        <div className={styles.soundOrb} aria-hidden="true"><i /><i /><i />{view.phase === "playing" && view.sounding ? <b key={view.soundingIndex ?? "sound"} /> : null}</div>
         <span>Ear · hear this instant</span>
-        <strong>{view.phase === "playing" ? view.sounding ? targetLabel : "Rest · keep the shared pulse inside" : view.phase === "count-in" ? "Feel the pulse before touching a key" : view.phase === "complete" ? "The reference has released" : "The score stays silent until you start"}</strong>
-        <small>{heardAttack ? `Measure ${heardAttack.measureNumber} · ${noteCount > 1 ? `${noteCount} tones begin together` : "one tone begins"}` : view.phase === "playing" ? "No scheduled reference tone is sounding in this gap." : "A visible count-in will establish the shared clock."}</small>
+        <strong>{view.phase === "playing" ? currentOnsetIsSounding ? targetLabel : earlierSustainIsSounding ? "Earlier score tone still ringing · no new attack" : "Rest · keep the shared pulse inside" : view.phase === "count-in" ? "Feel the pulse before touching a key" : view.phase === "complete" ? "The reference has released" : "The score stays silent until you start"}</strong>
+        <small>{currentOnsetIsSounding && heardAttack ? `Measure ${heardAttack.measureNumber} · ${noteCount > 1 ? `${noteCount} tones begin together now` : "one tone begins now"}` : earlierSustainIsSounding ? `After landing ${cursorOrdinal ?? "…"} · sustain continues without a new onset.` : view.phase === "playing" ? "No scheduled reference tone is sounding in this gap." : "A visible count-in will establish the shared clock."}</small>
       </article>
 
-      <article className={styles.heardStaff} aria-label={heardAttack ? exactReveal ? `Heard landing on the staff: ${heardNotes.map((note) => writtenLabel(note, showConventions)).join(" plus ")}` : `Heard ${noteCount}-note landing; pitch positions hidden in hard mode` : "Staff reveal waiting for reference playback"}>
-        <span>Eye · unveil what begins now</span>
-        <div className={cx(styles.playbackStaff, !exactReveal && styles.isPlaybackVeiled)} key={`${view.currentIndex ?? "waiting"}-${readingMode}`} aria-hidden="true">
-          <i className={styles.playbackTrebleLines} /><i className={styles.playbackBassLines} /><b className={styles.staffBrace}>{"}"}</b>
-          {heardAttack && exactReveal ? heardNotes.map((note, index) => <em key={note.id} className={styles.playbackNote} style={{ "--staff-y": `${scoreStaffY(note)}px`, "--staff-left": `${50 + (index - (heardNotes.length - 1) / 2) * 7}%` } as CSSProperties}><small>{showConventions ? note.pitch.label : note.hand === "left" ? "lower" : "upper"}</small></em>) : null}
-          {heardAttack && !exactReveal ? Array.from({ length: Math.min(8, noteCount) }, (_, index) => <em key={index} className={styles.silhouetteNote} style={{ "--staff-left": `${50 + (index - (noteCount - 1) / 2) * 8}%` } as CSSProperties} />) : null}
-          {!heardAttack ? <strong>{view.phase === "count-in" ? view.countdown : view.phase === "playing" ? "𝄽" : "○"}</strong> : null}
-        </div>
-        <small>{readingMode === "read" ? "Easy mode places the heard landing on the staff now—not several beats early." : readingMode === "memory" ? "The heard position blooms, then fades so your inner image carries it." : "Hard mode reveals attack size and pulse, but withholds staff position and note identity."}</small>
+      <article className={styles.heardStaff} aria-labelledby="listening-staff-title">
+        <span>Eye · covered score becomes heard notation</span>
+        <strong id="listening-staff-title">{view.phase === "complete" ? "Review only what reached your ear." : readingMode === "read" ? "Each sound leaves a note-shaped memory." : readingMode === "memory" ? "See it once; keep it after the veil returns." : "Follow pulse and shape before pitch is shown."}</strong>
+        <ListeningStaff view={view} loop={loop} comparisons={comparisons} readingMode={readingMode} showConventions={showConventions} notationById={notationById} feedbackAttackId={learnerComparison?.expected.id ?? null} />
+        <small>{readingMode === "read" ? "Easy keeps the clock-reached prefix visible while every future staff position stays covered." : readingMode === "memory" ? "Memory briefly opens the current onset, then re-covers its pitch position." : "Hard keeps staff height hidden during play; Stop + review reveals only the clock-reached prefix."} This pitch locator prints every altered pitch instead of a key signature, so repeated accidentals are deliberate; the source page remains the authoritative engraving.</small>
       </article>
 
       <article className={styles.handFeedback}>
@@ -911,7 +1155,7 @@ function PlayAlongField({ view, loop, comparison, readingMode, showConventions, 
           <small className={styles.higherLabel}>move higher</small><small className={styles.lowerLabel}>move lower</small>
         </div>
         <strong>{pitchFeedback}</strong>
-        <small>{timingFeedback}{heardAttack && pressedTargetCount ? ` · ${pressedTargetCount} of ${noteCount} target key${noteCount === 1 ? "" : "s"} down now` : ""}</small>
+        <small>{timingFeedback}{learnerComparison && pressedTargetCount ? ` · ${pressedTargetCount} of ${feedbackNoteCount} target key${feedbackNoteCount === 1 ? "" : "s"} down now` : ""}</small>
       </article>
     </div>
     <p className="sr-only" role="status" aria-live={view.phase === "playing" ? "off" : "polite"} aria-atomic="true">{phaseTitle}{heardAttack ? `. ${targetLabel}. ${pitchFeedback}. ${timingFeedback}.` : "."}</p>
@@ -1012,7 +1256,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     referenceSessionRef.current = null;
     setAudioState("idle");
     setReferencePlayback((current) => freezeHeardRange
-      ? { ...current, phase: "complete", currentIndex: null, sounding: false, countdown: null }
+      ? { ...current, phase: "complete", currentIndex: null, memoryRevealIndex: null, soundingIndex: null, sounding: false, countdown: null }
       : EMPTY_REFERENCE_VIEW);
     // The audible clock is meaningful only when a synchronized take survives.
     // In particular, Stop during count-in must not poison later live-follow
@@ -1446,6 +1690,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   }, [measureLoop, practiceHand, readingChunks, score, takeHistory]);
   const currentChunkMemory = baseCurrentChunk ? chunkMemoryById.get(baseCurrentChunk.id) ?? null : null;
   const comparisonsByExpectedIndex = useMemo(() => new Map(visibleComparisons.map((comparison) => [comparison.expectedIndex, comparison])), [visibleComparisons]);
+  const referenceComparisonsByAttackId = useMemo(() => new Map((evaluation?.comparisons ?? []).map((comparison) => [comparison.expected.id, comparison])), [evaluation?.comparisons]);
   const journeyComparisonsByExpectedIndex = useMemo(() => new Map(journeyComparisons.map((comparison) => [comparison.expectedIndex, comparison])), [journeyComparisons]);
   const comparisonsByMeasureIndex = useMemo(() => {
     const grouped = new Map<number, SheetEventComparison[]>();
@@ -1611,9 +1856,12 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
         phase: playAlong ? "count-in" : "playing",
         voice,
         playAlong,
-        currentIndex: playAlong ? null : playbackPlan.cues[0].expectedIndex,
+        startIndex: playbackPlan.cues[0].expectedIndex,
+        currentIndex: null,
         cursorIndex: playbackPlan.cues[0].expectedIndex,
-        sounding: !playAlong,
+        memoryRevealIndex: null,
+        soundingIndex: null,
+        sounding: false,
         cueCount: playbackPlan.cues.length,
         progress: 0,
         countdown: playAlong ? countIn.pulseOffsetsBeats.length : null,
@@ -1637,26 +1885,33 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
         if (visualNow - visualUpdateMsRef.current >= 45) {
           visualUpdateMsRef.current = visualNow;
           const elapsedMs = visualNow - firstPerformanceMs;
-          if (elapsedMs < 0 && playAlong) {
+          if (elapsedMs < 0) {
             setReferencePlayback((current) => ({
               ...current,
-              phase: "count-in",
+              phase: playAlong ? "count-in" : "playing",
               currentIndex: null,
               cursorIndex: playbackPlan.cues[0].expectedIndex,
+              memoryRevealIndex: null,
+              soundingIndex: null,
               sounding: false,
               progress: 0,
-              countdown: Math.max(1, Math.min(countIn.pulseOffsetsBeats.length, Math.ceil(-elapsedMs / Math.max(1, pulseMs)))),
+              countdown: playAlong ? Math.max(1, Math.min(countIn.pulseOffsetsBeats.length, Math.ceil(-elapsedMs / Math.max(1, pulseMs)))) : null,
             }));
           } else {
             const audibleElapsed = Math.max(0, elapsedMs);
             const frame = scoreReferenceFrameAt(playbackPlan, audibleElapsed + 8);
             const cursorCue = playbackPlan.cues.find((candidate) => candidate.expectedIndex === frame.cursorIndex) ?? playbackPlan.cues[0];
+            const memoryRevealIndex = audibleElapsed + 8 >= cursorCue.onsetMs && audibleElapsed - cursorCue.onsetMs < 1_450
+              ? cursorCue.expectedIndex
+              : null;
             if (referenceSessionRef.current?.playAlong) referenceSessionRef.current.heardEndAttackId = cursorCue.attackId;
             setReferencePlayback((current) => ({
               ...current,
               phase: "playing",
-              currentIndex: frame.soundingIndex,
+              currentIndex: frame.cursorIndex,
               cursorIndex: frame.cursorIndex,
+              memoryRevealIndex,
+              soundingIndex: frame.soundingIndex,
               sounding: frame.soundingIndex != null,
               progress: Math.max(0, Math.min(1, audibleElapsed / Math.max(1, playbackPlan.totalDurationMs))),
               countdown: null,
@@ -1681,8 +1936,11 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
           phase: "complete",
           voice,
           playAlong,
+          startIndex: playbackPlan.cues[0].expectedIndex,
           currentIndex: null,
           cursorIndex: playbackPlan.cues.at(-1)?.expectedIndex ?? null,
+          memoryRevealIndex: null,
+          soundingIndex: null,
           sounding: false,
           cueCount: playbackPlan.cues.length,
           progress: 1,
@@ -1774,7 +2032,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     ...(focusComparison?.actualNotes ?? []).filter((note) => nextAttack.midiNotes.includes(note)),
   ]).size) : 0;
   const liveHudMessage = scoreVeiled && nextAttack
-    ? `Veiled landing ${currentIndex + 1} of ${loop?.attacks.length ?? 0}: ${nextAttack.midiNotes.length} note${nextAttack.midiNotes.length === 1 ? "" : "s"}. Pitch and outcome feedback return in review.`
+    ? `Veiled landing ${currentIndex + 1} of ${loop?.attacks.length ?? 0}: ${nextAttack.midiNotes.length} note${nextAttack.midiNotes.length === 1 ? "" : "s"}. Exact pitch positions and measurements return in review; live direction and alignment feedback stay categorical.`
     : gatheringPreviousChord && nextAttack
       ? `Gathering ${announcedGatheredCount} of ${nextAttack.midiNotes.length} notes inside the ${clusterWindow} millisecond togetherness window.`
       : nextAttack
@@ -1867,7 +2125,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       <p className={styles.audioNotice} role="status" aria-live="polite">{audioNotice}{referenceTimingClock ? ` This review measures attacks from the audible start; ${timingMode === "self-paced" ? "the Play-along clock temporarily replaces self-paced timing" : "the fixed-pulse lens uses the same clock"}.` : timingMode === "pulse" ? ` Fixed-pulse is a constant ${practiceTempo} BPM drill from the latest numeric tempo at this boundary: your first landing is beat zero, and later tempo changes, rubato words, or fermatas do not move its clock.` : ""}</p>
     </div>
 
-    {loop ? <PlayAlongField view={referencePlayback} loop={loop} comparison={referenceComparison} readingMode={readingMode} showConventions={showConventions} activeNotes={pressedNotes} audioPlaying={audioState === "playing"} canPlay={hasPracticeAttacks} onToggle={togglePlayAlong} /> : null}
+    {loop ? <PlayAlongField view={referencePlayback} loop={loop} comparison={referenceComparison} comparisons={referenceComparisonsByAttackId} readingMode={readingMode} showConventions={showConventions} notationById={notationById} activeNotes={pressedNotes} audioPlaying={audioState === "playing"} canPlay={hasPracticeAttacks} onToggle={togglePlayAlong} /> : null}
     {synchronizedRevealActive ? <p className={styles.alignmentKey}><strong>One clock · two useful positions.</strong> The luminous field above is what the reference is sounding now. The panels below follow where your received MIDI currently aligns; the distance between them is your lead or lag.</p> : null}
 
     {loop ? <div className={styles.immersionOverview}>

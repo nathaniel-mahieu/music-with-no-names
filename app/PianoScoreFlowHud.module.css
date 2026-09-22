@@ -329,23 +329,63 @@
 .soundOrb b { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--flow-blue); box-shadow: 0 0 12px var(--flow-blue), 0 0 42px rgba(119, 209, 223, .72); transform: translate(-50%, -50%); animation: soundBloom .34s ease-out both; }
 .playAlongField[data-phase="count-in"] .soundOrb { border-color: rgba(239, 199, 107, .42); background: radial-gradient(circle, rgba(239, 199, 107, .16), transparent 67%); }
 
-.heardStaff { border-color: rgba(239, 199, 107, .07); }
-.playbackStaff { position: relative; height: 202px; margin-top: 4px; overflow: hidden; border: 1px solid rgba(219, 228, 242, .11); border-radius: 52% 48% 49% 51% / 12% 12% 16% 16%; background: radial-gradient(ellipse at center, rgba(239, 199, 107, .055), transparent 66%); }
-.playbackTrebleLines,
-.playbackBassLines { position: absolute; right: 14px; left: 25px; height: 41px; background: repeating-linear-gradient(to bottom, rgba(219, 228, 242, .29) 0 1px, transparent 1px 10px); }
-.playbackTrebleLines { top: 38px; }
-.playbackBassLines { top: 124px; }
-.playbackStaff::after { position: absolute; top: 101px; right: 18px; left: 25px; border-top: 1px dashed rgba(119, 209, 223, .15); content: ""; }
-.staffBrace { position: absolute; top: 50%; left: 7px; color: rgba(219, 228, 242, .4); font-family: Georgia, serif; font-size: 6rem; font-weight: 400; line-height: .9; transform: translateY(-50%) scaleX(.52); }
-.playbackNote,
-.silhouetteNote { position: absolute; top: var(--staff-y); left: var(--staff-left); width: 17px; height: 11px; border-radius: 50%; background: var(--flow-gold); box-shadow: 0 0 0 1px #080b12, 0 0 18px rgba(239, 199, 107, .55); transform: translate(-50%, -50%) rotate(-13deg); animation: noteArrival .28s ease-out both; }
-.playbackNote::after { position: absolute; right: -2px; bottom: 4px; width: 1px; height: 25px; background: rgba(241, 243, 247, .78); content: ""; transform: rotate(13deg); transform-origin: bottom; }
-.playbackNote small { position: absolute; top: 15px; left: 50%; color: var(--flow-gold); font-family: var(--font-mono), monospace; font-size: .58rem; font-style: normal; white-space: nowrap; transform: translateX(-50%) rotate(13deg); }
-.playbackStaff > strong { display: grid; position: absolute; inset: 0; place-content: center; color: var(--flow-gold); font-family: var(--font-display), Georgia, serif; font-size: 3.2rem; font-weight: 400; text-shadow: 0 0 28px rgba(239, 199, 107, .5); }
-.silhouetteNote { top: 50%; width: 14px; height: 14px; border: 1px dashed var(--flow-blue); background: rgba(119, 209, 223, .08); box-shadow: 0 0 15px rgba(119, 209, 223, .28); transform: translate(-50%, -50%); }
-.isPlaybackVeiled .playbackTrebleLines,
-.isPlaybackVeiled .playbackBassLines { opacity: .18; filter: blur(2px); }
-.playAlongField[data-reading="memory"] .playbackNote { animation: noteMemory 1.45s ease both; }
+.heardStaff { border-color: rgba(239, 199, 107, .12); }
+.listeningStaffRegion { display: grid; min-width: 0; gap: 5px; }
+.listeningStaff {
+  position: relative;
+  height: 244px;
+  margin-top: 2px;
+  overflow: hidden;
+  border: 1px solid rgba(219, 228, 242, .2);
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(239, 199, 107, .07), transparent 66%),
+    linear-gradient(180deg, rgba(6, 10, 17, .9), rgba(10, 14, 22, .96));
+  box-shadow: inset 0 0 40px rgba(119, 209, 223, .025), 0 12px 36px rgba(0, 0, 0, .16);
+}
+.listeningTrebleLines,
+.listeningBassLines { position: absolute; right: 10px; left: 48px; z-index: 7; box-sizing: border-box; height: 41px; border-top: 1px solid rgba(226, 233, 244, .62); border-bottom: 1px solid rgba(226, 233, 244, .62); pointer-events: none; }
+.listeningTrebleLines::before,
+.listeningBassLines::before { position: absolute; top: 9px; right: 0; left: 0; height: 21px; border-top: 1px solid rgba(226, 233, 244, .62); border-bottom: 1px solid rgba(226, 233, 244, .62); content: ""; }
+.listeningTrebleLines::after,
+.listeningBassLines::after { position: absolute; top: 19px; right: 0; left: 0; border-top: 1px solid rgba(226, 233, 244, .62); content: ""; }
+.listeningTrebleLines { top: 38px; }
+.listeningBassLines { top: 124px; }
+.listeningStaff::after { position: absolute; top: 101px; right: 10px; left: 48px; z-index: 7; border-top: 1px dashed rgba(119, 209, 223, .38); content: ""; pointer-events: none; }
+.listeningBrace { position: absolute; top: 101px; left: 5px; z-index: 7; color: rgba(226, 233, 244, .76); font-family: Georgia, serif; font-size: 6rem; font-weight: 400; line-height: .9; transform: translateY(-50%) scaleX(.52); }
+.trebleClef,
+.bassClef { position: absolute; left: 25px; z-index: 3; color: rgba(226, 233, 244, .82); font-family: Georgia, serif; font-weight: 400; line-height: 1; text-shadow: 0 0 14px rgba(119, 209, 223, .18); }
+.trebleClef { top: 27px; font-size: 3.45rem; }
+.bassClef { top: 121px; font-size: 2.25rem; }
+.staffNotationBoundary { position: absolute; top: 4px; right: 8px; z-index: 10; max-width: calc(100% - 64px); overflow: hidden; color: rgba(183, 193, 207, .82); background: rgba(7, 11, 18, .9); font-family: var(--font-mono), monospace; font-size: .625rem; letter-spacing: .025em; text-overflow: ellipsis; white-space: nowrap; }
+.listeningStaffTrack { position: absolute; inset: 0 9px 0 48px; min-width: 0; }
+.listeningLanding { position: absolute; top: 0; bottom: 0; left: var(--staff-cell-left); width: var(--staff-cell-width); min-width: 0; border-left: 1px solid rgba(219, 228, 242, .055); }
+.listeningLanding:first-child { border-left: 0; }
+.listeningLanding.isStaffMeasureStart { border-left: 2px solid rgba(226, 233, 244, .42); }
+.listeningLanding.isStaffCursor::after { position: absolute; top: 10px; bottom: 43px; left: var(--staff-attack-x); z-index: 9; width: 2px; border-radius: 99px; background: var(--flow-gold); box-shadow: 0 0 16px rgba(239, 199, 107, .68); content: ""; transform: translateX(-50%); }
+.listeningLanding.isStaffSounding { background: radial-gradient(ellipse at var(--staff-attack-x) 45%, rgba(119, 209, 223, .14), transparent 62%); }
+.listeningLanding.isStaffFeedback { outline: 1px dashed rgba(119, 209, 223, .44); outline-offset: -4px; }
+.listeningLanding.isStaffCorrect { box-shadow: inset 0 -3px 0 rgba(139, 215, 180, .72); }
+.listeningLanding.isStaffWrong { box-shadow: inset 0 -3px 0 rgba(241, 141, 126, .82); }
+.listeningNoteGroup { position: absolute; top: var(--staff-y); left: calc(var(--staff-attack-x) + var(--note-nudge)); z-index: 8; width: 17px; height: 11px; transform: translate(-50%, -50%); }
+.listeningNote { position: absolute; inset: 0; border-radius: 50%; background: var(--flow-gold); box-shadow: 0 0 0 1px #080b12, 0 0 15px rgba(239, 199, 107, .58); transform: rotate(-13deg); animation: listeningNoteArrival .28s ease-out both; }
+.listeningNote::after { position: absolute; right: -2px; bottom: 4px; width: 1px; height: 25px; background: rgba(241, 243, 247, .88); content: ""; transform: rotate(13deg); transform-origin: bottom; }
+.listeningAccidental { position: absolute; top: 50%; right: calc(100% + 3px); z-index: 5; color: #f1f3f7; font-family: Georgia, serif; font-size: .95rem; font-weight: 400; line-height: 1; transform: translateY(-50%); }
+.listeningOctave { position: absolute; bottom: 13px; left: 50%; color: var(--flow-gold); font-family: var(--font-mono), monospace; font-size: .625rem; white-space: nowrap; transform: translateX(-50%); }
+.listeningLedger { position: absolute; top: var(--ledger-y); left: 50%; z-index: -1; width: 25px; border-top: 1px solid rgba(241, 243, 247, .78); transform: translate(-50%, 5.5px); }
+.staffSlotVeil { display: grid; position: absolute; top: 12px; right: 3px; bottom: 43px; left: 3px; z-index: 6; place-content: center; border: 1px solid rgba(119, 209, 223, .18); border-radius: 45% 55% 49% 51% / 11% 13% 12% 14%; background: linear-gradient(135deg, rgba(10, 16, 25, .64), rgba(15, 22, 33, .56)); box-shadow: inset 0 0 22px rgba(119, 209, 223, .045); text-align: center; }
+.staffSlotVeil::before { position: absolute; inset: 0; opacity: .28; background-image: radial-gradient(circle, rgba(119, 209, 223, .4) 0 1px, transparent 1.4px); background-position: 7px 11px; background-size: 23px 19px; content: ""; mask-image: linear-gradient(180deg, transparent, #000 28%, #000 72%, transparent); }
+.staffSlotVeil b { position: relative; color: var(--flow-blue); font-family: var(--font-display), Georgia, serif; font-size: 1.15rem; font-weight: 400; }
+.staffSlotVeil small { position: relative; color: #b6c0ce; font-family: var(--font-mono), monospace; font-size: .625rem; letter-spacing: .025em; text-transform: uppercase; }
+.listeningLanding[data-disclosure="veiled"] .staffSlotVeil b { color: rgba(219, 228, 242, .44); }
+.listeningLanding[data-disclosure="memory"] .listeningNote { animation: listeningNoteMemory 1.45s ease both; }
+.listeningLanding[data-disclosure="memory"] .staffSlotVeil { animation: veilReturn 1.45s ease both; }
+.staffSlotCaption { display: grid; position: absolute; right: 2px; bottom: 3px; left: 2px; z-index: 10; min-width: 0; justify-items: center; text-align: center; }
+.staffSlotCaption b { max-width: 100%; overflow: hidden; color: #b7c1cf; font-family: var(--font-mono), monospace; font-size: .625rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.staffSlotCaption small { width: 100%; overflow: hidden; color: #9eabba; font-size: .625rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.staffSlotCaption em { width: 100%; overflow: hidden; color: var(--flow-gold); font-family: var(--font-mono), monospace; font-size: .625rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.isStaffCorrect .staffSlotCaption small { color: var(--flow-mint); }
+.isStaffWrong .staffSlotCaption small { color: var(--flow-coral); }
 
 .handFeedback { text-align: center; }
 .feedbackCompass { position: relative; width: min(100%, 290px); height: 174px; margin: 5px auto 2px; border: 1px solid rgba(119, 209, 223, .18); border-radius: 48% 52% 50% 50% / 44% 46% 54% 56%; background: radial-gradient(circle at center, rgba(139, 215, 180, .1), transparent 18%, rgba(119, 209, 223, .025) 58%, transparent 70%); }
@@ -370,6 +410,9 @@
 @keyframes soundBloom { from { opacity: .35; transform: translate(-50%, -50%) scale(.62); } to { opacity: 1; transform: translate(-50%, -50%) scale(1.14); } }
 @keyframes noteArrival { from { opacity: 0; filter: blur(5px); transform: translate(-50%, -50%) rotate(-13deg) scale(.45); } to { opacity: 1; filter: none; transform: translate(-50%, -50%) rotate(-13deg) scale(1); } }
 @keyframes noteMemory { 0% { opacity: 0; filter: blur(5px); transform: translate(-50%, -50%) rotate(-13deg) scale(.45); } 22% { opacity: 1; filter: none; transform: translate(-50%, -50%) rotate(-13deg) scale(1); } 100% { opacity: .2; filter: blur(2px); transform: translate(-50%, -50%) rotate(-13deg) scale(.84); } }
+@keyframes listeningNoteArrival { from { opacity: 0; filter: blur(4px); transform: rotate(-13deg) scale(.45); } to { opacity: 1; filter: none; transform: rotate(-13deg) scale(1); } }
+@keyframes listeningNoteMemory { 0% { opacity: 0; filter: blur(4px); transform: rotate(-13deg) scale(.45); } 22% { opacity: 1; filter: none; transform: rotate(-13deg) scale(1); } 100% { opacity: 0; filter: blur(2px); transform: rotate(-13deg) scale(.84); } }
+@keyframes veilReturn { 0%, 26% { opacity: 0; } 100% { opacity: 1; } }
 
 .measureMap {
   display: flex;
@@ -887,8 +930,8 @@
   .sensoryBridge { grid-template-columns: 1fr 1fr; }
   .earBeacon { grid-column: 1 / -1; grid-template-columns: 90px 1fr; justify-items: start; text-align: left; }
   .earBeacon .soundOrb { grid-row: 1 / span 3; width: 76px; height: 76px; margin: 0; }
-  .heardStaff { border-top: 1px solid var(--flow-line); border-left: 0 !important; }
-  .handFeedback { grid-column: auto; border-top: 1px solid var(--flow-line); border-left: 1px solid var(--flow-line) !important; }
+  .heardStaff { grid-column: 1 / -1; border-top: 1px solid var(--flow-line); border-left: 0 !important; }
+  .handFeedback { grid-column: 1 / -1; border-top: 1px solid var(--flow-line); border-left: 0 !important; }
   .scoreHorizon > header,
   .handCompass > header { display: grid; }
   .scoreHorizon header p,
@@ -932,6 +975,10 @@
   .earBeacon { grid-column: 1; }
   .handFeedback { grid-column: 1; border-left: 0 !important; }
   .sensoryBridge article + article { border-top: 1px solid var(--flow-line); }
+  .staffSlotVeil small,
+  .staffSlotCaption small,
+  .staffSlotCaption em { display: none; }
+  .staffSlotCaption { bottom: 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -941,10 +988,13 @@
   .scoreRail { scroll-behavior: auto; }
   .attackEchoPulse { animation: none; transform: none; }
   .soundOrb b,
-  .playbackNote,
-  .silhouetteNote,
+  .listeningNote,
+  .staffSlotVeil,
   .referenceTimeline > b { animation: none; }
-  .feedbackPoint { transition: none; }
+  .listeningLanding[data-disclosure="memory"] .staffSlotVeil { opacity: 0; }
+  .listeningLanding[data-disclosure="memory"] .listeningNote { opacity: 1; }
+  .feedbackPoint,
+  .feedbackTimingMark { transition: none; }
 }
 
 @media (forced-colors: active) {
@@ -964,9 +1014,29 @@
   .secureCard,
   .liveInstruction { background: Canvas; }
   .playAlongField,
-  .playbackStaff,
+  .listeningStaff,
   .feedbackCompass,
   .referenceTimeline { background: Canvas; }
+  .listeningTrebleLines,
+  .listeningBassLines,
+  .listeningTrebleLines::before,
+  .listeningBassLines::before,
+  .listeningTrebleLines::after,
+  .listeningBassLines::after { border-color: CanvasText; }
+  .listeningBrace,
+  .trebleClef,
+  .bassClef,
+  .listeningAccidental { color: CanvasText; }
+  .listeningNote { border: 1px solid CanvasText; background: CanvasText; box-shadow: none; }
+  .listeningNote::after { background: CanvasText; }
+  .listeningLedger { border-color: CanvasText; }
+  .listeningStaff::after { border-color: CanvasText; }
+  .staffSlotVeil { border: 2px dashed CanvasText; background: transparent; }
+  .listeningLanding.isStaffMeasureStart { border-left-color: CanvasText; }
+  .listeningLanding.isStaffFeedback { outline-color: Highlight; }
+  .listeningLanding.isStaffCursor { outline: 3px solid Highlight; outline-offset: -3px; }
+  .listeningLanding.isStaffCorrect { border-bottom: 4px solid CanvasText; box-shadow: none; }
+  .listeningLanding.isStaffWrong { border-bottom: 4px dashed Highlight; box-shadow: none; }
   .notehead { border-color: CanvasText; background: CanvasText; box-shadow: none; }
   .notehead.isOpen { background: Canvas; }
   .whiteKey,
