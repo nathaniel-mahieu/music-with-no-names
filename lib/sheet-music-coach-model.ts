@@ -487,6 +487,14 @@ export type SheetPerformanceEvaluationOptions = SheetMusicLoopSelection & {
    * When omitted, a self-paced take keeps anchoring itself to its first match.
    */
   timingClock?: { scoreBeat: number; performanceTimeMs: number };
+  /**
+   * Optional performed-time map for a locally supplied recording. Points must
+   * move forward in both score and performance time. It takes precedence over
+   * the fixed-tempo timingClock. Include written release beats when recording-
+   * time release comparison is desired; otherwise duration falls back to the
+   * score tempo map.
+   */
+  timingMap?: ReadonlyArray<{ scoreBeat: number; performanceTimeMs: number }>;
   /** When false, untouched trailing score events remain pending. */
   finalize?: boolean;
 };
@@ -1941,12 +1949,21 @@ function pairCorrections(expected: SheetMusicPracticeAttack, actualNotes: number
   return corrections;
 }
 
-function clusterDurationError(expected: SheetMusicPracticeAttack, actual: MidiAttackCluster, score: SheetMusicScore, fixedTempoBpm?: number) {
+function clusterDurationError(
+  expected: SheetMusicPracticeAttack,
+  actual: MidiAttackCluster,
+  score: SheetMusicScore,
+  fixedTempoBpm?: number,
+  timingMap?: ReadonlyArray<{ scoreBeat: number; performanceTimeMs: number }> | null,
+) {
   const errors: { errorMs: number; midi: number; label: string }[] = [];
   for (const expectedNote of expected.notes) {
     const performed = actual.events.find((event) => event.midi === expectedNote.pitch.midi && event.releaseMs !== undefined);
     if (performed?.releaseMs === undefined) continue;
-    const expectedMs = scoreBeatSpanToMs(score, expectedNote.onsetBeat, expectedNote.onsetBeat + expectedNote.soundingDurationBeats, fixedTempoBpm);
+    const releaseBeat = expectedNote.onsetBeat + expectedNote.soundingDurationBeats;
+    const expectedMs = timingMap && timingMap.length > 1
+      ? Math.max(0, performanceTimeAtScoreBeat(timingMap, releaseBeat) - performanceTimeAtScoreBeat(timingMap, expectedNote.onsetBeat))
+      : scoreBeatSpanToMs(score, expectedNote.onsetBeat, releaseBeat, fixedTempoBpm);
     // All notes in a notated chord share its written release point, including
     // notes rolled a little later by an arpeggiation. Anchor that release to
     // the cluster's first attack instead of granting each rolled tone a fresh
@@ -1962,6 +1979,20 @@ function clusterDurationError(expected: SheetMusicPracticeAttack, actual: MidiAt
   return errors.length
     ? errors.reduce((worst, value) => Math.abs(value.errorMs) > Math.abs(worst.errorMs) ? value : worst)
     : null;
+}
+
+function performanceTimeAtScoreBeat(
+  points: ReadonlyArray<{ scoreBeat: number; performanceTimeMs: number }>,
+  scoreBeat: number,
+) {
+  const exact = points.find((point) => Math.abs(point.scoreBeat - scoreBeat) <= EPSILON);
+  if (exact) return exact.performanceTimeMs;
+  if (points.length === 1) return points[0].performanceTimeMs;
+  const rightIndex = points.findIndex((point) => point.scoreBeat > scoreBeat);
+  const left = rightIndex === 0 ? points[0] : rightIndex < 0 ? points.at(-2)! : points[rightIndex - 1];
+  const right = rightIndex === 0 ? points[1] : rightIndex < 0 ? points.at(-1)! : points[rightIndex];
+  const portion = (scoreBeat - left.scoreBeat) / (right.scoreBeat - left.scoreBeat);
+  return left.performanceTimeMs + portion * (right.performanceTimeMs - left.performanceTimeMs);
 }
 
 function arpeggiationMatch(expected: SheetMusicPracticeAttack, actual: MidiAttackCluster, pitchMatch: boolean) {
@@ -2130,6 +2161,20 @@ export function evaluateSheetMusicPerformance(
       throw new RangeError("Playback clock score beat must fall inside the selected loop.");
     }
   }
+  const timingMap = options.timingMap ? [...options.timingMap] : null;
+  if (timingMap) {
+    if (!timingMap.length || timingMap.length > MAX_SCORE_EVENTS) throw new RangeError("Playback timing map must contain a bounded set of points.");
+    timingMap.forEach((point, index) => {
+      assertFinite(point.scoreBeat, "Playback timing-map score beat");
+      assertFinite(point.performanceTimeMs, "Playback timing-map performance time");
+      if (point.performanceTimeMs < 0) throw new RangeError("Playback timing-map performance time must be non-negative.");
+      if (point.scoreBeat < loop.startBeat - EPSILON || point.scoreBeat > loop.endBeat + EPSILON) throw new RangeError("Playback timing-map beat must fall inside the selected loop.");
+      const prior = timingMap[index - 1];
+      if (prior && (point.scoreBeat <= prior.scoreBeat + EPSILON || point.performanceTimeMs <= prior.performanceTimeMs + EPSILON)) {
+        throw new RangeError("Playback timing-map points must move forward in score and performance time.");
+      }
+    });
+  }
   const timingAnchor = options.timingClock
     ? options.timingClock.performanceTimeMs - scoreBeatSpanToMs(score, loop.startBeat, options.timingClock.scoreBeat, options.tempoBpm)
     : firstPair
@@ -2159,10 +2204,12 @@ export function evaluateSheetMusicPerformance(
     const actualSpacing = actual ? chordSpacing(actualNotes) : null;
     const isChord = expectedNotes.length > 1;
     const spacingMatch = isChord && actualSpacing ? equalNumbers(expectedSpacing.adjacentSemitones, actualSpacing.adjacentSemitones) : isChord ? false : null;
-    const expectedMs = scoreBeatSpanToMs(score, loop.startBeat, expected.onsetBeat, options.tempoBpm) + timingAnchor;
+    const expectedMs = timingMap
+      ? performanceTimeAtScoreBeat(timingMap, expected.onsetBeat)
+      : scoreBeatSpanToMs(score, loop.startBeat, expected.onsetBeat, options.tempoBpm) + timingAnchor;
     const timingErrorMs = actual ? actual.onsetMs - expectedMs : null;
     const timingMatch = timingErrorMs === null ? null : Math.abs(timingErrorMs) <= timingToleranceMs;
-    const durationDetail = actual ? clusterDurationError(expected, actual, score, options.tempoBpm) : null;
+    const durationDetail = actual ? clusterDurationError(expected, actual, score, options.tempoBpm, timingMap) : null;
     const durationErrorMs = durationDetail?.errorMs ?? null;
     const durationMatch = durationErrorMs === null ? null : Math.abs(durationErrorMs) <= durationToleranceMs;
     const rollMatch = actual ? arpeggiationMatch(expected, actual, pitchMatch) : null;

@@ -15,7 +15,7 @@ export const SHEET_PRACTICE_DIMENSIONS = [
 
 export type SheetPracticeDimension = (typeof SHEET_PRACTICE_DIMENSIONS)[number];
 export type SheetEvidenceMark = "matched" | "mismatched" | "missed" | "not-observed";
-export type SheetClockEvidence = "unscored" | "fixed-pulse";
+export type SheetClockEvidence = "unscored" | "fixed-pulse" | "synced-recording";
 
 export type SheetTakeLandingEvidence = {
   landingId: string;
@@ -99,7 +99,7 @@ export function sheetTakeEvidenceFromEvaluation(
   assertIdentifier(metadata.takeId, "Take ID");
   if (!Number.isFinite(metadata.finishedAt) || metadata.finishedAt < 0) throw new RangeError("Finished time must be a non-negative finite number.");
   if (!["left", "right", "unknown", "both"].includes(metadata.hand)) throw new RangeError("Unknown practice hand.");
-  if (!["unscored", "fixed-pulse"].includes(metadata.clockEvidence)) throw new RangeError("Unknown clock-evidence mode.");
+  if (!["unscored", "fixed-pulse", "synced-recording"].includes(metadata.clockEvidence)) throw new RangeError("Unknown clock-evidence mode.");
   return {
     version: 1,
     scoreId: metadata.scoreId,
@@ -157,7 +157,7 @@ function landingNeedsRepair(landing: SheetTakeLandingEvidence) {
 
 function takeHasCompleteEvidence(take: SheetTakeEvidence, selected: readonly SheetTakeLandingEvidence[], expectedLandingCount: number) {
   if (selected.length !== expectedLandingCount) return false;
-  if (take.clockEvidence !== "fixed-pulse") return true;
+  if (take.clockEvidence === "unscored") return true;
   return selected.every((landing) => landing.marks.timing !== "not-observed" && landing.marks.duration !== "not-observed");
 }
 

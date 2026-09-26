@@ -325,6 +325,38 @@ test("scores play-along timing against the audible reference clock instead of th
   }), /inside the selected loop/);
 });
 
+test("scores attacks against a rubato local-recording timing map", () => {
+  const normalized = score();
+  const events: MidiPerformanceNote[] = [
+    { midi: 60, onsetMs: 1_020, releaseMs: 1_820 },
+    { midi: 64, onsetMs: 1_040, releaseMs: 1_820 },
+    { midi: 67, onsetMs: 1_060, releaseMs: 1_820 },
+    { midi: 62, onsetMs: 1_820, releaseMs: 2_620 },
+  ];
+  const evaluation = evaluateSheetMusicPerformance(normalized, events, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 0,
+    timingToleranceMs: 90,
+    timingMap: [
+      { scoreBeat: 0, performanceTimeMs: 1_000 },
+      { scoreBeat: 1, performanceTimeMs: 1_800 },
+      { scoreBeat: 3, performanceTimeMs: 3_400 },
+    ],
+  });
+  assert.equal(evaluation.comparisons[0].timingErrorMs, 20);
+  assert.equal(evaluation.comparisons[1].timingErrorMs, 20);
+  assert.equal(evaluation.comparisons[0].durationErrorMs, 0, "the recording map also scales the written release span");
+  assert.equal(evaluation.comparisons[1].durationErrorMs, 0);
+  assert.throws(() => evaluateSheetMusicPerformance(normalized, events, {
+    startMeasureIndex: 0,
+    endMeasureIndex: 0,
+    timingMap: [
+      { scoreBeat: 0, performanceTimeMs: 1_000 },
+      { scoreBeat: 1, performanceTimeMs: 900 },
+    ],
+  }), /move forward/);
+});
+
 test("applies a nonzero score-beat clock inside one exact attack range", () => {
   const normalized = score();
   const containing = selectSheetMusicLoop(normalized, { startMeasureIndex: 0, endMeasureIndex: 1, hand: "both" });

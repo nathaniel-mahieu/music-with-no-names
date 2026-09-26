@@ -241,6 +241,312 @@
 .sessionActions .primaryAction { color: #090b10; border-color: var(--flow-gold); background: var(--flow-gold); font-weight: 700; }
 .audioNotice { grid-column: 1 / -1; margin: 0; color: #8793a5; font-size: .7rem; line-height: 1.45; }
 
+.referenceDock {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  margin: 14px clamp(18px, 3vw, 38px);
+  overflow: hidden;
+  border: 1px solid rgba(119, 209, 223, .2);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(119, 209, 223, .105), transparent 23rem),
+    radial-gradient(circle at 92% 0%, rgba(239, 199, 107, .07), transparent 19rem),
+    linear-gradient(145deg, rgba(12, 18, 28, .96), rgba(6, 9, 15, .96));
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(241, 243, 247, .025);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.referenceDock::before {
+  position: absolute;
+  top: 0;
+  right: 12%;
+  left: 12%;
+  height: 1px;
+  opacity: .72;
+  background: linear-gradient(90deg, transparent, rgba(119, 209, 223, .48), rgba(239, 199, 107, .34), transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.referenceDock.isTransportFocused {
+  border-color: rgba(119, 209, 223, .46);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, .24), 0 0 0 1px rgba(119, 209, 223, .08), inset 0 0 36px rgba(119, 209, 223, .035);
+}
+
+.referenceDockHeader {
+  display: flex;
+  min-width: 0;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.referenceDockHeader > div:first-child,
+.sourceSummary { display: grid; min-width: 0; gap: 3px; }
+
+.referenceDockHeader span,
+.sourceSummary > span,
+.localTrack > span,
+.syncEditor > span,
+.voicePreview > span {
+  color: var(--flow-blue);
+  font-family: var(--font-mono), monospace;
+  font-size: .65rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.referenceDockHeader strong,
+.sourceSummary > strong { color: var(--flow-text); font-size: .76rem; font-weight: 600; line-height: 1.35; }
+.referenceDockHeader small,
+.sourceSummary > small { color: var(--flow-muted); font-size: .675rem; line-height: 1.4; }
+.referenceDockHeader p,
+.sourceSummary > p { max-width: 76ch; margin: 0; color: var(--flow-muted); font-size: .675rem; line-height: 1.45; }
+.referenceDockHeader > p { text-align: right; }
+
+.sourceTabs {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--flow-line);
+  border-radius: 999px;
+  background: rgba(3, 6, 11, .6);
+}
+
+.sourceTab {
+  display: grid;
+  gap: 1px;
+  padding: 7px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #aab5c5;
+  background: transparent;
+  font-family: var(--font-mono), monospace;
+  font-size: .65rem;
+  letter-spacing: .025em;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sourceTab > span { font-weight: 720; }
+.sourceTab > small { opacity: .75; font-size: .57rem; letter-spacing: .05em; text-transform: uppercase; }
+
+.sourceTab:hover:not(:disabled) { color: var(--flow-text); background: rgba(219, 228, 242, .055); }
+.sourceTab[aria-pressed="true"],
+.sourceTab[aria-selected="true"],
+.sourceTab[data-active="true"] { color: #071018; border-color: var(--flow-blue); background: var(--flow-blue); font-weight: 750; }
+
+.sourceBody {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(180px, .34fr) minmax(0, 1fr);
+  gap: 14px 22px;
+  align-items: center;
+  padding: 13px 14px 15px;
+  border-top: 1px solid var(--flow-line);
+  background: rgba(4, 7, 12, .34);
+}
+
+.sourceBody[data-source="synth"],
+.sourceBody[data-source="spotify"],
+.sourceBody[data-source="local"][data-ready="false"] { grid-template-columns: minmax(0, 1fr); }
+.sourceBody[data-source="local"][data-ready="false"] .sourceSummary { max-width: 78ch; }
+
+.sourceSummary { align-content: start; }
+.sourceSummary > small { max-width: 46ch; }
+
+.localTrack {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px 12px;
+  align-items: center;
+}
+
+.localTrack > div:first-child { display: grid; min-width: 0; gap: 3px; }
+.localTrack > div:first-child > span { color: var(--flow-blue); font-family: var(--font-mono), monospace; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }
+.localTrack > div:first-child > strong { overflow: hidden; color: var(--flow-text); font-size: .74rem; text-overflow: ellipsis; white-space: nowrap; }
+.localTrack > div:first-child > small { color: var(--flow-muted); font-size: .64rem; line-height: 1.4; }
+.localTrack > div:last-child { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
+.localTrack > div:last-child > button { min-height: 38px; padding: 8px 13px; border: 1px solid var(--flow-line-strong); border-radius: 999px; color: var(--flow-text); background: rgba(7, 11, 18, .84); cursor: pointer; }
+
+.audioFileAction {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 13px;
+  border: 1px solid rgba(119, 209, 223, .4);
+  border-radius: 999px;
+  color: var(--flow-blue);
+  background: rgba(119, 209, 223, .075);
+  font-family: var(--font-mono), monospace;
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .025em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.audioFileAction:hover { color: #071018; border-color: var(--flow-blue); background: var(--flow-blue); }
+.audioFileAction input[type="file"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+.localPlayer {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  color-scheme: dark;
+  accent-color: var(--flow-blue);
+}
+
+.localPlayer audio { width: 100%; height: 38px; color-scheme: dark; accent-color: var(--flow-blue); }
+
+.syncEditor {
+  display: grid;
+  min-width: 0;
+  grid-column: 1 / -1;
+  gap: 9px;
+  padding-top: 11px;
+  border-top: 1px solid var(--flow-line);
+}
+
+.syncEditor > summary {
+  display: flex;
+  min-height: 38px;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--flow-text);
+  font-size: .72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.syncEditor > summary::marker { color: var(--flow-blue); }
+.syncEditor p { max-width: 90ch; margin: 0; color: var(--flow-muted); font-size: .675rem; line-height: 1.5; }
+
+.syncControls {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.syncControls label { display: grid; min-width: 0; gap: 5px; color: var(--flow-muted); font-size: .65rem; }
+.syncControls select,
+.syncControls input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--flow-line-strong);
+  border-radius: 10px;
+  color: var(--flow-text);
+  background: rgba(3, 6, 11, .72);
+  font-size: .7rem;
+}
+
+.syncControls button,
+.anchorChip,
+.spotifyForm button,
+.voicePreview button {
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid var(--flow-line-strong);
+  border-radius: 10px;
+  color: var(--flow-text);
+  background: rgba(7, 11, 18, .84);
+  font-size: .675rem;
+  cursor: pointer;
+}
+
+.syncControls button:hover:not(:disabled),
+.anchorChip:hover:not(:disabled),
+.spotifyForm button:hover:not(:disabled),
+.voicePreview button:hover:not(:disabled) { color: #071018; border-color: var(--flow-blue); background: var(--flow-blue); }
+
+.anchorList { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; align-items: center; }
+.anchorList:empty { display: none; }
+
+.anchorChip {
+  display: inline-flex;
+  min-width: 0;
+  gap: 7px;
+  align-items: center;
+  border-color: rgba(139, 215, 180, .3);
+  border-radius: 999px;
+  color: #c8e8d9;
+  background: rgba(139, 215, 180, .055);
+  font-family: var(--font-mono), monospace;
+  line-height: 1.2;
+}
+
+.anchorChip b { color: var(--flow-mint); font-weight: 700; }
+.anchorChip small { color: var(--flow-muted); font-size: .625rem; }
+.anchorChip strong { color: var(--flow-mint); font-weight: 700; }
+.anchorChip > button { display: inline-grid; width: 24px; height: 24px; place-items: center; padding: 0; border: 0; border-radius: 50%; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.anchorChip > button:hover { color: #071018; background: var(--flow-mint); }
+
+.spotifyForm { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; }
+.spotifyForm label { display: grid; min-width: 0; gap: 5px; color: var(--flow-muted); font-size: .65rem; }
+.spotifyForm input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid var(--flow-line-strong);
+  border-radius: 10px;
+  color: var(--flow-text);
+  background: rgba(3, 6, 11, .72);
+  font-size: .7rem;
+}
+
+.spotifyEmbed {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 152px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: #111;
+  color-scheme: dark;
+}
+
+.spotifyEmbed iframe { display: block; width: 100%; min-height: 152px; border: 0; }
+
+.policyNote {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid rgba(239, 199, 107, .48);
+  color: #aeb8c7;
+  background: rgba(239, 199, 107, .035);
+  font-size: .65rem;
+  line-height: 1.45;
+}
+
+.policyNote strong { color: var(--flow-gold); font-weight: 700; }
+
+.voicePreview {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid var(--flow-line-strong);
+  border-radius: 10px;
+  background: rgba(7, 11, 18, .58);
+}
+
+.voicePreview > summary { color: var(--flow-muted); font-size: .675rem; cursor: pointer; }
+.voicePreview > div { display: flex; flex-wrap: wrap; gap: 6px; }
+
 .playAlongField {
   position: relative;
   min-width: 0;
@@ -292,9 +598,18 @@
 .playbackBadges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .playbackBadges span { padding: 5px 9px; border: 1px solid var(--flow-line); border-radius: 999px; color: #b9c3d1; font-size: .65rem; white-space: nowrap; }
 .playbackHeaderActions { display: grid; gap: 9px; justify-items: end; }
+.fieldTransportActions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.fieldTransportActions button { min-height: 38px; padding: 9px 13px; border-radius: 999px; font-family: var(--font-mono), monospace; font-size: .65rem; font-weight: 700; letter-spacing: .025em; line-height: 1; cursor: pointer; }
+.fieldIndependentNotice { max-width: 34ch; padding: 8px 11px; border: 1px solid var(--flow-line); border-radius: 999px; color: var(--flow-muted); background: rgba(5, 8, 13, .55); font-family: var(--font-mono), monospace; font-size: .62rem; line-height: 1.3; text-align: right; }
 .fieldPlayAction { min-width: 168px; padding: 10px 15px; border: 1px solid rgba(239, 199, 107, .55); border-radius: 999px; color: #071018; background: linear-gradient(135deg, var(--flow-gold), #f5dfaa); box-shadow: 0 0 24px rgba(239, 199, 107, .15); font: 700 .7rem/1 var(--font-mono), monospace; letter-spacing: .04em; cursor: pointer; }
+.fieldTransportActions .fieldPlayAction { min-width: 136px; }
 .fieldPlayAction:hover:not(:disabled) { border-color: #fff0c8; box-shadow: 0 0 30px rgba(239, 199, 107, .28); transform: translateY(-1px); }
 .fieldPlayAction:disabled { opacity: .45; cursor: not-allowed; }
+.fieldListenAction { border: 1px solid rgba(119, 209, 223, .46); color: var(--flow-blue); background: rgba(119, 209, 223, .07); }
+.fieldListenAction:hover:not(:disabled) { color: #071018; border-color: var(--flow-blue); background: var(--flow-blue); box-shadow: 0 0 24px rgba(119, 209, 223, .2); transform: translateY(-1px); }
+.fieldRevealAction { border: 1px dashed rgba(239, 199, 107, .58); color: var(--flow-gold); background: rgba(239, 199, 107, .055); }
+.fieldRevealAction:hover:not(:disabled),
+.fieldRevealAction[aria-pressed="true"] { color: #071018; border-style: solid; border-color: var(--flow-gold); background: var(--flow-gold); }
 .playAlongField[data-phase="playing"] .fieldPlayAction,
 .playAlongField[data-phase="count-in"] .fieldPlayAction { color: #dbe4f2; border-color: rgba(241, 141, 126, .48); background: rgba(241, 141, 126, .11); }
 
@@ -874,6 +1189,8 @@
 
 .shell button:focus-visible,
 .shell select:focus-visible,
+.shell input:not([type="file"]):focus-visible,
+.shell audio:focus-visible,
 .shell summary:focus-visible,
 .shell label:has(input[type="file"]:focus-visible) { outline: 3px solid var(--flow-blue); outline-offset: 2px; }
 .shell button:disabled { cursor: not-allowed; opacity: .45; }
@@ -896,6 +1213,7 @@
   .evidenceGroups { grid-template-columns: 1fr; }
   .sensoryBridge { grid-template-columns: .82fr 1.18fr; }
   .handFeedback { grid-column: 1 / -1; border-top: 1px solid var(--flow-line); border-left: 0 !important; }
+  .syncControls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 900px) {
@@ -923,10 +1241,17 @@
   .sessionBar { grid-template-columns: 1fr; }
   .sessionActions { justify-content: stretch; }
   .sessionActions button { flex: 1 1 150px; }
+  .referenceDock { margin-right: 12px; margin-left: 12px; border-radius: 16px; }
+  .referenceDockHeader { display: grid; }
+  .sourceTabs { width: 100%; }
+  .sourceTab { flex: 1 1 0; }
+  .sourceBody { grid-template-columns: 1fr; }
+  .sourceSummary > small { max-width: 74ch; }
   .playAlongField > header { display: grid; }
   .playbackBadges { justify-content: flex-start; }
   .playbackHeaderActions { justify-items: start; }
-  .fieldPlayAction { width: 100%; }
+  .fieldTransportActions { width: 100%; justify-content: flex-start; }
+  .fieldTransportActions button { flex: 1 1 145px; }
   .sensoryBridge { grid-template-columns: 1fr 1fr; }
   .earBeacon { grid-column: 1 / -1; grid-template-columns: 90px 1fr; justify-items: start; text-align: left; }
   .earBeacon .soundOrb { grid-row: 1 / span 3; width: 76px; height: 76px; margin: 0; }
@@ -966,6 +1291,23 @@
 @media (max-width: 430px) {
   .practiceControls { grid-template-columns: 1fr; }
   .practiceControls label { border-right: 0 !important; }
+  .referenceDock { margin: 10px 8px; border-radius: 14px; }
+  .referenceDockHeader,
+  .sourceBody { padding-right: 10px; padding-left: 10px; }
+  .sourceTabs { border-radius: 12px; }
+  .sourceTab { min-width: 0; padding-right: 7px; padding-left: 7px; border-radius: 9px; white-space: normal; }
+  .localTrack { grid-template-columns: 1fr; }
+  .localTrack > span,
+  .localTrack > small { grid-column: 1; }
+  .audioFileAction { width: 100%; }
+  .syncControls { grid-template-columns: 1fr; }
+  .spotifyForm { grid-template-columns: 1fr; }
+  .spotifyForm button { width: 100%; }
+  .anchorChip { width: 100%; justify-content: center; }
+  .voicePreview > span { width: 100%; margin-right: 0; }
+  .voicePreview button { flex: 1 1 120px; }
+  .fieldTransportActions { display: grid; grid-template-columns: 1fr; }
+  .fieldTransportActions button { width: 100%; }
   .chunkJourneyNav { flex-wrap: wrap; }
   .chunkJourneyNav span { order: -1; width: 100%; text-align: center; }
   .chunkJourneyNav button { flex: 1 1 130px; }
@@ -983,7 +1325,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dropZone,
-  .scoreCard { transition: none; }
+  .scoreCard,
+  .referenceDock { transition: none; }
   .measureMap,
   .scoreRail { scroll-behavior: auto; }
   .attackEchoPulse { animation: none; transform: none; }
@@ -1000,6 +1343,10 @@
 @media (forced-colors: active) {
   .shell,
   .dropZone,
+  .referenceDock,
+  .sourceTabs,
+  .sourceBody,
+  .policyNote,
   .scoreCard,
   .focusLanding,
   .chunkFocus,
@@ -1016,7 +1363,32 @@
   .playAlongField,
   .listeningStaff,
   .feedbackCompass,
-  .referenceTimeline { background: Canvas; }
+  .referenceTimeline,
+  .syncControls input,
+  .syncControls select,
+  .spotifyForm input,
+  .spotifyEmbed { background: Canvas; }
+  .referenceDock,
+  .sourceTabs,
+  .sourceBody,
+  .localPlayer,
+  .spotifyEmbed,
+  .policyNote { border-color: CanvasText; }
+  .referenceDock::before { display: none; }
+  .sourceTab,
+  .audioFileAction,
+  .syncControls button,
+  .anchorChip,
+  .spotifyForm button,
+  .voicePreview button,
+  .fieldListenAction,
+  .fieldRevealAction,
+  .fieldPlayAction { color: ButtonText; border: 1px solid ButtonText; background: ButtonFace; box-shadow: none; }
+  .sourceTab[aria-pressed="true"],
+  .sourceTab[aria-selected="true"],
+  .sourceTab[data-active="true"],
+  .fieldRevealAction[aria-pressed="true"] { color: HighlightText; border: 3px solid Highlight; background: Highlight; }
+  .referenceDock.isTransportFocused { outline: 3px solid Highlight; outline-offset: -3px; box-shadow: none; }
   .listeningTrebleLines,
   .listeningBassLines,
   .listeningTrebleLines::before,
