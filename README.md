@@ -4,7 +4,9 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Score Flow · Ear-First Recording Bridge v2.22**. It provides:
+The current milestone is **Score Flow · One-Screen Playing Deck v2.23**. It provides:
+
+- A desktop playing surface that keeps the compact piano toolbar, score identity, source choice, practice setup, MIDI readiness, transport, veiled staff, and live hand feedback together in one 1280×720 viewport. Local-audio/Spotify setup and the full practice controls open as bounded, keyboard-reachable drawers over the stage instead of pushing the ear–eye–hands loop off-screen; narrow screens retain the natural stacked layout.
 
 - A genuinely blind listening pass. `Listen · notes locked` keeps pitch, note count, staff height, target keys, and grading hidden before, during, and after playback. The grand-staff scaffold and recording time remain visible so the ear has a temporal place without receiving the answer; stopping never opens the veil.
 

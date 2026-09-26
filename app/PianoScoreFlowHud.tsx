@@ -1129,7 +1129,9 @@ function PlayAlongField({ view, loop, comparison, comparisons, readingMode, show
           ? `Sustain ringing · after landing ${cursorOrdinal ?? "…"}`
           : `Rest · pulse continues after landing ${cursorOrdinal ?? "…"}`
       : view.phase === "complete"
-        ? view.intent === "practice" ? "Pass complete · evidence ready, notation still your choice" : "Listening complete · notation stayed locked"
+        ? view.intent === "practice"
+          ? reviewRevealed ? "Pass complete · heard passage revealed by choice" : "Pass complete · evidence ready, notation still your choice"
+          : reviewRevealed ? "Listening complete · heard passage revealed by choice" : "Listening complete · notation stayed locked"
         : view.phase === "unavailable"
           ? "Audio unavailable · silent practice remains ready"
           : "Listen first, then play when the phrase is inside you";
@@ -1253,6 +1255,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const [audioNotice, setAudioNotice] = useState("Synthesized score reference is ready. MIDI input remains silent.");
   const [referenceVolume, setReferenceVolume] = useState(78);
   const [referenceSource, setReferenceSource] = useState<ReferenceSource>("synth");
+  const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false);
   const [reviewNotationRevealed, setReviewNotationRevealed] = useState(false);
   const [localReferenceAudio, setLocalReferenceAudio] = useState<LocalReferenceAudio | null>(null);
   const [localAudioTime, setLocalAudioTime] = useState(0);
@@ -1308,8 +1311,10 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     audioContextRef.current = null;
     audioMasterRef.current = null;
     const session = referenceSessionRef.current;
-    const freezeHeardRange = freezeTake && session?.playAlong && session.heardEndAttackId;
-    if (freezeHeardRange && session) {
+    const freezePracticePrefix = Boolean(freezeTake && session?.playAlong && session.heardEndAttackId);
+    const freezeListeningPrefix = Boolean(preserveReviewRange && session && !session.playAlong && session.heardEndAttackId);
+    const preserveHeardPrefix = freezePracticePrefix || freezeListeningPrefix;
+    if (freezePracticePrefix && session) {
       const captured = capturedScoreEvents(
         eventsRef.current,
         session.afterId,
@@ -1319,23 +1324,23 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       setReferenceReviewRange({ startAttackId: session.startAttackId, endAttackId: session.heardEndAttackId! });
       setReviewTakeEvents(captured);
       setCaptureState("review");
-      setCaptureNotice(captured.length ? "Play-along stopped. Only the heard prefix is frozen for synchronized review." : "Play-along stopped after the reference began, but no MIDI attack arrived. Only the heard prefix is shown as missed.");
+      setCaptureNotice(captured.length ? "Play + compare stopped. Only the heard prefix is frozen for synchronized review." : "Play + compare stopped after the reference began, but no MIDI attack arrived. Only the heard prefix is shown as missed.");
     } else if (freezeTake && session?.playAlong) {
       setReferenceReviewRange(null);
       setCaptureState("idle");
-      setCaptureNotice("Play-along stopped during the count-in; no score landing was marked missed.");
+      setCaptureNotice("Play + compare stopped during the count-in; no score landing was marked missed.");
     } else if (!preserveReviewRange) {
       setReferenceReviewRange(null);
     }
     referenceSessionRef.current = null;
     setAudioState("idle");
-    setReferencePlayback((current) => freezeHeardRange
+    setReferencePlayback((current) => preserveHeardPrefix
       ? { ...current, phase: "complete", currentIndex: null, memoryRevealIndex: null, soundingIndex: null, sounding: false, countdown: null }
       : EMPTY_REFERENCE_VIEW);
     // The audible clock is meaningful only when a synchronized take survives.
     // In particular, Stop during count-in must not poison later live-follow
     // timing, while a later upper/bass preview must preserve frozen evidence.
-    const cancelledPlayAlongBeforeSound = Boolean(freezeTake && session?.playAlong && !freezeHeardRange);
+    const cancelledPlayAlongBeforeSound = Boolean(freezeTake && session?.playAlong && !freezePracticePrefix);
     if (!preserveClock || cancelledPlayAlongBeforeSound) {
       setReferenceTimingClock(null);
       setReferenceTimingMap(null);
@@ -1533,6 +1538,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     setSpotifyTarget(target);
     setSpotifyInput(target.canonicalUrl);
     setReferenceSource("spotify");
+    setSourceDrawerOpen(true);
     setReviewNotationRevealed(false);
     setSpotifyNotice("Spotify is embedded for independent reference listening. It does not move, reveal, or grade the score.");
   };
@@ -1541,6 +1547,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     if (source === referenceSource) return;
     stopReference("Reference source changed. MIDI input remains silent.");
     setReferenceSource(source);
+    setSourceDrawerOpen(source !== "synth");
     setReviewNotationRevealed(false);
     setAudioNotice(source === "synth"
       ? "Score tones are ready for synchronized listening or play-along."
@@ -1742,7 +1749,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
 
   const reviewTake = () => {
     if (!takeEvents.length) { setCaptureNotice("No new landings have crossed this take boundary yet."); return; }
-    if (audioState === "playing") stopReference("Play-along stopped at this review boundary.", true);
+    if (audioState === "playing") stopReference("Play + compare stopped at this review boundary.", true);
     setReviewTakeEvents(takeEvents.map((event) => ({ ...event })));
     setCaptureState("review");
     setCaptureNotice(pressedNotes.length
@@ -1897,7 +1904,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const playReference = useCallback(async (voice: ReferenceVoice = "full", playAlong = voice === "full") => {
     if (!score || !loop?.attacks.length) return;
     if (playAlong && activeNotes.length) {
-      setAudioNotice("Release held or sustained keys before Play along so the first hand boundary is unambiguous.");
+      setAudioNotice("Release held or sustained keys before Play + compare so the first hand boundary is unambiguous.");
       return;
     }
     const intent: ReferenceIntent = playAlong ? "practice" : voice === "full" ? "listen" : "preview";
@@ -1922,7 +1929,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       setSettledThroughEventId(afterId);
       setReviewTakeEvents(null);
       setCaptureState("armed");
-      setCaptureNotice("Play-along armed. Wait through the count-in, then place each silent MIDI attack against the score-tone reference.");
+      setCaptureNotice("Play + compare is ready. Wait through the count-in, then place each silent MIDI attack against the score-tone reference.");
     }
     let context: AudioContext | null = null;
     let master: GainNode | null = null;
@@ -2092,7 +2099,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
             const memoryRevealIndex = audibleElapsed + 8 >= cursorCue.onsetMs && audibleElapsed - cursorCue.onsetMs < 1_450
               ? cursorCue.expectedIndex
               : null;
-            if (referenceSessionRef.current?.playAlong) referenceSessionRef.current.heardEndAttackId = cursorCue.attackId;
+            if (referenceSessionRef.current) referenceSessionRef.current.heardEndAttackId = cursorCue.attackId;
             setReferencePlayback((current) => ({
               ...current,
               phase: "playing",
@@ -2150,7 +2157,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
           setCaptureNotice(captured.length
             ? "The audible reference ended. Your synchronized take is frozen: inspect successes, misses, semitone correction, and pulse distance."
             : "The audible reference ended without a MIDI attack. The written landings are frozen as misses so the starting point remains visible.");
-          setAudioNotice(`Play-along finished at ${practiceTempo} BPM. The heard score and your silent MIDI take now share one review timeline${playbackPlan.truncated ? "; select a shorter chunk for an untruncated pass" : ""}.`);
+          setAudioNotice(`Play + compare finished at ${practiceTempo} BPM. The heard score and your silent MIDI take now share one review timeline${playbackPlan.truncated ? "; select a shorter chunk for an untruncated pass" : ""}.`);
         } else {
           setAudioNotice(intent === "listen"
             ? "Listening pass finished without revealing or grading notes. Listen again, play against it, or reveal the heard passage when ready."
@@ -2348,7 +2355,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
           const memoryRevealIndex = audibleElapsed + 8 >= cursorCue.onsetMs && audibleElapsed - cursorCue.onsetMs < 1_450
             ? cursorCue.expectedIndex
             : null;
-          if (referenceSessionRef.current?.playAlong) referenceSessionRef.current.heardEndAttackId = cursorCue.attackId;
+          if (referenceSessionRef.current) referenceSessionRef.current.heardEndAttackId = cursorCue.attackId;
           setReferencePlayback((current) => ({
             ...current,
             phase: "playing",
@@ -2417,7 +2424,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   const referenceSourceLabel = referenceSource === "synth"
     ? "score tones"
     : referenceSource === "local"
-      ? "aligned local recording"
+      ? localReferenceAudio && mediaSyncAnchors.length ? "aligned local recording" : localReferenceAudio ? "local recording · align a landing" : "local recording · choose a file"
       : "Spotify · independent listening";
   const syncTargetOptions = loop?.attacks.slice(0, MAX_LIVE_FEEDBACK_ATTACKS) ?? [];
   const syncTargetAttack = syncTargetAttackId == null
@@ -2488,7 +2495,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     if (audioState === "playing") {
       stopReference(
         referencePlayback.playAlong
-          ? "Play-along stopped. The synchronized evidence so far is frozen for review."
+          ? "Play + compare stopped. The synchronized evidence so far is frozen for review."
           : referencePlayback.intent === "listen"
             ? "Listening stopped. Notation remains locked; no performance judgment was added."
             : "Preview stopped. The frozen play-along review is unchanged.",
@@ -2517,10 +2524,11 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
   };
 
   return <section className={styles.shell} aria-labelledby="score-flow-title">
+    <div className={styles.commandDeck}>
     <header className={styles.scoreHeader}>
       <div><span>Score Flow · uploaded score</span><h3 id="score-flow-title">{imported.title}</h3><p>{imported.composer ? `${imported.composer} · ` : ""}{imported.partNames.join(" + ")} · {imported.fileName}</p></div>
       <div className={styles.scoreFacts}><span>{imported.measureCount} measures</span><span>{score.attacks.length} landings</span><span>{scoreVeiled ? "key context veiled" : keySignatureLabel(localMeasureContext ?? imported)}</span><span>{meterSummary(imported)}</span><span>{imported.tempoBpm ? `opening ${Math.round(imported.tempoBpm)} BPM` : "tempo not encoded · using 72"}</span><span>{scoreVeiled ? "pitch range veiled" : imported.lowestMidi != null && imported.highestMidi != null ? `${pitchClassName(imported.lowestMidi, prefer)}–${pitchClassName(imported.highestMidi, prefer)}` : "range unavailable"}</span></div>
-      <button type="button" className={styles.removeScore} onClick={clearScore}>Remove local score</button>
+      <button type="button" className={styles.removeScore} aria-label="Remove local score" onClick={clearScore}>Remove</button>
     </header>
 
     <section className={cx(styles.referenceDock, transportFocused && styles.isTransportFocused)} aria-labelledby="reference-source-title">
@@ -2528,15 +2536,18 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
         <div><span>Sound source</span><strong id="reference-source-title">Hear the passage without giving away the page.</strong></div>
         <p>Listen keeps pitch, chord size, staff height, and target keys hidden. Play + compare adds silent MIDI evidence. Reveal is always a separate action after the pass.</p>
       </header>
-      <div className={styles.sourceTabs} role="group" aria-label="Reference sound source">
-        <button type="button" className={cx(styles.sourceTab, referenceSource === "synth" && styles.isSelected)} aria-pressed={referenceSource === "synth"} onClick={() => chooseReferenceSource("synth")}><span>Score tones</span><small>synchronized</small></button>
-        <button type="button" className={cx(styles.sourceTab, referenceSource === "local" && styles.isSelected)} aria-pressed={referenceSource === "local"} onClick={() => chooseReferenceSource("local")}><span>Local recording</span><small>syncable</small></button>
-        <button type="button" className={cx(styles.sourceTab, referenceSource === "spotify" && styles.isSelected)} aria-pressed={referenceSource === "spotify"} onClick={() => chooseReferenceSource("spotify")}><span>Spotify</span><small>listen-only</small></button>
+      <div className={styles.sourceControls}>
+        <div className={styles.sourceTabs} role="group" aria-label="Reference sound source">
+          <button type="button" className={cx(styles.sourceTab, referenceSource === "synth" && styles.isSelected)} aria-pressed={referenceSource === "synth"} onClick={() => chooseReferenceSource("synth")}><span>Score tones</span><small>synchronized</small></button>
+          <button type="button" className={cx(styles.sourceTab, referenceSource === "local" && styles.isSelected)} aria-pressed={referenceSource === "local"} onClick={() => chooseReferenceSource("local")}><span>Local recording</span><small>syncable</small></button>
+          <button type="button" className={cx(styles.sourceTab, referenceSource === "spotify" && styles.isSelected)} aria-pressed={referenceSource === "spotify"} onClick={() => chooseReferenceSource("spotify")}><span>Spotify</span><small>listen-only</small></button>
+        </div>
+        <button type="button" className={styles.sourceDrawerToggle} aria-expanded={sourceDrawerOpen} aria-controls="score-flow-source-drawer" onClick={() => setSourceDrawerOpen((open) => !open)}>{sourceDrawerOpen ? "Close source" : referenceSource === "synth" ? "Source details" : "Open player"}</button>
       </div>
 
-      {referenceSource === "synth" ? <div className={styles.sourceBody} data-source="synth">
+      {referenceSource === "synth" ? <div id="score-flow-source-drawer" className={cx(styles.sourceBody, !sourceDrawerOpen && styles.isSourceBodyCollapsed)} data-source="synth">
         <div className={styles.sourceSummary}><span>Generated from the uploaded score</span><strong>Exact score timing at {practiceTempo} BPM</strong><p>Best for measured play-along. The sound and cursor share one clock; MIDI produces no audio.</p></div>
-      </div> : referenceSource === "local" ? <div className={styles.sourceBody} data-source="local" data-ready={localReferenceAudio ? "true" : "false"}>
+      </div> : referenceSource === "local" ? <div id="score-flow-source-drawer" className={cx(styles.sourceBody, !sourceDrawerOpen && styles.isSourceBodyCollapsed)} data-source="local" data-ready={localReferenceAudio ? "true" : "false"}>
         {!localReferenceAudio ? <div className={styles.sourceSummary}><span>Private recording</span><strong>Add an MP3 or other local audio file.</strong><p>The file remains inside this browser tab. After upload, align one written landing to the matching instant in the recording.</p><label className={styles.audioFileAction} htmlFor="score-flow-reference-audio">Choose recording<input id="score-flow-reference-audio" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.webm" onChange={onReferenceAudioChange} /></label></div> : <>
           <div className={styles.localTrack}>
             <div><span>Local to this tab</span><strong>{localReferenceAudio.name}</strong><small>{localReferenceAudio.durationSeconds == null ? "reading duration…" : clockLabel(localReferenceAudio.durationSeconds * 1_000)} · current {clockLabel(localAudioTime * 1_000)}</small></div>
@@ -2570,7 +2581,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
             })}</div> : null}
           </div>
         </>}
-      </div> : <div className={styles.sourceBody} data-source="spotify">
+      </div> : <div id="score-flow-source-drawer" className={cx(styles.sourceBody, !sourceDrawerOpen && styles.isSourceBodyCollapsed)} data-source="spotify">
         <div className={styles.spotifyForm}>
           <label htmlFor="score-flow-spotify"><span>Spotify link or URI</span><input id="score-flow-spotify" type="url" inputMode="url" placeholder="https://open.spotify.com/track/…" value={spotifyInput} onChange={(event) => setSpotifyInput(event.target.value)} /></label>
           <button type="button" onClick={installSpotifyEmbed}>Embed</button>
@@ -2582,6 +2593,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
 
     <details className={styles.practiceSetup}>
       <summary><span>Practice setup</span><strong>{selectedChunk ? `chunk ${selectedChunk.ordinal + 1} · ${selectedChunk.attackCount} landings` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`} · {practiceHand === "both" ? "both staves" : practiceHand === "right" ? "upper staff" : "lower staff"} · {readingMode === "read" ? "Follow" : readingMode === "memory" ? "Flash" : "Hidden"} · {referenceSourceLabel}</strong><small>Loop, staff cues, timing, level, and chord-togetherness</small></summary>
+      <div className={styles.practiceDrawer}>
       <div className={styles.practiceControls} aria-label="Score practice controls">
         <label><span>From measure</span><select value={loopStart} onChange={(event) => changeLoop(Number(event.target.value), Math.max(Number(event.target.value), loopEnd))}>{score.measures.map((measure) => <option key={measure.id} value={measure.index}>{measure.number}</option>)}</select></label>
         <label><span>Through measure</span><select value={loopEnd} onChange={(event) => changeLoop(Math.min(loopStart, Number(event.target.value)), Number(event.target.value))}>{score.measures.map((measure) => <option key={measure.id} value={measure.index} disabled={measure.index < loopStart}>{measure.number}</option>)}</select></label>
@@ -2602,6 +2614,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
         const state = wrong ? `${evidenceScope} needs repair` : correct ? `${evidenceScope} aligned` : current ? "current" : inLoop ? "in loop" : "outside loop";
         return <button key={measure.id} type="button" className={cx(inLoop && styles.isInLoop, current && styles.isCurrentMeasure, wrong && styles.hasWrong, correct && styles.isMeasureCorrect)} aria-label={`Measure ${measure.number}, ${imported.measures[measure.index]?.timeSignatureDisplay ?? `${measure.beats}/${measure.beatType}`}, ${state}`} aria-current={current ? "location" : undefined} onClick={() => changeLoop(measure.index, Math.min(score.measures.length - 1, measure.index + Math.max(0, loopEnd - loopStart)))}><span>{measure.number}</span><small>{imported.measures[measure.index]?.timeSignatureDisplay ?? `${measure.beats}/${measure.beatType}`}</small><em>{wrong ? selectedChunk ? "chunk repair" : "repair" : correct ? selectedChunk ? "chunk aligned" : "aligned" : current ? "current" : inLoop ? "loop" : ""}</em></button>;
       })}{navigatorEnd < score.measures.length - 1 ? <span className={styles.measureGap} aria-hidden="true">…</span> : null}</div>
+      </div>
     </details>
 
     <div className={styles.sessionBar}>
@@ -2614,6 +2627,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       </div>
       <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}{frozen ? <button type="button" className={styles.primaryAction} onClick={onResumeCapture}>Resume live trace</button> : null}{!midiConnected ? <button type="button" onClick={onConnectMidi}>Connect / retry MIDI</button> : null}{referenceSource === "synth" ? <details className={styles.voicePreview}><summary>Voice previews</summary><div><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper", false)}>Upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass", false)}>Bass route</button></div></details> : null}{audioState === "playing" && referencePlayback.playAlong ? null : captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose silent take</button> : <button type="button" disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Record chunk without audio" : "Record loop without audio" : selectedChunk ? "Record silent chunk" : "Record silent take"}</button>}</div>
       <p className={styles.audioNotice} role="status" aria-live="polite">{audioNotice}{referenceTimingMap ? " This review uses the recording’s aligned timing map, including the drift between your anchors." : referenceTimingClock ? ` This review measures attacks from the audible start; ${timingMode === "self-paced" ? "the Play + compare clock temporarily replaces self-paced timing" : "the fixed-pulse lens uses the same clock"}.` : timingMode === "pulse" ? ` Fixed-pulse is a constant ${practiceTempo} BPM drill from the latest numeric tempo at this boundary: your first landing is beat zero, and later tempo changes, rubato words, or fermatas do not move its clock.` : ""}</p>
+    </div>
     </div>
 
     {loop ? <PlayAlongField view={referencePlayback} loop={loop} comparison={referenceComparison} comparisons={referenceComparisonsByAttackId} readingMode={readingMode} showConventions={showConventions} notationById={notationById} activeNotes={pressedNotes} audioPlaying={audioState === "playing"} canPlay={sourceCanPlay} independentListening={referenceSource === "spotify"} sourceLabel={referenceSourceLabel} reviewRevealed={reviewNotationRevealed} onListen={listenReference} onToggle={togglePlayAlong} onToggleReveal={toggleReviewReveal} /> : null}

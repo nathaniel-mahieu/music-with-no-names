@@ -8746,6 +8746,25 @@ footer a {
 .piano-hud.is-score-flow .piano-hud-statebar,
 .piano-hud.is-score-flow .piano-focus-lenses { display: none; }
 
+@media (min-width: 1181px) {
+  .piano-hud.is-score-flow .piano-hud-header {
+    grid-template-columns: minmax(210px, .34fr) minmax(0, 1.66fr);
+    gap: 12px 18px;
+    min-height: 68px;
+    padding: 7px 14px;
+  }
+  .piano-hud.is-score-flow .piano-hud-header > div:first-child > .section-kicker,
+  .piano-hud.is-score-flow .piano-hud-header > div:first-child > p:last-child { display: none; }
+  .piano-hud.is-score-flow .piano-hud-header h2 { margin: 0; font-size: 1.12rem; line-height: 1.1; }
+  .piano-hud.is-score-flow .piano-hud-controls { flex-wrap: nowrap; gap: 5px; min-width: 0; }
+  .piano-hud.is-score-flow .piano-hud-controls .midi-status { flex: 1 1 190px; min-width: 150px; padding: 6px 8px; }
+  .piano-hud.is-score-flow .piano-hud-controls .midi-status p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .piano-hud.is-score-flow .piano-hud-controls > label:not(.piano-convention-toggle) select { min-width: 132px; }
+  .piano-hud.is-score-flow .piano-hud-controls > button,
+  .piano-hud.is-score-flow .piano-hud-controls select,
+  .piano-hud.is-score-flow .piano-hud-controls .piano-convention-toggle { min-height: 44px; }
+}
+
 @media (max-width: 900px) {
   .piano-hud.is-score-flow .piano-hud-header { grid-template-columns: 1fr; }
   .piano-hud.is-score-flow .piano-hud-controls { justify-content: flex-start; }

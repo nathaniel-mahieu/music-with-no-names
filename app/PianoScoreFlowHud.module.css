@@ -175,6 +175,8 @@
 .scoreFacts span { padding: 6px 9px; border: 1px solid var(--flow-line); border-radius: 999px; color: #b5bfce; font-size: .72rem; }
 .removeScore { flex: 0 0 auto; color: var(--flow-muted); }
 
+.commandDeck { min-width: 0; }
+
 .practiceSetup {
   border-bottom: 1px solid var(--flow-line);
   background: rgba(4, 6, 10, .56);
@@ -198,6 +200,7 @@
 .practiceSetup > summary > span { color: var(--flow-blue); font-family: var(--font-mono), monospace; font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; }
 .practiceSetup > summary > strong { overflow: hidden; color: var(--flow-text); font-size: .75rem; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .practiceSetup > summary > small { color: var(--flow-muted); font-size: .6875rem; }
+.practiceDrawer { min-width: 0; }
 
 .practiceControls {
   display: grid;
@@ -306,6 +309,14 @@
 .sourceSummary > p { max-width: 76ch; margin: 0; color: var(--flow-muted); font-size: .675rem; line-height: 1.45; }
 .referenceDockHeader > p { text-align: right; }
 
+.sourceControls {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  align-items: center;
+  padding: 0 14px 12px;
+}
+
 .sourceTabs {
   display: inline-flex;
   flex: 0 0 auto;
@@ -316,6 +327,24 @@
   border-radius: 999px;
   background: rgba(3, 6, 11, .6);
 }
+
+.sourceDrawerToggle {
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid var(--flow-line-strong);
+  border-radius: 999px;
+  color: var(--flow-blue);
+  background: rgba(119, 209, 223, .06);
+  font-family: var(--font-mono), monospace;
+  font-size: .65rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sourceDrawerToggle:hover,
+.sourceDrawerToggle[aria-expanded="true"] { color: #071018; border-color: var(--flow-blue); background: var(--flow-blue); }
+.sourceBody.isSourceBodyCollapsed { display: none; }
 
 .sourceTab {
   display: grid;
@@ -1195,6 +1224,157 @@
 .shell label:has(input[type="file"]:focus-visible) { outline: 3px solid var(--flow-blue); outline-offset: 2px; }
 .shell button:disabled { cursor: not-allowed; opacity: .45; }
 
+/* Desktop command deck: the controls needed while playing stay in one viewport.
+   Source/setup drawers temporarily float over the stage instead of pushing it away. */
+@media (min-width: 1181px) {
+  .commandDeck {
+    display: grid;
+    position: relative;
+    z-index: 20;
+    grid-template-columns: minmax(390px, .78fr) minmax(650px, 1.22fr);
+    grid-template-areas:
+      "score source"
+      "setup session";
+    border-bottom: 1px solid var(--flow-line);
+    background: rgba(5, 8, 13, .98);
+  }
+
+  .scoreHeader {
+    display: grid;
+    grid-area: score;
+    grid-template-columns: minmax(150px, 1fr) auto auto;
+    gap: 8px 12px;
+    min-width: 0;
+    min-height: 66px;
+    padding: 8px 12px;
+    border-right: 1px solid var(--flow-line);
+    border-bottom: 1px solid var(--flow-line);
+  }
+  .scoreHeader > div:first-child { min-width: 0; }
+  .scoreHeader > div:first-child > span { font-size: .6rem; }
+  .scoreHeader h3 { max-width: none; margin: 2px 0 0; overflow: hidden; font-size: 1.05rem; line-height: 1.08; text-overflow: ellipsis; white-space: nowrap; }
+  .scoreHeader p { display: none; }
+  .scoreFacts { flex-wrap: nowrap; gap: 4px; justify-content: flex-start; }
+  .scoreFacts span { padding: 4px 6px; font-size: .61rem; white-space: nowrap; }
+  .scoreFacts span:nth-child(n + 3) { display: none; }
+  .removeScore { min-height: 44px; padding: 6px 9px; font-size: .62rem; white-space: nowrap; }
+
+  .referenceDock {
+    display: grid;
+    position: relative;
+    grid-area: source;
+    grid-template-columns: minmax(185px, .62fr) minmax(430px, 1.38fr);
+    gap: 8px;
+    align-items: center;
+    min-height: 66px;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    border-bottom: 1px solid var(--flow-line);
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .referenceDock::before { display: none; }
+  .referenceDockHeader { padding: 8px 0 8px 12px; }
+  .referenceDockHeader > p { display: none; }
+  .referenceDockHeader strong { font-size: .7rem; }
+  .sourceControls { min-width: 0; padding: 5px 10px 5px 0; }
+  .sourceTabs { flex: 1 1 auto; }
+  .sourceTab { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 5px 8px; }
+  .sourceDrawerToggle { flex: 0 0 auto; min-height: 44px; }
+  .sourceBody:not(.isSourceBodyCollapsed) {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 8px;
+    z-index: 60;
+    width: min(780px, calc(100vw - 32px));
+    max-height: min(62dvh, 560px);
+    overflow: auto;
+    border: 1px solid rgba(119, 209, 223, .35);
+    border-radius: 16px;
+    background: rgba(5, 9, 15, .985);
+    box-shadow: 0 26px 72px rgba(0, 0, 0, .58), 0 0 0 1px rgba(119, 209, 223, .06);
+  }
+
+  .practiceSetup {
+    position: relative;
+    grid-area: setup;
+    min-width: 0;
+    border-right: 1px solid var(--flow-line);
+    border-bottom: 0;
+  }
+  .practiceSetup > summary { min-height: 58px; padding: 6px 12px; }
+  .practiceSetup > summary > small { display: none; }
+  .practiceSetup[open] { z-index: 55; }
+  .practiceDrawer {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: min(1180px, calc(100vw - 32px));
+    max-height: min(64dvh, 570px);
+    overflow: auto;
+    border: 1px solid rgba(119, 209, 223, .3);
+    background: rgba(5, 9, 15, .985);
+    box-shadow: 0 26px 72px rgba(0, 0, 0, .58);
+  }
+
+  .sessionBar {
+    grid-area: session;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    min-width: 0;
+    min-height: 58px;
+    padding: 6px 10px;
+    border-bottom: 0;
+  }
+  .sessionSummary { display: flex; min-width: 0; gap: 8px; align-items: center; }
+  .sessionSummary > span { flex: 0 0 auto; font-size: .6rem; }
+  .sessionSummary > strong { display: none; }
+  .sessionSummary > small {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .inputReadiness { flex: 1 1 auto; max-width: none; min-width: 0; margin: 0; padding: 5px 8px; }
+  .inputReadiness > div { grid-template-columns: auto minmax(0, 1fr); }
+  .inputReadiness small { display: none; }
+  .sessionActions { flex: 0 0 auto; flex-wrap: nowrap; gap: 5px; }
+  .sessionActions button { min-height: 44px; padding: 7px 10px; font-size: .62rem; white-space: nowrap; }
+  .voicePreview { min-height: 44px; padding: 5px 8px; }
+  .audioNotice {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .playAlongField > header { padding: 10px 14px 7px; }
+  .playAlongField > header strong { font-size: clamp(1.02rem, 1.4vw, 1.35rem); }
+  .playAlongField > header > div:first-child { gap: 3px; }
+  .playbackHeaderActions { gap: 5px; }
+  .playbackBadges span { padding: 4px 7px; }
+  .fieldTransportActions button { min-height: 44px; padding: 8px 12px; }
+  .referenceTimeline { height: 25px; margin: 0 14px 7px; }
+  .sensoryBridge { grid-template-columns: .66fr 1.5fr .84fr; }
+  .sensoryBridge article { gap: 5px; padding: 10px 12px 12px; }
+  .sensoryBridge article > strong { font-size: 1rem; }
+  .sensoryBridge article > small { line-height: 1.32; }
+  .soundOrb { width: 82px; height: 82px; margin: 1px auto 2px; }
+  .soundOrb i:nth-child(2) { inset: 13px; }
+  .soundOrb i:nth-child(3) { inset: 26px; }
+  .listeningStaff { height: 214px; }
+  .feedbackCompass { height: 138px; margin-top: 2px; }
+}
+
 @media (max-width: 1180px) {
   .practiceControls { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .practiceControls label:nth-child(4) { border-right: 0; }
@@ -1243,8 +1423,10 @@
   .sessionActions button { flex: 1 1 150px; }
   .referenceDock { margin-right: 12px; margin-left: 12px; border-radius: 16px; }
   .referenceDockHeader { display: grid; }
+  .sourceControls { display: grid; grid-template-columns: 1fr; padding-right: 10px; padding-left: 10px; }
   .sourceTabs { width: 100%; }
   .sourceTab { flex: 1 1 0; }
+  .sourceDrawerToggle { width: 100%; }
   .sourceBody { grid-template-columns: 1fr; }
   .sourceSummary > small { max-width: 74ch; }
   .playAlongField > header { display: grid; }

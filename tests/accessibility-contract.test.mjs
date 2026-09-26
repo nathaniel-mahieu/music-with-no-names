@@ -61,7 +61,7 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*midiConnected=\{midi\.inputs\.length > 0\}[\s\S]*onResumeCapture=\{resumeTrace\}/);
   assert.match(piano, /pressedNotes=\{pressedNoteNumbers\}/);
   assert.match(piano, /focusLens === "score-flow"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
-  assert.match(piano, /The score stays in this browser tab\. MIDI stays silent; only the explicit Play along and preview controls synthesize the written score\./);
+  assert.match(piano, /The score and local recording stay in this browser tab\. Listen and Play \+ compare are explicit; MIDI input itself never makes sound\./);
   assert.match(session, /"score-flow"/);
   assert.match(ratio, /"score-flow": "uploaded-score coach"/);
 
@@ -117,7 +117,8 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /startIndex: playbackPlan\.cues\[0\]\.expectedIndex[\s\S]*currentIndex: null[\s\S]*cursorIndex: playbackPlan\.cues\[0\]\.expectedIndex[\s\S]*sounding: false/, "the staff must remain covered during the audio lead-in");
   assert.match(scoreFlow, /audibleElapsed - cursorCue\.onsetMs < 1_450[\s\S]*memoryRevealIndex/, "Memory's brief reveal must expire from the audible clock rather than animation alone");
   assert.match(scoreFlow, /startAttackId: playbackPlan\.cues\[0\]\.attackId[\s\S]*endAttackId: playbackPlan\.cues\.at\(-1\)!\.attackId/, "frozen review must cover only the cues that were actually scheduled");
-  assert.match(scoreFlow, /cancelledPlayAlongBeforeSound[\s\S]*if \(!preserveClock \|\| cancelledPlayAlongBeforeSound\) \{[\s\S]*setReferenceTimingClock\(null\);[\s\S]*setReferenceTimingMap\(null\);[\s\S]*\}/, "count-in cancellation must clear every stale timing map without erasing an existing review during previews");
+  assert.match(scoreFlow, /const freezeListeningPrefix = Boolean\(preserveReviewRange[\s\S]*!session\.playAlong[\s\S]*session\.heardEndAttackId\)/, "stopping a blind listen pass must retain only the clock-reached prefix for an optional reveal");
+  assert.match(scoreFlow, /cancelledPlayAlongBeforeSound[\s\S]*!freezePracticePrefix[\s\S]*if \(!preserveClock \|\| cancelledPlayAlongBeforeSound\) \{[\s\S]*setReferenceTimingClock\(null\);[\s\S]*setReferenceTimingMap\(null\);[\s\S]*\}/, "count-in cancellation must clear every stale timing map without erasing an existing review during previews");
   assert.match(scoreFlow, /timingError < 0 \? 24 : 76/);
   assert.match(scoreFlow, /const pressedTargetCount = handExactReveal \?/);
   assert.match(model, /export function buildScoreReferencePlan/);
@@ -220,6 +221,16 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlowCss, /\.shell button,[\s\S]*\.shell label:has\(input\[type="file"\]\) \{ min-height: 44px; \}/);
   assert.match(scoreFlowCss, /\.practiceSetup > summary[^}]*min-height: 52px/);
   assert.match(scoreFlowCss, /\.reviewEvidence > summary[^}]*min-height: 48px/);
+  assert.match(scoreFlow, /<div className=\{styles\.commandDeck\}>[\s\S]*<header className=\{styles\.scoreHeader\}>/,
+    "desktop playing controls should share one compact command deck");
+  assert.match(scoreFlow, /aria-controls="score-flow-source-drawer"[\s\S]*sourceDrawerOpen \? "Close source"/,
+    "large source players need an explicit collapsible drawer");
+  assert.match(scoreFlowCss, /@media \(min-width: 1181px\)[\s\S]*\.commandDeck \{[\s\S]*grid-template-areas:[\s\S]*"score source"[\s\S]*"setup session"/,
+    "desktop score identity, source, setup, and input state should be arranged beside one another");
+  assert.match(scoreFlowCss, /\.sourceBody:not\(\.isSourceBodyCollapsed\) \{[\s\S]*position: absolute;[\s\S]*max-height: min\(62dvh, 560px\);[\s\S]*overflow: auto;/,
+    "source setup should overlay the playing surface without growing the page");
+  assert.match(scoreFlowCss, /\.practiceDrawer \{[\s\S]*position: absolute;[\s\S]*max-height: min\(64dvh, 570px\);[\s\S]*overflow: auto;/,
+    "practice setup should remain keyboard-reachable in a bounded desktop drawer");
   assert.match(scoreFlowCss, /\.shell button:focus-visible,/);
   assert.match(scoreFlowCss, /\.shell select:focus-visible,/);
   assert.match(scoreFlowCss, /\.shell summary:focus-visible,/);
