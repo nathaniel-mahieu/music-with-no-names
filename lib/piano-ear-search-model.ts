@@ -4,11 +4,15 @@ import {
   type PracticeHand,
   type SheetMusicScore,
   type SheetPitchCollectionAnalysis,
+  type SheetReferencePlan,
   type SheetReadingChunk,
 } from "./sheet-music-coach-model.ts";
 
 export const EAR_SEARCH_MAX_LANDINGS = 8;
-export const EAR_SEARCH_MAX_PROBES = 64;
+export const EAR_SEARCH_MAX_PROBES = 4096;
+export const EAR_SEARCH_RECENT_PROBES = 64;
+export const EAR_SEARCH_CHORD_SETTLE_MS = 60;
+export const EAR_SEARCH_MAX_REFERENCE_GAP_MS = 2400;
 
 export type EarSearchVoice = "upper" | "bass" | "full";
 
@@ -22,6 +26,12 @@ export type EarSearchLanding = {
 export type EarSearchProbe = {
   id: string | number;
   notes: number[];
+  onsetMs: number;
+};
+
+export type EarSearchAttack = {
+  id: number;
+  note: number;
   onsetMs: number;
 };
 
@@ -40,7 +50,7 @@ export type EarSearchProbeFeedback = {
   intervalDirection: "unavailable" | "matched" | "opposite" | "repeat-mismatch";
   intervalWidth: "unavailable" | "matched" | "narrower" | "wider" | "same-class-other-octave";
   collection: "caught" | "inside" | "outside" | "unclear";
-  texture: "caught" | "same-family" | "more-compact" | "more-open" | "different";
+  texture: "caught" | "same-family" | "fewer-keys" | "more-keys" | "more-compact" | "more-open" | "different";
 };
 
 export type EarSearchEvaluation = {
@@ -49,6 +59,13 @@ export type EarSearchEvaluation = {
   complete: boolean;
   acceptedProbeIds: Array<string | number>;
   latest: EarSearchProbeFeedback | null;
+};
+
+export type EarSearchTracker = EarSearchEvaluation & {
+  processedThroughEventId: number;
+  probeCount: number;
+  recentProbes: EarSearchProbe[];
+  pendingAttacks: EarSearchAttack[];
 };
 
 function assertMidi(value: number, label: string) {
@@ -103,7 +120,8 @@ function normalizeTarget(target: readonly EarSearchLanding[]) {
 
 function normalizeProbes(probes: readonly EarSearchProbe[]) {
   if (!Array.isArray(probes)) throw new TypeError("Ear-search probes must be an array.");
-  return probes.slice(-EAR_SEARCH_MAX_PROBES).map((probe, index) => {
+  if (probes.length > EAR_SEARCH_MAX_PROBES) throw new RangeError(`Ear-search evaluation is limited to ${EAR_SEARCH_MAX_PROBES} probes.`);
+  return probes.map((probe, index) => {
     if (!probe || (typeof probe.id !== "string" && typeof probe.id !== "number")) throw new TypeError(`Probe ${index + 1} needs an ID.`);
     if (!Number.isFinite(probe.onsetMs) || probe.onsetMs < 0) throw new RangeError(`Probe ${index + 1} needs a non-negative finite onset.`);
     return { ...probe, notes: normalizeNotes(probe.notes, `Probe ${index + 1}`) };
@@ -134,13 +152,14 @@ function feedbackForProbe(
   const targetCenter = center(expected.notes);
   const delta = targetCenter - playedCenter;
   const absoluteDelta = Math.abs(delta);
-  const playedBand = Math.floor(playedCenter / 12);
-  const targetBand = Math.floor(targetCenter / 12);
-  const bandDelta = targetBand - playedBand;
   const sameFamily = pitchClassSignature(probe.notes) === pitchClassSignature(expected.notes);
   const expectedSpan = span(expected.notes);
   const playedSpan = span(probe.notes);
-  const texture: EarSearchProbeFeedback["texture"] = sameFamily
+  const texture: EarSearchProbeFeedback["texture"] = probe.notes.length < expected.notes.length
+    ? "fewer-keys"
+    : probe.notes.length > expected.notes.length
+      ? "more-keys"
+      : sameFamily
     ? "same-family"
     : expected.notes.length === probe.notes.length && playedSpan < expectedSpan
       ? "more-compact"
@@ -181,7 +200,7 @@ function feedbackForProbe(
     probeId: probe.id,
     status: "searching",
     pitchDirection: delta > 0 ? "higher" : delta < 0 ? "lower" : "same-height",
-    register: bandDelta >= 2 ? "far-below" : bandDelta === 1 ? "below" : bandDelta <= -2 ? "far-above" : bandDelta === -1 ? "above" : "same-band",
+    register: delta >= 24 ? "far-below" : delta >= 12 ? "below" : delta <= -24 ? "far-above" : delta <= -12 ? "above" : "same-band",
     proximity: absoluteDelta <= 2 ? "near" : absoluteDelta <= 7 ? "nearby" : "far",
     pitchFamily: sameFamily ? "same-family" : "different",
     intervalDirection,
@@ -228,6 +247,132 @@ export function evaluateEarSearch(
   return { totalLandings: target.length, matchedLandings, complete, acceptedProbeIds, latest };
 }
 
+/** Start a durable search checkpoint at a fresh raw-event boundary. */
+export function createEarSearchTracker(
+  targetInput: readonly EarSearchLanding[],
+  processedThroughEventId = -1,
+): EarSearchTracker {
+  const target = normalizeTarget(targetInput);
+  if (!Number.isInteger(processedThroughEventId) || processedThroughEventId < -1) {
+    throw new RangeError("The ear-search event boundary must be an integer at or above -1.");
+  }
+  return {
+    totalLandings: target.length,
+    matchedLandings: 0,
+    complete: false,
+    acceptedProbeIds: [],
+    latest: null,
+    processedThroughEventId,
+    probeCount: 0,
+    recentProbes: [],
+    pendingAttacks: [],
+  };
+}
+
+function pendingProbeDueAt(target: readonly EarSearchLanding[], tracker: EarSearchTracker, chordWindowMs: number) {
+  if (!tracker.pendingAttacks.length || tracker.complete || tracker.matchedLandings >= target.length) return null;
+  const first = tracker.pendingAttacks[0].onsetMs;
+  const last = tracker.pendingAttacks.at(-1)!.onsetMs;
+  const expectedKeyCount = target[tracker.matchedLandings].notes.length;
+  if (expectedKeyCount === 1) return chordWindowMs <= 40 ? last : Math.min(first + chordWindowMs, last + EAR_SEARCH_CHORD_SETTLE_MS);
+  return tracker.pendingAttacks.length >= expectedKeyCount
+    ? Math.min(first + chordWindowMs, last + EAR_SEARCH_CHORD_SETTLE_MS)
+    : first + chordWindowMs;
+}
+
+/** The monotonic time at which a partial or just-complete chord probe becomes stable. */
+export function earSearchPendingDueAt(
+  targetInput: readonly EarSearchLanding[],
+  tracker: EarSearchTracker,
+  chordWindowMs: number,
+) {
+  const target = normalizeTarget(targetInput);
+  if (!Number.isFinite(chordWindowMs) || chordWindowMs < 40 || chordWindowMs > 1000) {
+    throw new RangeError("The chord gathering window must be from 40 through 1000 ms.");
+  }
+  return pendingProbeDueAt(target, tracker, chordWindowMs);
+}
+
+/**
+ * Incrementally turn raw key attacks into stable probes. The expected landing's
+ * key count starts a short settle period, so near-simultaneous extra tones are
+ * still diagnosed while a later melodic attack cannot mutate an already
+ * accepted sonority. Accepted progress lives in this checkpoint rather than
+ * in the rolling event/probe display window.
+ */
+export function advanceEarSearchTracker(
+  targetInput: readonly EarSearchLanding[],
+  tracker: EarSearchTracker,
+  attackInput: readonly EarSearchAttack[],
+  options: { chordWindowMs: number; nowMs: number; collection?: EarSearchCollection },
+): EarSearchTracker {
+  const target = normalizeTarget(targetInput);
+  if (!tracker || tracker.totalLandings !== target.length || tracker.matchedLandings < 0 || tracker.matchedLandings > target.length) {
+    throw new RangeError("The ear-search checkpoint does not match this target.");
+  }
+  if (!Number.isFinite(options.chordWindowMs) || options.chordWindowMs < 40 || options.chordWindowMs > 1000) {
+    throw new RangeError("The chord gathering window must be from 40 through 1000 ms.");
+  }
+  if (!Number.isFinite(options.nowMs) || options.nowMs < 0) throw new RangeError("Ear-search time must be a non-negative finite value.");
+  if (!Array.isArray(attackInput) || attackInput.length > EAR_SEARCH_MAX_PROBES) {
+    throw new RangeError(`Ear-search updates are limited to ${EAR_SEARCH_MAX_PROBES} raw attacks.`);
+  }
+  const fresh = attackInput
+    .map((attack, index) => {
+      if (!attack || !Number.isInteger(attack.id) || attack.id < 0) throw new RangeError(`Raw attack ${index + 1} needs a non-negative integer ID.`);
+      assertMidi(attack.note, `Raw attack ${index + 1}`);
+      if (!Number.isFinite(attack.onsetMs) || attack.onsetMs < 0) throw new RangeError(`Raw attack ${index + 1} needs a non-negative finite onset.`);
+      return { ...attack };
+    })
+    .filter((attack) => attack.id > tracker.processedThroughEventId)
+    .sort((first, second) => first.id - second.id);
+  const existingDueAt = pendingProbeDueAt(target, tracker, options.chordWindowMs);
+  const pendingCanClose = existingDueAt !== null && options.nowMs >= existingDueAt;
+  if (!fresh.length && !pendingCanClose) return tracker;
+
+  const next: EarSearchTracker = {
+    ...tracker,
+    acceptedProbeIds: [...tracker.acceptedProbeIds],
+    recentProbes: [...tracker.recentProbes],
+    pendingAttacks: [...tracker.pendingAttacks],
+  };
+  const finalizePending = () => {
+    if (!next.pendingAttacks.length || next.complete) return;
+    const raw = next.pendingAttacks;
+    next.pendingAttacks = [];
+    const probe: EarSearchProbe = {
+      id: raw.at(-1)!.id,
+      notes: normalizeNotes(raw.map((attack) => attack.note), `Probe ${next.probeCount + 1}`),
+      onsetMs: raw[0].onsetMs,
+    };
+    const expected = target[next.matchedLandings];
+    const previous = next.matchedLandings ? target[next.matchedLandings - 1] : null;
+    const caught = sameNotes(probe.notes, expected.notes);
+    next.latest = feedbackForProbe(probe, expected, previous, options.collection ?? null, caught);
+    next.probeCount += 1;
+    next.recentProbes = [...next.recentProbes, probe].slice(-EAR_SEARCH_RECENT_PROBES);
+    if (caught) {
+      next.acceptedProbeIds.push(probe.id);
+      next.matchedLandings += 1;
+      next.complete = next.matchedLandings === target.length;
+    }
+  };
+
+  for (const attack of fresh) {
+    next.processedThroughEventId = Math.max(next.processedThroughEventId, attack.id);
+    if (next.complete) continue;
+    const dueAt = pendingProbeDueAt(target, next, options.chordWindowMs);
+    if (dueAt !== null && attack.onsetMs >= dueAt) finalizePending();
+    if (next.complete) continue;
+    next.pendingAttacks.push(attack);
+    const expectedKeyCount = target[next.matchedLandings].notes.length;
+    if ((expectedKeyCount === 1 && options.chordWindowMs <= 40) || next.pendingAttacks.length > expectedKeyCount) finalizePending();
+  }
+  const dueAt = pendingProbeDueAt(target, next, options.chordWindowMs);
+  if (dueAt !== null && options.nowMs >= dueAt) finalizePending();
+  return next;
+}
+
 /** Build non-overlapping cognitive units, each bounded to two measures. */
 export function buildEarSearchChunks(
   score: SheetMusicScore,
@@ -247,7 +392,7 @@ export function buildEarSearchChunks(
       maxAttacks: maxLandings,
       targetAttacks: maxLandings,
     });
-    chunks.push(...windowChunks.filter((chunk) => chunk.attackCount <= maxLandings && chunk.measureNumbers.length <= 2));
+    chunks.push(...windowChunks.filter((chunk) => chunk.attackCount >= 2 && chunk.attackCount <= maxLandings && chunk.measureNumbers.length <= 2));
   }
   return chunks.map((chunk, ordinal) => ({ ...chunk, ordinal }));
 }
@@ -271,7 +416,7 @@ export function earSearchLandingsForChunk(
   });
   return loop.attacks.map((attack) => {
     const ordered = [...attack.midiNotes].sort((first, second) => first - second);
-    const notes = voice === "upper" ? [ordered.at(-1)!] : voice === "bass" ? [ordered[0]] : ordered;
+    const notes = voice === "upper" ? [ordered.at(-1)!] : voice === "bass" ? [ordered[0]] : ordered.slice(0, 16);
     return { id: attack.id, notes, measureIndex: attack.measureIndex, measureNumber: attack.measureNumber };
   });
 }
@@ -294,4 +439,32 @@ export function earSearchCollectionFromAnalysis(analysis: SheetPitchCollectionAn
   const [first, second] = analysis.candidates;
   if (!first || first.fit !== "compatible" || (second && first.fitScore - second.fitScore < 0.04)) return null;
   return { source: "local-candidate", pitchClasses: [...first.pitchClasses] };
+}
+
+/**
+ * Sound Finder teaches pitch order rather than score timing. Preserve every
+ * audible cue and its sounding duration while shortening unusually long gaps
+ * so a two-measure unit remains a practical memory object.
+ */
+export function compactEarSearchReferencePlan(
+  plan: SheetReferencePlan,
+  maxGapMs = EAR_SEARCH_MAX_REFERENCE_GAP_MS,
+): SheetReferencePlan {
+  if (!plan || !Array.isArray(plan.cues)) throw new TypeError("A score reference plan is required.");
+  if (!Number.isFinite(maxGapMs) || maxGapMs < 250 || maxGapMs > 10_000) throw new RangeError("The ear-search gap cap must be from 250 through 10000 ms.");
+  if (!plan.cues.length) return { ...plan, cues: [], totalDurationMs: 0 };
+  const sourceOriginMs = plan.cues[0].onsetMs;
+  let removedSilenceMs = 0;
+  let sourceSoundingEndMs = sourceOriginMs;
+  const cues = plan.cues.map((cue, index) => {
+    if (!Number.isFinite(cue.onsetMs) || !Number.isFinite(cue.endMs) || cue.endMs < cue.onsetMs) throw new RangeError("Reference cues need ordered finite timing.");
+    if (index && cue.onsetMs < plan.cues[index - 1].onsetMs) throw new RangeError("Reference cues must be ordered by onset.");
+    const sourceSilenceMs = Math.max(0, cue.onsetMs - sourceSoundingEndMs);
+    removedSilenceMs += Math.max(0, sourceSilenceMs - maxGapMs);
+    const compactOnsetMs = cue.onsetMs - sourceOriginMs - removedSilenceMs;
+    const soundingSpanMs = cue.endMs - cue.onsetMs;
+    sourceSoundingEndMs = Math.max(sourceSoundingEndMs, cue.endMs);
+    return { ...cue, onsetMs: compactOnsetMs, endMs: compactOnsetMs + soundingSpanMs, notes: cue.notes.map((note) => ({ ...note })) };
+  });
+  return { ...plan, cues, totalDurationMs: Math.max(...cues.map((cue) => cue.endMs)) };
 }

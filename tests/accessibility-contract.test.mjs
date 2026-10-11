@@ -195,9 +195,9 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /<option value="both">Both staves<\/option>/);
   assert.match(scoreFlow, /<option value="right">Upper staff<\/option>/);
   assert.match(scoreFlow, /<option value="left">Lower staff<\/option>/);
-  assert.match(piano, /focusLens === "score-flow" \? <label htmlFor="score-flow-view">/);
-  assert.match(piano, /<select id="score-flow-view" value=\{focusLens\}/);
-  assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" \? <RouteSelector/);
+  assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search" \? <label htmlFor="compact-hud-view">/);
+  assert.match(piano, /<select id="compact-hud-view" value=\{focusLens\}/);
+  assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" && focusLens !== "ear-search" \? <RouteSelector/);
 
   assert.match(scoreFlow, /aria-label=\{`Measure \$\{measure\.number\}[\s\S]*\$\{state\}`\}/);
   assert.match(scoreFlow, /const navigatorStart = Math\.max\(0, loopStart - 6\)/);
@@ -242,6 +242,56 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlowCss, /\.listeningTrebleLines,[\s\S]*\.listeningBassLines::after \{ border-color: CanvasText; \}/, "forced-color staff lines must use five real system-color borders rather than gradients or shadows");
   assert.match(scoreFlowCss, /\.staffSlotVeil \{[^}]*border: 2px dashed CanvasText;[^}]*background: transparent;/);
   assert.doesNotMatch(scoreFlowCss, /forced-color-adjust:\s*none/);
+});
+
+test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-leaking", async () => {
+  const [piano, finder, finderCss, model, session, ratio] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoEarSearchHud.module.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-ear-search-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-session.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(piano, /\{ id: "ear-search", label: "Sound Finder · untimed ear search"/);
+  assert.match(piano, /focusLens === "ear-search" \? <PianoEarSearchHud/);
+  assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
+  assert.match(piano, /const relationshipBlind = echoKeyBlind \|\| scoreFlowInput \|\| earSearchInput/);
+  assert.match(session, /"ear-search"/);
+  assert.match(ratio, /"ear-search": "untimed sound finder"/);
+
+  assert.match(finder, /<section className=\{styles\.shell\} aria-labelledby="ear-search-title"/);
+  assert.match(finder, /"Hear hidden phrase"/);
+  assert.match(finder, /Wrong probes do not consume a slot or erase earlier progress/);
+  assert.match(finder, /Timing is not graded/);
+  assert.match(finder, /MIDI remains silent/);
+  assert.match(finder, /pitch, staff position, or target key is shown/);
+  assert.match(finder, /hintMode === "blind"/);
+  assert.match(finder, /if \(hintMode === "blind"\) return `Probe \$\{probeOrdinal\} received/);
+  assert.match(finder, /const primaryCue: PrimaryCue = hintMode === "blind" \? null/, "progress-only mode must not expose which target-relative cue would be primary");
+  assert.match(finder, /hintMode === "blind" \? "Relationship feedback" : chordCountMismatch \? "Chord key count first"/, "progress-only mode must not reveal a chord key-count mismatch through the interval heading");
+  assert.match(finder, /className=\{styles\.nextMove\}>Next move<\/em>/, "the prioritized cue needs a visible non-color label");
+  assert.match(finder, /aria-current=\{primaryCue === "place" \? "step" : undefined\}/, "the prioritized cue needs semantic state as well as styling");
+  assert.match(finder, /\{searchLandings\.map\(\(_, index\) => <li/);
+  assert.match(finder, /revealed \? <section className=\{styles\.revealDrawer\}/);
+  assert.match(finder, /role="dialog" aria-modal="true"/);
+  assert.match(finder, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(finder, /role="progressbar" aria-label="Hidden reference playback"/);
+  assert.match(finder, /parseStoredScoreFlowSource/);
+  assert.match(finder, /window\.sessionStorage\.setItem\(SCORE_FLOW_STORAGE_KEY/);
+  assert.doesNotMatch(finder, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
+
+  assert.match(model, /EAR_SEARCH_MAX_LANDINGS = 8/);
+  assert.match(model, /startMeasureIndex \+= 2/);
+  assert.match(model, /Non-matching probes are ignored rather than accumulated as errors/);
+  assert.match(model, /intervalDirection/);
+  assert.match(model, /intervalWidth/);
+  assert.doesNotMatch(model, /goodnessScore|musicalityScore|overallScore/);
+  assert.match(finderCss, /min-height: 44px/);
+  assert.match(finderCss, /@media \(max-width: 1120px\) \{[\s\S]*\.transport \{ grid-column: 1 \/ -1;/, "the command transport must wrap before a 1024px desktop clips it");
+  assert.match(finderCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(finderCss, /@media \(forced-colors: active\)/);
 });
 
 test("Score Flow follows raw MIDI in study and capture while keeping review frozen", async () => {
@@ -361,7 +411,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| focusLens === "ear-search" \|\| focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
   assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
   assert.match(intervalGlow, /octave layers shrink inward/);

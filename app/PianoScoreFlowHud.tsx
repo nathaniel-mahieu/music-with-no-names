@@ -61,9 +61,7 @@ import {
   type ScoreMediaAnchor,
 } from "@/lib/score-media-sync";
 import { spotifyEmbedTarget, type SpotifyEmbedTarget } from "@/lib/spotify-embed";
-
-const SCORE_FLOW_STORAGE_KEY = "music-with-no-names:score-flow:v1";
-const SCORE_FLOW_HISTORY_STORAGE_KEY = "music-with-no-names:score-flow-history:v1";
+import { SCORE_FLOW_HISTORY_STORAGE_KEY, SCORE_FLOW_STORAGE_KEY } from "@/lib/score-flow-storage";
 const MAX_LIVE_FEEDBACK_ATTACKS = 160;
 const MAX_UI_ALIGNMENT_CELLS = 1_250_000;
 const MAX_REFERENCE_VOICES = 256;

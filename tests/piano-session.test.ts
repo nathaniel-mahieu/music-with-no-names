@@ -52,6 +52,14 @@ test("preserves the uploaded-score coach in the tab summary", () => {
   })), { attackCount: 2, focusLens: "score-flow" });
 });
 
+test("preserves the untimed Sound Finder lens in the tab summary", () => {
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 25,
+    focusLens: "ear-search",
+    phraseEvents: [phraseEvent(1, 60, 100), phraseEvent(2, 63, 70_240)],
+  })), { attackCount: 2, focusLens: "ear-search" });
+});
+
 test("preserves the research HUD lens in the tab summary", () => {
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 25,
