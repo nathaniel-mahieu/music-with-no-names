@@ -195,9 +195,9 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /<option value="both">Both staves<\/option>/);
   assert.match(scoreFlow, /<option value="right">Upper staff<\/option>/);
   assert.match(scoreFlow, /<option value="left">Lower staff<\/option>/);
-  assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search" \? <label htmlFor="compact-hud-view">/);
+  assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search" \|\| focusLens === "scale-quality" \? <label htmlFor="compact-hud-view">/);
   assert.match(piano, /<select id="compact-hud-view" value=\{focusLens\}/);
-  assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" && focusLens !== "ear-search" \? <RouteSelector/);
+  assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" && focusLens !== "ear-search" && focusLens !== "scale-quality" \? <RouteSelector/);
 
   assert.match(scoreFlow, /aria-label=\{`Measure \$\{measure\.number\}[\s\S]*\$\{state\}`\}/);
   assert.match(scoreFlow, /const navigatorStart = Math\.max\(0, loopStart - 6\)/);
@@ -260,7 +260,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
   assert.match(piano, /const relationshipBlind = echoKeyBlind \|\| scoreFlowInput \|\| earSearchInput/);
   assert.match(piano, /role=\{focusLens === "ear-search" \? "group" : undefined\}/);
-  assert.match(piano, /focusLens === "ear-search" \? "HUD view" : "Piano view"/);
+  assert.match(piano, /focusLens === "score-flow" \? "Piano view" : "HUD view"/);
   assert.match(piano, /focusLens === "ear-search" \? "Names in exact reveal" : "Theory names"/);
   assert.match(session, /"ear-search"/);
   assert.match(ratio, /"ear-search": "untimed sound finder"/);
@@ -410,12 +410,14 @@ test("EchoKey preserves an ear-first boundary while keeping every later represen
 });
 
 test("immersive piano HUDs plus vocal pitch match keep visual channels named, bounded, and non-color-only", async () => {
-  const [piano, immersion, intervalGlow, research, gravity, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, vocalTrainingModel, css] = await Promise.all([
+  const [piano, immersion, intervalGlow, research, gravity, scaleQuality, scaleQualityCss, voiceLab, vocal, model, researchModel, gravityModel, vocalModel, vocalSpectrumModel, vocalTrainingModel, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoImmersion.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoIntervalGlowHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoResearchHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoScaleGravityHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoScaleQualityHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoScaleQualityHud.module.css", import.meta.url), "utf8"),
     readFile(new URL("../app/VoiceLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/VocalPitchCoach.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-immersion-model.ts", import.meta.url), "utf8"),
@@ -430,8 +432,9 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /focusLens === "interval-glow" \? <PianoIntervalGlowHud/);
   assert.match(piano, /focusLens === "research" \? <PianoResearchHud/);
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
+  assert.match(piano, /focusLens === "scale-quality" \? <PianoScaleQualityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| focusLens === "ear-search" \|\| focusLens === "immersion" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| focusLens === "ear-search" \|\| focusLens === "immersion" \|\| focusLens === "scale-quality" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
   assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
   assert.match(intervalGlow, /octave layers shrink inward/);
@@ -635,6 +638,27 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(gravityModel, /export function physicalScaleGravityWindowOffset/);
   assert.match(gravityModel, /export function recognizeMajorHarmonyContext/);
   assert.match(gravityModel, /export function rotateMajorMode/);
+  assert.match(scaleQuality, /aria-labelledby="piano-scale-quality-title"/);
+  assert.match(scaleQuality, /role="img"[\s\S]{0,180}aria-labelledby=/);
+  assert.match(scaleQuality, /aria-live="polite"/);
+  assert.match(scaleQuality, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(scaleQuality, /htmlFor="scale-quality-split"/);
+  assert.match(scaleQuality, /<output id="scale-quality-split-reading" htmlFor="scale-quality-split">/);
+  assert.match(scaleQuality, /raw MIDI/i);
+  assert.match(scaleQuality, /silent/i);
+  assert.match(scaleQuality, /const liveOverlap[\s\S]*scaleQualityOverlapProfile\(tonicEvent\.note, latestUpper\.note, activeNotes, soundModelId\)/);
+  assert.match(scaleQuality, /only while raw MIDI proves exact overlap/);
+  assert.doesNotMatch(scaleQuality, /capturedOverlap|latestUpper\.fieldNotes/);
+  assert.doesNotMatch(scaleQuality, /\?\? SCALE_QUALITY_CATALOG\[0\]/);
+  assert.match(scaleQuality, /candidateEvidence\.id === "suggestive" \|\| candidateEvidence\.id === "complete"/);
+  assert.match(scaleQuality, /<button[\s\S]{0,260}aria-pressed=/);
+  assert.match(scaleQuality, /role="group"[\s\S]{0,320}(listener|feel)/i);
+  assert.doesNotMatch(scaleQuality, /AudioContext|webkitAudioContext|createOscillator|\.play\(\)/);
+  assert.doesNotMatch(scaleQuality, /tabIndex=\{?[1-9]/);
+  assert.match(scaleQualityCss, /min-height:\s*44px/);
+  assert.match(scaleQualityCss, /@media \(max-width:/);
+  assert.match(scaleQualityCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(scaleQualityCss, /@media \(forced-colors: active\)/);
   assert.match(css, /\.piano-scale-gravity-slots[\s\S]*grid-template-columns: repeat\(13, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-scale-gravity-intro/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-slots/);
@@ -905,7 +929,7 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /route A held · now perform B/);
   assert.match(piano, /function isLandmarkRouteCompareSession/);
   assert.match(piano, /session\.sourcePathId !== session\.targetPathId/);
-  assert.match(piano, /version: 25[\s\S]*landmarkRouteCompareSession/);
+  assert.match(piano, /version: 26[\s\S]*landmarkRouteCompareSession/);
   assert.match(piano, /Two routes in the same underlying coordinate/);
   assert.match(piano, /className="hud-landmark-compare-plot"[\s\S]*role="img" aria-label=\{summary\}/);
   assert.match(piano, /role="table" aria-label="Route structure comparison"/);
@@ -1144,7 +1168,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
   assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
   assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
-  assert.match(piano, /version: 25/);
+  assert.match(piano, /version: 26/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperienceContext\(null\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);

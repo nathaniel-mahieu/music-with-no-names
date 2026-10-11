@@ -8750,46 +8750,46 @@ footer a {
 .piano-focus-lenses span { color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .piano-focus-lenses button[aria-pressed="true"] span { color: color-mix(in srgb, var(--background) 72%, transparent); }
 
-/* Score Flow and Sound Finder keep one compact command shell above their playing deck. */
-.piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header {
+/* Focused performance HUDs keep one compact command shell above their playing deck. */
+.piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header {
   grid-template-columns: minmax(220px, .55fr) minmax(560px, 1.45fr);
   gap: 18px 30px;
   align-items: center;
   padding-top: 14px;
   padding-bottom: 14px;
 }
-.piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header h2 { max-width: none; margin: 3px 0 5px; font-size: clamp(1.2rem, 2vw, 1.65rem); letter-spacing: -.025em; }
-.piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header > div:first-child > p:last-child { max-width: 60ch; font-size: .72rem; line-height: 1.4; }
-.piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls .midi-status { flex: 1 1 210px; }
-.piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-statebar,
-.piano-hud:is(.is-score-flow, .is-ear-search) .piano-focus-lenses { display: none; }
+.piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header h2 { max-width: none; margin: 3px 0 5px; font-size: clamp(1.2rem, 2vw, 1.65rem); letter-spacing: -.025em; }
+.piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header > div:first-child > p:last-child { max-width: 60ch; font-size: .72rem; line-height: 1.4; }
+.piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls .midi-status { flex: 1 1 210px; }
+.piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-statebar,
+.piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-focus-lenses { display: none; }
 
 @media (min-width: 1181px) {
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header {
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header {
     grid-template-columns: minmax(210px, .34fr) minmax(0, 1.66fr);
     gap: 12px 18px;
     min-height: 68px;
     padding: 7px 14px;
   }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header > div:first-child > .section-kicker,
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header > div:first-child > p:last-child { display: none; }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header h2 { margin: 0; font-size: 1.12rem; line-height: 1.1; }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls { flex-wrap: nowrap; gap: 5px; min-width: 0; }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls .midi-status { flex: 1 1 190px; min-width: 150px; padding: 6px 8px; }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls .midi-status p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls > label:not(.piano-convention-toggle) select { min-width: 132px; }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls > button,
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls select,
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls .piano-convention-toggle { min-height: 44px; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header > div:first-child > .section-kicker,
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header > div:first-child > p:last-child { display: none; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header h2 { margin: 0; font-size: 1.12rem; line-height: 1.1; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls { flex-wrap: nowrap; gap: 5px; min-width: 0; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls .midi-status { flex: 1 1 190px; min-width: 150px; padding: 6px 8px; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls .midi-status p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls > label:not(.piano-convention-toggle) select { min-width: 132px; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls > button,
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls select,
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls .piano-convention-toggle { min-height: 44px; }
 }
 
 @media (max-width: 900px) {
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header { grid-template-columns: 1fr; }
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-controls { justify-content: flex-start; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header { grid-template-columns: 1fr; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-controls { justify-content: flex-start; }
 }
 
 @media (max-width: 620px) {
-  .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header > div:first-child > p:last-child { display: none; }
+  .piano-hud:is(.is-score-flow, .is-ear-search, .is-scale-quality) .piano-hud-header > div:first-child > p:last-child { display: none; }
 }
 
 @media (min-width: 901px) {

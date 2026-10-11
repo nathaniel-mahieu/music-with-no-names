@@ -6,7 +6,23 @@ Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-
 
 Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search)
 
-The current milestone is **Sound Finder · Extended Ear Search v2.25**. It provides:
+Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
+
+The current milestone is **Scale Quality Explorer v2.26**. It provides:
+
+- A dedicated, silent raw-MIDI HUD for playing two complementary roles on one keyboard. A learner-selected split sends lower-register attacks to the tonic beacon and upper-register attacks to the scale field; the browser neither synthesizes those notes nor treats the on-screen keyboard as evidence in this view.
+
+- A stable tonic epoch. Repeating the same lower pitch class in any octave reinforces the existing home while a different lower pitch class deliberately re-homes the field and starts fresh upper-note evidence. Upper attacks before the first tonic remain visibly unassigned instead of being fitted to an invented center.
+
+- An octave-folded twelve-semitone orbit plus an unfolded upper-register trail. The latest relation exposes exact physical semitone and cent distance, equal-tempered frequency ratio, interval landmark, movement from the previous upper attack, and the shortest signed routes back to tonic. Once a route is explicitly chosen or sufficiently supported, it adds scale degree or outside-route status and neighboring scale gaps without rewriting the physical facts.
+
+- Ranked scale frames with tonic held fixed. Major, minor, modal, pentatonic, blues, whole-tone, and octatonic candidates show distinct matched, outside, and still-missing pitch classes; repeated notes do not inflate the evidence, sparse or tied evidence draws no automatic route, and compatibility is never mislabeled as detected key or musical quality.
+
+- A simultaneous-overlap lens that appears only while the exact tonic and upper key are both physically sounding. It keeps modeled partial alignment, interaction, roughness, periodic fit, center ambiguity, fusion, and register openness separate under the chosen teaching spectrum; after either key is released, simultaneous acoustics are withheld rather than inferred from memory.
+
+- Learner-owned descriptions of a relation as resting, leaning up, leaning down, or ambiguous. Those reports stay separate from equal-key geometry, scale-fit evidence, and the assumed-spectrum model, preserving an honest distinction between physical description, convention, and felt experience.
+
+The prior **Sound Finder · Extended Ear Search v2.25** remains available and provides:
 
 - A second, focused Piano HUD for the beginner task that ordinary play-along grading handles poorly: hear a short hidden score phrase, wait as long as needed, then explore a real or on-screen keyboard until the sound is found. MIDI remains silent, and seconds between the reference and the learner's probes are deliberately ignored.
 
