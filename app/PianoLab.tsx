@@ -367,7 +367,7 @@ const EVENT_X = (slot: number) => 84 + slot * 88;
 const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }> = [
   { id: "echo-key", label: "EchoKey · ear-first path", description: "Hear, hold, find, diagnose, repair, read, and transfer one short relationship." },
   { id: "score-flow", label: "Score Flow · upload score", description: "Align a MusicXML score with your silent playing, hands, intervals, and repair loops." },
-  { id: "ear-search", label: "Sound Finder · untimed ear search", description: "Hear a hidden score phrase of up to 4, 6, or 8 landings, then probe toward its register, pitch, intervals, and local collection without a clock." },
+  { id: "ear-search", label: "Sound Finder · untimed ear search", description: "Hear a hidden score phrase of 4, 6, 8, 16, or 32 landings, then probe toward its register, pitch, intervals, and local collection without a clock." },
   { id: "explore", label: "Explore", description: "See the whole phrase across every representation." },
   { id: "immersion", label: "Immersion", description: "Let register, fifths, intervals, timing, chords, and pull become one living sky." },
   { id: "interval-glow", label: "Interval Glow", description: "Make each exact semitone spacing a stable place, color, and phrase trace." },

@@ -280,7 +280,9 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /\{searchLandings\.map\(\(_, index\) => <li/);
   assert.match(finder, /revealed \? <section className=\{styles\.revealDrawer\}/);
   assert.match(finder, /role="dialog" aria-modal="true"/);
+  assert.match(finder, /role="region" tabIndex=\{0\} aria-label="Scrollable revealed phrase pitch map"/);
   assert.match(finder, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(finder, /<small role="status" aria-live="polite">\{audioNotice\}<\/small>/);
   assert.match(finder, /role="progressbar" aria-label="Hidden reference playback"/);
   assert.match(finder, /<option value=\{32\}>32 landings<\/option>/);
   assert.match(finder, /selectEarSearchChunkLoop\(score, chunk\)/);
@@ -302,11 +304,14 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finderCss, /min-height: 44px/);
   assert.match(finderCss, /\.memoryRailDense ol/);
   assert.match(finderCss, /\.revealPlotViewport/);
+  assert.match(finderCss, /\.footerDeck input\[type="range"\][\s\S]*min-height: 44px/);
   assert.match(finderCss, /@media \(max-width: 1120px\) \{[\s\S]*\.transport \{ grid-column: 1 \/ -1;/, "the command transport must wrap before a 1024px desktop clips it");
   assert.match(finderCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(finderCss, /@media \(forced-colors: active\)/);
   assert.match(globalCss, /\.piano-hud\.is-ear-search \{[\s\S]*overflow: visible;[\s\S]*border: 0;[\s\S]*background: transparent;/);
   assert.match(globalCss, /\.piano-hud\.is-ear-search \.piano-hud-header \{[\s\S]*margin-bottom: 8px;/);
+  assert.match(globalCss, /\.piano-hud\.is-ear-search \.piano-hud-controls \.midi-status strong \{[\s\S]*white-space: nowrap;/);
+  assert.doesNotMatch(piano, /up to 4, 6, or 8 landings/);
 });
 
 test("Score Flow follows raw MIDI in study and capture while keeping review frozen", async () => {

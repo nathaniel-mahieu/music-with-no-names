@@ -8801,6 +8801,14 @@ footer a {
   }
   .piano-hud.is-ear-search .piano-hud-header > div:first-child { display: none; }
   .piano-hud.is-ear-search .piano-hud-controls { flex-wrap: nowrap; justify-content: flex-end; }
+  .piano-hud.is-ear-search .piano-hud-controls .midi-status {
+    min-height: 44px;
+    max-height: 44px;
+    padding: 4px 8px;
+  }
+  .piano-hud.is-ear-search .piano-hud-controls .midi-status strong {
+    white-space: nowrap;
+  }
   .piano-hud.is-ear-search .piano-hud-controls > label:not(.piano-convention-toggle) { display: block; }
   .piano-hud.is-ear-search .piano-hud-controls > label:not(.piano-convention-toggle) > span {
     position: absolute;

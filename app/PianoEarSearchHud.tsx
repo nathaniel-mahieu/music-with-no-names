@@ -236,7 +236,7 @@ function RevealedMap({ notes, showConventions }: { notes: Array<{ notes: number[
   const span = Math.max(1, maximum - minimum);
   const revealMinWidth = Math.max(680, notes.length * 38);
   return <div className={styles.revealMap}>
-    <div className={styles.revealPlotViewport} tabIndex={notes.length > 12 ? 0 : undefined} aria-label={notes.length > 12 ? "Scrollable extended phrase pitch map" : undefined}>
+    <div className={styles.revealPlotViewport} role="region" tabIndex={0} aria-label="Scrollable revealed phrase pitch map">
       <div className={styles.revealPlot} style={{ "--reveal-min-width": `${revealMinWidth}px` } as CSSProperties} role="img" aria-label={`Revealed pitch-height map with ${notes.length} landings from MIDI key ${minimum} through ${maximum}. Scroll horizontally to inspect an extended phrase.`}>
         {Array.from({ length: 13 }, (_, index) => <i key={index} style={{ bottom: `${index / 12 * 100}%` }} />)}
         {notes.map((landing, landingIndex) => landing.notes.map((note) => <b key={`${landingIndex}-${note}`} style={{ left: `${(landingIndex + .5) / notes.length * 100}%`, bottom: `${(note - minimum) / span * 84 + 8}%` } as CSSProperties}>{notes.length <= 12 || note === landing.notes.at(-1) ? <span>{showConventions ? midiLabel(note) : note}</span> : null}</b>))}
@@ -665,7 +665,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
     {!chunks.length ? <div className={styles.noChunks}><strong>No multi-landing unit exists for this staff choice.</strong><p>Try Both staffs or another score section. Empty measures and isolated final notes are not expanded into invented material.</p></div> : <>
       <div className={styles.statusStrip}>
         <span className={cx(styles.phaseLamp, styles[`phase_${visiblePhase}`])} aria-hidden="true" />
-        <div><strong>{phaseTitle}</strong><small>{audioNotice}</small></div>
+        <div><strong>{phaseTitle}</strong><small role="status" aria-live="polite">{audioNotice}</small></div>
         <div className={styles.readiness}><span>{midiConnected ? "MIDI ready" : "MIDI not connected"}</span><strong>{midiStatus}</strong>{!midiConnected ? <button type="button" onClick={onConnectMidi}>Connect</button> : frozen ? <button type="button" onClick={onResumeCapture}>Resume</button> : null}</div>
       </div>
 
