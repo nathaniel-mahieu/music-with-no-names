@@ -4,7 +4,25 @@ An audible, visual exploration of music through frequency ratios, spectra, time,
 
 Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-mahieu.github.io/music-with-no-names/)
 
-The current milestone is **Score Flow · One-Screen Playing Deck v2.23**. It provides:
+Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search)
+
+The current milestone is **Sound Finder · Untimed Ear Search v2.24**. It provides:
+
+- A second, focused Piano HUD for the beginner task that ordinary play-along grading handles poorly: hear a short hidden score phrase, wait as long as needed, then explore a real or on-screen keyboard until the sound is found. MIDI remains silent, and seconds between the reference and the learner's probes are deliberately ignored.
+
+- Memory-sized phrases of up to four, six, or eight written landings, always bounded to at most two measures. The top note at each landing, bottom note at each landing, and full texture can be heard separately; the full-texture mode offers 140, 240, or 480 ms chord gathering so a beginner can build a sonority without racing a narrow attack window.
+
+- A secure-prefix matcher. A correct landing stays caught while later wrong probes remain exploratory; a later written note cannot skip the next hidden landing, and one attack cannot satisfy two repeated targets. Search history retains only the latest sixty-four probes.
+
+- A beginner compass that keeps four kinds of evidence separate: coarse register/place, higher-or-lower pitch direction, interval contour and narrower/wider reach from the last caught anchor, and cautious inside/outside nearby-collection context. An octave copy can be recognized as the same pitch family without becoming an exact success.
+
+- A stricter Progress-only mode that withholds those compass hints. Neither mode exposes target names, staff height, exact semitone corrections, or destination keys while searching; the learner must explicitly choose `Reveal exact map` after hearing the phrase.
+
+- A neutral playback pulse, hidden memory stones, recent-probe trail, prominent listening/searching/complete state, independent tempo and reference-level controls, and an exact post-reveal semitone map. No aggregate goodness, musicality, talent, or timing score is invented.
+
+- Local reuse of the MusicXML already retained by Score Flow, direct on-device MusicXML/MXL upload, or the project-authored Orbit Study demo. Target audio is created only by the explicit `Hear hidden phrase` action; incoming MIDI still makes no sound and no score or performance data leaves the browser tab.
+
+The prior **Score Flow · One-Screen Playing Deck v2.23** remains available and provides:
 
 - A desktop playing surface that keeps the compact piano toolbar, score identity, source choice, practice setup, MIDI readiness, transport, veiled staff, and live hand feedback together in one 1280×720 viewport. Local-audio/Spotify setup and the full practice controls open as bounded, keyboard-reachable drawers over the stage instead of pushing the ear–eye–hands loop off-screen; narrow screens retain the natural stacked layout.
 
