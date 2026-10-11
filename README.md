@@ -6,11 +6,11 @@ Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-
 
 Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search)
 
-The current milestone is **Sound Finder · Untimed Ear Search v2.24**. It provides:
+The current milestone is **Sound Finder · Extended Ear Search v2.25**. It provides:
 
 - A second, focused Piano HUD for the beginner task that ordinary play-along grading handles poorly: hear a short hidden score phrase, wait as long as needed, then explore a real or on-screen keyboard until the sound is found. MIDI remains silent, and seconds between the reference and the learner's probes are deliberately ignored.
 
-- Memory-sized phrases of up to four, six, or eight written landings, always bounded to at most two measures. The top note at each landing, bottom note at each landing, and full texture can be heard separately; the full-texture mode offers 140, 240, or 480 ms chord gathering so a beginner can build a sonority without racing a narrow attack window.
+- Selectable phrases of up to four, six, eight, sixteen, or thirty-two written landings, always bounded to at most two measures. Four-to-eight keeps the natural short reading groups; the extended choices join consecutive groups only inside the same two-measure window. The top note at each landing, bottom note at each landing, and full texture can be heard separately; the full-texture mode offers 140, 240, or 480 ms chord gathering so a beginner can build a sonority without racing a narrow attack window.
 
 - A secure-prefix matcher. A correct landing stays caught while later wrong probes remain exploratory; a later written note cannot skip the next hidden landing, and one attack cannot satisfy two repeated targets. Search history retains only the latest sixty-four probes.
 
@@ -18,9 +18,11 @@ The current milestone is **Sound Finder · Untimed Ear Search v2.24**. It provid
 
 - A stricter Progress-only mode that withholds those compass hints. Neither mode exposes target names, staff height, exact semitone corrections, or destination keys while searching; the learner must explicitly choose `Reveal exact map` after hearing the phrase.
 
-- A neutral playback pulse, hidden memory stones, recent-probe trail, prominent listening/searching/complete state, independent tempo and reference-level controls, and an exact post-reveal semitone map. No aggregate goodness, musicality, talent, or timing score is invented.
+- A neutral playback pulse, a compact hidden-memory matrix that remains legible through thirty-two landings, a recent-probe trail, prominent listening/searching/complete state, independent tempo and reference-level controls, and an exact post-reveal semitone map. A pathological full-texture reference is refused with a useful shorter-span or single-voice remedy instead of overwhelming the browser. No aggregate goodness, musicality, talent, or timing score is invented.
 
-- Local reuse of the MusicXML already retained by Score Flow, direct on-device MusicXML/MXL upload, or the project-authored Orbit Study demo. Target audio is created only by the explicit `Hear hidden phrase` action; incoming MIDI still makes no sound and no score or performance data leaves the browser tab.
+- Local reuse of the MusicXML already retained by Score Flow, direct on-device MusicXML/MXL upload, or the project-authored Orbit Study demo. Upper, lower, and both-staff targets now reconstruct from their filtered score window without looking their suffixed attack IDs up in the unfiltered score. Target audio is created only by the explicit `Hear hidden phrase` action; incoming MIDI still makes no sound and no score or performance data leaves the browser tab.
+
+- A detached, height-neutral HUD utility bar keeps MIDI, HUD selection, input pause, naming, and configuration visibly outside the immersive Sound Finder field while preserving the one-screen desktop layout and a natural mobile stack.
 
 The prior **Score Flow · One-Screen Playing Deck v2.23** remains available and provides:
 
