@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ORBIT_STUDY_MUSICXML, normalizeImportedMusicXmlScore, parseMusicXml } from "../lib/musicxml-import.ts";
-import { analyzeLocalPitchCollections, selectSheetMusicLoop } from "../lib/sheet-music-coach-model.ts";
+import { analyzeLocalPitchCollections, normalizeSheetMusicScore } from "../lib/sheet-music-coach-model.ts";
 import { parseStoredScoreFlowSource } from "../lib/score-flow-storage.ts";
 import {
   advanceEarSearchTracker,
@@ -11,12 +11,75 @@ import {
   earSearchCollectionFromAnalysis,
   earSearchLandingsForChunk,
   evaluateEarSearch,
+  selectEarSearchChunkLoop,
   type EarSearchLanding,
+  type EarSearchLandingLimit,
   type EarSearchProbe,
 } from "../lib/piano-ear-search-model.ts";
 
 const landing = (id: string, notes: number[], measureIndex = 0): EarSearchLanding => ({ id, notes, measureIndex, measureNumber: String(measureIndex + 1) });
 const probe = (id: number, notes: number[], onsetMs = id * 100): EarSearchProbe => ({ id, notes, onsetMs });
+
+function twoStaffRoundTripScore() {
+  return normalizeSheetMusicScore({
+    id: "two-staff-round-trip",
+    title: "Two-staff round trip",
+    tempoBpm: 96,
+    measures: Array.from({ length: 2 }, (_, measureIndex) => ({
+      number: measureIndex + 1,
+      durationBeats: 4,
+      events: Array.from({ length: 4 }, (_, offset) => [
+        { id: `right-${measureIndex}-${offset}`, kind: "note" as const, midi: 60 + measureIndex * 4 + offset, offsetBeats: offset, durationBeats: 1, staff: 1, hand: "right" as const },
+        { id: `left-${measureIndex}-${offset}`, kind: "note" as const, midi: 48 + measureIndex * 4 + offset, offsetBeats: offset, durationBeats: 1, staff: 2, hand: "left" as const },
+      ]).flat(),
+    })),
+  });
+}
+
+function denseLandingScore(landingCount = 32) {
+  const measureCounts = [Math.floor(landingCount / 2), Math.ceil(landingCount / 2)];
+  return normalizeSheetMusicScore({
+    id: `dense-${landingCount}`,
+    title: `Dense ${landingCount}`,
+    tempoBpm: 96,
+    measures: Array.from({ length: 2 }, (_, measureIndex) => ({
+      number: measureIndex + 1,
+      durationBeats: 4,
+      events: Array.from({ length: measureCounts[measureIndex] }, (_, offset) => ({
+        id: `dense-${measureIndex}-${offset}`,
+        kind: "note" as const,
+        midi: 60 + (measureIndex * measureCounts[0] + offset) % 12,
+        offsetBeats: offset * 4 / measureCounts[measureIndex],
+        durationBeats: 4 / measureCounts[measureIndex],
+        staff: 1,
+        hand: "right" as const,
+      })),
+    })),
+  });
+}
+
+function boundaryTieScore() {
+  return normalizeSheetMusicScore({
+    id: "boundary-tie-round-trip",
+    title: "Boundary tie round trip",
+    tempoBpm: 96,
+    measures: [
+      { number: 1, durationBeats: 4, events: [
+        { id: "opening-a", kind: "note", midi: 55, offsetBeats: 0, durationBeats: 1, staff: 1, hand: "right" },
+        { id: "opening-b", kind: "note", midi: 57, offsetBeats: 1, durationBeats: 1, staff: 1, hand: "right" },
+      ] },
+      { number: 2, durationBeats: 4, events: [
+        { id: "tie-start", kind: "note", midi: 60, offsetBeats: 3, durationBeats: 1, staff: 1, hand: "right", voice: "1", tie: { start: true } },
+      ] },
+      { number: 3, durationBeats: 4, events: [
+        { id: "tie-stop", kind: "note", midi: 60, offsetBeats: 0, durationBeats: 1, staff: 1, hand: "right", voice: "1", tie: { stop: true } },
+        { id: "boundary-new", kind: "note", midi: 64, offsetBeats: 0, durationBeats: 1, staff: 1, hand: "right" },
+        { id: "after-a", kind: "note", midi: 67, offsetBeats: 1, durationBeats: 1, staff: 1, hand: "right" },
+        { id: "after-b", kind: "note", midi: 69, offsetBeats: 2, durationBeats: 1, staff: 1, hand: "right" },
+      ] },
+    ],
+  });
+}
 
 test("shared score restoration accepts only a bounded versioned MusicXML source", () => {
   assert.deepEqual(parseStoredScoreFlowSource(JSON.stringify({ version: 1, fileName: "study.musicxml", xml: "<score-partwise/>" })), {
@@ -153,8 +216,9 @@ test("blind evaluation exposes categories and progress but no target pitch paylo
 });
 
 test("target and probe inputs are strictly bounded", () => {
-  assert.throws(() => evaluateEarSearch([], []), /from 1 through 8/);
-  assert.throws(() => evaluateEarSearch(Array.from({ length: 9 }, (_, index) => landing(String(index), [60])), []), /from 1 through 8/);
+  assert.throws(() => evaluateEarSearch([], []), /from 1 through 32/);
+  assert.equal(evaluateEarSearch(Array.from({ length: 32 }, (_, index) => landing(String(index), [60])), []).totalLandings, 32);
+  assert.throws(() => evaluateEarSearch(Array.from({ length: 33 }, (_, index) => landing(String(index), [60])), []), /from 1 through 32/);
   assert.throws(() => evaluateEarSearch([landing("a", [128])], []), /MIDI key/);
   assert.throws(() => evaluateEarSearch([landing("a", [60])], [{ id: 1, notes: [60], onsetMs: Number.NaN }]), /finite onset/);
   assert.throws(() => evaluateEarSearch([landing("a", [60], 0), landing("b", [62], 1), landing("c", [64], 2)], []), /at most two measures/);
@@ -238,7 +302,7 @@ test("reference compaction shortens only silence and never creates a false overl
   assert.equal(compact.truncated, false);
 });
 
-test("score chunks and derived targets stay within eight landings and two measures", () => {
+test("score chunks and derived targets retain their source loop context", () => {
   const score = normalizeImportedMusicXmlScore(parseMusicXml(ORBIT_STUDY_MUSICXML, "orbit-study.musicxml"));
   const chunks = buildEarSearchChunks(score, { maxLandings: 8 });
   assert.ok(chunks.length > 0);
@@ -251,6 +315,75 @@ test("score chunks and derived targets stay within eight landings and two measur
   const targets = earSearchLandingsForChunk(score, first, { voice: "upper" });
   assert.equal(targets.length, first.attackCount);
   assert.ok(targets.every((target) => target.notes.length === 1));
-  const loop = selectSheetMusicLoop(score, { startAttackId: first.startAttackId, endAttackId: first.endAttackId });
+  const loop = selectEarSearchChunkLoop(score, first);
   assert.equal(loop.attacks.length, targets.length);
+});
+
+test("hand-filtered chunk IDs round-trip for lower, upper, and both staffs", () => {
+  const score = twoStaffRoundTripScore();
+  for (const hand of ["left", "right", "both"] as const) {
+    const chunks = buildEarSearchChunks(score, { hand, maxLandings: 4 });
+    assert.ok(chunks.length > 0, hand);
+    for (const chunk of chunks) {
+      assert.equal(chunk.hand, hand);
+      assert.equal(chunk.sourceStartMeasureIndex, 0);
+      assert.equal(chunk.sourceEndMeasureIndex, 1);
+      if (hand !== "both") assert.match(chunk.startAttackId, new RegExp(`:${hand}$`));
+      const loop = selectEarSearchChunkLoop(score, chunk);
+      const targets = earSearchLandingsForChunk(score, chunk, { hand, voice: hand === "left" ? "bass" : "upper" });
+      assert.equal(loop.attacks.length, chunk.attackCount, hand);
+      assert.equal(targets.length, chunk.attackCount, hand);
+    }
+  }
+});
+
+test("synthetic boundary-tie chunk IDs round-trip through their source measure window", () => {
+  const score = boundaryTieScore();
+  const chunk = buildEarSearchChunks(score, { hand: "both", maxLandings: 4 })
+    .find((candidate) => candidate.startAttackId.startsWith("boundary-"));
+  assert.ok(chunk);
+  assert.equal(chunk.sourceStartMeasureIndex, 2);
+  assert.equal(chunk.sourceEndMeasureIndex, 2);
+  assert.equal(selectEarSearchChunkLoop(score, chunk).attacks.length, chunk.attackCount);
+  assert.equal(earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "full" }).length, chunk.attackCount);
+});
+
+test("larger memory limits coalesce natural chunks inside one two-measure window", () => {
+  const score = denseLandingScore();
+  const natural = buildEarSearchChunks(score, { hand: "right", maxLandings: 8 });
+  assert.deepEqual(natural.map((chunk) => chunk.attackCount), [8, 8, 8, 8]);
+  const medium = buildEarSearchChunks(score, { hand: "right", maxLandings: 16 });
+  assert.deepEqual(medium.map((chunk) => chunk.attackCount), [16, 16]);
+  const expanded = buildEarSearchChunks(score, { hand: "right", maxLandings: 32 });
+  assert.equal(expanded.length, 1);
+  assert.equal(expanded[0].attackCount, 32);
+  assert.deepEqual(expanded[0].attackIndexes, natural.flatMap((chunk) => chunk.attackIndexes));
+  assert.equal(expanded[0].startAttackId, natural[0].startAttackId);
+  assert.equal(expanded[0].endAttackId, natural.at(-1)!.endAttackId);
+  assert.equal(expanded[0].sourceStartMeasureIndex, 0);
+  assert.equal(expanded[0].sourceEndMeasureIndex, 1);
+  assert.equal(selectEarSearchChunkLoop(score, expanded[0]).attacks.length, 32);
+  assert.equal(earSearchLandingsForChunk(score, expanded[0], { hand: "right" }).length, 32);
+  assert.throws(() => buildEarSearchChunks(score, { maxLandings: 33 as EarSearchLandingLimit }), /4, 6, 8, 16, or 32/);
+  assert.throws(() => buildEarSearchChunks(score, { maxLandings: 12 as EarSearchLandingLimit }), /4, 6, 8, 16, or 32/);
+});
+
+test("extended chunks rebalance a trailing singleton without dropping a source attack", () => {
+  const score = denseLandingScore(33);
+  const chunks = buildEarSearchChunks(score, { hand: "right", maxLandings: 32 });
+  assert.equal(chunks.length, 2);
+  assert.ok(chunks.every((chunk) => chunk.attackCount >= 2 && chunk.attackCount <= 32));
+  const attackIndexes = chunks.flatMap((chunk) => chunk.attackIndexes);
+  assert.deepEqual(attackIndexes, Array.from({ length: 33 }, (_, index) => index));
+  assert.equal(chunks.reduce((sum, chunk) => sum + chunk.attackCount, 0), 33);
+  chunks.forEach((chunk) => assert.equal(selectEarSearchChunkLoop(score, chunk).attacks.length, chunk.attackCount));
+});
+
+test("chunk-loop reconstruction rejects stale attack-count metadata", () => {
+  const score = denseLandingScore();
+  const chunk = buildEarSearchChunks(score, { hand: "right", maxLandings: 8 })[0];
+  assert.throws(
+    () => selectEarSearchChunkLoop(score, { ...chunk, attackCount: chunk.attackCount + 1 }),
+    /stale or mismatched: expected 9 landings but reconstructed 8/,
+  );
 });

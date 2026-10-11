@@ -8,19 +8,32 @@ import {
   type SheetReadingChunk,
 } from "./sheet-music-coach-model.ts";
 
-export const EAR_SEARCH_MAX_LANDINGS = 8;
+export const EAR_SEARCH_MAX_LANDINGS = 32;
 export const EAR_SEARCH_MAX_PROBES = 4096;
 export const EAR_SEARCH_RECENT_PROBES = 64;
 export const EAR_SEARCH_CHORD_SETTLE_MS = 60;
 export const EAR_SEARCH_MAX_REFERENCE_GAP_MS = 2400;
 
 export type EarSearchVoice = "upper" | "bass" | "full";
+export type EarSearchLandingLimit = 4 | 6 | 8 | 16 | 32;
 
 export type EarSearchLanding = {
   id: string;
   notes: number[];
   measureIndex: number;
   measureNumber: string;
+};
+
+/**
+ * A reading chunk plus the exact practice-loop context that produced its IDs.
+ * Hand-filtered and boundary-tie attacks deliberately do not share IDs with
+ * score.attacks, so retaining this source window is what makes reconstruction
+ * deterministic.
+ */
+export type EarSearchChunk = SheetReadingChunk & {
+  sourceStartMeasureIndex: number;
+  sourceEndMeasureIndex: number;
+  hand: PracticeHand;
 };
 
 export type EarSearchProbe = {
@@ -373,47 +386,178 @@ export function advanceEarSearchTracker(
   return next;
 }
 
+function earSearchHandSummary(hands: EarSearchChunk["hands"]) {
+  const known = hands.filter((hand) => hand !== "unknown");
+  if (known.includes("left") && known.includes("right")) return "both hands";
+  if (known[0] === "left") return "left hand";
+  if (known[0] === "right") return "right hand";
+  return "unspecified hand";
+}
+
+function earSearchNoteSummary(labels: readonly string[]) {
+  if (labels.length <= 5) return labels.join(" → ");
+  return `${labels.slice(0, 2).join(" → ")} → … → ${labels.slice(-2).join(" → ")}`;
+}
+
+function withEarSearchSource(
+  chunk: SheetReadingChunk,
+  sourceStartMeasureIndex: number,
+  sourceEndMeasureIndex: number,
+  hand: PracticeHand,
+): EarSearchChunk {
+  return { ...chunk, sourceStartMeasureIndex, sourceEndMeasureIndex, hand };
+}
+
+function mergeEarSearchChunks(
+  score: SheetMusicScore,
+  chunks: readonly SheetReadingChunk[],
+  sourceStartMeasureIndex: number,
+  sourceEndMeasureIndex: number,
+  hand: PracticeHand,
+): EarSearchChunk {
+  if (!chunks.length) throw new RangeError("At least one reading chunk is required for an ear-search phrase.");
+  if (chunks.length === 1) return withEarSearchSource(chunks[0], sourceStartMeasureIndex, sourceEndMeasureIndex, hand);
+  const sourceLoop = selectSheetMusicLoop(score, { startMeasureIndex: sourceStartMeasureIndex, endMeasureIndex: sourceEndMeasureIndex, hand });
+  const attackIndexes = chunks.flatMap((chunk) => chunk.attackIndexes);
+  const attacks = attackIndexes.map((index) => sourceLoop.attacks[index]);
+  if (attacks.some((attack) => !attack)) throw new RangeError("Ear-search chunk indexes must exist in their source practice loop.");
+  const firstChunk = chunks[0];
+  const lastChunk = chunks.at(-1)!;
+  const firstAttack = attacks[0];
+  const upperNotes = attacks.map((attack) => attack.midiNotes.at(-1)!);
+  const attackLabels = chunks.flatMap((chunk) => chunk.attackLabels);
+  const allNotes = attacks.flatMap((attack) => attack.midiNotes);
+  const hands = [...new Set(attacks.flatMap((attack) => attack.hands))].sort();
+  const endBeat = Math.max(...attacks.map((attack) => attack.onsetBeat + attack.soundingDurationBeats));
+  const semitonePattern = upperNotes.slice(1).map((note, index) => note - upperNotes[index]);
+  const intervalPreview = semitonePattern.slice(0, 8).map((interval) => `${interval > 0 ? "+" : ""}${interval}`).join(" · ");
+  return {
+    id: `ear-search:${sourceStartMeasureIndex}-${sourceEndMeasureIndex}:${hand}:${firstChunk.id}:${lastChunk.id}`,
+    ordinal: firstChunk.ordinal,
+    startAttackId: firstChunk.startAttackId,
+    endAttackId: lastChunk.endAttackId,
+    attackIndexes,
+    startAttackIndex: attackIndexes[0],
+    endAttackIndex: attackIndexes.at(-1)!,
+    attackCount: attacks.length,
+    noteCount: attacks.reduce((sum, attack) => sum + attack.midiNotes.length, 0),
+    measureNumbers: [...new Set(attacks.map((attack) => attack.measureNumber))],
+    startBeat: firstAttack.onsetBeat,
+    endBeat,
+    durationBeats: endBeat - firstAttack.onsetBeat,
+    hands,
+    handSummary: earSearchHandSummary(hands),
+    attackLabels,
+    noteSummary: earSearchNoteSummary(attackLabels),
+    strategy: "interval-chain",
+    label: `Hear ${attacks.length} landings as one phrase`,
+    cue: `Hold the longer contour in memory${intervalPreview ? `; its opening moves ${intervalPreview} semitones` : ""}.`,
+    semitonePattern,
+    rhythmPatternBeats: attacks.slice(1).map((attack, index) => attack.onsetBeat - attacks[index].onsetBeat),
+    chordSpacings: chunks.flatMap((chunk) => chunk.chordSpacings),
+    rangeSemitones: allNotes.length ? Math.max(...allNotes) - Math.min(...allNotes) : 0,
+    sourceStartMeasureIndex,
+    sourceEndMeasureIndex,
+    hand,
+  };
+}
+
+function coalesceEarSearchChunks(
+  score: SheetMusicScore,
+  chunks: readonly SheetReadingChunk[],
+  maxLandings: number,
+  sourceStartMeasureIndex: number,
+  sourceEndMeasureIndex: number,
+  hand: PracticeHand,
+) {
+  const coalesced: EarSearchChunk[] = [];
+  let start = 0;
+  while (start < chunks.length) {
+    let end = start;
+    let landingCount = 0;
+    while (end < chunks.length && landingCount + chunks[end].attackCount <= maxLandings) {
+      landingCount += chunks[end].attackCount;
+      end += 1;
+    }
+    const remainingLandings = chunks.slice(end).reduce((sum, chunk) => sum + chunk.attackCount, 0);
+    if (remainingLandings === 1 && end - start > 1) {
+      end -= 1;
+      landingCount -= chunks[end].attackCount;
+    }
+    if (landingCount >= 2) {
+      coalesced.push(mergeEarSearchChunks(score, chunks.slice(start, end), sourceStartMeasureIndex, sourceEndMeasureIndex, hand));
+    }
+    if (end <= start) break;
+    start = end;
+  }
+  return coalesced;
+}
+
 /** Build non-overlapping cognitive units, each bounded to two measures. */
 export function buildEarSearchChunks(
   score: SheetMusicScore,
-  options: { hand?: PracticeHand; maxLandings?: 4 | 6 | 8 } = {},
-): SheetReadingChunk[] {
+  options: { hand?: PracticeHand; maxLandings?: EarSearchLandingLimit } = {},
+): EarSearchChunk[] {
   const maxLandings = options.maxLandings ?? 4;
   const hand = options.hand ?? "both";
-  if (![4, 6, 8].includes(maxLandings)) throw new RangeError("Ear-search chunk size must be 4, 6, or 8 landings.");
-  const chunks: SheetReadingChunk[] = [];
+  if (![4, 6, 8, 16, EAR_SEARCH_MAX_LANDINGS].includes(maxLandings)) {
+    throw new RangeError("Ear-search chunk size must be 4, 6, 8, 16, or 32 landings.");
+  }
+  const chunks: EarSearchChunk[] = [];
   for (let startMeasureIndex = 0; startMeasureIndex < score.measures.length; startMeasureIndex += 2) {
     const endMeasureIndex = Math.min(score.measures.length - 1, startMeasureIndex + 1);
+    const baseLimit = Math.min(8, maxLandings);
     const windowChunks = buildSheetMusicReadingChunks(score, {
       startMeasureIndex,
       endMeasureIndex,
       hand,
       minAttacks: 2,
-      maxAttacks: maxLandings,
-      targetAttacks: maxLandings,
+      maxAttacks: baseLimit,
+      targetAttacks: baseLimit,
     });
-    chunks.push(...windowChunks.filter((chunk) => chunk.attackCount >= 2 && chunk.attackCount <= maxLandings && chunk.measureNumbers.length <= 2));
+    if (maxLandings <= 8) {
+      chunks.push(...windowChunks
+        .filter((chunk) => chunk.attackCount >= 2 && chunk.attackCount <= maxLandings && chunk.measureNumbers.length <= 2)
+        .map((chunk) => withEarSearchSource(chunk, startMeasureIndex, endMeasureIndex, hand)));
+    } else {
+      chunks.push(...coalesceEarSearchChunks(
+        score,
+        windowChunks.filter((chunk) => chunk.measureNumbers.length <= 2),
+        maxLandings,
+        startMeasureIndex,
+        endMeasureIndex,
+        hand,
+      ));
+    }
   }
   return chunks.map((chunk, ordinal) => ({ ...chunk, ordinal }));
 }
 
-export function earSearchLandingsForChunk(
-  score: SheetMusicScore,
-  chunk: SheetReadingChunk,
-  options: { hand?: PracticeHand; voice?: EarSearchVoice } = {},
-): EarSearchLanding[] {
-  const hand = options.hand ?? "both";
-  const voice = options.voice ?? "upper";
-  const firstAttack = score.attacks.find((attack) => attack.id === chunk.startAttackId);
-  const lastAttack = score.attacks.find((attack) => attack.id === chunk.endAttackId);
-  if (!firstAttack || !lastAttack) throw new RangeError("Ear-search chunk attack IDs must exist in the score.");
+/** Recreate the exact hand-filtered, boundary-tie-aware loop that minted a chunk's IDs. */
+export function selectEarSearchChunkLoop(score: SheetMusicScore, chunk: EarSearchChunk) {
   const loop = selectSheetMusicLoop(score, {
-    startMeasureIndex: firstAttack.measureIndex,
-    endMeasureIndex: lastAttack.measureIndex,
+    startMeasureIndex: chunk.sourceStartMeasureIndex,
+    endMeasureIndex: chunk.sourceEndMeasureIndex,
     startAttackId: chunk.startAttackId,
     endAttackId: chunk.endAttackId,
-    hand,
+    hand: chunk.hand,
   });
+  if (loop.attacks.length !== chunk.attackCount) {
+    throw new RangeError(`Ear-search chunk is stale or mismatched: expected ${chunk.attackCount} landings but reconstructed ${loop.attacks.length}.`);
+  }
+  return loop;
+}
+
+export function earSearchLandingsForChunk(
+  score: SheetMusicScore,
+  chunk: EarSearchChunk,
+  options: { hand?: PracticeHand; voice?: EarSearchVoice } = {},
+): EarSearchLanding[] {
+  if (options.hand !== undefined && options.hand !== chunk.hand) {
+    throw new RangeError("Ear-search chunk hand must match the hand used to build it.");
+  }
+  const voice = options.voice ?? "upper";
+  const loop = selectEarSearchChunkLoop(score, chunk);
   return loop.attacks.map((attack) => {
     const ordered = [...attack.midiNotes].sort((first, second) => first - second);
     const notes = voice === "upper" ? [ordered.at(-1)!] : voice === "bass" ? [ordered[0]] : ordered.slice(0, 16);
