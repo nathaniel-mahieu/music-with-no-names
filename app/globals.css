@@ -8519,6 +8519,20 @@ footer a {
   overflow: hidden;
 }
 
+.piano-hud.is-ear-search {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.piano-hud.is-ear-search .piano-hud-header {
+  margin-bottom: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  box-shadow: 0 0 0 1px var(--line), 0 6px 18px rgba(0, 0, 0, .12);
+}
+
 .piano-hud-header {
   display: grid;
   grid-template-columns: minmax(320px, .9fr) minmax(480px, 1.1fr);
@@ -8582,6 +8596,10 @@ footer a {
 .piano-hud-controls > label:not(.piano-convention-toggle) select { min-width: 146px; }
 .piano-hud-controls .piano-convention-toggle { display: flex; gap: 7px; min-height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); }
 .piano-hud-controls .piano-convention-toggle input { grid-row: auto; }
+
+.piano-hud.is-ear-search .piano-hud-controls > button,
+.piano-hud.is-ear-search .piano-hud-controls select,
+.piano-hud.is-ear-search .piano-hud-controls .piano-convention-toggle { min-height: 44px; }
 
 .piano-hud-statebar {
   display: grid;
@@ -8774,14 +8792,28 @@ footer a {
   .piano-hud:is(.is-score-flow, .is-ear-search) .piano-hud-header > div:first-child > p:last-child { display: none; }
 }
 
-@media (min-width: 761px) {
+@media (min-width: 901px) {
   .piano-hud.is-ear-search .piano-hud-header {
     grid-template-columns: 1fr;
-    min-height: 52px;
-    padding: 4px 10px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 10px;
   }
   .piano-hud.is-ear-search .piano-hud-header > div:first-child { display: none; }
-  .piano-hud.is-ear-search .piano-hud-controls { justify-content: flex-end; }
+  .piano-hud.is-ear-search .piano-hud-controls { flex-wrap: nowrap; justify-content: flex-end; }
+  .piano-hud.is-ear-search .piano-hud-controls > label:not(.piano-convention-toggle) { display: block; }
+  .piano-hud.is-ear-search .piano-hud-controls > label:not(.piano-convention-toggle) > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .piano-hud.is-ear-search .piano-hud-header > div:first-child { display: none; }
 }
 
 /* Piano HUD v2.11: exact semitone spacing as a live color/place memory. */

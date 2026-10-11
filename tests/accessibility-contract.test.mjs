@@ -245,10 +245,11 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
 });
 
 test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-leaking", async () => {
-  const [piano, finder, finderCss, model, session, ratio] = await Promise.all([
+  const [piano, finder, finderCss, globalCss, model, session, ratio] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoEarSearchHud.module.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-ear-search-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/piano-session.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
@@ -258,6 +259,9 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(piano, /focusLens === "ear-search" \? <PianoEarSearchHud/);
   assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
   assert.match(piano, /const relationshipBlind = echoKeyBlind \|\| scoreFlowInput \|\| earSearchInput/);
+  assert.match(piano, /role=\{focusLens === "ear-search" \? "group" : undefined\}/);
+  assert.match(piano, /focusLens === "ear-search" \? "HUD view" : "Piano view"/);
+  assert.match(piano, /focusLens === "ear-search" \? "Names in exact reveal" : "Theory names"/);
   assert.match(session, /"ear-search"/);
   assert.match(ratio, /"ear-search": "untimed sound finder"/);
 
@@ -278,20 +282,31 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /role="dialog" aria-modal="true"/);
   assert.match(finder, /role="status" aria-live="polite" aria-atomic="true"/);
   assert.match(finder, /role="progressbar" aria-label="Hidden reference playback"/);
+  assert.match(finder, /<option value=\{32\}>32 landings<\/option>/);
+  assert.match(finder, /selectEarSearchChunkLoop\(score, chunk\)/);
+  assert.match(finder, /MAX_EAR_SEARCH_REFERENCE_VOICES = 256/);
+  assert.match(finder, /total > 8 && styles\.memoryRailDense/);
   assert.match(finder, /parseStoredScoreFlowSource/);
   assert.match(finder, /window\.sessionStorage\.setItem\(SCORE_FLOW_STORAGE_KEY/);
   assert.doesNotMatch(finder, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
 
-  assert.match(model, /EAR_SEARCH_MAX_LANDINGS = 8/);
+  assert.match(model, /EAR_SEARCH_MAX_LANDINGS = 32/);
+  assert.match(model, /EarSearchLandingLimit = 4 \| 6 \| 8 \| 16 \| 32/);
+  assert.match(model, /sourceStartMeasureIndex/);
+  assert.match(model, /selectEarSearchChunkLoop/);
   assert.match(model, /startMeasureIndex \+= 2/);
   assert.match(model, /Non-matching probes are ignored rather than accumulated as errors/);
   assert.match(model, /intervalDirection/);
   assert.match(model, /intervalWidth/);
   assert.doesNotMatch(model, /goodnessScore|musicalityScore|overallScore/);
   assert.match(finderCss, /min-height: 44px/);
+  assert.match(finderCss, /\.memoryRailDense ol/);
+  assert.match(finderCss, /\.revealPlotViewport/);
   assert.match(finderCss, /@media \(max-width: 1120px\) \{[\s\S]*\.transport \{ grid-column: 1 \/ -1;/, "the command transport must wrap before a 1024px desktop clips it");
   assert.match(finderCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(finderCss, /@media \(forced-colors: active\)/);
+  assert.match(globalCss, /\.piano-hud\.is-ear-search \{[\s\S]*overflow: visible;[\s\S]*border: 0;[\s\S]*background: transparent;/);
+  assert.match(globalCss, /\.piano-hud\.is-ear-search \.piano-hud-header \{[\s\S]*margin-bottom: 8px;/);
 });
 
 test("Score Flow follows raw MIDI in study and capture while keeping review frozen", async () => {
