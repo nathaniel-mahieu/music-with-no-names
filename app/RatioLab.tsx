@@ -71,6 +71,7 @@ const PIANO_LENS_LABELS: Record<PianoSessionSummary["focusLens"], string> = {
   "echo-key": "ear-first EchoKey",
   "score-flow": "uploaded-score coach",
   "ear-search": "untimed sound finder",
+  "ear-search-hands": "two-staff sound finder",
   explore: "whole-phrase",
   immersion: "immersive-sky",
   "scale-quality": "scale-quality-explorer",
@@ -779,7 +780,7 @@ export function RatioLab() {
         </nav>
         <div className="header-status">
           <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.26
+          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.27
         </div>
       </header>
 

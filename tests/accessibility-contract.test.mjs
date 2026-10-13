@@ -195,9 +195,9 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /<option value="both">Both staves<\/option>/);
   assert.match(scoreFlow, /<option value="right">Upper staff<\/option>/);
   assert.match(scoreFlow, /<option value="left">Lower staff<\/option>/);
-  assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search" \|\| focusLens === "scale-quality" \? <label htmlFor="compact-hud-view">/);
+  assert.match(piano, /focusLens === "score-flow" \|\| isEarSearchFocus \|\| focusLens === "scale-quality" \? <label htmlFor="compact-hud-view">/);
   assert.match(piano, /<select id="compact-hud-view" value=\{focusLens\}/);
-  assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" && focusLens !== "ear-search" && focusLens !== "scale-quality" \? <RouteSelector/);
+  assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" \? <RouteSelector/);
 
   assert.match(scoreFlow, /aria-label=\{`Measure \$\{measure\.number\}[\s\S]*\$\{state\}`\}/);
   assert.match(scoreFlow, /const navigatorStart = Math\.max\(0, loopStart - 6\)/);
@@ -256,16 +256,22 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   ]);
 
   assert.match(piano, /\{ id: "ear-search", label: "Sound Finder · untimed ear search"/);
-  assert.match(piano, /focusLens === "ear-search" \? <PianoEarSearchHud/);
-  assert.match(piano, /focusLens === "score-flow" \|\| focusLens === "ear-search"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
+  assert.match(piano, /\{ id: "ear-search-hands", label: "Sound Finder · two-staff path"/);
+  assert.match(piano, /function isEarSearchLens\(lens: FocusLens\)[\s\S]*lens === "ear-search" \|\| lens === "ear-search-hands"/);
+  assert.match(piano, /const isEarSearchFocus = isEarSearchLens\(focusLens\)/);
+  assert.match(piano, /\{isEarSearchFocus \? <PianoEarSearchHud[\s\S]*key=\{focusLens\}[\s\S]*mode=\{focusLens === "ear-search-hands" \? "two-hand" : "classic"\}/,
+    "classic and two-staff Sound Finder need distinct keyed state boundaries");
+  assert.match(piano, /focusLens === "score-flow" \|\| isEarSearchFocus[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
   assert.match(piano, /const relationshipBlind = echoKeyBlind \|\| scoreFlowInput \|\| earSearchInput/);
-  assert.match(piano, /role=\{focusLens === "ear-search" \? "group" : undefined\}/);
+  assert.match(piano, /role=\{isEarSearchFocus \? "group" : undefined\}/);
   assert.match(piano, /focusLens === "score-flow" \? "Piano view" : "HUD view"/);
-  assert.match(piano, /focusLens === "ear-search" \? "Names in exact reveal" : "Theory names"/);
+  assert.match(piano, /isEarSearchFocus \? "Names in exact reveal" : "Theory names"/);
   assert.match(session, /"ear-search"/);
+  assert.match(session, /"ear-search-hands"/);
   assert.match(ratio, /"ear-search": "untimed sound finder"/);
+  assert.match(ratio, /"ear-search-hands": "two-staff sound finder"/);
 
-  assert.match(finder, /<section className=\{styles\.shell\} aria-labelledby="ear-search-title"/);
+  assert.match(finder, /<section className=\{cx\(styles\.shell, twoHand && styles\.twoHandShell\)\} aria-labelledby="ear-search-title"/);
   assert.match(finder, /"Hear hidden phrase"/);
   assert.match(finder, /Wrong probes do not consume a slot or erase earlier progress/);
   assert.match(finder, /Timing is not graded/);
@@ -277,7 +283,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /hintMode === "blind" \? "Relationship feedback" : chordCountMismatch \? "Chord key count first"/, "progress-only mode must not reveal a chord key-count mismatch through the interval heading");
   assert.match(finder, /className=\{styles\.nextMove\}>Next move<\/em>/, "the prioritized cue needs a visible non-color label");
   assert.match(finder, /aria-current=\{primaryCue === "place" \? "step" : undefined\}/, "the prioritized cue needs semantic state as well as styling");
-  assert.match(finder, /\{searchLandings\.map\(\(_, index\) => <li/);
+  assert.match(finder, /\{searchLandings\.map\(\(landing, index\) => <li/);
   assert.match(finder, /revealed \? <section className=\{styles\.revealDrawer\}/);
   assert.match(finder, /role="dialog" aria-modal="true"/);
   assert.match(finder, /role="region" tabIndex=\{0\} aria-label="Scrollable revealed phrase pitch map"/);
@@ -292,8 +298,34 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /window\.sessionStorage\.setItem\(SCORE_FLOW_STORAGE_KEY/);
   assert.doesNotMatch(finder, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
 
+  assert.match(finder, /mode\?: "classic" \| "two-hand"/);
+  assert.match(finder, /<option value="staff-anchors">One anchor per staff<\/option>/);
+  assert.match(finder, /const targetById = new Map\(searchLandings\.map/);
+  assert.match(finder, /voice === "staff-anchors" && target \? target\.notes\.flatMap/,
+    "the audible staff-anchor reference must use the same hidden notes as evaluation");
+  assert.match(finder, /const handProgress = summarizeEarSearchHandProgress\(searchLandings, matched\)/);
+  assert.match(finder, /className=\{styles\.handLane\} data-lane="upper"/);
+  assert.match(finder, /className=\{styles\.handLane\} data-lane="lower"/);
+  assert.match(finder, /Staff lanes come from the uploaded score\. MIDI reports keys, not which hand pressed them/);
+  assert.match(finder, /Pitch remains hidden/);
+  assert.match(finder, /showStaff=\{twoHand\}/,
+    "staff provenance may join exact pitch only inside the learner-opened reveal");
+  assert.match(piano, /saved\.version === 27/);
+  assert.match(piano, /const session: PersistedPianoSession = \{ version: 27,/);
+
   assert.match(model, /EAR_SEARCH_MAX_LANDINGS = 32/);
   assert.match(model, /EarSearchLandingLimit = 4 \| 6 \| 8 \| 16 \| 32/);
+  assert.match(model, /EarSearchVoice = "upper" \| "bass" \| "staff-anchors" \| "full"/);
+  assert.match(model, /EarSearchStaff = "upper" \| "lower" \| "both" \| "unknown"/);
+  assert.match(model, /const selectedStaves = new Set\(attack\.notes[\s\S]*selectedPitches\.has\(note\.pitch\.midi\)/,
+    "staff identity must follow selected authored score staffs rather than pitch height or inferred hands");
+  assert.match(finder, /earSearchPlaybackLandingAt\(playbackCues, elapsed\)/,
+    "playback staff cues must become neutral during silence rather than holding the preceding lane");
+  assert.doesNotMatch(finder, /right-hand lane|left-hand lane|hands together/,
+    "score-staff provenance must not be presented as observed physical hand identity");
+  assert.match(model, /export function summarizeEarSearchHandProgress/);
+  assert.match(model, /staff === "upper" \|\| staff === "both"/);
+  assert.match(model, /staff === "lower" \|\| staff === "both"/);
   assert.match(model, /sourceStartMeasureIndex/);
   assert.match(model, /selectEarSearchChunkLoop/);
   assert.match(model, /startMeasureIndex \+= 2/);
@@ -304,6 +336,10 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finderCss, /min-height: 44px/);
   assert.match(finderCss, /\.memoryRailDense ol/);
   assert.match(finderCss, /\.revealPlotViewport/);
+  assert.match(finderCss, /\.twoHandShell/);
+  assert.match(finderCss, /\.handCue/);
+  assert.match(finderCss, /\.handLane\[data-lane="upper"\]/);
+  assert.match(finderCss, /\.handLane\[data-lane="lower"\]/);
   assert.match(finderCss, /\.footerDeck input\[type="range"\][\s\S]*min-height: 44px/);
   assert.match(finderCss, /@media \(max-width: 1120px\) \{[\s\S]*\.transport \{ grid-column: 1 \/ -1;/, "the command transport must wrap before a 1024px desktop clips it");
   assert.match(finderCss, /@media \(prefers-reduced-motion: reduce\)/);
@@ -434,7 +470,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /focusLens === "scale-quality" \? <PianoScaleQualityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| focusLens === "ear-search" \|\| focusLens === "immersion" \|\| focusLens === "scale-quality" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| isEarSearchFocus \|\| focusLens === "immersion" \|\| focusLens === "scale-quality" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
   assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
   assert.match(intervalGlow, /octave layers shrink inward/);
@@ -929,7 +965,7 @@ test("dynamic visuals and status changes expose nonvisual descriptions", async (
   assert.match(piano, /route A held · now perform B/);
   assert.match(piano, /function isLandmarkRouteCompareSession/);
   assert.match(piano, /session\.sourcePathId !== session\.targetPathId/);
-  assert.match(piano, /version: 26[\s\S]*landmarkRouteCompareSession/);
+  assert.match(piano, /version: 27[\s\S]*landmarkRouteCompareSession/);
   assert.match(piano, /Two routes in the same underlying coordinate/);
   assert.match(piano, /className="hud-landmark-compare-plot"[\s\S]*role="img" aria-label=\{summary\}/);
   assert.match(piano, /role="table" aria-label="Route structure comparison"/);
@@ -1168,7 +1204,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(piano, /Missing releases remain unknown\. Velocity is an attack control, not measured acoustic loudness/);
   assert.match(piano, /does not infer meter, groove, intention, feeling, preference, or quality/);
   assert.match(piano, /sourceBeforeAttackEventIds: before\.gesture\.attacks\.map/);
-  assert.match(piano, /version: 26/);
+  assert.match(piano, /version: 27/);
   assert.match(piano, /experienceOrigin === "phrase" \|\| experiencePhrase\.length < 3/);
   assert.match(piano, /landmarkLastMatchIdRef\.current = 0;\s+setExperienceOrigin\("phrase"\);\s+setExperienceContext\(null\);\s+setExperiencePhrase\(\[\]\);/);
   assert.match(piano, /<details className="hud-interval-tools">/);

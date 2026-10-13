@@ -7,6 +7,8 @@
   --ear-violet: #b49bff;
   --ear-gold: #ffd17a;
   --ear-rose: #ff91aa;
+  --ear-upper: #86cfff;
+  --ear-lower: #ffae82;
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -20,6 +22,14 @@
     radial-gradient(circle at 96% 88%, rgba(175, 113, 232, .09), transparent 30%),
     linear-gradient(145deg, #05070d 0%, #090c15 54%, #060810 100%);
   box-shadow: 0 22px 70px rgba(0, 0, 0, .32), inset 0 1px rgba(255, 255, 255, .025);
+}
+
+.twoHandShell {
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(87, 137, 212, .18), transparent 34%),
+    radial-gradient(ellipse at 50% 80%, rgba(205, 107, 89, .13), transparent 36%),
+    radial-gradient(circle at 7% 8%, rgba(77, 205, 192, .08), transparent 26%),
+    linear-gradient(145deg, #05070d 0%, #090c15 54%, #060810 100%);
 }
 
 .shell::before {
@@ -128,6 +138,10 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(92px, 1fr));
   gap: 7px;
+}
+
+.twoHandControls {
+  grid-template-columns: repeat(3, minmax(112px, 1fr));
 }
 
 .controls label,
@@ -359,6 +373,9 @@
   border: 1px solid rgba(193, 207, 233, .2);
   border-radius: 50%;
   background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, .1), rgba(255, 255, 255, .018) 50%, transparent 52%);
+  font-size: .66rem;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .memoryRail li.isCurrent {
@@ -397,6 +414,7 @@
 .memoryRailDense li i {
   width: 14px;
   height: 14px;
+  font-size: .45rem;
 }
 
 .memoryRailDense li.isCurrent i {
@@ -415,6 +433,55 @@
   color: var(--ear-gold);
 }
 
+.handTotals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.handTotals > span {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid rgba(188, 205, 232, .12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .025);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.handTotals b {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.handTotals em {
+  overflow: hidden;
+  font-size: .55rem;
+  font-style: normal;
+  text-overflow: ellipsis;
+}
+
+.handTotals strong { font-size: .61rem; }
+.handTotals > span[data-staff="upper"] { color: var(--ear-upper); }
+.handTotals > span[data-staff="lower"] { color: var(--ear-lower); }
+
+.twoHandMemory li[data-staff="upper"] i { color: var(--ear-upper); border-color: color-mix(in srgb, var(--ear-upper) 52%, transparent); border-radius: 50% 50% 44% 44%; }
+.twoHandMemory li[data-staff="lower"] i { color: var(--ear-lower); border-color: color-mix(in srgb, var(--ear-lower) 52%, transparent); border-radius: 44% 44% 50% 50%; }
+.twoHandMemory li[data-staff="both"] i { color: var(--ear-violet); border-color: color-mix(in srgb, var(--ear-violet) 62%, transparent); border-radius: 9px; }
+.twoHandMemory li[data-staff="unknown"] i { color: var(--ear-muted); border-style: dashed; }
+.twoHandMemory li.isCaught[data-staff="upper"] i { color: #071018; background: var(--ear-upper); box-shadow: 0 0 15px rgba(134, 207, 255, .38); }
+.twoHandMemory li.isCaught[data-staff="lower"] i { color: #1a0d08; background: var(--ear-lower); box-shadow: 0 0 15px rgba(255, 174, 130, .34); }
+.twoHandMemory li.isCaught[data-staff="both"] i { color: #0f0a19; background: var(--ear-violet); box-shadow: 0 0 17px rgba(180, 155, 255, .42); }
+
 .compassField {
   position: relative;
   display: grid;
@@ -425,6 +492,90 @@
     radial-gradient(circle at center, rgba(78, 115, 166, .16), transparent 38%),
     linear-gradient(rgba(255,255,255,.012), rgba(255,255,255,0));
 }
+
+.twoHandCompassField {
+  grid-template-rows: 26px 74px minmax(0, 1fr) auto;
+}
+
+.handCue {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(168px, 1.12fr) minmax(0, 1fr);
+  align-items: stretch;
+  min-width: 0;
+  border-bottom: 1px solid rgba(188, 205, 232, .1);
+  background: rgba(6, 9, 16, .56);
+}
+
+.handCue::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 10%;
+  left: 10%;
+  z-index: -1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(134, 207, 255, .36), rgba(180, 155, 255, .16), rgba(255, 174, 130, .36));
+}
+
+.handLane,
+.handCueCore {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  gap: 2px;
+  padding: 8px 12px;
+}
+
+.handLane {
+  opacity: .46;
+  transition: opacity 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.handLane[data-lane="upper"] { color: var(--ear-upper); text-align: right; }
+.handLane[data-lane="lower"] { color: var(--ear-lower); }
+.handLane[data-active="true"] { opacity: 1; }
+.handLane[data-lane="upper"][data-active="true"] { background: linear-gradient(90deg, transparent, rgba(74, 153, 212, .12)); box-shadow: inset -1px 0 rgba(134, 207, 255, .18); }
+.handLane[data-lane="lower"][data-active="true"] { background: linear-gradient(90deg, rgba(199, 103, 72, .11), transparent); box-shadow: inset 1px 0 rgba(255, 174, 130, .18); }
+.handLane span { color: currentColor; font-size: .56rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.handLane strong { overflow: hidden; color: var(--ear-ink); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.handLane small { color: var(--ear-muted); font-size: .56rem; }
+
+.handCueCore {
+  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  column-gap: 8px;
+  border-inline: 1px solid rgba(188, 205, 232, .11);
+  background: rgba(7, 11, 20, .9);
+  text-align: left;
+}
+
+.handCueCore > i {
+  grid-row: 1 / 4;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--ear-violet);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 1.05rem;
+  font-style: normal;
+  text-shadow: 0 0 15px currentColor;
+  box-shadow: 0 0 18px rgba(180, 155, 255, .11);
+}
+
+.handCue[data-staff="upper"] .handCueCore > i { color: var(--ear-upper); }
+.handCue[data-staff="lower"] .handCueCore > i { color: var(--ear-lower); }
+.handCue[data-staff="silence"]::after { opacity: .22; }
+.handCue[data-staff="silence"] .handCueCore > i { color: var(--ear-muted); border-style: dashed; box-shadow: none; text-shadow: none; }
+.handCue[data-staff="complete"] .handCueCore > i { color: var(--ear-teal); }
+.handCueCore > span { color: var(--ear-muted); font-size: .51rem; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+.handCueCore > strong { overflow: hidden; font-size: .69rem; text-overflow: ellipsis; white-space: nowrap; }
+.handCueCore > small { color: var(--ear-muted); font-size: .54rem; }
 
 .playbackLine {
   position: relative;
@@ -857,6 +1008,12 @@
 .revealSteps strong { overflow: hidden; font-size: .73rem; text-overflow: ellipsis; white-space: nowrap; }
 .revealSteps small { color: var(--ear-muted); font-size: .6rem; line-height: 1.35; }
 .revealMap > p { grid-column: 1 / -1; color: var(--ear-muted); font-size: .64rem; }
+.revealSteps article[data-staff="upper"] { border-color: rgba(134, 207, 255, .25); }
+.revealSteps article[data-staff="upper"] span { color: var(--ear-upper); }
+.revealSteps article[data-staff="lower"] { border-color: rgba(255, 174, 130, .23); }
+.revealSteps article[data-staff="lower"] span { color: var(--ear-lower); }
+.revealSteps article[data-staff="both"] { border-color: rgba(180, 155, 255, .3); }
+.revealSteps article[data-staff="both"] span { color: var(--ear-violet); }
 
 .emptyHeader {
   padding: 22px 24px 12px;
@@ -968,6 +1125,9 @@
   .memoryRail,
   .probeDock { gap: 7px; padding: 10px; }
   .compass { padding-block: 8px 4px; }
+  .twoHandCompassField { grid-template-rows: 26px 62px minmax(0, 1fr) auto; }
+  .handLane,
+  .handCueCore { padding-block: 5px; }
   .centralInstruction { margin-bottom: 6px; padding-block: 6px; }
   .footerDeck { min-height: 54px; padding-block: 5px; }
 }
@@ -990,6 +1150,7 @@
   .memoryRail.memoryRailDense li { grid-template-columns: 1fr; }
   .memoryRail li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .compassField { min-height: 470px; }
+  .twoHandCompassField { min-height: 550px; }
   .compass { grid-template-columns: 1fr 112px 1fr; padding-inline: 6px; }
   .soundCore { width: 104px; }
   .compass article { padding: 10px 8px; }
@@ -1004,6 +1165,17 @@
   .revealMap > p { grid-column: auto; }
   .importPanel { grid-template-columns: 1fr; text-align: center; }
   .importOrbit { justify-self: center; }
+}
+
+@media (max-width: 620px) {
+  .twoHandControls { grid-template-columns: 1fr; }
+  .handCue { grid-template-columns: minmax(0, .78fr) minmax(148px, 1.3fr) minmax(0, .78fr); }
+  .handLane { padding-inline: 6px; }
+  .handLane strong { font-size: .61rem; }
+  .handLane small { display: none; }
+  .handCueCore { padding-inline: 7px; }
+  .handCueCore > strong { font-size: .61rem; }
+  .handCueCore > small { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1029,4 +1201,9 @@
   .probeDock li.isAccepted > i { border-color: Highlight; background: Highlight; }
   .memoryRail li.isCurrent i { border-color: Highlight; outline: 2px dashed Highlight; outline-offset: 2px; }
   .soundCore { border-color: Highlight; }
+  .handCue,
+  .handCueCore,
+  .handTotals > span { border-color: CanvasText; background: Canvas; }
+  .handLane[data-active="true"],
+  .handCueCore > i { color: Highlight; border-color: Highlight; background: Canvas; }
 }

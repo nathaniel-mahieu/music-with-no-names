@@ -14,14 +14,29 @@ export const EAR_SEARCH_RECENT_PROBES = 64;
 export const EAR_SEARCH_CHORD_SETTLE_MS = 60;
 export const EAR_SEARCH_MAX_REFERENCE_GAP_MS = 2400;
 
-export type EarSearchVoice = "upper" | "bass" | "full";
+export type EarSearchVoice = "upper" | "bass" | "staff-anchors" | "full";
 export type EarSearchLandingLimit = 4 | 6 | 8 | 16 | 32;
+export type EarSearchStaff = "upper" | "lower" | "both" | "unknown";
 
 export type EarSearchLanding = {
   id: string;
   notes: number[];
   measureIndex: number;
   measureNumber: string;
+  /** Score-authored staff role. MIDI cannot observe the learner's physical hand. */
+  staff?: EarSearchStaff;
+};
+
+export type EarSearchPlaybackCue = {
+  onsetMs: number;
+  notes: ReadonlyArray<{ onsetOffsetMs: number; durationMs: number }>;
+};
+
+export type EarSearchHandProgress = {
+  upper: { caught: number; total: number };
+  lower: { caught: number; total: number };
+  shared: { caught: number; total: number };
+  nextStaff: EarSearchStaff | null;
 };
 
 /**
@@ -560,9 +575,87 @@ export function earSearchLandingsForChunk(
   const loop = selectEarSearchChunkLoop(score, chunk);
   return loop.attacks.map((attack) => {
     const ordered = [...attack.midiNotes].sort((first, second) => first - second);
-    const notes = voice === "upper" ? [ordered.at(-1)!] : voice === "bass" ? [ordered[0]] : ordered.slice(0, 16);
-    return { id: attack.id, notes, measureIndex: attack.measureIndex, measureNumber: attack.measureNumber };
+    const upperStaffNotes = attack.notes.filter((note) => note.staff === 1).map((note) => note.pitch.midi);
+    const lowerStaffNotes = attack.notes.filter((note) => note.staff === 2).map((note) => note.pitch.midi);
+    const staffAnchors = [
+      ...(upperStaffNotes.length ? [Math.max(...upperStaffNotes)] : []),
+      ...(lowerStaffNotes.length ? [Math.min(...lowerStaffNotes)] : []),
+    ];
+    const notes = voice === "upper" ? [ordered.at(-1)!]
+      : voice === "bass" ? [ordered[0]]
+        : voice === "staff-anchors" ? [...new Set(staffAnchors.length ? staffAnchors : [ordered.at(-1)!])].sort((first, second) => first - second)
+          : ordered.slice(0, 16);
+    const selectedPitches = new Set(notes);
+    const selectedStaves = new Set(attack.notes
+      .filter((note) => selectedPitches.has(note.pitch.midi))
+      .map((note) => note.staff));
+    const staff: EarSearchStaff = selectedStaves.has(1) && selectedStaves.has(2)
+      ? "both"
+      : selectedStaves.has(1)
+        ? "upper"
+        : selectedStaves.has(2)
+          ? "lower"
+          : "unknown";
+    return { id: attack.id, notes, measureIndex: attack.measureIndex, measureNumber: attack.measureNumber, staff };
   });
+}
+
+/**
+ * Return the latest landing with a note that is physically sounding at this
+ * playback instant. Written and compacted rests therefore remain visually
+ * silent instead of inheriting the preceding staff cue.
+ */
+export function earSearchPlaybackLandingAt(
+  cues: readonly EarSearchPlaybackCue[],
+  elapsedMs: number,
+): number | null {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    throw new RangeError("Ear-search playback time must be finite and non-negative.");
+  }
+  const active = cues.findLastIndex((cue) => cue.notes.some((note) => {
+    const startMs = cue.onsetMs + note.onsetOffsetMs;
+    const durationMs = Math.max(140, note.durationMs);
+    return elapsedMs >= startMs && elapsedMs < startMs + durationMs;
+  }));
+  return active >= 0 ? active : null;
+}
+
+/**
+ * Summarize the same ordered secure prefix as two score-staff lanes. A shared
+ * landing advances both lanes once; this is not a claim about the player's
+ * physical fingering or which hand produced an incoming MIDI message.
+ */
+export function summarizeEarSearchHandProgress(
+  target: readonly EarSearchLanding[],
+  matchedLandings: number,
+): EarSearchHandProgress {
+  if (!Number.isFinite(matchedLandings) || !Number.isInteger(matchedLandings)) {
+    throw new RangeError("Matched ear-search landings must be a finite integer.");
+  }
+  const caughtLandings = Math.min(target.length, Math.max(0, matchedLandings));
+  const summary: EarSearchHandProgress = {
+    upper: { caught: 0, total: 0 },
+    lower: { caught: 0, total: 0 },
+    shared: { caught: 0, total: 0 },
+    nextStaff: caughtLandings < target.length ? target[caughtLandings].staff ?? "unknown" : null,
+  };
+  target.forEach((landing, index) => {
+    const caught = index < caughtLandings;
+    const staff = landing.staff ?? "unknown";
+    if (staff === "upper" || staff === "both") {
+      summary.upper.total += 1;
+      if (caught) summary.upper.caught += 1;
+    }
+    if (staff === "lower" || staff === "both") {
+      summary.lower.total += 1;
+      if (caught) summary.lower.caught += 1;
+    }
+    if (staff === "both") {
+      summary.shared.total += 1;
+      if (caught) summary.shared.caught += 1;
+    }
+  });
+  return summary;
 }
 
 /**

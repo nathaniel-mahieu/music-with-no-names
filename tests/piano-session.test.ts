@@ -68,6 +68,14 @@ test("preserves the untimed Sound Finder lens in the tab summary", () => {
   })), { attackCount: 2, focusLens: "ear-search" });
 });
 
+test("preserves the v27 two-staff Sound Finder lens in the tab summary", () => {
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 27,
+    focusLens: "ear-search-hands",
+    phraseEvents: [phraseEvent(1, 48, 100), phraseEvent(2, 72, 70_240)],
+  })), { attackCount: 2, focusLens: "ear-search-hands" });
+});
+
 test("preserves the research HUD lens in the tab summary", () => {
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 25,
@@ -98,6 +106,15 @@ test("retains a full Score Flow history through the expanded 4,096-event boundar
     focusLens: "score-flow",
     phraseEvents,
   })), { attackCount: 4096, focusLens: "score-flow" });
+});
+
+test("retains a full delayed-search history for the two-staff Sound Finder", () => {
+  const phraseEvents = Array.from({ length: 4096 }, (_, id) => phraseEvent(id, 48 + id % 36, id * 1_000));
+  assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
+    version: 27,
+    focusLens: "ear-search-hands",
+    phraseEvents,
+  })), { attackCount: 4096, focusLens: "ear-search-hands" });
 });
 
 test("rejects malformed data or histories beyond the expanded boundary", () => {

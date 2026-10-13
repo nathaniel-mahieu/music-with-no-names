@@ -4,6 +4,7 @@ export const PIANO_SESSION_LENSES = [
   "echo-key",
   "score-flow",
   "ear-search",
+  "ear-search-hands",
   "explore",
   "immersion",
   "scale-quality",

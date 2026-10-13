@@ -6,9 +6,23 @@ Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-
 
 Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search)
 
+Two-Staff Sound Finder: [open the staff-aware ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search-hands)
+
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
-The current milestone is **Scale Quality Explorer v2.26**. It provides:
+The current milestone is **Sound Finder · Two-Staff Path v2.27**. It provides:
+
+- A separate Sound Finder view that preserves the original untimed secure-prefix search while exposing one deliberately limited piece of notation: whether each hidden landing belongs to the upper staff, lower staff, both staffs together, or an unassigned score lane. Exact pitch, key, note name, staff height, and semitone correction remain hidden until the learner chooses the exact reveal.
+
+- A synchronized two-lane memory. Upper- and lower-staff counts advance independently, a simultaneous cross-staff sonority remains one chronological landing, and a clear central cue names the opening, currently sounding, or next score staff. Shapes, arrows, position, text, and color carry the same distinction.
+
+- A beginner `One anchor per staff` texture that asks for the top written anchor of the upper staff and the bass anchor of the lower staff at each score moment. `All written keys` retains the denser challenge. The synthesized reference and the silent-MIDI matcher use the same hidden target notes, with 140, 240, or 480 ms gathering for multi-key moments.
+
+- Honest score provenance. Staff identity comes from the authored MusicXML staff rather than pitch height or an inferred physical hand, so cross-staff writing remains exactly where the score placed it. The HUD repeatedly states that ordinary MIDI reports keys, not which physical hand pressed them.
+
+- A one-screen desktop field with separate staff progress semantics, a joined-staff bridge, staff-aware playback pulses that go neutral during rests, a staff-tagged post-listen reveal, a responsive mobile stack, reduced-motion and forced-color fallbacks, and the same local-only score and silent incoming-MIDI boundaries as Sound Finder.
+
+The prior **Scale Quality Explorer v2.26** remains available and provides:
 
 - A dedicated, silent raw-MIDI HUD for playing two complementary roles on one keyboard. A learner-selected split sends lower-register attacks to the tonic beacon and upper-register attacks to the scale field; the browser neither synthesizes those notes nor treats the on-screen keyboard as evidence in this view.
 
