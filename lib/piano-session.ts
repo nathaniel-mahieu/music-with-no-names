@@ -72,9 +72,10 @@ export function parsePianoSessionSummary(serialized: string | null): PianoSessio
   if (!phraseEvents) return null;
   try {
     const session = JSON.parse(serialized!) as Record<string, unknown>;
-    const focusLens = PIANO_SESSION_LENSES.includes(session.focusLens as PianoSessionLens)
+    const storedFocusLens = PIANO_SESSION_LENSES.includes(session.focusLens as PianoSessionLens)
       ? session.focusLens as PianoSessionLens
       : "explore";
+    const focusLens: PianoSessionLens = storedFocusLens === "ear-search-hands" ? "ear-search" : storedFocusLens;
     return { attackCount: phraseEvents.length, focusLens };
   } catch {
     return null;

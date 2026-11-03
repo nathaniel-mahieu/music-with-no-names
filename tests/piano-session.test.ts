@@ -68,12 +68,12 @@ test("preserves the untimed Sound Finder lens in the tab summary", () => {
   })), { attackCount: 2, focusLens: "ear-search" });
 });
 
-test("preserves the v27 two-staff Sound Finder lens in the tab summary", () => {
+test("migrates the retired v27 two-staff Sound Finder lens into the unified Sound Finder", () => {
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 27,
     focusLens: "ear-search-hands",
     phraseEvents: [phraseEvent(1, 48, 100), phraseEvent(2, 72, 70_240)],
-  })), { attackCount: 2, focusLens: "ear-search-hands" });
+  })), { attackCount: 2, focusLens: "ear-search" });
 });
 
 test("preserves the research HUD lens in the tab summary", () => {
@@ -108,13 +108,13 @@ test("retains a full Score Flow history through the expanded 4,096-event boundar
   })), { attackCount: 4096, focusLens: "score-flow" });
 });
 
-test("retains a full delayed-search history for the two-staff Sound Finder", () => {
+test("retains a full delayed-search history while migrating the retired two-staff Sound Finder", () => {
   const phraseEvents = Array.from({ length: 4096 }, (_, id) => phraseEvent(id, 48 + id % 36, id * 1_000));
   assert.deepEqual(parsePianoSessionSummary(JSON.stringify({
     version: 27,
     focusLens: "ear-search-hands",
     phraseEvents,
-  })), { attackCount: 4096, focusLens: "ear-search-hands" });
+  })), { attackCount: 4096, focusLens: "ear-search" });
 });
 
 test("rejects malformed data or histories beyond the expanded boundary", () => {

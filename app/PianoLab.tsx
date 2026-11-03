@@ -205,6 +205,16 @@ type ChordMeasure = {
 };
 type FrameMode = "discover" | "locked";
 type FocusLens = "echo-key" | "score-flow" | "ear-search" | "ear-search-hands" | "explore" | "immersion" | "scale-quality" | "interval-glow" | "sight-shapes" | "research" | "gravity" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
+type FocusLensTier = "primary" | "secondary";
+type FocusLensGroup = "practice" | "develop";
+type FocusLensDefinition = {
+  id: Exclude<FocusLens, "ear-search-hands">;
+  label: string;
+  description: string;
+  tier: FocusLensTier;
+  group?: FocusLensGroup;
+  status?: "todo";
+};
 function isEarSearchLens(lens: FocusLens) {
   return lens === "ear-search" || lens === "ear-search-hands";
 }
@@ -369,25 +379,65 @@ const WHITE_NOTES = VISIBLE_NOTES.filter((note) => WHITE_PITCH_CLASSES.has(pitch
 const DEFAULT_SCALE = PIANO_SCALES[0];
 const FIFTHS_ORDER = fifthsCircle();
 const EVENT_X = (slot: number) => 84 + slot * 88;
-const FOCUS_LENSES: Array<{ id: FocusLens; label: string; description: string }> = [
-  { id: "echo-key", label: "EchoKey · ear-first path", description: "Hear, hold, find, diagnose, repair, read, and transfer one short relationship." },
-  { id: "score-flow", label: "Score Flow · upload score", description: "Align a MusicXML score with your silent playing, hands, intervals, and repair loops." },
-  { id: "ear-search", label: "Sound Finder · untimed ear search", description: "Hear a hidden score phrase of 4, 6, 8, 16, or 32 landings, then probe toward its register, pitch, intervals, and local collection without a clock." },
-  { id: "ear-search-hands", label: "Sound Finder · two-staff path", description: "Keep upper, lower, and together score landings visible while their exact pitches remain hidden." },
-  { id: "explore", label: "Explore", description: "See the whole phrase across every representation." },
-  { id: "immersion", label: "Immersion", description: "Let register, fifths, intervals, timing, chords, and pull become one living sky." },
-  { id: "scale-quality", label: "Scale Quality", description: "Let one low tonic illuminate every upper scale position, gap, overlap, and felt tendency." },
-  { id: "interval-glow", label: "Interval Glow", description: "Make each exact semitone spacing a stable place, color, and phrase trace." },
-  { id: "sight-shapes", label: "Sight Shapes", description: "Read staff geometry as one shape for the eyes, hands, and ear." },
-  { id: "research", label: "Research HUD", description: "Compare semitone, interval-orbit, thirds-lattice, and all-pairs maps." },
-  { id: "gravity", label: "Scale Gravity", description: "Hold one degree while IV, V, and I change its role beneath you." },
-  { id: "intervals", label: "Intervals", description: "Connect spacing, frequency ratio, and transferable hand shape." },
-  { id: "scales", label: "Scales", description: "See how pitch evidence suggests Do and a scale route." },
-  { id: "chords", label: "Chords", description: "Choose one question about a note, a chord change, or a new voicing." },
-  { id: "motion", label: "Motion", description: "Choose one question about pulse, touch, breath, voices, or motif." },
-  { id: "paths", label: "Paths", description: "Play pop, blues, cadence, and pedal-point archetypes as transferable relationships." },
-  { id: "experience", label: "Experience", description: "Report how this phrase felt; keep your response separate from modeled evidence." },
+// One catalog drives route validation and every visible navigation surface.
+// The retired two-staff route remains a FocusLens only so old links and saved
+// sessions can migrate into Sound Finder's Upper / Lower / Both practice layer.
+const FOCUS_LENSES: FocusLensDefinition[] = [
+  { id: "ear-search", label: "Sound Finder", description: "Untimed ear search", tier: "primary" },
+  { id: "explore", label: "Explore", description: "Whole phrase · every representation", tier: "primary", status: "todo" },
+  { id: "interval-glow", label: "Interval Glow", description: "Semitone spacing in color", tier: "primary" },
+  { id: "sight-shapes", label: "Sight Shapes", description: "Staff geometry · eyes × hands × ear", tier: "primary", status: "todo" },
+  { id: "scales", label: "Scales", description: "Do, gap patterns, and routes", tier: "primary", status: "todo" },
+  { id: "immersion", label: "Immersion", description: "One living fifths-and-register sky", tier: "primary" },
+  { id: "echo-key", label: "EchoKey", description: "Ear-first relationship path", tier: "secondary", group: "practice" },
+  { id: "score-flow", label: "Score Flow", description: "Upload and align a MusicXML score", tier: "secondary", group: "practice" },
+  { id: "scale-quality", label: "Scale Quality", description: "Low tonic × upper scale color", tier: "secondary", group: "practice" },
+  { id: "gravity", label: "Scale Gravity", description: "One held degree through IV · V · I", tier: "secondary", group: "practice" },
+  { id: "intervals", label: "Intervals", description: "Spacing, ratio, and hand shape", tier: "secondary", group: "practice" },
+  { id: "chords", label: "Chords", description: "Notes, changes, and voicings", tier: "secondary", group: "develop" },
+  { id: "motion", label: "Motion", description: "Pulse, touch, breath, voices, and motif", tier: "secondary", group: "develop" },
+  { id: "paths", label: "Paths", description: "Transferable harmonic archetypes", tier: "secondary", group: "develop" },
+  { id: "research", label: "Research HUD", description: "Compare alternate relationship maps", tier: "secondary", group: "develop" },
+  { id: "experience", label: "Experience", description: "Keep your response separate from the model", tier: "secondary", group: "develop" },
 ];
+const PRIMARY_FOCUS_LENSES = FOCUS_LENSES.filter((lens) => lens.tier === "primary");
+const SECONDARY_FOCUS_GROUPS: Array<{ id: FocusLensGroup; label: string; lenses: FocusLensDefinition[] }> = [
+  { id: "practice", label: "Practice", lenses: FOCUS_LENSES.filter((lens) => lens.group === "practice") },
+  { id: "develop", label: "Develop & reflect", lenses: FOCUS_LENSES.filter((lens) => lens.group === "develop") },
+];
+
+function normalizeFocusLens(lens: FocusLens | null | undefined): FocusLens | null {
+  if (lens === "ear-search-hands") return "ear-search";
+  return FOCUS_LENSES.some((candidate) => candidate.id === lens) ? lens ?? null : null;
+}
+
+function PianoFocusNavigation({ focusLens, onSelect }: { focusLens: FocusLens; onSelect: (lens: FocusLens) => void }) {
+  const activeSecondary = FOCUS_LENSES.find((lens) => lens.id === focusLens && lens.tier === "secondary") ?? null;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const renderLens = (lens: FocusLensDefinition) => <button
+    key={lens.id}
+    type="button"
+    aria-current={focusLens === lens.id ? "page" : undefined}
+    onClick={() => { setMoreOpen(false); onSelect(lens.id); }}
+  >
+    <span className="piano-focus-lens-title"><strong>{lens.label}</strong>{lens.status === "todo" ? <em>To do</em> : null}</span>
+    <small>{lens.description}</small>
+  </button>;
+  return <nav className="piano-focus-navigation" aria-label="Piano learning views">
+    <div className="piano-focus-primary" role="group" aria-label="Primary learning views">
+      {PRIMARY_FOCUS_LENSES.map(renderLens)}
+    </div>
+    <details className="piano-focus-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
+      <summary><span>More learning views</span>{activeSecondary ? <small>Current · {activeSecondary.label}</small> : <small>Practice · develop · reflect</small>}</summary>
+      <div className="piano-focus-secondary">
+        {SECONDARY_FOCUS_GROUPS.map((group) => <section key={group.id} aria-labelledby={`piano-focus-${group.id}`}>
+          <h3 id={`piano-focus-${group.id}`}>{group.label}</h3>
+          <div>{group.lenses.map(renderLens)}</div>
+        </section>)}
+      </div>
+    </details>
+  </nav>;
+}
 const MOTION_FOCUS_MODES: Array<{ id: MotionFocusMode; label: string; question: string }> = [
   { id: "pulse", label: "Pulse", question: "Where did each attack land?" },
   { id: "touch", label: "Touch", question: "How did one touch meet the next?" },
@@ -4292,7 +4342,12 @@ export function PianoLab() {
       setNowMs(currentNow);
       const linkedParams = new URLSearchParams(window.location.search);
       const linkedLens = linkedParams.get("pianoLens") as FocusLens | null;
-      const validLinkedLens = FOCUS_LENSES.some((lens) => lens.id === linkedLens) ? linkedLens : null;
+      const validLinkedLens = normalizeFocusLens(linkedLens);
+      if (linkedLens === "ear-search-hands") {
+        const canonicalUrl = new URL(window.location.href);
+        canonicalUrl.searchParams.set("pianoLens", "ear-search");
+        window.history.replaceState(window.history.state, "", canonicalUrl);
+      }
       const linkedMotionMode = linkedParams.get("pianoMotion");
       const validLinkedMotionMode = isMotionFocusMode(linkedMotionMode) ? linkedMotionMode : null;
       const linkedChordMode = linkedParams.get("pianoChord");
@@ -4330,7 +4385,7 @@ export function PianoLab() {
             setChordWindowMs(saved.chordWindowMs ?? 160);
             setBoundaryCorrections(saved.boundaryCorrections ?? {});
             setMembershipCorrections(saved.membershipCorrections ?? {});
-            const restoredFocusLens = validLinkedLens ?? saved.focusLens ?? "explore";
+            const restoredFocusLens = validLinkedLens ?? normalizeFocusLens(saved.focusLens) ?? "explore";
             setFocusLens(restoredFocusLens);
             if (restoredFocusLens === "scale-quality") setScaleQualityEntryAnchorId(Math.max(0, ...restoredPhrase.map((event) => event.id)));
             setMotionFocusMode(validLinkedMotionMode ?? (isMotionFocusMode(saved.motionFocusMode) ? saved.motionFocusMode : "pulse"));
@@ -5833,12 +5888,13 @@ export function PianoLab() {
       aria-labelledby={isEarSearchFocus ? undefined : "piano-hud-title"}
       aria-label={isEarSearchFocus ? focusLens === "ear-search-hands" ? "Sound Finder two-staff ear-search HUD" : "Sound Finder ear-search HUD" : undefined}
     >
+      <PianoFocusNavigation focusLens={focusLens} onSelect={selectFocusLens} />
+
       <header className="piano-hud-header">
         <div><p className="section-kicker">MIDI relationship companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "echo-key" ? "Hear a short relationship before names or notation appear; sing or imagine it, find it anywhere on the keyboard, repair one divergence, then reveal and transfer the structure." : focusLens === "score-flow" ? "Import MusicXML, select a short measure loop, and translate written pitch, rhythm, ties, voices, and chords into physical hand territory, ear prompts, and one repairable difference at a time." : focusLens === "ear-search" ? "Hear one bounded score phrase, then take as long as you need to probe toward the correct register, pitch, interval reach, and nearby collection without seeing the answer." : focusLens === "ear-search-hands" ? "Hear both score staffs as one phrase while upper, lower, and together landings remain visible and exact pitches stay hidden." : focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : focusLens === "scale-quality" ? "Let an intermittent low tonic become home, then watch upper scale positions reveal exact semitone structure, local gaps, demonstrated overlap, and your own listening words." : focusLens === "interval-glow" ? "Every exact attack-to-attack and within-chord semitone spacing becomes a stable color and place around one live phrase thread." : focusLens === "sight-shapes" ? "Turn written intervals, lines, chord silhouettes, anchors, movement groups, and musical intention into one linked eyes–hands–ear practice loop." : focusLens === "research" ? "The same twelve pitch positions stay fixed while semitone, interval-orbit, thirds-lattice, and all-pairs maps expose different relationships—and their limits." : focusLens === "gravity" ? "A semitone-accurate major-scale landscape keeps degree location fixed while IV, V, and I reveal how one held pitch changes role without moving." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} {focusLens === "echo-key" ? "MIDI input stays silent; only clearly labeled reference and repair buttons play the teaching tone. Singing is a self-report in this first release." : focusLens === "score-flow" ? "The score and local recording stay in this browser tab. Listen and Play + compare are explicit; MIDI input itself never makes sound." : isEarSearchFocus ? "Only Hear hidden phrase makes sound. Incoming MIDI stays silent, and attack timing is deliberately not graded." : focusLens === "scale-quality" ? "Incoming MIDI stays silent; your instrument or DAW supplies every tone." : "MIDI sends note data only. Sung-pitch practice now lives on the dedicated Voice page."}</p></div>
         <div className="piano-hud-controls" role={isEarSearchFocus ? "group" : undefined} aria-label={isEarSearchFocus ? "Sound Finder navigation and configuration" : "HUD controls"}>
           <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{displayedMidiStatus}</strong></div></div>
           {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
-          {focusLens === "score-flow" || isEarSearchFocus || focusLens === "scale-quality" ? <label htmlFor="compact-hud-view"><span>{focusLens === "score-flow" ? "Piano view" : "HUD view"}</span><select id="compact-hud-view" value={focusLens} onChange={(event) => selectFocusLens(event.target.value as FocusLens)}>{FOCUS_LENSES.map((lens) => <option key={lens.id} value={lens.id}>{lens.label}</option>)}</select></label> : null}
           {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label> : null}
           <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={() => {
             setFrozen((current) => {
@@ -5885,10 +5941,6 @@ export function PianoLab() {
       {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
 
       {!isShortHudFocus ? <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} /> : null}
-
-      <nav className="piano-focus-lenses" aria-label="Learning focus">
-        {FOCUS_LENSES.map((lens) => <button key={lens.id} type="button" className={lens.id === "echo-key" ? "is-ear-first" : undefined} aria-pressed={focusLens === lens.id} onClick={() => selectFocusLens(lens.id)}><strong>{lens.label}</strong><span>{lens.description}</span></button>)}
-      </nav>
 
       {focusLens === "immersion" ? <PianoImmersion
         events={events}

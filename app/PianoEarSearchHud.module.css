@@ -397,6 +397,17 @@
   box-shadow: 0 0 15px rgba(114, 230, 209, .32);
 }
 
+.memoryRail li.isRest {
+  color: var(--ear-muted);
+  opacity: .58;
+}
+
+.memoryRail li.isRest i {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+
 .memoryRailDense ol {
   grid-template-columns: repeat(8, minmax(12px, 1fr));
   align-content: center;

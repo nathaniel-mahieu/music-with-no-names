@@ -2,6 +2,7 @@ import {
   buildSheetMusicReadingChunks,
   selectSheetMusicLoop,
   type PracticeHand,
+  type SheetMusicPracticeAttack,
   type SheetMusicScore,
   type SheetPitchCollectionAnalysis,
   type SheetReferencePlan,
@@ -21,6 +22,8 @@ export type EarSearchStaff = "upper" | "lower" | "both" | "unknown";
 export type EarSearchLanding = {
   id: string;
   notes: number[];
+  /** Source-note IDs aligned to `notes`, used to keep reference audio exact. */
+  sourceNoteIds?: string[];
   measureIndex: number;
   measureNumber: string;
   /** Score-authored staff role. MIDI cannot observe the learner's physical hand. */
@@ -548,19 +551,58 @@ export function buildEarSearchChunks(
   return chunks.map((chunk, ordinal) => ({ ...chunk, ordinal }));
 }
 
-/** Recreate the exact hand-filtered, boundary-tie-aware loop that minted a chunk's IDs. */
-export function selectEarSearchChunkLoop(score: SheetMusicScore, chunk: EarSearchChunk) {
-  const loop = selectSheetMusicLoop(score, {
+function projectEarSearchAttackToStaff(attack: SheetMusicPracticeAttack, hand: PracticeHand): SheetMusicPracticeAttack | null {
+  if (hand === "both") return attack;
+  const staff = hand === "right" ? 1 : 2;
+  const notes = attack.notes.filter((note) => note.staff === staff);
+  if (!notes.length) return null;
+  return {
+    ...attack,
+    // Keep the canonical attack identity so every staff layer maps back onto
+    // the same score landing and reference-playback cue.
+    id: attack.id,
+    durationBeats: Math.max(...notes.map((note) => note.soundingDurationBeats)),
+    soundingDurationBeats: Math.max(...notes.map((note) => note.soundingDurationBeats)),
+    notes,
+    midiNotes: [...new Set(notes.map((note) => note.pitch.midi))].sort((first, second) => first - second),
+    hands: [...new Set(notes.map((note) => note.hand))].sort(),
+    arpeggiate: notes.find((note) => note.arpeggiate !== null)?.arpeggiate ?? null,
+  };
+}
+
+/**
+ * Recreate the exact boundary-tie-aware loop that minted a chunk's IDs, then
+ * optionally project one written staff into that canonical phrase frame.
+ * Projection may contain fewer playable attacks, but it never changes the
+ * phrase's measure window, attack boundaries, ordinal, or score clock.
+ */
+export function selectEarSearchChunkLoop(
+  score: SheetMusicScore,
+  chunk: EarSearchChunk,
+  practiceLayer: PracticeHand = chunk.hand,
+) {
+  if (practiceLayer !== chunk.hand && chunk.hand !== "both") {
+    throw new RangeError("Only a canonical both-staff ear-search chunk can be projected to another staff layer.");
+  }
+  const canonical = selectSheetMusicLoop(score, {
     startMeasureIndex: chunk.sourceStartMeasureIndex,
     endMeasureIndex: chunk.sourceEndMeasureIndex,
     startAttackId: chunk.startAttackId,
     endAttackId: chunk.endAttackId,
     hand: chunk.hand,
   });
-  if (loop.attacks.length !== chunk.attackCount) {
-    throw new RangeError(`Ear-search chunk is stale or mismatched: expected ${chunk.attackCount} landings but reconstructed ${loop.attacks.length}.`);
+  if (canonical.attacks.length !== chunk.attackCount) {
+    throw new RangeError(`Ear-search chunk is stale or mismatched: expected ${chunk.attackCount} landings but reconstructed ${canonical.attacks.length}.`);
   }
-  return loop;
+  if (practiceLayer === chunk.hand) return canonical;
+  return {
+    ...canonical,
+    hand: practiceLayer,
+    attacks: canonical.attacks.flatMap((attack) => {
+      const projected = projectEarSearchAttackToStaff(attack, practiceLayer);
+      return projected ? [projected] : [];
+    }),
+  };
 }
 
 export function earSearchLandingsForChunk(
@@ -568,11 +610,9 @@ export function earSearchLandingsForChunk(
   chunk: EarSearchChunk,
   options: { hand?: PracticeHand; voice?: EarSearchVoice } = {},
 ): EarSearchLanding[] {
-  if (options.hand !== undefined && options.hand !== chunk.hand) {
-    throw new RangeError("Ear-search chunk hand must match the hand used to build it.");
-  }
+  const practiceLayer = options.hand ?? chunk.hand;
   const voice = options.voice ?? "upper";
-  const loop = selectEarSearchChunkLoop(score, chunk);
+  const loop = selectEarSearchChunkLoop(score, chunk, practiceLayer);
   return loop.attacks.map((attack) => {
     const ordered = [...attack.midiNotes].sort((first, second) => first - second);
     const upperStaffNotes = attack.notes.filter((note) => note.staff === 1).map((note) => note.pitch.midi);
@@ -586,6 +626,10 @@ export function earSearchLandingsForChunk(
         : voice === "staff-anchors" ? [...new Set(staffAnchors.length ? staffAnchors : [ordered.at(-1)!])].sort((first, second) => first - second)
           : ordered.slice(0, 16);
     const selectedPitches = new Set(notes);
+    const sourceNoteIds = notes.flatMap((midi) => {
+      const source = attack.notes.find((note) => note.pitch.midi === midi);
+      return source ? [source.id] : [];
+    });
     const selectedStaves = new Set(attack.notes
       .filter((note) => selectedPitches.has(note.pitch.midi))
       .map((note) => note.staff));
@@ -596,7 +640,7 @@ export function earSearchLandingsForChunk(
         : selectedStaves.has(2)
           ? "lower"
           : "unknown";
-    return { id: attack.id, notes, measureIndex: attack.measureIndex, measureNumber: attack.measureNumber, staff };
+    return { id: attack.id, notes, sourceNoteIds, measureIndex: attack.measureIndex, measureNumber: attack.measureNumber, staff };
   });
 }
 

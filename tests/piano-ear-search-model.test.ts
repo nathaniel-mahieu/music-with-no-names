@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ORBIT_STUDY_MUSICXML, normalizeImportedMusicXmlScore, parseMusicXml } from "../lib/musicxml-import.ts";
-import { analyzeLocalPitchCollections, normalizeSheetMusicScore } from "../lib/sheet-music-coach-model.ts";
+import { analyzeLocalPitchCollections, buildScoreReferencePlan, normalizeSheetMusicScore } from "../lib/sheet-music-coach-model.ts";
 import { parseStoredScoreFlowSource } from "../lib/score-flow-storage.ts";
 import {
   advanceEarSearchTracker,
@@ -78,6 +78,25 @@ function boundaryTieScore() {
         { id: "after-b", kind: "note", midi: 69, offsetBeats: 2, durationBeats: 1, staff: 1, hand: "right" },
       ] },
     ],
+  });
+}
+
+function staggeredStaffScore() {
+  return normalizeSheetMusicScore({
+    id: "staggered-staff",
+    title: "Staggered staff",
+    tempoBpm: 60,
+    measures: [{
+      number: 1,
+      durationBeats: 4,
+      events: [
+        { id: "upper-0", kind: "note", midi: 60, offsetBeats: 0, durationBeats: 1, staff: 1, hand: "unknown" },
+        { id: "lower-1", kind: "note", midi: 48, offsetBeats: 1, durationBeats: 1, staff: 2, hand: "unknown" },
+        { id: "upper-2", kind: "note", midi: 64, offsetBeats: 2, durationBeats: 1, staff: 1, hand: "unknown" },
+        { id: "lower-2", kind: "note", midi: 52, offsetBeats: 2, durationBeats: 1, staff: 2, hand: "unknown" },
+        { id: "upper-3", kind: "note", midi: 67, offsetBeats: 3, durationBeats: 1, staff: 1, hand: "unknown" },
+      ],
+    }],
   });
 }
 
@@ -319,6 +338,52 @@ test("score chunks and derived targets retain their source loop context", () => 
   assert.equal(loop.attacks.length, targets.length);
 });
 
+test("canonical phrases keep Orbit starts fixed while staff layers change", () => {
+  const score = normalizeImportedMusicXmlScore(parseMusicXml(ORBIT_STUDY_MUSICXML, "orbit-study.musicxml"));
+  const canonical = buildEarSearchChunks(score, { hand: "both", maxLandings: 8 });
+  assert.deepEqual(canonical.map((chunk) => chunk.startBeat), [0, 4, 8, 12]);
+  const phraseTwo = canonical[1];
+  assert.ok(phraseTwo);
+  assert.equal(phraseTwo.ordinal, 1);
+  assert.equal(phraseTwo.startBeat, 4);
+  assert.equal(phraseTwo.endBeat, 8);
+
+  const upper = selectEarSearchChunkLoop(score, phraseTwo, "right");
+  const lower = selectEarSearchChunkLoop(score, phraseTwo, "left");
+  const both = selectEarSearchChunkLoop(score, phraseTwo, "both");
+  assert.ok(upper.attacks.every((attack) => attack.onsetBeat >= 4 && attack.onsetBeat < 8));
+  assert.ok(lower.attacks.every((attack) => attack.onsetBeat >= 4 && attack.onsetBeat < 8));
+  assert.ok(both.attacks.every((attack) => attack.onsetBeat >= 4 && attack.onsetBeat < 8));
+  assert.deepEqual(earSearchLandingsForChunk(score, phraseTwo, { hand: "left", voice: "full" }).flatMap((item) => item.notes), [53, 60]);
+});
+
+test("staff projections retain canonical attack IDs, slots, and leading silence", () => {
+  const score = staggeredStaffScore();
+  const chunk = buildEarSearchChunks(score, { hand: "both", maxLandings: 4 })[0];
+  assert.ok(chunk);
+  const canonicalLoop = selectEarSearchChunkLoop(score, chunk);
+  const upperLoop = selectEarSearchChunkLoop(score, chunk, "right");
+  const lowerLoop = selectEarSearchChunkLoop(score, chunk, "left");
+  assert.deepEqual(canonicalLoop.attacks.map((attack) => attack.onsetBeat), [0, 1, 2, 3]);
+  assert.deepEqual(upperLoop.attacks.map((attack) => attack.onsetBeat), [0, 2, 3]);
+  assert.deepEqual(lowerLoop.attacks.map((attack) => attack.onsetBeat), [1, 2]);
+  assert.deepEqual(upperLoop.attacks.map((attack) => attack.id), [canonicalLoop.attacks[0].id, canonicalLoop.attacks[2].id, canonicalLoop.attacks[3].id]);
+  assert.deepEqual(lowerLoop.attacks.map((attack) => attack.id), [canonicalLoop.attacks[1].id, canonicalLoop.attacks[2].id]);
+
+  const upper = earSearchLandingsForChunk(score, chunk, { hand: "right", voice: "full" });
+  const lower = earSearchLandingsForChunk(score, chunk, { hand: "left", voice: "full" });
+  const both = earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "full" });
+  assert.deepEqual(upper.map((item) => item.notes), [[60], [64], [67]]);
+  assert.deepEqual(lower.map((item) => item.notes), [[48], [52]]);
+  assert.deepEqual(both.map((item) => item.notes), [[60], [48], [52, 64], [67]]);
+
+  const canonicalPlan = buildScoreReferencePlan(canonicalLoop, { tempoBpm: 60, maxLandings: canonicalLoop.attacks.length });
+  const lowerIds = new Set(lower.map((item) => item.id));
+  const lowerCues = canonicalPlan.cues.filter((cue) => lowerIds.has(cue.attackId));
+  assert.equal(canonicalPlan.baseBeat, 0);
+  assert.equal(lowerCues[0].onsetMs, 1_000, "lower-staff playback retains one beat of leading silence");
+});
+
 test("hand-filtered chunk IDs round-trip for lower, upper, and both staffs", () => {
   const score = twoStaffRoundTripScore();
   for (const hand of ["left", "right", "both"] as const) {
@@ -346,6 +411,10 @@ test("synthetic boundary-tie chunk IDs round-trip through their source measure w
   assert.equal(chunk.sourceEndMeasureIndex, 2);
   assert.equal(selectEarSearchChunkLoop(score, chunk).attacks.length, chunk.attackCount);
   assert.equal(earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "full" }).length, chunk.attackCount);
+  const projected = selectEarSearchChunkLoop(score, chunk, "right");
+  assert.equal(projected.attacks[0].id, selectEarSearchChunkLoop(score, chunk).attacks[0].id);
+  assert.equal(earSearchLandingsForChunk(score, chunk, { hand: "left", voice: "full" }).length, 0,
+    "an empty lower-staff layer remains an empty projection of this phrase");
 });
 
 test("larger memory limits coalesce natural chunks inside one two-measure window", () => {

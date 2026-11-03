@@ -6,11 +6,29 @@ Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-
 
 Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search)
 
-Two-Staff Sound Finder: [open the staff-aware ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search-hands)
-
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
-The current milestone is **Sound Finder · Two-Staff Path v2.27**. It provides:
+The current milestone is **Piano Navigation · Primary + More v2.29**. It provides:
+
+- One compact navigation model shared across the Piano companion. The six primary views are now `Sound Finder`, `Explore`, `Interval Glow`, `Sight Shapes`, `Scales`, and `Immersion`, in that order, with the active view conveyed by text and structure as well as color.
+
+- Visible `To do` status badges on Explore, Sight Shapes, and Scales without disabling their current working material. Status is separate from the title so the information hierarchy remains easy to scan and accessible.
+
+- A native `More learning views` disclosure for the remaining maintained HUDs, divided into `Practice` and `Develop & reflect`. It opens as a compact desktop panel, becomes an in-flow responsive list on narrow screens, names the active secondary view, and closes after a selection.
+
+- Retirement of the duplicate two-staff Sound Finder navigation entry. Upper, Lower, and Both now live together as practice layers in the primary untimed Sound Finder; old `ear-search-hands` links and stored sessions migrate automatically to that unified view.
+
+The prior **Sound Finder · Staff-Synced Timeline v2.28** remains available and provides:
+
+- One canonical phrase list shared by `Both staffs`, `Upper staff`, and `Lower staff`. Changing the practice layer keeps the same phrase number, measure window, score onset, and navigation position instead of silently jumping to another note or chunk.
+
+- A fixed landing timeline that shows selected-staff notes and honest staff-rest positions without revealing pitch. Later notes retain their written landing numbers, while an empty selected staff stays on the same phrase and asks the learner to choose another layer or phrase explicitly.
+
+- Reference playback, visual progress, and silent-MIDI matching derived from the same canonical attack IDs. Upper, lower, and combined versions retain the same phrase clock—including leading silence—and the synthesized notes are exactly the hidden notes being evaluated.
+
+- Regression coverage for the bundled Orbit Study, staggered upper/lower attacks, shared attacks, boundary ties, empty staff projections, and layer-specific leading silence, plus the existing hidden-target, accessibility, responsive, and browser-safety checks.
+
+The historical **Sound Finder · Two-Staff Path v2.27** is now folded into the primary Sound Finder and originally provided:
 
 - A separate Sound Finder view that preserves the original untimed secure-prefix search while exposing one deliberately limited piece of notation: whether each hidden landing belongs to the upper staff, lower staff, both staffs together, or an unassigned score lane. Exact pitch, key, note name, staff height, and semitone correction remain hidden until the learner chooses the exact reveal.
 

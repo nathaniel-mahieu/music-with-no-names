@@ -56,7 +56,7 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(piano, /\{ id: "score-flow", label: "Score Flow · upload score"/);
+  assert.match(piano, /\{ id: "score-flow", label: "Score Flow", description: "Upload and align a MusicXML score", tier: "secondary", group: "practice" \}/);
   assert.match(piano, /focusLens === "score-flow" \? <PianoScoreFlowHud/);
   assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*midiConnected=\{midi\.inputs\.length > 0\}[\s\S]*onResumeCapture=\{resumeTrace\}/);
   assert.match(piano, /pressedNotes=\{pressedNoteNumbers\}/);
@@ -195,8 +195,8 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /<option value="both">Both staves<\/option>/);
   assert.match(scoreFlow, /<option value="right">Upper staff<\/option>/);
   assert.match(scoreFlow, /<option value="left">Lower staff<\/option>/);
-  assert.match(piano, /focusLens === "score-flow" \|\| isEarSearchFocus \|\| focusLens === "scale-quality" \? <label htmlFor="compact-hud-view">/);
-  assert.match(piano, /<select id="compact-hud-view" value=\{focusLens\}/);
+  assert.match(piano, /<PianoFocusNavigation focusLens=\{focusLens\} onSelect=\{selectFocusLens\} \/>[\s\S]*<header className="piano-hud-header">/);
+  assert.doesNotMatch(piano, /compact-hud-view/, "the unified navigation replaces the focused-HUD-only duplicate select");
   assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" \? <RouteSelector/);
 
   assert.match(scoreFlow, /aria-label=\{`Measure \$\{measure\.number\}[\s\S]*\$\{state\}`\}/);
@@ -255,8 +255,22 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(piano, /\{ id: "ear-search", label: "Sound Finder · untimed ear search"/);
-  assert.match(piano, /\{ id: "ear-search-hands", label: "Sound Finder · two-staff path"/);
+  assert.match(piano, /\{ id: "ear-search", label: "Sound Finder", description: "Untimed ear search", tier: "primary" \}/);
+  assert.doesNotMatch(piano, /\{ id: "ear-search-hands", label:/, "the retired two-staff route must not appear in navigation metadata");
+  assert.match(piano, /function normalizeFocusLens[\s\S]*lens === "ear-search-hands"\) return "ear-search"/);
+  assert.match(piano, /linkedLens === "ear-search-hands"[\s\S]*canonicalUrl\.searchParams\.set\("pianoLens", "ear-search"\)/);
+  assert.match(piano, /const FOCUS_LENSES[\s\S]*id: "ear-search"[\s\S]*id: "explore"[\s\S]*id: "interval-glow"[\s\S]*id: "sight-shapes"[\s\S]*id: "scales"[\s\S]*id: "immersion"/,
+    "the six primary views need one stable, learner-facing order");
+  assert.match(piano, /id: "explore"[^\n]*status: "todo"/);
+  assert.match(piano, /id: "sight-shapes"[^\n]*status: "todo"/);
+  assert.match(piano, /id: "scales"[^\n]*status: "todo"/);
+  assert.match(piano, /const SECONDARY_FOCUS_GROUPS[\s\S]*label: "Practice"[\s\S]*label: "Develop & reflect"/);
+  assert.match(piano, /<details className="piano-focus-more"[\s\S]*<summary><span>More learning views<\/span>/);
+  assert.match(piano, /open=\{moreOpen\} onToggle=\{\(event\) => setMoreOpen\(event\.currentTarget\.open\)\}/,
+    "the native disclosure needs explicit state so its overlay can close after navigation");
+  assert.match(piano, /onClick=\{\(\) => \{ setMoreOpen\(false\); onSelect\(lens\.id\); \}\}/,
+    "choosing any view must dismiss the secondary overlay");
+  assert.match(piano, /aria-current=\{focusLens === lens\.id \? "page" : undefined\}/);
   assert.match(piano, /function isEarSearchLens\(lens: FocusLens\)[\s\S]*lens === "ear-search" \|\| lens === "ear-search-hands"/);
   assert.match(piano, /const isEarSearchFocus = isEarSearchLens\(focusLens\)/);
   assert.match(piano, /\{isEarSearchFocus \? <PianoEarSearchHud[\s\S]*key=\{focusLens\}[\s\S]*mode=\{focusLens === "ear-search-hands" \? "two-hand" : "classic"\}/,
@@ -264,7 +278,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(piano, /focusLens === "score-flow" \|\| isEarSearchFocus[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
   assert.match(piano, /const relationshipBlind = echoKeyBlind \|\| scoreFlowInput \|\| earSearchInput/);
   assert.match(piano, /role=\{isEarSearchFocus \? "group" : undefined\}/);
-  assert.match(piano, /focusLens === "score-flow" \? "Piano view" : "HUD view"/);
+  assert.doesNotMatch(piano, /compact-hud-view/);
   assert.match(piano, /isEarSearchFocus \? "Names in exact reveal" : "Theory names"/);
   assert.match(session, /"ear-search"/);
   assert.match(session, /"ear-search-hands"/);
@@ -283,8 +297,10 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /hintMode === "blind" \? "Relationship feedback" : chordCountMismatch \? "Chord key count first"/, "progress-only mode must not reveal a chord key-count mismatch through the interval heading");
   assert.match(finder, /className=\{styles\.nextMove\}>Next move<\/em>/, "the prioritized cue needs a visible non-color label");
   assert.match(finder, /aria-current=\{primaryCue === "place" \? "step" : undefined\}/, "the prioritized cue needs semantic state as well as styling");
-  assert.match(finder, /\{searchLandings\.map\(\(landing, index\) => <li/);
+  assert.match(finder, /\{timelineLandings\.map\(\(item\) =>/);
   assert.match(finder, /revealed \? <section className=\{styles\.revealDrawer\}/);
+  assert.match(finder, /<RevealedMap[\s\S]*timelineLength=\{timelineTotal\}/, "the exact reveal must retain the canonical phrase width when a selected staff has rests");
+  assert.match(finder, /\(slot - \.5\) \/ slotCount \* 100/, "revealed pitches must use canonical timeline slots instead of filtered landing order");
   assert.match(finder, /role="dialog" aria-modal="true"/);
   assert.match(finder, /role="region" tabIndex=\{0\} aria-label="Scrollable revealed phrase pitch map"/);
   assert.match(finder, /role="status" aria-live="polite" aria-atomic="true"/);
@@ -293,7 +309,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /<option value=\{32\}>32 landings<\/option>/);
   assert.match(finder, /selectEarSearchChunkLoop\(score, chunk\)/);
   assert.match(finder, /MAX_EAR_SEARCH_REFERENCE_VOICES = 256/);
-  assert.match(finder, /total > 8 && styles\.memoryRailDense/);
+  assert.match(finder, /timelineTotal > 8 && styles\.memoryRailDense/);
   assert.match(finder, /parseStoredScoreFlowSource/);
   assert.match(finder, /window\.sessionStorage\.setItem\(SCORE_FLOW_STORAGE_KEY/);
   assert.doesNotMatch(finder, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
@@ -301,8 +317,21 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /mode\?: "classic" \| "two-hand"/);
   assert.match(finder, /<option value="staff-anchors">One anchor per staff<\/option>/);
   assert.match(finder, /const targetById = new Map\(searchLandings\.map/);
-  assert.match(finder, /voice === "staff-anchors" && target \? target\.notes\.flatMap/,
-    "the audible staff-anchor reference must use the same hidden notes as evaluation");
+  assert.match(finder, /target\.sourceNoteIds\.flatMap\(\(id\) => noteById\.get\(id\) \?\? \[\]\)/,
+    "audible reference notes must come from the same staff-projected hidden targets as evaluation");
+  assert.match(finder, /buildEarSearchChunks\(score, \{ hand: "both", maxLandings \}\)/,
+    "phrase navigation must use one canonical both-staff chunk list");
+  assert.doesNotMatch(finder, /buildEarSearchChunks\(score, \{ hand: practiceHand/,
+    "staff changes must not regenerate different phrase boundaries");
+  assert.match(finder, /selectEarSearchChunkLoop\(score, chunk, practiceHand\)/,
+    "the selected staff must be projected inside the canonical phrase");
+  assert.match(finder, /Same phrase timeline/);
+  assert.doesNotMatch(finder, /setPracticeHand\(next\); setChunkIndex\(0\)/,
+    "a staff-layer change must keep the current phrase index");
+  assert.match(finder, /maxLandings: canonicalLoop\.attacks\.length/,
+    "reference timing must retain every canonical timeline slot");
+  assert.match(finder, /This phrase has no \{practiceHand/,
+    "an empty selected staff must remain on the same phrase instead of auto-advancing");
   assert.match(finder, /const handProgress = summarizeEarSearchHandProgress\(searchLandings, matched\)/);
   assert.match(finder, /className=\{styles\.handLane\} data-lane="upper"/);
   assert.match(finder, /className=\{styles\.handLane\} data-lane="lower"/);
@@ -700,7 +729,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-slots/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-degree-picker[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-scale-gravity-hud/);
-  assert.match(css, /\.piano-focus-lenses[\s\S]*repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.piano-focus-primary[\s\S]*repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(model, /IMMERSION_HISTORY_ATTACKS = 12/);
   assert.match(model, /export function immersionHistory[\s\S]*slice\(-IMMERSION_HISTORY_ATTACKS\)/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);
