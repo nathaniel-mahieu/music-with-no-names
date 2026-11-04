@@ -220,7 +220,7 @@
 
 .statusStrip {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) minmax(210px, auto);
+  grid-template-columns: 14px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-height: 48px;
@@ -262,35 +262,6 @@
   font-size: .64rem;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.readiness {
-  display: flex;
-  align-items: center;
-  justify-content: end;
-  gap: 7px;
-  min-width: 0;
-}
-
-.readiness span {
-  color: var(--ear-teal);
-  font-size: .61rem;
-  font-weight: 820;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.readiness strong {
-  max-width: 200px;
-  color: var(--ear-muted);
-  font-size: .62rem;
-  font-weight: 600;
-}
-
-.readiness button {
-  min-height: 44px;
-  padding: 0 10px;
-  font-size: .66rem;
 }
 
 .stage {
@@ -1151,7 +1122,6 @@
   .transport > button { flex: 1; }
   .chunkStepper { flex: 1 1 180px; }
   .statusStrip { grid-template-columns: 12px minmax(0, 1fr); }
-  .readiness { grid-column: 1 / -1; justify-content: start; }
   .stage { display: block; height: auto; min-height: 0; }
   .memoryRail,
   .probeDock { display: block; overflow: visible; border: 0; border-bottom: 1px solid var(--ear-line); }

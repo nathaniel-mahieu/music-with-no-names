@@ -33,6 +33,7 @@ test("Sight Shapes keeps notation, interval, keyboard, and learner-report channe
   assert.match(sight, /selected \$\{chordWindowMs\} ms reading window/);
   assert.match(sight, /aria-live="polite"/);
   assert.match(sight, /aria-pressed=\{practiceMode === "transfer"\}/);
+  assert.doesNotMatch(sight, /onResumeCapture|>Resume capture<\/button>/, "Sight Shapes must recover capture from the shared Piano input bar");
   assert.doesNotMatch(sight, /AudioContext|createOscillator|OscillatorNode|tabIndex=\{?[1-9]/);
   assert.match(model, /written distance \(staff steps \/ generic interval\)/);
   assert.match(model, /export function analyzeNotatedInterval/);
@@ -58,10 +59,11 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
 
   assert.match(piano, /\{ id: "score-flow", label: "Score Flow", description: "Upload and align a MusicXML score", tier: "secondary", group: "practice" \}/);
   assert.match(piano, /focusLens === "score-flow" \? <PianoScoreFlowHud/);
-  assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*midiConnected=\{midi\.inputs\.length > 0\}[\s\S]*onResumeCapture=\{resumeTrace\}/);
+  assert.match(piano, /events=\{phraseEvents\}[\s\S]*activeNotes=\{activeNoteNumbers\}[\s\S]*frozen=\{frozen\}[\s\S]*onResumeCapture=\{resumeTrace\}/);
   assert.match(piano, /pressedNotes=\{pressedNoteNumbers\}/);
   assert.match(piano, /focusLens === "score-flow"[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
-  assert.match(piano, /The score and local recording stay in this browser tab\. Listen and Play \+ compare are explicit; MIDI input itself never makes sound\./);
+  assert.match(piano, /Silent MIDI maps each attack to interval, score, scale, and harmonic context\. Your instrument or DAW supplies the sound\./);
+  assert.doesNotMatch(scoreFlow, /midiConnected|midiStatus|onConnectMidi|Connect \/ retry MIDI/, "Score Flow must use the shared Piano input bar for device setup");
   assert.match(session, /"score-flow"/);
   assert.match(ratio, /"score-flow": "uploaded-score coach"/);
 
@@ -195,7 +197,7 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.match(scoreFlow, /<option value="both">Both staves<\/option>/);
   assert.match(scoreFlow, /<option value="right">Upper staff<\/option>/);
   assert.match(scoreFlow, /<option value="left">Lower staff<\/option>/);
-  assert.match(piano, /<PianoFocusNavigation focusLens=\{focusLens\} onSelect=\{selectFocusLens\} \/>[\s\S]*<header className="piano-hud-header">/);
+  assert.match(piano, /<header className="piano-workspace-header">[\s\S]*<PianoFocusNavigation focusLens=\{focusLens\} onSelect=\{selectFocusLens\} \/>/);
   assert.doesNotMatch(piano, /compact-hud-view/, "the unified navigation replaces the focused-HUD-only duplicate select");
   assert.match(piano, /focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" \? <RouteSelector/);
 
@@ -265,7 +267,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(piano, /id: "sight-shapes"[^\n]*status: "todo"/);
   assert.match(piano, /id: "scales"[^\n]*status: "todo"/);
   assert.match(piano, /const SECONDARY_FOCUS_GROUPS[\s\S]*label: "Practice"[\s\S]*label: "Develop & reflect"/);
-  assert.match(piano, /<details className="piano-focus-more"[\s\S]*<summary><span>More learning views<\/span>/);
+  assert.match(piano, /<details className="piano-focus-more"[\s\S]*<summary><span>\{activeSecondary\?\.label \?\? "More views"\}<\/span>/);
   assert.match(piano, /open=\{moreOpen\} onToggle=\{\(event\) => setMoreOpen\(event\.currentTarget\.open\)\}/,
     "the native disclosure needs explicit state so its overlay can close after navigation");
   assert.match(piano, /onClick=\{\(\) => \{ setMoreOpen\(false\); onSelect\(lens\.id\); \}\}/,
@@ -277,7 +279,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
     "classic and two-staff Sound Finder need distinct keyed state boundaries");
   assert.match(piano, /focusLens === "score-flow" \|\| isEarSearchFocus[\s\S]*pushPhraseEvent\(phraseEventsRef\.current, event, 30 \* 60_000, 4096\)/);
   assert.match(piano, /const relationshipBlind = echoKeyBlind \|\| scoreFlowInput \|\| earSearchInput/);
-  assert.match(piano, /role=\{isEarSearchFocus \? "group" : undefined\}/);
+  assert.match(piano, /className="piano-input-console" role="group" aria-label="MIDI input and Piano settings"/);
   assert.doesNotMatch(piano, /compact-hud-view/);
   assert.match(piano, /isEarSearchFocus \? "Names in exact reveal" : "Theory names"/);
   assert.match(session, /"ear-search"/);
@@ -304,7 +306,8 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /role="dialog" aria-modal="true"/);
   assert.match(finder, /role="region" tabIndex=\{0\} aria-label="Scrollable revealed phrase pitch map"/);
   assert.match(finder, /role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(finder, /<small role="status" aria-live="polite">\{audioNotice\}<\/small>/);
+  assert.match(finder, /<small role="status" aria-live="polite">\{frozen \? "Capture is paused in the Piano input bar\. " : ""\}\{audioNotice\}<\/small>/);
+  assert.doesNotMatch(finder, /midiConnected|midiStatus|onConnectMidi|MIDI not connected/, "Sound Finder must use the shared Piano input bar for device setup");
   assert.match(finder, /role="progressbar" aria-label="Hidden reference playback"/);
   assert.match(finder, /<option value=\{32\}>32 landings<\/option>/);
   assert.match(finder, /selectEarSearchChunkLoop\(score, chunk\)/);
@@ -374,8 +377,8 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finderCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(finderCss, /@media \(forced-colors: active\)/);
   assert.match(globalCss, /\.piano-hud\.is-ear-search \{[\s\S]*overflow: visible;[\s\S]*border: 0;[\s\S]*background: transparent;/);
-  assert.match(globalCss, /\.piano-hud\.is-ear-search \.piano-hud-header \{[\s\S]*margin-bottom: 8px;/);
-  assert.match(globalCss, /\.piano-hud\.is-ear-search \.piano-hud-controls \.midi-status strong \{[\s\S]*white-space: nowrap;/);
+  assert.match(globalCss, /\.piano-workspace-header \{[\s\S]*min-height: 82px;/);
+  assert.match(globalCss, /\.piano-input-console \.midi-status strong,[\s\S]*white-space: nowrap;/);
   assert.doesNotMatch(piano, /up to 4, 6, or 8 landings/);
 });
 
@@ -412,13 +415,20 @@ test("Score Flow follows raw MIDI in study and capture while keeping review froz
   const echoUseContract = scoreFlow.slice(echoUseStart, echoUseEnd + 2);
   assert.match(echoUseContract, /liveTakeEvents|liveAttack|received/i, "the receipt view must consume raw post-boundary input rather than review-only evaluation");
 
-  const controlsStart = piano.indexOf('<div className="piano-hud-controls"');
-  const controlsEnd = piano.indexOf('<div className="piano-hud-statebar">', controlsStart);
+  const controlsStart = piano.indexOf('<div className="piano-input-console"');
+  const controlsEnd = piano.indexOf('</header>', controlsStart);
   assert.ok(controlsStart >= 0 && controlsEnd > controlsStart, "the shared HUD needs a central controls region");
   const midiControls = piano.slice(controlsStart, controlsEnd);
   assert.match(midiControls, /role=["']status["']/, "MIDI connection state must be exposed centrally");
   assert.match(midiControls, /onClick=\{midi\.connect\}/, "the central HUD must offer MIDI permission/connection");
   assert.match(midiControls, /Retry MIDI[\s\S]*Connect MIDI|Connect MIDI[\s\S]*Retry MIDI/, "the same central affordance must support first connection and retry");
+  assert.match(midiControls, /Resume capture[\s\S]*Pause capture|Pause capture[\s\S]*Resume capture/, "capture state must be controlled from the shared input bar");
+  assert.equal((piano.match(/onClick=\{midi\.connect\}/g) ?? []).length, 1, "device connection needs exactly one owner");
+  assert.match(piano, /const finalizeActiveNotes = useCallback\(\(\) => \{[\s\S]*callbacksRef\.current\.onSustain\(false,[\s\S]*callbacksRef\.current\.onRelease\([\s\S]*clear\(\);/,
+    "switching or losing a MIDI input must close captured pedal and key durations before clearing visual state");
+  assert.match(piano, /if \(inputId !== selectedInputIdRef\.current\) finalizeActiveNotes\(\)/,
+    "manual MIDI input changes must use the same duration-finalization boundary as hot unplug");
+  assert.doesNotMatch(scoreFlow, /onConnectMidi|midiStatus|Connect \/ retry MIDI/, "Score Flow must not duplicate device setup");
 });
 
 test("EchoKey preserves an ear-first boundary while keeping every later representation explicit", async () => {
@@ -431,7 +441,8 @@ test("EchoKey preserves an ear-first boundary while keeping every later represen
   ]);
 
   assert.match(piano, /focusLens === "echo-key" \? <PianoEchoKeyHud/);
-  assert.match(piano, /MIDI input stays silent; only clearly labeled reference and repair buttons/);
+  assert.match(piano, /Silent MIDI maps each attack/);
+  assert.match(echo, /MIDI tells us which keys arrived—not why/);
   assert.match(piano, /physical position \$\{echoKeyPosition\} of \$\{VISIBLE_NOTES\.length\} from the left/);
   assert.match(piano, /EchoKey reveals relationship labels in its Read step/);
   assert.match(piano, /VISIBLE_NOTES\.map\(\(note\) => renderKey\(note, !WHITE_PITCH_CLASSES\.has/);
@@ -526,7 +537,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /pulseMirror=\{pulseMirrorModel\}/);
   assert.match(piano, /<details className="piano-immersion-keyboard">/);
   assert.doesNotMatch(piano, /VocalPitchCoach/);
-  assert.match(piano, /Sung-pitch practice now lives on the dedicated Voice page/);
+  assert.match(piano, /Your instrument or DAW supplies the sound/);
   assert.match(voiceLab, /<VocalPitchCoach/);
   assert.match(voiceLab, /anchorSource="voice-lab-reference"/);
   assert.match(voiceLab, /id="voice-anchor-key"/);
@@ -561,7 +572,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /const immersionHistoryEvents = useMemo\(\(\) => immersionHistory\(phraseEvents\)/);
   assert.match(piano, /groupChordGestures\(immersionHistoryEvents[\s\S]*measureChordGestures\(immersionChordGestures[\s\S]*IMMERSION_MAX_FIELD_NOTES\)\.slice\(-4\)/);
   assert.match(piano, /phraseEvents=\{immersionHistoryEvents\}/);
-  assert.match(piano, /shared HUD history · notes \+ chords/);
+  assert.match(piano, /\$\{immersionHistoryEvents\.length\}\/\$\{IMMERSION_HISTORY_ATTACKS\} attacks/);
   assert.match(piano, /if \(!isShortHudFocus\)[\s\S]*window\.setInterval\(\(\) => setNowMs\(currentHudTime\(\)\), 120\)/);
   assert.match(piano, /window\.setTimeout\(\(\) => setNowMs\(currentHudTime\(\)\), remainingMs\)/);
   assert.match(immersion, /<section className="piano-immersion" aria-labelledby="piano-immersion-title">/);
@@ -1106,12 +1117,22 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.hud-landmark-compare-table > div \{ grid-template-columns: 1fr 1fr; \}/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.hud-landmark-compare-field > rect:first-child \{ stroke: Highlight/);
   assert.match(css, /\.lab-nav-primary[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(css, /@media \(max-width: 1180px\) \{\s*\.site-header/,
+    "the compact global navigation must not consume a second desktop row at laptop widths");
+  assert.match(css, /@media \(max-width: 980px\) \{[\s\S]*\.piano-workspace-header \{ grid-template-columns: 1fr; \}/,
+    "the Piano identity and input console must stack before their fixed minimum tracks can overflow");
   assert.match(ratio, /<details className="lab-nav-more"/);
+  assert.match(ratio, /const PRIMARY_LAB_IDS: LabId\[\] = \["guide", "piano", "voice"\]/);
+  assert.match(ratio, /\{ label: "Music and response", labs: \["recording", "atlas", "personal"\] \}/);
+  assert.match(ratio, /\{activeLab !== "piano" \? <section className="hero">/);
+  assert.doesNotMatch(ratio, /className="header-status"/, "release state must not compete with primary navigation");
   assert.match(ratio, /aria-label="Live piano phrase available"/);
   assert.match(ratio, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)/);
   assert.match(ratio, /behavior: prefersReducedMotion \? "auto" : "smooth"/);
   assert.match(ratio, /className="skip-link" href="#lab-stage" onClick=\{skipToActiveLab\}/);
-  assert.match(ratio, /id="lab-stage" className="lab-stage" tabIndex=\{-1\}/);
+  assert.match(ratio, /id="lab-stage" className=\{activeLab === "piano" \? "lab-stage is-piano" : "lab-stage"\} tabIndex=\{-1\}/);
+  assert.match(piano, /focusLens === "scale-quality" \? "Web MIDI unavailable" : "Screen keys only"/,
+    "Scale Quality cannot advertise screen keys because it intentionally has no on-screen keyboard");
   assert.match(css, /@media \(forced-colors: active\)/);
   assert.match(css, /\.atlas-point\.is-selected > i[\s\S]*outline: 4px solid Highlight/);
   assert.match(css, /\.spectrum-partial\.voice-6[\s\S]*border: 3px double Canvas/);

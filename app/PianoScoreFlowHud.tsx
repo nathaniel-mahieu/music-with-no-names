@@ -91,9 +91,6 @@ type PianoScoreFlowHudProps = {
   chordWindowMs: number;
   showConventions: boolean;
   frozen: boolean;
-  midiConnected: boolean;
-  midiStatus: string;
-  onConnectMidi: () => void;
   onResumeCapture: () => void;
 };
 
@@ -1228,7 +1225,7 @@ function stopAudioContext(context: AudioContext | null, master: GainNode | null)
   } catch { void context.close(); }
 }
 
-export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWindowMs, showConventions, frozen, midiConnected, midiStatus, onConnectMidi, onResumeCapture }: PianoScoreFlowHudProps) {
+export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWindowMs, showConventions, frozen, onResumeCapture }: PianoScoreFlowHudProps) {
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
   const [fileState, setFileState] = useState<"empty" | "loading" | "ready" | "error">("empty");
@@ -2481,14 +2478,12 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
     }
     return "Replay the smallest surrounding relationship. Keep correct pitches intact and change only the named pulse or key-release boundary.";
   })();
-  const inputState = frozen ? "paused" : liveAttack ? "received" : midiConnected ? "ready" : "disconnected";
+  const inputState = frozen ? "paused" : liveAttack ? "received" : "ready";
   const inputHeadline = frozen
-    ? "Trace paused"
+    ? "Capture paused in the Piano input bar"
     : liveAttack
       ? `${liveAttack.notes.length} key${liveAttack.notes.length === 1 ? "" : "s"} received now`
-      : midiConnected
-        ? "MIDI ready · play any key"
-        : "MIDI is not connected";
+      : "Waiting for a silent key attack";
   const togglePlayAlong = () => {
     if (audioState === "playing") {
       stopReference(
@@ -2619,11 +2614,11 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       <div className={styles.sessionSummary}>
         <span>{captureState === "idle" ? liveAttack ? "live follow" : "live follow · waiting" : captureState === "armed" ? liveEvaluationPaused ? "long review take" : evaluation?.complete && pressedNotes.length ? "release to finish" : takeEvents.length ? "recording review take" : "review take ready" : "frozen review"}</span>
         <strong>{loop?.attacks.length ?? 0} written landing{loop?.attacks.length === 1 ? "" : "s"} · {selectedChunk ? `chunk ${selectedChunk.ordinal + 1} selected` : `m.${score.measures[loopStart].number}–${score.measures[loopEnd].number}`}</strong>
-        <div className={styles.inputReadiness} data-state={inputState}><i aria-hidden="true" /><div><span>Silent input</span><strong>{inputHeadline}</strong><small>{midiStatus}</small></div></div>
+        <div className={styles.inputReadiness} data-state={inputState}><i aria-hidden="true" /><div><span>Live receipt</span><strong>{inputHeadline}</strong><small>Connection and capture controls stay in the shared Piano input bar.</small></div></div>
         <small role="status" aria-live="polite" aria-atomic="true">{frozen ? "The shared trace is paused. Resume it to let new attacks enter live follow; held keys may still light." : evaluationError ? "Evaluation paused until the loop is shortened." : !hasPracticeAttacks ? "This selection contains no landing targets for the chosen staff focus. Include a measure with notes or change the staff focus." : captureState === "armed" && evaluation?.complete && pressedNotes.length ? "All written landings have arrived. Release the pressed keys so key-up lengths can enter the frozen review; pedal-sustained tones do not block review." : captureState === "idle" && liveAttack ? "MIDI received. Live follow is comparing this pass now; no Arm step is required." : captureNotice}</small>
         {evaluationError ? <small role="alert">{evaluationError} Choose a shorter measure loop; raw input receipt remains active.</small> : null}
       </div>
-      <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}{frozen ? <button type="button" className={styles.primaryAction} onClick={onResumeCapture}>Resume live trace</button> : null}{!midiConnected ? <button type="button" onClick={onConnectMidi}>Connect / retry MIDI</button> : null}{referenceSource === "synth" ? <details className={styles.voicePreview}><summary>Voice previews</summary><div><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper", false)}>Upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass", false)}>Bass route</button></div></details> : null}{audioState === "playing" && referencePlayback.playAlong ? null : captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose silent take</button> : <button type="button" disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Record chunk without audio" : "Record loop without audio" : selectedChunk ? "Record silent chunk" : "Record silent take"}</button>}</div>
+      <div className={styles.sessionActions}>{selectedChunk ? <button type="button" onClick={clearPracticeChunk}>Full measure loop</button> : null}{referenceSource === "synth" ? <details className={styles.voicePreview}><summary>Voice previews</summary><div><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("upper", false)}>Upper path</button><button type="button" disabled={!hasPracticeAttacks || audioState === "playing"} onClick={() => void playReference("bass", false)}>Bass route</button></div></details> : null}{audioState === "playing" && referencePlayback.playAlong ? null : captureState === "armed" ? <button type="button" onClick={reviewTake}>Stop + diagnose silent take</button> : <button type="button" disabled={!hasPracticeAttacks || Boolean(evaluationError)} onClick={armTake}>{captureState === "review" ? selectedChunk ? "Record chunk without audio" : "Record loop without audio" : selectedChunk ? "Record silent chunk" : "Record silent take"}</button>}</div>
       <p className={styles.audioNotice} role="status" aria-live="polite">{audioNotice}{referenceTimingMap ? " This review uses the recording’s aligned timing map, including the drift between your anchors." : referenceTimingClock ? ` This review measures attacks from the audible start; ${timingMode === "self-paced" ? "the Play + compare clock temporarily replaces self-paced timing" : "the fixed-pulse lens uses the same clock"}.` : timingMode === "pulse" ? ` Fixed-pulse is a constant ${practiceTempo} BPM drill from the latest numeric tempo at this boundary: your first landing is beat zero, and later tempo changes, rubato words, or fermatas do not move its clock.` : ""}</p>
     </div>
     </div>

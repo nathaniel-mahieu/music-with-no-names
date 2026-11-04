@@ -60,11 +60,11 @@ const LABS: { id: LabId; label: string }[] = [
   { id: "personal", label: "Personal Lens" },
 ];
 
-const PRIMARY_LAB_IDS: LabId[] = ["guide", "piano", "voice", "personal"];
+const PRIMARY_LAB_IDS: LabId[] = ["guide", "piano", "voice"];
 const SUPPORT_LAB_GROUPS: Array<{ label: string; labs: LabId[] }> = [
   { label: "Pitch relationships", labs: ["ratio", "scale", "harmony"] },
   { label: "Time and listening", labs: ["ear", "rhythm", "journey"] },
-  { label: "Music as evidence", labs: ["recording", "atlas"] },
+  { label: "Music and response", labs: ["recording", "atlas", "personal"] },
 ];
 const SUPPORT_LAB_IDS = new Set(SUPPORT_LAB_GROUPS.flatMap((group) => group.labs));
 const PIANO_LENS_LABELS: Record<PianoSessionSummary["focusLens"], string> = {
@@ -744,7 +744,7 @@ export function RatioLab() {
         : "No partials align within this visible range. Near-misses can create beating or spectral tension depending on register and timbre.";
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" id="top">
       <a className="skip-link" href="#lab-stage" onClick={skipToActiveLab}>Skip to active lab</a>
       <header className="site-header">
         <a className="brand" href="#top" aria-label="Music With No Names home">
@@ -757,13 +757,13 @@ export function RatioLab() {
           <div className="lab-nav-primary">
             {PRIMARY_LAB_IDS.map((id) => {
               const lab = labById(id);
-              return <button key={lab.id} type="button" className={activeLab === lab.id ? "is-selected" : ""} onClick={() => selectLab(lab.id)} aria-pressed={activeLab === lab.id}>{lab.label}</button>;
+              return <button key={lab.id} type="button" className={activeLab === lab.id ? "is-selected" : ""} onClick={() => selectLab(lab.id)} aria-current={activeLab === lab.id ? "page" : undefined}>{lab.label}</button>;
             })}
           </div>
           <details className="lab-nav-more" ref={moreLabsRef}>
             <summary>
-              <span>{SUPPORT_LAB_IDS.has(activeLab) ? labById(activeLab).label : "More learning labs"}</span>
-              <small>{SUPPORT_LAB_IDS.has(activeLab) ? "current lens" : "pitch · time · music"}</small>
+              <span>{SUPPORT_LAB_IDS.has(activeLab) ? labById(activeLab).label : "More"}</span>
+              {SUPPORT_LAB_IDS.has(activeLab) ? <small>Current</small> : null}
             </summary>
             <div className="lab-nav-groups">
               {SUPPORT_LAB_GROUPS.map((group) => (
@@ -771,17 +771,13 @@ export function RatioLab() {
                   <span>{group.label}</span>
                   {group.labs.map((id) => {
                     const lab = labById(id);
-                    return <button key={lab.id} type="button" className={activeLab === lab.id ? "is-selected" : ""} onClick={() => selectLab(lab.id)} aria-pressed={activeLab === lab.id}>{lab.label}</button>;
+                    return <button key={lab.id} type="button" className={activeLab === lab.id ? "is-selected" : ""} onClick={() => selectLab(lab.id)} aria-current={activeLab === lab.id ? "page" : undefined}>{lab.label}</button>;
                   })}
                 </div>
               ))}
             </div>
           </details>
         </nav>
-        <div className="header-status">
-          <span className="status-dot" aria-hidden="true" />
-          {activeLab === "guide" ? "start here" : activeLab === "personal" ? "personal lens" : `${activeLab} lab`} · v2.29
-        </div>
       </header>
 
       {activeLab !== "piano" && pianoSessionSummary && pianoSessionSummary.attackCount > 0 ? (
@@ -794,7 +790,7 @@ export function RatioLab() {
         </aside>
       ) : null}
 
-      <section className="hero" id="top">
+      {activeLab !== "piano" ? <section className="hero">
         <div className="hero-copy">
           <p className="eyebrow">{activeCopy.eyebrow}</p>
           <h1>{activeCopy.title}</h1>
@@ -809,9 +805,9 @@ export function RatioLab() {
               : activeCopy.principleBottom}
           </span>
         </div>
-      </section>
+      </section> : null}
 
-      <div id="lab-stage" className="lab-stage" tabIndex={-1}>
+      <div id="lab-stage" className={activeLab === "piano" ? "lab-stage is-piano" : "lab-stage"} tabIndex={-1}>
         {activeLab === "guide" ? (
           <GuideLab onNavigate={selectLab} />
         ) : activeLab === "ratio" ? (
@@ -1050,7 +1046,7 @@ export function RatioLab() {
 
       <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response</span>
+        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response · v2.30</span>
       </footer>
     </main>
   );

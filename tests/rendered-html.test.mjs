@@ -39,7 +39,7 @@ test("server-renders the guided learning product surface", async () => {
   assert.match(html, /Hearing safety/i);
   assert.match(html, /Good for whom—and for what/i);
   assert.match(html, />Start<\/button>/i);
-  assert.match(html, /More learning labs/i);
+  assert.match(html, />More</i);
   assert.match(html, />Ratio<\/button>/i);
   assert.match(html, />Scale<\/button>/i);
   assert.match(html, />Piano<\/button>/i);
@@ -94,7 +94,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
-  assert.match(ratioLab, /v2\.29/);
+  assert.match(ratioLab, /v2\.30/);
   assert.match(scaleLab, /Hear home\. Build intervals\. Generate scales\. Predict what comes next/);
   assert.match(scaleLab, /Transposition moves every pitch together/);
   assert.match(scaleLab, /hear it in your mind first/i);

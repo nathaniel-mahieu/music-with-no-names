@@ -41,7 +41,6 @@ type PianoSightReadingHudProps = {
   chordWindowMs: number;
   showConventions: boolean;
   frozen: boolean;
-  onResumeCapture: () => void;
 };
 
 type Chapter = "understand" | "embody" | "integrate" | "mindset";
@@ -662,7 +661,7 @@ function patternChapterCopy(chapter: Chapter) {
   return "Preserve what worked, identify the smallest consequential difference, and retry one change.";
 }
 
-export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chordWindowMs, showConventions, frozen, onResumeCapture }: PianoSightReadingHudProps) {
+export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chordWindowMs, showConventions, frozen }: PianoSightReadingHudProps) {
   const [chapter, setChapter] = useState<Chapter>("understand");
   const [patternId, setPatternId] = useState("neighbor-return");
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("exact");
@@ -1017,7 +1016,7 @@ export function PianoSightReadingHud({ events, activeNotes, doMidi, scale, chord
           </div>
         </header>
 
-        {frozen ? <p className={styles.frameNotice} role="alert"><strong>Attack capture is frozen.</strong> Held keys can still light, but new notes cannot enter this attempt. <button type="button" onClick={onResumeCapture}>Resume capture</button></p> : liveFrameChanged ? <p className={styles.frameNotice} role="status"><strong>The live Do / route moved.</strong> This written score stays fixed through the attempt. Adopt the live frame only when you want a new target.</p> : null}
+        {frozen ? <p className={styles.frameNotice} role="alert"><strong>Attack capture is paused.</strong> Held keys can still light, but new notes cannot enter this attempt. Resume in the Piano input bar.</p> : liveFrameChanged ? <p className={styles.frameNotice} role="status"><strong>The live Do / route moved.</strong> This written score stays fixed through the attempt. Adopt the live frame only when you want a new target.</p> : null}
 
         <div className={styles.controlRail}>
           <fieldset>

@@ -62,9 +62,6 @@ type PianoEarSearchHudProps = {
   chordWindowMs: number;
   showConventions: boolean;
   frozen: boolean;
-  midiConnected: boolean;
-  midiStatus: string;
-  onConnectMidi: () => void;
   onResumeCapture: () => void;
   mode?: "classic" | "two-hand";
 };
@@ -283,7 +280,7 @@ function RevealedMap({ notes, timelineLength, showConventions, showStaff = false
   </div>;
 }
 
-export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConventions, frozen, midiConnected, midiStatus, onConnectMidi, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
+export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConventions, frozen, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
   const twoHand = mode === "two-hand";
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
@@ -737,8 +734,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
     {!chunks.length ? <div className={styles.noChunks}><strong>No multi-landing score phrase exists here.</strong><p>Try another score section. Empty measures and isolated final notes are not expanded into invented material.</p></div> : !searchLandings.length ? <div className={styles.noChunks}><strong>This phrase has no {practiceHand === "right" ? "upper" : practiceHand === "left" ? "lower" : "selected"}-staff notes.</strong><p>The phrase number and score timeline stay fixed. Choose another practice layer or move to the next phrase; the app will not jump on your behalf.</p></div> : <>
       <div className={styles.statusStrip}>
         <span className={cx(styles.phaseLamp, styles[`phase_${visiblePhase}`])} aria-hidden="true" />
-        <div><strong>{phaseTitle}</strong><small role="status" aria-live="polite">{audioNotice}</small></div>
-        <div className={styles.readiness}><span>{midiConnected ? "MIDI ready" : "MIDI not connected"}</span><strong>{midiStatus}</strong>{!midiConnected ? <button type="button" onClick={onConnectMidi}>Connect</button> : frozen ? <button type="button" onClick={onResumeCapture}>Resume</button> : null}</div>
+        <div><strong>{phaseTitle}</strong><small role="status" aria-live="polite">{frozen ? "Capture is paused in the Piano input bar. " : ""}{audioNotice}</small></div>
       </div>
 
       <div className={styles.stage}>

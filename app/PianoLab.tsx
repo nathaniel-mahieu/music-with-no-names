@@ -215,6 +215,7 @@ type FocusLensDefinition = {
   group?: FocusLensGroup;
   status?: "todo";
 };
+type MidiConnectionPhase = "idle" | "requesting" | "permission-denied" | "unsupported" | "ready-no-device" | "connected";
 function isEarSearchLens(lens: FocusLens) {
   return lens === "ear-search" || lens === "ear-search-hands";
 }
@@ -414,25 +415,26 @@ function normalizeFocusLens(lens: FocusLens | null | undefined): FocusLens | nul
 function PianoFocusNavigation({ focusLens, onSelect }: { focusLens: FocusLens; onSelect: (lens: FocusLens) => void }) {
   const activeSecondary = FOCUS_LENSES.find((lens) => lens.id === focusLens && lens.tier === "secondary") ?? null;
   const [moreOpen, setMoreOpen] = useState(false);
-  const renderLens = (lens: FocusLensDefinition) => <button
+  const renderLens = (lens: FocusLensDefinition, describe = false) => <button
     key={lens.id}
     type="button"
     aria-current={focusLens === lens.id ? "page" : undefined}
+    aria-label={lens.status === "todo" ? `${lens.label}, planned` : lens.label}
     onClick={() => { setMoreOpen(false); onSelect(lens.id); }}
   >
     <span className="piano-focus-lens-title"><strong>{lens.label}</strong>{lens.status === "todo" ? <em>To do</em> : null}</span>
-    <small>{lens.description}</small>
+    {describe ? <small>{lens.description}</small> : null}
   </button>;
   return <nav className="piano-focus-navigation" aria-label="Piano learning views">
     <div className="piano-focus-primary" role="group" aria-label="Primary learning views">
-      {PRIMARY_FOCUS_LENSES.map(renderLens)}
+      {PRIMARY_FOCUS_LENSES.map((lens) => renderLens(lens))}
     </div>
     <details className="piano-focus-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
-      <summary><span>More learning views</span>{activeSecondary ? <small>Current · {activeSecondary.label}</small> : <small>Practice · develop · reflect</small>}</summary>
+      <summary><span>{activeSecondary?.label ?? "More views"}</span>{activeSecondary ? <small>Current</small> : null}</summary>
       <div className="piano-focus-secondary">
         {SECONDARY_FOCUS_GROUPS.map((group) => <section key={group.id} aria-labelledby={`piano-focus-${group.id}`}>
           <h3 id={`piano-focus-${group.id}`}>{group.label}</h3>
-          <div>{group.lenses.map(renderLens)}</div>
+          <div>{group.lenses.map((lens) => renderLens(lens, true))}</div>
         </section>)}
       </div>
     </details>
@@ -911,12 +913,14 @@ function gestureSlots(gesture: HudChordGesture, events: HudNoteEvent[]) {
 
 function useMidiKeyboard(callbacks: MidiCallbacks) {
   const accessRef = useRef<MidiAccessLike | null>(null);
+  const selectedInputIdRef = useRef("");
   const pressedRef = useRef(new Set<number>());
   const sustainedRef = useRef(new Set<number>());
   const sustainDownRef = useRef(false);
   const notesRef = useRef(new Map<number, number>());
+  const noteChannelsRef = useRef(new Map<number, number>());
   const callbacksRef = useRef(callbacks);
-  const [supported, setSupported] = useState<boolean | null>(null);
+  const [phase, setPhase] = useState<MidiConnectionPhase>("idle");
   const [inputs, setInputs] = useState<MidiInputLike[]>([]);
   const [selectedInputId, setSelectedInputId] = useState("");
   const [notes, setNotes] = useState<Map<number, number>>(new Map());
@@ -937,32 +941,67 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
     sustainedRef.current.clear();
     sustainDownRef.current = false;
     notesRef.current.clear();
+    noteChannelsRef.current.clear();
     publish();
   }, [publish]);
 
+  const finalizeActiveNotes = useCallback(() => {
+    const atMs = performance.now();
+    const sustainedByChannel = new Map<number, number[]>();
+    sustainedRef.current.forEach((note) => {
+      const channel = noteChannelsRef.current.get(note) ?? 0;
+      const channelNotes = sustainedByChannel.get(channel) ?? [];
+      channelNotes.push(note);
+      sustainedByChannel.set(channel, channelNotes);
+    });
+    sustainedByChannel.forEach((releasedNotes, channel) => {
+      callbacksRef.current.onSustain(false, channel, atMs, releasedNotes);
+    });
+    pressedRef.current.forEach((note) => {
+      callbacksRef.current.onRelease(note, noteChannelsRef.current.get(note) ?? 0, atMs, false);
+    });
+    clear();
+  }, [clear]);
+
+  const selectInput = useCallback((inputId: string) => {
+    if (inputId !== selectedInputIdRef.current) finalizeActiveNotes();
+    selectedInputIdRef.current = inputId;
+    setSelectedInputId(inputId);
+  }, [finalizeActiveNotes]);
+
   const refreshInputs = useCallback((access: MidiAccessLike) => {
     const next = Array.from(access.inputs.values()).filter((input) => input.state !== "disconnected");
+    const current = selectedInputIdRef.current;
+    const nextSelectedId = next.some((input) => input.id === current) ? current : next[0]?.id ?? "";
     setInputs(next);
-    setSelectedInputId((current) => next.some((input) => input.id === current) ? current : next[0]?.id ?? "");
+    if (nextSelectedId !== current) {
+      // Finalize captured durations as well as held-key lights. A device cannot
+      // send its pending note-offs after it has disappeared.
+      finalizeActiveNotes();
+    }
+    selectedInputIdRef.current = nextSelectedId;
+    setSelectedInputId(nextSelectedId);
+    setPhase(next.length ? "connected" : "ready-no-device");
     setStatus(next.length ? `${next.length} MIDI input${next.length === 1 ? "" : "s"} available.` : "Permission is ready; connect or power on a MIDI keyboard.");
-  }, []);
+  }, [finalizeActiveNotes]);
 
   const connect = useCallback(async () => {
     const request = (navigator as NavigatorWithMidi).requestMIDIAccess;
     if (!request) {
-      setSupported(false);
+      setPhase("unsupported");
       setStatus("This browser does not expose MIDI input. The silent on-screen keys still work.");
       return;
     }
+    setPhase("requesting");
     setStatus("Waiting for MIDI permission…");
     try {
       const access = await request.call(navigator, { sysex: false });
       accessRef.current = access;
-      setSupported(true);
       refreshInputs(access);
       access.onstatechange = () => refreshInputs(access);
       try { window.sessionStorage.setItem(MIDI_SESSION_CONNECT_KEY, "1"); } catch { /* MIDI remains connected for this page. */ }
     } catch {
+      setPhase("permission-denied");
       setStatus("MIDI permission was not granted. Retry, or use the silent on-screen keys.");
     }
   }, [refreshInputs]);
@@ -971,7 +1010,7 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
     const request = (navigator as NavigatorWithMidi).requestMIDIAccess;
     if (!request) {
       const task = window.setTimeout(() => {
-        setSupported(false);
+        setPhase("unsupported");
         setStatus("This browser does not expose MIDI input. The silent on-screen keys still work.");
       }, 0);
       return () => window.clearTimeout(task);
@@ -996,24 +1035,31 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
   }, [connect]);
 
   useEffect(() => {
-    const input = inputs.find((candidate) => candidate.id === selectedInputId)
-      ?? accessRef.current?.inputs.get(selectedInputId);
+    const input = accessRef.current?.inputs.get(selectedInputId);
     if (!input) return;
     clear();
+    setPhase("connected");
     setStatus(`Visualizing ${input.name || "MIDI input"}. No sound is generated or recorded.`);
     input.onmidimessage = (event) => {
       const message = parseMidiMessage(event.data);
       const atMs = performance.now();
       if (message.type === "note-on") {
+        if (sustainedRef.current.has(message.note)) {
+          callbacksRef.current.onSustain(false, noteChannelsRef.current.get(message.note) ?? message.channel, atMs, [message.note]);
+        }
         pressedRef.current.add(message.note);
         sustainedRef.current.delete(message.note);
         notesRef.current.set(message.note, message.velocity);
+        noteChannelsRef.current.set(message.note, message.channel);
         publish();
         callbacksRef.current.onAttack(message.note, message.velocity, message.channel, uniqueSorted(Array.from(notesRef.current.keys())), atMs);
       } else if (message.type === "note-off") {
         pressedRef.current.delete(message.note);
         if (sustainDownRef.current) sustainedRef.current.add(message.note);
-        else notesRef.current.delete(message.note);
+        else {
+          notesRef.current.delete(message.note);
+          noteChannelsRef.current.delete(message.note);
+        }
         callbacksRef.current.onRelease(message.note, message.channel, atMs, sustainDownRef.current);
         publish();
       } else if (message.type === "sustain") {
@@ -1021,7 +1067,10 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
         sustainDownRef.current = message.down;
         if (!message.down) {
           sustainedRef.current.forEach((note) => {
-            if (!pressedRef.current.has(note)) notesRef.current.delete(note);
+            if (!pressedRef.current.has(note)) {
+              notesRef.current.delete(note);
+              noteChannelsRef.current.delete(note);
+            }
           });
           sustainedRef.current.clear();
         }
@@ -1030,11 +1079,11 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
       }
     };
     return () => { input.onmidimessage = null; };
-  }, [clear, inputs, publish, selectedInputId]);
+  }, [clear, publish, selectedInputId]);
 
   useEffect(() => () => { if (accessRef.current) accessRef.current.onstatechange = null; }, []);
 
-  return { clear, connect, inputs, notes, pressed, selectedInputId, setSelectedInputId, status, supported, sustained };
+  return { clear, connect, inputs, notes, phase, pressed, selectedInputId, setSelectedInputId: selectInput, status, sustained };
 }
 
 function diatonicIndex(note: number, prefer: "sharps" | "flats" = "sharps") {
@@ -4336,6 +4385,11 @@ export function PianoLab() {
     setFrozen(false);
   }, []);
 
+  const pauseTrace = useCallback(() => {
+    frozenRef.current = true;
+    setFrozen(true);
+  }, []);
+
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
       const currentNow = currentHudTime();
@@ -5877,66 +5931,66 @@ export function PianoLab() {
     ? nearestMidiForPitchClass(exactChordForAtlas.rootPitchClass, doMidi)
     : doMidi;
   const displayedMidiStatus = focusLens === "scale-quality" && !midi.inputs.length
-    ? midi.supported === false
-      ? "Hardware MIDI is required; this browser does not expose Web MIDI."
-      : "Connect a hardware MIDI keyboard. This view intentionally has no on-screen input."
+    ? midi.phase === "unsupported"
+      ? "This browser does not expose Web MIDI, and Scale Quality has no on-screen keyboard. Open this view in Chrome or Edge with a hardware MIDI keyboard."
+      : midi.phase === "permission-denied"
+        ? "MIDI permission was not granted. Scale Quality requires a hardware MIDI input; choose Retry MIDI to ask again."
+        : midi.phase === "ready-no-device"
+          ? "MIDI permission is ready, but no hardware keyboard was found. Connect or power on a device."
+          : midi.phase === "requesting"
+            ? "Waiting for MIDI permission…"
+            : "Connect a hardware MIDI keyboard. This view intentionally has no on-screen input."
     : midi.status;
+  const selectedMidiInput = midi.inputs.find((input) => input.id === midi.selectedInputId) ?? midi.inputs[0] ?? null;
+  const selectedMidiName = selectedMidiInput
+    ? [selectedMidiInput.manufacturer, selectedMidiInput.name].filter(Boolean).join(" · ") || "MIDI input"
+    : null;
+  const midiConnectionLabel = selectedMidiName
+    ?? (midi.phase === "unsupported" ? focusLens === "scale-quality" ? "No input available" : "Unavailable in this browser"
+      : midi.phase === "requesting" ? "Requesting permission…"
+        : midi.phase === "ready-no-device" ? "No keyboard found"
+          : midi.phase === "permission-denied" ? "Permission needed"
+            : focusLens === "scale-quality" ? "Hardware keyboard required" : "Not connected");
+  const midiCaptureLabel = frozen ? "Capture paused · keys still light" : selectedMidiInput ? "Capture on · silent note data" : "Your piano or DAW supplies sound";
+  const activeFocusDefinition = FOCUS_LENSES.find((lens) => lens.id === normalizeFocusLens(focusLens)) ?? FOCUS_LENSES[0];
 
   return (
     <section
       className={`advanced-lab piano-lab piano-hud${focusLens === "score-flow" ? " is-score-flow" : isEarSearchFocus ? " is-ear-search" : focusLens === "scale-quality" ? " is-scale-quality" : ""}`}
-      aria-labelledby={isEarSearchFocus ? undefined : "piano-hud-title"}
-      aria-label={isEarSearchFocus ? focusLens === "ear-search-hands" ? "Sound Finder two-staff ear-search HUD" : "Sound Finder ear-search HUD" : undefined}
+      aria-labelledby="piano-workspace-title"
     >
-      <PianoFocusNavigation focusLens={focusLens} onSelect={selectFocusLens} />
-
-      <header className="piano-hud-header">
-        <div><p className="section-kicker">MIDI relationship companion · one coordinated view</p><h2 id="piano-hud-title">See relationships as your hands play.</h2><p>{focusLens === "echo-key" ? "Hear a short relationship before names or notation appear; sing or imagine it, find it anywhere on the keyboard, repair one divergence, then reveal and transfer the structure." : focusLens === "score-flow" ? "Import MusicXML, select a short measure loop, and translate written pitch, rhythm, ties, voices, and chords into physical hand territory, ear prompts, and one repairable difference at a time." : focusLens === "ear-search" ? "Hear one bounded score phrase, then take as long as you need to probe toward the correct register, pitch, interval reach, and nearby collection without seeing the answer." : focusLens === "ear-search-hands" ? "Hear both score staffs as one phrase while upper, lower, and together landings remain visible and exact pitches stay hidden." : focusLens === "immersion" ? "Every attack becomes a stable place in one fifths-and-register sky; timing, interval, scale, chord, and tonal evidence gather around it without becoming a score." : focusLens === "scale-quality" ? "Let an intermittent low tonic become home, then watch upper scale positions reveal exact semitone structure, local gaps, demonstrated overlap, and your own listening words." : focusLens === "interval-glow" ? "Every exact attack-to-attack and within-chord semitone spacing becomes a stable color and place around one live phrase thread." : focusLens === "sight-shapes" ? "Turn written intervals, lines, chord silhouettes, anchors, movement groups, and musical intention into one linked eyes–hands–ear practice loop." : focusLens === "research" ? "The same twelve pitch positions stay fixed while semitone, interval-orbit, thirds-lattice, and all-pairs maps expose different relationships—and their limits." : focusLens === "gravity" ? "A semitone-accurate major-scale landscape keeps degree location fixed while IV, V, and I reveal how one held pitch changes role without moving." : "Every attack keeps one numbered column across staff, reference frequency, and evidence."} {focusLens === "echo-key" ? "MIDI input stays silent; only clearly labeled reference and repair buttons play the teaching tone. Singing is a self-report in this first release." : focusLens === "score-flow" ? "The score and local recording stay in this browser tab. Listen and Play + compare are explicit; MIDI input itself never makes sound." : isEarSearchFocus ? "Only Hear hidden phrase makes sound. Incoming MIDI stays silent, and attack timing is deliberately not graded." : focusLens === "scale-quality" ? "Incoming MIDI stays silent; your instrument or DAW supplies every tone." : "MIDI sends note data only. Sung-pitch practice now lives on the dedicated Voice page."}</p></div>
-        <div className="piano-hud-controls" role={isEarSearchFocus ? "group" : undefined} aria-label={isEarSearchFocus ? "Sound Finder navigation and configuration" : "HUD controls"}>
-          <div className="midi-status"><i className={midi.inputs.length ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI</span><strong role="status">{displayedMidiStatus}</strong></div></div>
-          {midi.inputs.length ? <label htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : <button type="button" className="piano-primary-action" onClick={midi.connect}>{midi.supported === false ? "Retry MIDI" : "Connect MIDI"}</button>}
-          {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select></label> : null}
-          <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={() => {
-            setFrozen((current) => {
-              const next = !current;
-              frozenRef.current = next;
-              return next;
-            });
-          }}>{isEarSearchFocus ? frozen ? "Resume MIDI input" : "Pause MIDI input" : focusLens === "scale-quality" ? frozen ? "Resume attack history" : "Freeze attack history" : phraseCompareSession ? "Trace live for A/B" : frozen ? "Resume trace" : "Freeze trace"}</button>
-          {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button> : null}
-          <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>{isEarSearchFocus ? "Names in exact reveal" : "Theory names"}</span></label>
-          {!isEarSearchFocus ? <button type="button" onClick={clearAll}>Clear</button> : null}
+      <header className="piano-workspace-header">
+        <div className="piano-workspace-identity">
+          <p className="section-kicker">Piano workspace</p>
+          <h1 id="piano-workspace-title">Play. See the relationships.</h1>
+          <p>Silent MIDI maps each attack to interval, score, scale, and harmonic context. Your instrument or DAW supplies the sound.</p>
+        </div>
+        <div className="piano-input-console" role="group" aria-label="MIDI input and Piano settings">
+          <div className="midi-status"><i className={selectedMidiInput ? "is-connected" : ""} aria-hidden="true" /><div><span>MIDI input</span><strong role="status">{midiConnectionLabel}</strong><small>{midiCaptureLabel}</small></div></div>
+          {selectedMidiInput ? <label className="piano-midi-select" htmlFor="hud-midi-input"><span>Input</span><select id="hud-midi-input" value={midi.selectedInputId} onChange={(event) => midi.setSelectedInputId(event.target.value)}>{midi.inputs.map((input) => <option key={input.id} value={input.id}>{[input.manufacturer, input.name].filter(Boolean).join(" · ") || "MIDI input"}</option>)}</select></label> : midi.phase === "unsupported" ? <span className="piano-midi-unavailable">{focusLens === "scale-quality" ? "Web MIDI unavailable" : "Screen keys only"}</span> : <button type="button" className="piano-primary-action" disabled={midi.phase === "requesting"} onClick={midi.connect}>{midi.phase === "requesting" ? "Requesting MIDI…" : midi.phase === "permission-denied" ? "Retry MIDI" : "Connect MIDI"}</button>}
+          <button type="button" disabled={Boolean(phraseCompareSession)} aria-pressed={frozen} onClick={frozen ? resumeTrace : pauseTrace}>{phraseCompareSession ? "Capture live for A/B" : frozen ? "Resume capture" : "Pause capture"}</button>
+          <details className="piano-workspace-settings">
+            <summary>Settings</summary>
+            <div className="piano-workspace-settings-panel">
+              <p>{displayedMidiStatus}</p>
+              {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select><small>Total maximum span · {chordWindowMs * 2} ms</small></label> : null}
+              {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button> : null}
+              <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>{isEarSearchFocus ? "Names in exact reveal" : "Theory names"}</span></label>
+              {!isEarSearchFocus ? <button type="button" onClick={clearAll}>Clear piano history</button> : null}
+            </div>
+          </details>
         </div>
       </header>
 
-      <div className="piano-hud-statebar">
-        {focusLens === "echo-key" ? <>
-          <span>Ear-first frame</span>
-          <strong>Starting key, scale degrees, and notation stay hidden until Read.</strong>
-          <small>Any-key mode grades the directed interval path; a later transfer round supplies one starting place.</small>
-          <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} silent attacks available · each attempt owns a new boundary`}</em>
-        </> : focusLens === "score-flow" ? <>
-          <span>Imported score frame</span>
-          <strong>The file supplies notation; this take supplies silent MIDI evidence.</strong>
-          <small>Pitch, interval, chord, pulse, and release remain separate. Suggested fingerings are clearly marked when the score has none.</small>
-          <em>{frozen ? "Trace frozen; held keys still show below." : `${phraseEvents.length} silent score-practice attacks retained`}</em>
-        </> : isEarSearchFocus ? <>
-          <span>{focusLens === "ear-search-hands" ? "Two-staff hidden-phrase frame" : "Untimed hidden-phrase frame"}</span>
-          <strong>Wrong probes do not consume a landing or erase an accepted prefix.</strong>
-          <small>{focusLens === "ear-search-hands" ? "Upper, lower, and together score lanes stay visible while exact pitch remains hidden. MIDI does not identify physical hands." : "Register, direction, interval width, and nearby collection stay separate; no blended musicality score is produced."}</small>
-          <em>{frozen ? "Trace frozen; resume before searching." : `${phraseEvents.length} silent attacks retained for delayed search`}</em>
-        </> : focusLens === "scale-quality" ? <>
-          <span>Low tonic × upper route</span>
-          <strong>The bass lane establishes home; the upper lane supplies scale evidence.</strong>
-          <small>Exact distance, provisional route fit, modeled overlap, and listener report remain separate.</small>
-          <em>{frozen ? "Attack history frozen; held-key overlap remains live." : `${phraseEvents.length} silent attacks retained`}</em>
-        </> : <>
+      <PianoFocusNavigation focusLens={focusLens} onSelect={selectFocusLens} />
+      <h2 className="sr-only">{activeFocusDefinition.label}</h2>
+
+      {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <div className="piano-hud-statebar" aria-label="Current Piano frame">
           <span className={frameMode === "locked" ? "is-locked" : ""}>{frameMode === "locked" ? "Locked frame" : "Discovering frame"}</span>
           <strong>Do reference · {formatHz(frequencyFromMidi(doMidi))}{showConventions ? ` · ${conventionalPitchName(doMidi, framePitchPreference)}` : ""}</strong>
-          <small>{latestSnapshot?.evidenceLabel ?? "Play four distinct positions before the frame can move."} · group gaps up to {chordWindowMs} ms ({chordWindowMs * 2} ms maximum span)</small>
-          <em>{frozen ? "Trace frozen; held keys still show below." : focusLens === "sight-shapes" ? `${phraseEvents.length} in silent phrase · each exercise owns a resettable attempt boundary` : isShortHudFocus ? `${immersionHistoryEvents.length}/${IMMERSION_HISTORY_ATTACKS} shared HUD history · notes + chords` : `${phraseEvents.length} in phrase · ${events.length}/7 in microscope`}</em>
-        </>}
-      </div>
+          <small>{latestSnapshot?.evidenceLabel ?? "Play four distinct positions before the frame can move."}</small>
+          <em>{frozen ? "Capture paused" : isShortHudFocus ? `${immersionHistoryEvents.length}/${IMMERSION_HISTORY_ATTACKS} attacks` : `${phraseEvents.length} attacks`}</em>
+      </div> : null}
 
       {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
 
@@ -6006,9 +6060,6 @@ export function PianoLab() {
         chordWindowMs={chordWindowMs}
         showConventions={showConventions}
         frozen={frozen}
-        midiConnected={midi.inputs.length > 0}
-        midiStatus={midi.status}
-        onConnectMidi={midi.connect}
         onResumeCapture={resumeTrace}
       /> : null}
 
@@ -6019,9 +6070,6 @@ export function PianoLab() {
         chordWindowMs={chordWindowMs}
         showConventions={showConventions}
         frozen={frozen}
-        midiConnected={midi.inputs.length > 0}
-        midiStatus={midi.status}
-        onConnectMidi={midi.connect}
         onResumeCapture={resumeTrace}
         mode={focusLens === "ear-search-hands" ? "two-hand" : "classic"}
       /> : null}
@@ -6035,7 +6083,6 @@ export function PianoLab() {
         chordWindowMs={chordWindowMs}
         showConventions={showConventions}
         frozen={frozen}
-        onResumeCapture={resumeTrace}
       /> : null}
 
       {focusLens === "research" ? <PianoResearchHud

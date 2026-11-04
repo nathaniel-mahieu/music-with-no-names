@@ -8,7 +8,19 @@ Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.
 
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
-The current milestone is **Piano Navigation · Primary + More v2.29**. It provides:
+The current milestone is **Quiet Shell · Unified Piano Input v2.30**. It provides:
+
+- One compact site navigation with `Start`, `Piano`, and `Voice` as the stable primary destinations. Ratio, Scale, Ear, Harmony, Rhythm, Journey, Recording, Atlas, and Personal Lens remain available under a single `More` disclosure; release metadata has moved out of the persistent header.
+
+- A Piano-owned workspace instead of a second full-page marketing hero. One short heading states the invariant contract once: incoming MIDI is silent note data, while the learner's piano or DAW supplies the sound.
+
+- One shared MIDI input bar across every Piano view: connection state, permission/retry, device choice, and `Pause capture` / `Resume capture` stay in the same place. Model and display options live in a compact Settings disclosure; Score Flow, Sound Finder, and Sight Shapes no longer duplicate device controls.
+
+- Accurate capture language and lifecycle handling. Pausing stops new history without pretending to disable Web MIDI or held-key visualization; workflow actions can still resume at a deliberate exercise boundary, and switching or unplugging a keyboard closes captured durations before clearing held-key lights.
+
+- A quieter Piano view switcher. The six first-class views retain their requested order and visible `To do` states, while subtitles move out of the persistent strip and active treatment no longer visually overwhelms the exercise.
+
+The prior **Piano Navigation · Primary + More v2.29** remains available and provides:
 
 - One compact navigation model shared across the Piano companion. The six primary views are now `Sound Finder`, `Explore`, `Interval Glow`, `Sight Shapes`, `Scales`, and `Immersion`, in that order, with the active view conveyed by text and structure as well as color.
 
