@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab"];
+const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab"];
 
 test("every learning lab exposes a named semantic region", async () => {
   for (const lab of LABS) {
@@ -541,7 +541,12 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(voiceLab, /<VocalPitchCoach/);
   assert.match(voiceLab, /anchorSource="voice-lab-reference"/);
   assert.match(voiceLab, /id="voice-anchor-key"/);
-  assert.match(voiceLab, /estimates sung pitch only—it does not recognize words/);
+  assert.match(voiceLab, /Local microphone analysis estimates one sustained pitch and its spectrum/);
+  assert.match(voiceLab, /className="voice-workspace-header"/);
+  assert.match(voiceLab, /className="voice-focus-navigation"/);
+  assert.match(voiceLab, /href="#voice-match"/);
+  assert.match(voiceLab, /href="#voice-ear-map"/);
+  assert.match(voiceLab, /href="#voice-spectrum"/);
   assert.match(piano, /<RouteSelector scale=\{scale\}/);
   assert.match(piano, /doCaptureArmed=\{doCaptureArmed\}/);
   assert.match(piano, /onToggleDoCapture=\{toggleDoCapture\}/);
@@ -782,7 +787,16 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(vocal, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(vocal, /source\.connect\(analyser\)/);
   assert.match(vocal, /getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
+  assert.match(vocal, /inputTrack\.onended = \(\) => \{[\s\S]*disposeMicrophoneResources\(\)/,
+    "an unplugged active input must release its timer, track, and AudioContext before showing recovery UI");
+  assert.match(vocal, /const createdContext = new AudioContextConstructor[\s\S]*catch \{[\s\S]*context && context\.state !== "closed"[\s\S]*context\.close\(\)/,
+    "a failed reference start must close the newly created AudioContext");
   assert.doesNotMatch(vocal, /MediaRecorder|localStorage|sessionStorage|fetch\(/);
+  assert.match(vocal, /<section id="voice-match"/);
+  assert.match(vocal, /<section id="voice-ear-map"/);
+  assert.match(vocal, /<section id="voice-spectrum"/);
+  assert.match(vocal, /className="voice-input-console"/);
+  assert.match(vocal, /className="voice-microphone-status"/);
   assert.match(vocal, /className="piano-voice-trace-frame" role="img" aria-label=\{pitchTraceSummary\}/);
   assert.match(vocal, /Center the pitch\. Then steady the trail\./);
   assert.match(vocal, /Hear target[\s\S]*Sing from memory[\s\S]*Check direction[\s\S]*Repeat without looking/);
@@ -800,7 +814,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(vocal, /Voice energy × target harmonics/);
   assert.match(vocal, /ideal target harmonics/);
   assert.match(vocal, /Formants can make an upper harmonic taller/);
-  assert.match(vocal, /no recording · no upload/);
+  assert.match(voiceLab, /Nothing is recorded or uploaded/);
   assert.match(vocal, /not measured piano audio/);
   assert.match(vocal, /not vocal quality, correctness, timbre, harmony, emotion/);
   assert.match(vocalModel, /export function detectVocalFundamental/);
@@ -828,7 +842,11 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-research-boundaries \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-research-clock-node\.is-latest circle/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-voice-ear-layout \{ grid-template-columns: 1fr/);
-  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.voice-lab-reference \{ grid-template-columns: 1fr 1fr/);
+  assert.match(css, /\.voice-workspace-header/);
+  assert.match(css, /\.voice-focus-navigation/);
+  assert.match(css, /\.voice-input-console/);
+  assert.match(css, /@media \(max-width: 980px\) \{\s*\.voice-workspace-header \{ grid-template-columns: 1fr; \}/,
+    "Voice should match Piano's compact workspace breakpoint before its fixed desktop tracks can overflow");
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-route-selector \{ grid-template-columns: 1fr 1fr/);
   assert.match(css, /\.piano-do-capture button\[aria-pressed="true"\]/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.piano-immersion-edge-hud[\s\S]*position: relative/);
@@ -844,7 +862,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(css, /\.piano-immersion-fingering \.is-finger-marker circle/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-reading \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-voice-trace-frame \{ grid-template-columns: 58px minmax\(0, 1fr\)/);
-  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.voice-lab-reference,[\s\S]*\.piano-voice-input \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-voice-actions \{ display: grid; grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-route-methods ol \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-edge-hud \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-immersion-lens\.is-scale \{ grid-column: 1; grid-row: auto/);
@@ -1084,9 +1102,10 @@ test("scale generator keeps orbit, window, home, and bounded meaning accessible"
 });
 
 test("focus, reduced-motion, and non-color contracts are present", async () => {
-  const [css, ratio, scale, piano, ear, harmony, rhythm, journey] = await Promise.all([
+  const [css, ratio, technical, scale, piano, ear, harmony, rhythm, journey] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/TechnicalNotesLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/EarLab.tsx", import.meta.url), "utf8"),
@@ -1123,14 +1142,27 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
     "the Piano identity and input console must stack before their fixed minimum tracks can overflow");
   assert.match(ratio, /<details className="lab-nav-more"/);
   assert.match(ratio, /const PRIMARY_LAB_IDS: LabId\[\] = \["guide", "piano", "voice"\]/);
-  assert.match(ratio, /\{ label: "Music and response", labs: \["recording", "atlas", "personal"\] \}/);
-  assert.match(ratio, /\{activeLab !== "piano" \? <section className="hero">/);
+  assert.match(ratio, /const WORKSPACE_LAB_IDS = new Set<LabId>\(\["guide", "piano", "voice", "technical"\]\)/);
+  assert.match(ratio, /\{ label: "Music and reference", labs: \["recording", "atlas", "personal", "technical"\] \}/);
+  assert.match(ratio, /\{!WORKSPACE_LAB_IDS\.has\(activeLab\) \? <section className="hero">/);
+  assert.match(ratio, /activeLab === "technical" \?[\s\S]{0,80}<TechnicalNotesLab/);
   assert.doesNotMatch(ratio, /className="header-status"/, "release state must not compete with primary navigation");
   assert.match(ratio, /aria-label="Live piano phrase available"/);
   assert.match(ratio, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)/);
   assert.match(ratio, /behavior: prefersReducedMotion \? "auto" : "smooth"/);
   assert.match(ratio, /className="skip-link" href="#lab-stage" onClick=\{skipToActiveLab\}/);
-  assert.match(ratio, /id="lab-stage" className=\{activeLab === "piano" \? "lab-stage is-piano" : "lab-stage"\} tabIndex=\{-1\}/);
+  assert.match(ratio, /id="lab-stage" className=\{`lab-stage\$\{activeLab === "guide"[\s\S]*activeLab === "technical" \? " is-technical"/);
+  assert.match(technical, /aria-labelledby="technical-notes-title"/);
+  assert.match(technical, /Browser-observed/);
+  assert.match(technical, /Declared coordinate/);
+  assert.match(technical, /Teaching model/);
+  assert.match(technical, /Human report/);
+  assert.match(technical, /mwno-prediction-2/);
+  assert.match(technical, /music-with-no-names\.live-atlas\.v1/);
+  assert.match(technical, /MIDI is data, not audio/);
+  assert.match(technical, /Spotify is not synchronized/);
+  assert.match(css, /@media \(min-width: 761px\) and \(min-height: 680px\)[\s\S]*\.start-landing \{ min-height: calc\(100svh - 66px\); \}/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.start-landing \{ display: block; min-height: 0; \}/);
   assert.match(piano, /focusLens === "scale-quality" \? "Web MIDI unavailable" : "Screen keys only"/,
     "Scale Quality cannot advertise screen keys because it intentionally has no on-screen keyboard");
   assert.match(css, /@media \(forced-colors: active\)/);

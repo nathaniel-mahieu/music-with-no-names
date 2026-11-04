@@ -32,12 +32,12 @@ test("server-renders the guided learning product surface", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Music With No Names · Sound Labs<\/title>/i);
-  assert.match(html, /Start with what you can hear and change\./i);
-  assert.match(html, /Music begins with relationships you can hear/i);
-  assert.match(html, /Compare two pitches/i);
-  assert.match(html, /Learn by changing one thing at a time/i);
-  assert.match(html, /Hearing safety/i);
-  assert.match(html, /Good for whom—and for what/i);
+  assert.match(html, /Hear the relationship\. See it\. Find it with your hands or voice\./i);
+  assert.match(html, /Open Piano HUD/i);
+  assert.match(html, /Train with Voice/i);
+  assert.match(html, /How the measurements work/i);
+  assert.match(html, /Technical Notes/i);
+  assert.match(html, /Silent MIDI/i);
   assert.match(html, />Start<\/button>/i);
   assert.match(html, />More</i);
   assert.match(html, />Ratio<\/button>/i);
@@ -55,11 +55,12 @@ test("server-renders the guided learning product surface", async () => {
 });
 
 test("removes the disposable starter and keeps audio safety visible in source", async () => {
-  const [page, layout, packageJson, guideLab, ratioLab, scaleLab, pianoLab, voiceLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab, pianoModel, pianoSoundModel] = await Promise.all([
+  const [page, layout, packageJson, guideLab, technicalNotesLab, ratioLab, scaleLab, pianoLab, voiceLab, earLab, harmonyLab, rhythmLab, journeyLab, recordingLab, atlasLab, personalLab, pianoModel, pianoSoundModel] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/GuideLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/TechnicalNotesLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ScaleLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
@@ -83,18 +84,19 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(layout, /Music With No Names/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
-  assert.match(guideLab, /change one thing, then listen/);
-  assert.match(guideLab, /Calibrate low\. Compare briefly/);
-  assert.match(guideLab, /Know what each number can—and cannot—tell you/);
-  assert.match(guideLab, /Can you tell what changed/);
-  assert.match(guideLab, /That fits the model here/);
-  assert.match(guideLab, /self-check, not a test of musical ability/);
-  assert.match(guideLab, /firstAnswerRef\.current\?\.focus/);
+  assert.match(guideLab, /Hear the relationship\. See it\. Find it with your hands or voice\./);
+  assert.match(guideLab, /Silent MIDI turns your playing into interval, scale, chord, notation, and motion views/);
+  assert.match(technicalNotesLab, /None is a musical-quality score/);
+  assert.match(technicalNotesLab, /Calibrate low\. Compare briefly\. Keep the claims bounded/);
+  assert.match(technicalNotesLab, /What is actually implemented/);
+  assert.match(technicalNotesLab, /Four layers that should not be collapsed/);
+  assert.match(technicalNotesLab, /self-check, not a test of musical ability|checks the model boundary, not musical ability/i);
+  assert.match(technicalNotesLab, /firstAnswerRef\.current\?\.focus/);
   assert.match(ratioLab, /exponentialRampToValueAtTime\(SYNTH_MASTER_GAIN/);
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
-  assert.match(ratioLab, /v2\.30/);
+  assert.match(ratioLab, /v2\.31/);
   assert.match(scaleLab, /Hear home\. Build intervals\. Generate scales\. Predict what comes next/);
   assert.match(scaleLab, /Transposition moves every pitch together/);
   assert.match(scaleLab, /hear it in your mind first/i);
@@ -142,7 +144,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /membershipCorrections/);
   assert.match(pianoModel, /interpretedChordNotes/);
   assert.match(pianoLab, /sustain/);
-  assert.match(voiceLab, /never recorded or uploaded/i);
+  assert.match(voiceLab, /Nothing is recorded or uploaded/i);
   assert.match(pianoLab, /No sound is generated or recorded/);
   assert.match(pianoLab, /Scale lens/);
   assert.match(pianoLab, /How to select a route/);
@@ -194,9 +196,12 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(pianoLab, /phraseSnapshots/);
   assert.match(pianoLab, /Voice-leading coach/);
   assert.doesNotMatch(pianoLab, /VocalPitchCoach/);
-  assert.match(voiceLab, /Dedicated voice pitch practice/);
+  assert.match(voiceLab, /Hear it\. Sing it\. See the distance\./);
   assert.match(voiceLab, /anchorSource="voice-lab-reference"/);
-  assert.match(voiceLab, /Voice practice reference controls/);
+  assert.match(voiceLab, /Voice reference and display settings/);
+  assert.match(voiceLab, /href="#voice-match"/);
+  assert.match(voiceLab, /href="#voice-ear-map"/);
+  assert.match(voiceLab, /href="#voice-spectrum"/);
   assert.match(pianoLab, /Silent ghost targets/);
   assert.match(pianoLab, /silent chord target/);
   assert.match(pianoLab, /silent resolution target/);

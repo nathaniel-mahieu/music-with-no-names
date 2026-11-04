@@ -41,9 +41,10 @@ import { GuideLab } from "./GuideLab";
 import { ScaleLab } from "./ScaleLab";
 import { PianoLab } from "./PianoLab";
 import { VoiceLab } from "./VoiceLab";
+import { TechnicalNotesLab } from "./TechnicalNotesLab";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "guide" | "ratio" | "scale" | "piano" | "voice" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
+type LabId = "guide" | "ratio" | "scale" | "piano" | "voice" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal" | "technical";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "guide", label: "Start" },
@@ -58,13 +59,15 @@ const LABS: { id: LabId; label: string }[] = [
   { id: "recording", label: "Recording" },
   { id: "atlas", label: "Atlas" },
   { id: "personal", label: "Personal Lens" },
+  { id: "technical", label: "Technical Notes" },
 ];
 
 const PRIMARY_LAB_IDS: LabId[] = ["guide", "piano", "voice"];
+const WORKSPACE_LAB_IDS = new Set<LabId>(["guide", "piano", "voice", "technical"]);
 const SUPPORT_LAB_GROUPS: Array<{ label: string; labs: LabId[] }> = [
   { label: "Pitch relationships", labs: ["ratio", "scale", "harmony"] },
   { label: "Time and listening", labs: ["ear", "rhythm", "journey"] },
-  { label: "Music and response", labs: ["recording", "atlas", "personal"] },
+  { label: "Music and reference", labs: ["recording", "atlas", "personal", "technical"] },
 ];
 const SUPPORT_LAB_IDS = new Set(SUPPORT_LAB_GROUPS.flatMap((group) => group.labs));
 const PIANO_LENS_LABELS: Record<PianoSessionSummary["focusLens"], string> = {
@@ -151,6 +154,15 @@ const LAB_COPY: Record<
     principleTop: "Chosen key frequency",
     principleMain: "→ sung estimate → distance",
     principleBottom: "pitch detection, not speech recognition",
+  },
+  technical: {
+    eyebrow: "Implementation and model boundaries",
+    title: "Know what each display can—and cannot—support.",
+    description:
+      "Inspect the current feature inventory, evidence grammar, privacy boundary, model versions, definitions, safety guidance, and validation limits.",
+    principleTop: "Input",
+    principleMain: "→ coordinate → model",
+    principleBottom: "listener response stays separate",
   },
   ear: {
     eyebrow: "Test what belongs to the interval",
@@ -780,7 +792,7 @@ export function RatioLab() {
         </nav>
       </header>
 
-      {activeLab !== "piano" && pianoSessionSummary && pianoSessionSummary.attackCount > 0 ? (
+      {!WORKSPACE_LAB_IDS.has(activeLab) && pianoSessionSummary && pianoSessionSummary.attackCount > 0 ? (
         <aside className="live-phrase-return" aria-label="Live piano phrase available">
           <div>
             <span>Your live phrase is still here</span>
@@ -790,7 +802,7 @@ export function RatioLab() {
         </aside>
       ) : null}
 
-      {activeLab !== "piano" ? <section className="hero">
+      {!WORKSPACE_LAB_IDS.has(activeLab) ? <section className="hero">
         <div className="hero-copy">
           <p className="eyebrow">{activeCopy.eyebrow}</p>
           <h1>{activeCopy.title}</h1>
@@ -807,7 +819,7 @@ export function RatioLab() {
         </div>
       </section> : null}
 
-      <div id="lab-stage" className={activeLab === "piano" ? "lab-stage is-piano" : "lab-stage"} tabIndex={-1}>
+      <div id="lab-stage" className={`lab-stage${activeLab === "guide" ? " is-start" : activeLab === "piano" ? " is-piano" : activeLab === "voice" ? " is-voice" : activeLab === "technical" ? " is-technical" : ""}`} tabIndex={-1}>
         {activeLab === "guide" ? (
           <GuideLab onNavigate={selectLab} />
         ) : activeLab === "ratio" ? (
@@ -1027,6 +1039,8 @@ export function RatioLab() {
           <PianoLab />
         ) : activeLab === "voice" ? (
           <VoiceLab />
+        ) : activeLab === "technical" ? (
+          <TechnicalNotesLab onNavigate={selectLab} />
         ) : activeLab === "ear" ? (
           <EarLab onNavigateToPiano={() => selectLab("piano")} />
         ) : activeLab === "harmony" ? (
@@ -1044,10 +1058,10 @@ export function RatioLab() {
         )}
       </div>
 
-      <footer>
+      {activeLab !== "guide" ? <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response · v2.30</span>
-      </footer>
+        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response · v2.31</span>
+      </footer> : null}
     </main>
   );
 }

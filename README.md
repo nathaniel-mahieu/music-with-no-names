@@ -8,7 +8,19 @@ Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.
 
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
-The current milestone is **Quiet Shell · Unified Piano Input v2.30**. It provides:
+The current milestone is **One-View Start · Voice Workspace v2.31**. It provides:
+
+- A no-scroll desktop Start page that leads with the project’s central relationship-first idea, then offers three clear routes into Piano, Voice, and the foundational labs. Small and short viewports retain natural scrolling instead of clipping content.
+
+- A separate `Technical Notes` destination under `More`. It now owns the implemented-feature inventory, evidence-layer definitions, privacy and persistence boundaries, current model-version registry, glossary, validation limits, and hearing-safety guidance that previously crowded the landing page.
+
+- A Voice workspace organized like Piano: one compact page identity, a persistent reference console, a small Settings disclosure, and local `Pitch match`, `Ear map`, and `Harmonics` navigation. Microphone choice, permission, status, activity, and recovery guidance now read as one input surface rather than repeated page introductions.
+
+- More defensive Voice resource handling. A disconnected microphone disposes the active timer, stream, analyzer, and audio context before presenting recovery guidance; failed reference playback also closes the context it created.
+
+- One explicit evidence boundary across Start and Technical Notes: browser-observed input, declared coordinates, teaching-model outputs, and learner reports remain separate, and none is presented as a goodness, talent, emotion, or correctness score.
+
+The prior **Quiet Shell · Unified Piano Input v2.30** remains available and provides:
 
 - One compact site navigation with `Start`, `Piano`, and `Voice` as the stable primary destinations. Ratio, Scale, Ear, Harmony, Rhythm, Journey, Recording, Atlas, and Personal Lens remain available under a single `More` disclosure; release metadata has moved out of the persistent header.
 

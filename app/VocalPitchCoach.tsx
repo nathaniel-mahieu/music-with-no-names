@@ -354,9 +354,12 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         };
         inputTrack.onunmute = () => setMicrophoneNotice("Microphone input resumed. Hold one steady vowel.");
         inputTrack.onended = () => {
+          disposeMicrophoneResources();
           setDetection(null);
           setPitchTrail([]);
           setInputLevel(0);
+          setActiveInputLabel("");
+          setSpectrumPeakHz(null);
           setSelectedMicrophoneId(DEFAULT_MICROPHONE_ID);
           setMicrophoneState("error");
           setMicrophoneNotice("The selected microphone disconnected. Reconnect it, then start the microphone again.");
@@ -452,23 +455,29 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       return;
     }
     if (previewTimerRef.current != null) window.clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = null;
     const priorContext = previewContextRef.current;
     if (priorContext && priorContext.state !== "closed") void priorContext.close();
+    previewContextRef.current = null;
+    let context: AudioContext | null = null;
     try {
-      const context = new AudioContextConstructor({ latencyHint: "interactive" });
-      previewContextRef.current = context;
-      await context.resume();
-      const startsAt = context.currentTime + 0.035;
+      const createdContext = new AudioContextConstructor({ latencyHint: "interactive" });
+      context = createdContext;
+      previewContextRef.current = createdContext;
+      await createdContext.resume();
+      const startsAt = createdContext.currentTime + 0.035;
       ignoreMicrophoneUntilRef.current = performance.now() + (intervalSemitones === 0 ? 800 : 1_300);
-      playReferenceTone(context, vocalReferenceFrequency(anchorMidi), startsAt, 0.38);
-      if (intervalSemitones !== 0) playReferenceTone(context, targetReferenceHz, startsAt + 0.52, 0.48);
+      playReferenceTone(createdContext, vocalReferenceFrequency(anchorMidi), startsAt, 0.38);
+      if (intervalSemitones !== 0) playReferenceTone(createdContext, targetReferenceHz, startsAt + 0.52, 0.48);
       setPreviewNotice(intervalSemitones === 0 ? `Playing ${anchorLabel} quietly.` : `Playing ${anchorLabel}, then ${targetLabel}, quietly.`);
       previewTimerRef.current = window.setTimeout(() => {
-        if (context.state !== "closed") void context.close();
-        if (previewContextRef.current === context) previewContextRef.current = null;
+        if (createdContext.state !== "closed") void createdContext.close();
+        if (previewContextRef.current === createdContext) previewContextRef.current = null;
         setPreviewNotice("Reference finished. Sing the target from memory or against your piano.");
       }, intervalSemitones === 0 ? 650 : 1_250);
     } catch {
+      if (context && context.state !== "closed") void context.close();
+      if (previewContextRef.current === context) previewContextRef.current = null;
       setPreviewNotice("Reference playback could not start. Your physical piano can still supply the target.");
     }
   }, [anchorLabel, anchorMidi, intervalSemitones, targetLabel, targetReferenceHz]);
@@ -490,9 +499,10 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     return () => mediaDevices.removeEventListener("devicechange", handleDeviceChange);
   }, [refreshMicrophoneInputs]);
 
-  return <section className={`piano-voice-coach ${targetDistanceClass}`} aria-labelledby="voice-coach-title">
-    <header>
-      <div><span>Voice match · local microphone</span><strong id="voice-coach-title">Sing the interval in semitones</strong><small>One monophonic fundamental estimate · no recording · no upload</small></div>
+  return <section id="voice-match" className={`piano-voice-coach ${targetDistanceClass}`} aria-labelledby="voice-coach-title">
+    <h2 id="voice-coach-title" className="sr-only">Voice pitch match</h2>
+    <div className="voice-input-console" role="group" aria-label="Microphone input and reference playback">
+      <div className="voice-microphone-status" role="status" aria-live="polite"><i className={microphoneState === "listening" ? "is-listening" : microphoneState === "denied" || microphoneState === "error" ? "is-error" : ""} aria-hidden="true" /><div><span>Microphone input</span><strong>{microphoneStatusCopy}</strong><small>{microphoneNotice}</small></div></div>
       <div className="piano-voice-actions">
         <label className="piano-voice-source" htmlFor="voice-input-source"><span>Microphone source</span><select id="voice-input-source" value={selectedMicrophoneId} disabled={microphoneState === "requesting"} onChange={(event) => {
           const microphoneId = event.target.value;
@@ -502,7 +512,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
         <button type="button" aria-pressed={microphoneState === "listening"} disabled={microphoneState === "requesting"} onClick={microphoneState === "listening" ? stopMicrophone : () => void startMicrophone(selectedMicrophoneId)}>{microphoneState === "requesting" ? "Opening microphone…" : microphoneState === "listening" ? "Stop microphone" : "Start microphone"}</button>
         <button type="button" onClick={() => void hearInterval()}>{intervalSemitones === 0 ? "Hear target" : "Hear anchor → target"}</button>
       </div>
-    </header>
+    </div>
 
     <div className="piano-voice-controls">
       <p><span>Anchor</span><strong>{anchorLabel} · {formatHz(vocalReferenceFrequency(anchorMidi))}</strong><small>{anchorSource === "latest-piano-attack" ? "latest piano attack" : anchorSource === "voice-lab-reference" ? "chosen on this Voice page" : "selected Do until you play a key"}</small></p>
@@ -516,7 +526,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       <small>{activeInputLabel ? `Using ${activeInputLabel}. ` : ""}The level only confirms that samples are arriving; it is not a singing-quality score.</small>
     </div>
 
-    <section className="piano-voice-ear-training" aria-labelledby="voice-ear-training-title">
+    <section id="voice-ear-map" className="piano-voice-ear-training" aria-labelledby="voice-ear-training-title">
       <header>
         <div><span>Ear-training map</span><strong id="voice-ear-training-title">Center the pitch. Then steady the trail.</strong></div>
         <ol aria-label="Suggested ear-training loop"><li>Hear target</li><li>Sing from memory</li><li>Check direction</li><li>Repeat without looking</li></ol>
@@ -561,7 +571,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
       </div>
     </section>
 
-    <section className="piano-voice-spectrum" aria-labelledby="voice-spectrum-title">
+    <section id="voice-spectrum" className="piano-voice-spectrum" aria-labelledby="voice-spectrum-title">
       <header><div><span>Physical sound detail</span><strong id="voice-spectrum-title">Voice energy × target harmonics</strong></div><small>{spectrumPeakHz ? `strongest visible band ≈ ${formatHz(spectrumPeakHz)}` : "waiting for microphone energy"}</small></header>
       <div className="piano-voice-spectrum-plot" role="img" aria-label={spectrumSummary}>
         <canvas ref={spectrumCanvasRef} aria-hidden="true" />
@@ -575,8 +585,7 @@ export function VocalPitchCoach({ anchorMidi, anchorSource, doMidi, scale, showC
     </section>
 
     <footer>
-      <p role="status" aria-live="polite"><strong>{microphoneStatusCopy}</strong><small>{microphoneNotice}</small></p>
-      <p><strong>{previewNotice}</strong><small>Use headphones if the reference tone would leak back into the microphone.</small></p>
+      <p role="status" aria-live="polite"><strong>{previewNotice}</strong><small>Use headphones if the reference tone would leak back into the microphone.</small></p>
       <small>The microphone estimates one periodic fundamental, not vocal quality, correctness, timbre, harmony, emotion, or the acoustic tuning of a connected piano.</small>
     </footer>
   </section>;
