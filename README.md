@@ -8,6 +8,8 @@ Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.
 
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
+Technical Notes: [open the implementation and model reference](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical)
+
 The current milestone is **Technical Flow · Immersion First v2.32**. It provides:
 
 - A Technical Notes page that follows the browser's ordinary document scroll. Its compact four-link jump row stays in the page flow, anchor landings retain a small readable offset, and the former Safety section has been removed.
