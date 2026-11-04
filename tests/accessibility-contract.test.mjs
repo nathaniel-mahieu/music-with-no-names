@@ -261,7 +261,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.doesNotMatch(piano, /\{ id: "ear-search-hands", label:/, "the retired two-staff route must not appear in navigation metadata");
   assert.match(piano, /function normalizeFocusLens[\s\S]*lens === "ear-search-hands"\) return "ear-search"/);
   assert.match(piano, /linkedLens === "ear-search-hands"[\s\S]*canonicalUrl\.searchParams\.set\("pianoLens", "ear-search"\)/);
-  assert.match(piano, /const FOCUS_LENSES[\s\S]*id: "ear-search"[\s\S]*id: "explore"[\s\S]*id: "interval-glow"[\s\S]*id: "sight-shapes"[\s\S]*id: "scales"[\s\S]*id: "immersion"/,
+  assert.match(piano, /const FOCUS_LENSES[\s\S]*id: "immersion"[\s\S]*id: "ear-search"[\s\S]*id: "explore"[\s\S]*id: "interval-glow"[\s\S]*id: "sight-shapes"[\s\S]*id: "scales"/,
     "the six primary views need one stable, learner-facing order");
   assert.match(piano, /id: "explore"[^\n]*status: "todo"/);
   assert.match(piano, /id: "sight-shapes"[^\n]*status: "todo"/);
@@ -1161,6 +1161,10 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
   assert.match(technical, /music-with-no-names\.live-atlas\.v1/);
   assert.match(technical, /MIDI is data, not audio/);
   assert.match(technical, /Spotify is not synchronized/);
+  assert.doesNotMatch(technical, /technical-safety|>Safety<|Hearing safety/);
+  assert.match(css, /\.technical-jump-nav \{ display: grid; grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(css, /\.technical-jump-nav \{[^}]*position: sticky/,
+    "Technical Notes should use the document scroll instead of a second persistent navigation layer");
   assert.match(css, /@media \(min-width: 761px\) and \(min-height: 680px\)[\s\S]*\.start-landing \{ min-height: calc\(100svh - 66px\); \}/);
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.start-landing \{ display: block; min-height: 0; \}/);
   assert.match(piano, /focusLens === "scale-quality" \? "Web MIDI unavailable" : "Screen keys only"/,

@@ -159,7 +159,7 @@ const LAB_COPY: Record<
     eyebrow: "Implementation and model boundaries",
     title: "Know what each display can—and cannot—support.",
     description:
-      "Inspect the current feature inventory, evidence grammar, privacy boundary, model versions, definitions, safety guidance, and validation limits.",
+      "Inspect the current feature inventory, evidence grammar, privacy boundary, model versions, definitions, and validation limits.",
     principleTop: "Input",
     principleMain: "→ coordinate → model",
     principleBottom: "listener response stays separate",
@@ -1060,7 +1060,7 @@ export function RatioLab() {
 
       {activeLab !== "guide" ? <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response · v2.31</span>
+        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response · v2.32</span>
       </footer> : null}
     </main>
   );

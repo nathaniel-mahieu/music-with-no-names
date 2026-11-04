@@ -8,11 +8,17 @@ Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.
 
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
-The current milestone is **One-View Start · Voice Workspace v2.31**. It provides:
+The current milestone is **Technical Flow · Immersion First v2.32**. It provides:
+
+- A Technical Notes page that follows the browser's ordinary document scroll. Its compact four-link jump row stays in the page flow, anchor landings retain a small readable offset, and the former Safety section has been removed.
+
+- An Immersion-first Piano navigation order: `Immersion`, `Sound Finder`, `Explore`, `Interval Glow`, `Sight Shapes`, and `Scales`. This is a presentation change only; explicit URLs, saved sessions, and the existing Explore fallback continue to resolve by stable lens ID.
+
+The prior **One-View Start · Voice Workspace v2.31** remains available and provides:
 
 - A no-scroll desktop Start page that leads with the project’s central relationship-first idea, then offers three clear routes into Piano, Voice, and the foundational labs. Small and short viewports retain natural scrolling instead of clipping content.
 
-- A separate `Technical Notes` destination under `More`. It now owns the implemented-feature inventory, evidence-layer definitions, privacy and persistence boundaries, current model-version registry, glossary, validation limits, and hearing-safety guidance that previously crowded the landing page.
+- A separate `Technical Notes` destination under `More`. It now owns the implemented-feature inventory, evidence-layer definitions, privacy and persistence boundaries, current model-version registry, glossary, and validation limits that previously crowded the landing page.
 
 - A Voice workspace organized like Piano: one compact page identity, a persistent reference console, a small Settings disclosure, and local `Pitch match`, `Ear map`, and `Harmonics` navigation. Microphone choice, permission, status, activity, and recovery guidance now read as one input surface rather than repeated page introductions.
 
@@ -34,7 +40,7 @@ The prior **Quiet Shell · Unified Piano Input v2.30** remains available and pro
 
 The prior **Piano Navigation · Primary + More v2.29** remains available and provides:
 
-- One compact navigation model shared across the Piano companion. The six primary views are now `Sound Finder`, `Explore`, `Interval Glow`, `Sight Shapes`, `Scales`, and `Immersion`, in that order, with the active view conveyed by text and structure as well as color.
+- One compact navigation model shared across the Piano companion. The six primary views are `Immersion`, `Sound Finder`, `Explore`, `Interval Glow`, `Sight Shapes`, and `Scales`, in the current order, with the active view conveyed by text and structure as well as color.
 
 - Visible `To do` status badges on Explore, Sight Shapes, and Scales without disabling their current working material. Status is separate from the title so the information hierarchy remains easy to scan and accessible.
 

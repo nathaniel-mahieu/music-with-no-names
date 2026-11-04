@@ -384,12 +384,12 @@ const EVENT_X = (slot: number) => 84 + slot * 88;
 // The retired two-staff route remains a FocusLens only so old links and saved
 // sessions can migrate into Sound Finder's Upper / Lower / Both practice layer.
 const FOCUS_LENSES: FocusLensDefinition[] = [
+  { id: "immersion", label: "Immersion", description: "One living fifths-and-register sky", tier: "primary" },
   { id: "ear-search", label: "Sound Finder", description: "Untimed ear search", tier: "primary" },
   { id: "explore", label: "Explore", description: "Whole phrase · every representation", tier: "primary", status: "todo" },
   { id: "interval-glow", label: "Interval Glow", description: "Semitone spacing in color", tier: "primary" },
   { id: "sight-shapes", label: "Sight Shapes", description: "Staff geometry · eyes × hands × ear", tier: "primary", status: "todo" },
   { id: "scales", label: "Scales", description: "Do, gap patterns, and routes", tier: "primary", status: "todo" },
-  { id: "immersion", label: "Immersion", description: "One living fifths-and-register sky", tier: "primary" },
   { id: "echo-key", label: "EchoKey", description: "Ear-first relationship path", tier: "secondary", group: "practice" },
   { id: "score-flow", label: "Score Flow", description: "Upload and align a MusicXML score", tier: "secondary", group: "practice" },
   { id: "scale-quality", label: "Scale Quality", description: "Low tonic × upper scale color", tier: "secondary", group: "practice" },
@@ -5952,7 +5952,8 @@ export function PianoLab() {
           : midi.phase === "permission-denied" ? "Permission needed"
             : focusLens === "scale-quality" ? "Hardware keyboard required" : "Not connected");
   const midiCaptureLabel = frozen ? "Capture paused · keys still light" : selectedMidiInput ? "Capture on · silent note data" : "Your piano or DAW supplies sound";
-  const activeFocusDefinition = FOCUS_LENSES.find((lens) => lens.id === normalizeFocusLens(focusLens)) ?? FOCUS_LENSES[0];
+  const activeFocusDefinition = FOCUS_LENSES.find((lens) => lens.id === normalizeFocusLens(focusLens))
+    ?? FOCUS_LENSES.find((lens) => lens.id === "explore")!;
 
   return (
     <section

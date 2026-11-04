@@ -134,7 +134,6 @@ export function TechnicalNotesLab({ onNavigate }: { onNavigate: (destination: De
         <a href="#technical-evidence">Evidence</a>
         <a href="#technical-models">Models</a>
         <a href="#technical-glossary">Glossary</a>
-        <a href="#technical-safety">Safety</a>
       </nav>
 
       <section id="technical-implemented" className="technical-section" aria-labelledby="technical-implemented-title">
@@ -174,14 +173,6 @@ export function TechnicalNotesLab({ onNavigate }: { onNavigate: (destination: De
         </div>
       </section>
 
-      <section id="technical-safety" className="technical-section technical-safety" aria-labelledby="technical-safety-title">
-        <div className="technical-section-heading"><span>06 · Safety and validation</span><h2 id="technical-safety-title">Calibrate low. Compare briefly. Keep the claims bounded.</h2><p>Software checks cannot validate a physical listening level or a human learning outcome.</p></div>
-        <div>
-          <article><strong>Turn playback down first.</strong><p>Raise it only enough to hear the relationship. Stop if sound is uncomfortable and rest your ears during repeated comparisons.</p></article>
-          <article><strong>Use headphones thoughtfully.</strong><p>They can prevent a Voice reference from leaking into the microphone, but they also place sound close to the ear.</p></article>
-          <article><strong>Know what tests establish.</strong><p>The suite validates deterministic math, model fixtures, import boundaries, rendering contracts, accessibility markup, and builds—not acoustic calibration, comprehension, aesthetic response, or learning effectiveness.</p></article>
-        </div>
-      </section>
     </section>
   );
 }

@@ -87,7 +87,6 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(guideLab, /Hear the relationship\. See it\. Find it with your hands or voice\./);
   assert.match(guideLab, /Silent MIDI turns your playing into interval, scale, chord, notation, and motion views/);
   assert.match(technicalNotesLab, /None is a musical-quality score/);
-  assert.match(technicalNotesLab, /Calibrate low\. Compare briefly\. Keep the claims bounded/);
   assert.match(technicalNotesLab, /What is actually implemented/);
   assert.match(technicalNotesLab, /Four layers that should not be collapsed/);
   assert.match(technicalNotesLab, /self-check, not a test of musical ability|checks the model boundary, not musical ability/i);
@@ -96,7 +95,7 @@ test("removes the disposable starter and keeps audio safety visible in source", 
   assert.match(ratioLab, /linearRampToValueAtTime\(0\.0001/);
   assert.match(ratioLab, /Playback starts only when you choose to listen/);
   assert.match(ratioLab, /ratioShareSearch/);
-  assert.match(ratioLab, /v2\.31/);
+  assert.match(ratioLab, /v2\.32/);
   assert.match(scaleLab, /Hear home\. Build intervals\. Generate scales\. Predict what comes next/);
   assert.match(scaleLab, /Transposition moves every pitch together/);
   assert.match(scaleLab, /hear it in your mind first/i);
