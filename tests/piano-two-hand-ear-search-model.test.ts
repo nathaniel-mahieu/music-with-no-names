@@ -60,7 +60,7 @@ function staffAnchorScore() {
 
 test("two-hand landings retain upper, lower, shared, and unknown staff identity", () => {
   const score = staffRouteScore();
-  const chunk = buildEarSearchChunks(score, { hand: "both", maxLandings: 4 })[0];
+  const chunk = buildEarSearchChunks(score, { hand: "both", span: "one-bar" })[0];
   assert.ok(chunk);
 
   const route = earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "full" });
@@ -70,7 +70,7 @@ test("two-hand landings retain upper, lower, shared, and unknown staff identity"
 
 test("top-note and bass-note routes name the staff that authored the selected pitch", () => {
   const score = staffRouteScore();
-  const chunk = buildEarSearchChunks(score, { hand: "both", maxLandings: 4 })[0];
+  const chunk = buildEarSearchChunks(score, { hand: "both", span: "one-bar" })[0];
   assert.ok(chunk);
 
   const upperVoice = earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "upper" });
@@ -81,7 +81,7 @@ test("top-note and bass-note routes name the staff that authored the selected pi
 
 test("staff-anchor listening keeps one landmark from each authored score staff", () => {
   const score = staffAnchorScore();
-  const chunk = buildEarSearchChunks(score, { hand: "both", maxLandings: 4 })[0];
+  const chunk = buildEarSearchChunks(score, { hand: "both", span: "one-bar" })[0];
   assert.ok(chunk);
 
   const anchors = earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "staff-anchors" });

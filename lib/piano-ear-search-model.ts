@@ -1,10 +1,12 @@
 import {
-  buildSheetMusicReadingChunks,
+  chordSpacing,
   selectSheetMusicLoop,
   type PracticeHand,
   type SheetMusicPracticeAttack,
   type SheetMusicScore,
   type SheetPitchCollectionAnalysis,
+  type SheetReferencePlanCue,
+  type SheetReferencePlanNote,
   type SheetReferencePlan,
   type SheetReadingChunk,
 } from "./sheet-music-coach-model.ts";
@@ -16,7 +18,7 @@ export const EAR_SEARCH_CHORD_SETTLE_MS = 60;
 export const EAR_SEARCH_MAX_REFERENCE_GAP_MS = 2400;
 
 export type EarSearchVoice = "upper" | "bass" | "staff-anchors" | "full";
-export type EarSearchLandingLimit = 4 | 6 | 8 | 16 | 32;
+export type EarSearchTimeSpan = "half-bar" | "one-bar" | "two-bars";
 export type EarSearchStaff = "upper" | "lower" | "both" | "unknown";
 
 export type EarSearchLanding = {
@@ -52,6 +54,37 @@ export type EarSearchChunk = SheetReadingChunk & {
   sourceStartMeasureIndex: number;
   sourceEndMeasureIndex: number;
   hand: PracticeHand;
+  /** The score-clock boundary is structural and never inferred from attacks. */
+  frameStartBeat: number;
+  frameEndBeat: number;
+  span: EarSearchTimeSpan;
+};
+
+export type EarSearchReferencePlanNote = SheetReferencePlanNote;
+
+export type EarSearchReferencePlanCue = SheetReferencePlanCue & {
+  /** A carry is audible at the frame boundary but is not a target attack. */
+  kind: "attack" | "carry";
+  /** Stable position in the canonical, both-staff attack clock. */
+  canonicalAttackIndex: number | null;
+  /** Position in the selected target route; null for silence and carries. */
+  targetLandingIndex: number | null;
+  /** Score-authored staff identity, never an inference about the MIDI hand. */
+  staff: EarSearchStaff;
+  /** Original attack beat for a sound that began before this frame. */
+  carriedFromBeat?: number;
+};
+
+export type EarSearchRestSpan = {
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+};
+
+export type EarSearchReferencePlan = Omit<SheetReferencePlan, "cues"> & {
+  cues: EarSearchReferencePlanCue[];
+  /** Exact complement of selected sounding intervals inside the frame. */
+  restSpans: EarSearchRestSpan[];
 };
 
 export type EarSearchProbe = {
@@ -413,142 +446,126 @@ function earSearchHandSummary(hands: EarSearchChunk["hands"]) {
 }
 
 function earSearchNoteSummary(labels: readonly string[]) {
+  if (!labels.length) return "rest";
   if (labels.length <= 5) return labels.join(" → ");
   return `${labels.slice(0, 2).join(" → ")} → … → ${labels.slice(-2).join(" → ")}`;
 }
 
-function withEarSearchSource(
-  chunk: SheetReadingChunk,
-  sourceStartMeasureIndex: number,
-  sourceEndMeasureIndex: number,
-  hand: PracticeHand,
-): EarSearchChunk {
-  return { ...chunk, sourceStartMeasureIndex, sourceEndMeasureIndex, hand };
+function earSearchAttackLabel(attack: SheetMusicPracticeAttack) {
+  return attack.notes
+    .slice()
+    .sort((first, second) => first.pitch.midi - second.pitch.midi || first.id.localeCompare(second.id))
+    .map((note) => note.pitch.label)
+    .join(" + ");
 }
 
-function mergeEarSearchChunks(
+function createEarSearchFrame(
   score: SheetMusicScore,
-  chunks: readonly SheetReadingChunk[],
   sourceStartMeasureIndex: number,
   sourceEndMeasureIndex: number,
   hand: PracticeHand,
+  span: EarSearchTimeSpan,
+  frameStartBeat: number,
+  frameEndBeat: number,
+  structuralIndex: number,
 ): EarSearchChunk {
-  if (!chunks.length) throw new RangeError("At least one reading chunk is required for an ear-search phrase.");
-  if (chunks.length === 1) return withEarSearchSource(chunks[0], sourceStartMeasureIndex, sourceEndMeasureIndex, hand);
-  const sourceLoop = selectSheetMusicLoop(score, { startMeasureIndex: sourceStartMeasureIndex, endMeasureIndex: sourceEndMeasureIndex, hand });
-  const attackIndexes = chunks.flatMap((chunk) => chunk.attackIndexes);
-  const attacks = attackIndexes.map((index) => sourceLoop.attacks[index]);
-  if (attacks.some((attack) => !attack)) throw new RangeError("Ear-search chunk indexes must exist in their source practice loop.");
-  const firstChunk = chunks[0];
-  const lastChunk = chunks.at(-1)!;
-  const firstAttack = attacks[0];
+  const sourceLoop = selectSheetMusicLoop(score, {
+    startMeasureIndex: sourceStartMeasureIndex,
+    endMeasureIndex: sourceEndMeasureIndex,
+    hand,
+    includeBoundaryTies: false,
+  });
+  const indexed = sourceLoop.attacks
+    .map((attack, index) => ({ attack, index }))
+    .filter(({ attack }) => attack.onsetBeat >= frameStartBeat - 1e-8 && attack.onsetBeat < frameEndBeat - 1e-8);
+  const attacks = indexed.map(({ attack }) => attack);
+  const attackIndexes = indexed.map(({ index }) => index);
   const upperNotes = attacks.map((attack) => attack.midiNotes.at(-1)!);
-  const attackLabels = chunks.flatMap((chunk) => chunk.attackLabels);
+  const attackLabels = attacks.map(earSearchAttackLabel);
   const allNotes = attacks.flatMap((attack) => attack.midiNotes);
   const hands = [...new Set(attacks.flatMap((attack) => attack.hands))].sort();
-  const endBeat = Math.max(...attacks.map((attack) => attack.onsetBeat + attack.soundingDurationBeats));
   const semitonePattern = upperNotes.slice(1).map((note, index) => note - upperNotes[index]);
   const intervalPreview = semitonePattern.slice(0, 8).map((interval) => `${interval > 0 ? "+" : ""}${interval}`).join(" · ");
+  const structuralId = `ear-search:${score.id}:${span}:${sourceStartMeasureIndex}-${sourceEndMeasureIndex}:${structuralIndex}:${hand}`;
+  const startAttackId = attacks[0]?.id ?? `${structuralId}:rest-start`;
+  const endAttackId = attacks.at(-1)?.id ?? `${structuralId}:rest-end`;
+  const measureNumbers = score.measures
+    .slice(sourceStartMeasureIndex, sourceEndMeasureIndex + 1)
+    .map((measure) => measure.number);
   return {
-    id: `ear-search:${sourceStartMeasureIndex}-${sourceEndMeasureIndex}:${hand}:${firstChunk.id}:${lastChunk.id}`,
-    ordinal: firstChunk.ordinal,
-    startAttackId: firstChunk.startAttackId,
-    endAttackId: lastChunk.endAttackId,
+    id: structuralId,
+    ordinal: structuralIndex,
+    startAttackId,
+    endAttackId,
     attackIndexes,
-    startAttackIndex: attackIndexes[0],
-    endAttackIndex: attackIndexes.at(-1)!,
+    startAttackIndex: attackIndexes[0] ?? -1,
+    endAttackIndex: attackIndexes.at(-1) ?? -1,
     attackCount: attacks.length,
     noteCount: attacks.reduce((sum, attack) => sum + attack.midiNotes.length, 0),
-    measureNumbers: [...new Set(attacks.map((attack) => attack.measureNumber))],
-    startBeat: firstAttack.onsetBeat,
-    endBeat,
-    durationBeats: endBeat - firstAttack.onsetBeat,
+    measureNumbers,
+    startBeat: frameStartBeat,
+    endBeat: frameEndBeat,
+    durationBeats: frameEndBeat - frameStartBeat,
     hands,
     handSummary: earSearchHandSummary(hands),
     attackLabels,
     noteSummary: earSearchNoteSummary(attackLabels),
     strategy: "interval-chain",
-    label: `Hear ${attacks.length} landings as one phrase`,
-    cue: `Hold the longer contour in memory${intervalPreview ? `; its opening moves ${intervalPreview} semitones` : ""}.`,
+    label: attacks.length ? `Hear ${attacks.length} landing${attacks.length === 1 ? "" : "s"} in this frame` : "Hear the silent frame",
+    cue: attacks.length
+      ? `Keep the written clock${intervalPreview ? `; its opening moves ${intervalPreview} semitones` : ""}.`
+      : "Keep the full frame of silence in the phrase clock.",
     semitonePattern,
     rhythmPatternBeats: attacks.slice(1).map((attack, index) => attack.onsetBeat - attacks[index].onsetBeat),
-    chordSpacings: chunks.flatMap((chunk) => chunk.chordSpacings),
+    chordSpacings: indexed.flatMap(({ attack, index }) => attack.midiNotes.length > 1 ? [{
+      attackIndex: index,
+      noteLabels: attack.notes.slice().sort((first, second) => first.pitch.midi - second.pitch.midi).map((note) => note.pitch.label),
+      ...chordSpacing(attack.midiNotes),
+    }] : []),
     rangeSemitones: allNotes.length ? Math.max(...allNotes) - Math.min(...allNotes) : 0,
     sourceStartMeasureIndex,
     sourceEndMeasureIndex,
     hand,
+    frameStartBeat,
+    frameEndBeat,
+    span,
   };
 }
 
-function coalesceEarSearchChunks(
-  score: SheetMusicScore,
-  chunks: readonly SheetReadingChunk[],
-  maxLandings: number,
-  sourceStartMeasureIndex: number,
-  sourceEndMeasureIndex: number,
-  hand: PracticeHand,
-) {
-  const coalesced: EarSearchChunk[] = [];
-  let start = 0;
-  while (start < chunks.length) {
-    let end = start;
-    let landingCount = 0;
-    while (end < chunks.length && landingCount + chunks[end].attackCount <= maxLandings) {
-      landingCount += chunks[end].attackCount;
-      end += 1;
-    }
-    const remainingLandings = chunks.slice(end).reduce((sum, chunk) => sum + chunk.attackCount, 0);
-    if (remainingLandings === 1 && end - start > 1) {
-      end -= 1;
-      landingCount -= chunks[end].attackCount;
-    }
-    if (landingCount >= 2) {
-      coalesced.push(mergeEarSearchChunks(score, chunks.slice(start, end), sourceStartMeasureIndex, sourceEndMeasureIndex, hand));
-    }
-    if (end <= start) break;
-    start = end;
-  }
-  return coalesced;
-}
-
-/** Build non-overlapping cognitive units, each bounded to two measures. */
+/** Build deterministic score-clock frames independent of note density. */
 export function buildEarSearchChunks(
   score: SheetMusicScore,
-  options: { hand?: PracticeHand; maxLandings?: EarSearchLandingLimit } = {},
+  options: { hand?: PracticeHand; span?: EarSearchTimeSpan } = {},
 ): EarSearchChunk[] {
-  const maxLandings = options.maxLandings ?? 4;
   const hand = options.hand ?? "both";
-  if (![4, 6, 8, 16, EAR_SEARCH_MAX_LANDINGS].includes(maxLandings)) {
-    throw new RangeError("Ear-search chunk size must be 4, 6, 8, 16, or 32 landings.");
-  }
+  const span = options.span ?? "half-bar";
+  if (!["half-bar", "one-bar", "two-bars"].includes(span)) throw new RangeError("Ear-search span must be half-bar, one-bar, or two-bars.");
   const chunks: EarSearchChunk[] = [];
-  for (let startMeasureIndex = 0; startMeasureIndex < score.measures.length; startMeasureIndex += 2) {
-    const endMeasureIndex = Math.min(score.measures.length - 1, startMeasureIndex + 1);
-    const baseLimit = Math.min(8, maxLandings);
-    const windowChunks = buildSheetMusicReadingChunks(score, {
-      startMeasureIndex,
-      endMeasureIndex,
-      hand,
-      minAttacks: 2,
-      maxAttacks: baseLimit,
-      targetAttacks: baseLimit,
-    });
-    if (maxLandings <= 8) {
-      chunks.push(...windowChunks
-        .filter((chunk) => chunk.attackCount >= 2 && chunk.attackCount <= maxLandings && chunk.measureNumbers.length <= 2)
-        .map((chunk) => withEarSearchSource(chunk, startMeasureIndex, endMeasureIndex, hand)));
-    } else {
-      chunks.push(...coalesceEarSearchChunks(
+  if (span === "half-bar") {
+    for (const measure of score.measures) {
+      const midpoint = measure.startBeat + measure.durationBeats / 2;
+      chunks.push(createEarSearchFrame(score, measure.index, measure.index, hand, span, measure.startBeat, midpoint, chunks.length));
+      chunks.push(createEarSearchFrame(score, measure.index, measure.index, hand, span, midpoint, measure.startBeat + measure.durationBeats, chunks.length));
+    }
+  } else {
+    const stride = span === "one-bar" ? 1 : 2;
+    for (let startMeasureIndex = 0; startMeasureIndex < score.measures.length; startMeasureIndex += stride) {
+      const endMeasureIndex = Math.min(score.measures.length - 1, startMeasureIndex + stride - 1);
+      const startMeasure = score.measures[startMeasureIndex];
+      const endMeasure = score.measures[endMeasureIndex];
+      chunks.push(createEarSearchFrame(
         score,
-        windowChunks.filter((chunk) => chunk.measureNumbers.length <= 2),
-        maxLandings,
         startMeasureIndex,
         endMeasureIndex,
         hand,
+        span,
+        startMeasure.startBeat,
+        endMeasure.startBeat + endMeasure.durationBeats,
+        chunks.length,
       ));
     }
   }
-  return chunks.map((chunk, ordinal) => ({ ...chunk, ordinal }));
+  return chunks;
 }
 
 function projectEarSearchAttackToStaff(attack: SheetMusicPracticeAttack, hand: PracticeHand): SheetMusicPracticeAttack | null {
@@ -587,22 +604,46 @@ export function selectEarSearchChunkLoop(
   const canonical = selectSheetMusicLoop(score, {
     startMeasureIndex: chunk.sourceStartMeasureIndex,
     endMeasureIndex: chunk.sourceEndMeasureIndex,
-    startAttackId: chunk.startAttackId,
-    endAttackId: chunk.endAttackId,
     hand: chunk.hand,
+    includeBoundaryTies: false,
   });
-  if (canonical.attacks.length !== chunk.attackCount) {
-    throw new RangeError(`Ear-search chunk is stale or mismatched: expected ${chunk.attackCount} landings but reconstructed ${canonical.attacks.length}.`);
+  const frameAttacks = canonical.attacks
+    .filter((attack) => attack.onsetBeat >= chunk.frameStartBeat - 1e-8 && attack.onsetBeat < chunk.frameEndBeat - 1e-8)
+    .map((attack) => ({ ...attack, relativeOnsetBeat: attack.onsetBeat - chunk.frameStartBeat }));
+  if (frameAttacks.length !== chunk.attackCount) {
+    throw new RangeError(`Ear-search chunk is stale or mismatched: expected ${chunk.attackCount} landings but reconstructed ${frameAttacks.length}.`);
   }
-  if (practiceLayer === chunk.hand) return canonical;
-  return {
+  const framed = {
     ...canonical,
+    startBeat: chunk.frameStartBeat,
+    endBeat: chunk.frameEndBeat,
+    measureNumbers: [...chunk.measureNumbers],
+    attacks: frameAttacks,
+  };
+  if (practiceLayer === chunk.hand) return framed;
+  return {
+    ...framed,
     hand: practiceLayer,
-    attacks: canonical.attacks.flatMap((attack) => {
+    attacks: frameAttacks.flatMap((attack) => {
       const projected = projectEarSearchAttackToStaff(attack, practiceLayer);
       return projected ? [projected] : [];
     }),
   };
+}
+
+function selectEarSearchMidiNotes(attack: Pick<SheetMusicPracticeAttack, "midiNotes" | "notes">, voice: EarSearchVoice) {
+  const ordered = [...attack.midiNotes].sort((first, second) => first - second);
+  if (!ordered.length) return [];
+  const upperStaffNotes = attack.notes.filter((note) => note.staff === 1).map((note) => note.pitch.midi);
+  const lowerStaffNotes = attack.notes.filter((note) => note.staff === 2).map((note) => note.pitch.midi);
+  const staffAnchors = [
+    ...(upperStaffNotes.length ? [Math.max(...upperStaffNotes)] : []),
+    ...(lowerStaffNotes.length ? [Math.min(...lowerStaffNotes)] : []),
+  ];
+  return voice === "upper" ? [ordered.at(-1)!]
+    : voice === "bass" ? [ordered[0]]
+      : voice === "staff-anchors" ? [...new Set(staffAnchors.length ? staffAnchors : [ordered.at(-1)!])].sort((first, second) => first - second)
+        : ordered.slice(0, 16);
 }
 
 export function earSearchLandingsForChunk(
@@ -614,17 +655,7 @@ export function earSearchLandingsForChunk(
   const voice = options.voice ?? "upper";
   const loop = selectEarSearchChunkLoop(score, chunk, practiceLayer);
   return loop.attacks.map((attack) => {
-    const ordered = [...attack.midiNotes].sort((first, second) => first - second);
-    const upperStaffNotes = attack.notes.filter((note) => note.staff === 1).map((note) => note.pitch.midi);
-    const lowerStaffNotes = attack.notes.filter((note) => note.staff === 2).map((note) => note.pitch.midi);
-    const staffAnchors = [
-      ...(upperStaffNotes.length ? [Math.max(...upperStaffNotes)] : []),
-      ...(lowerStaffNotes.length ? [Math.min(...lowerStaffNotes)] : []),
-    ];
-    const notes = voice === "upper" ? [ordered.at(-1)!]
-      : voice === "bass" ? [ordered[0]]
-        : voice === "staff-anchors" ? [...new Set(staffAnchors.length ? staffAnchors : [ordered.at(-1)!])].sort((first, second) => first - second)
-          : ordered.slice(0, 16);
+    const notes = selectEarSearchMidiNotes(attack, voice);
     const selectedPitches = new Set(notes);
     const sourceNoteIds = notes.flatMap((midi) => {
       const source = attack.notes.find((note) => note.pitch.midi === midi);
@@ -644,6 +675,181 @@ export function earSearchLandingsForChunk(
   });
 }
 
+function earSearchStaffForNotes(notes: ReadonlyArray<{ staff: number }>): EarSearchStaff {
+  const staves = new Set(notes.map((note) => note.staff));
+  return staves.has(1) && staves.has(2) ? "both" : staves.has(1) ? "upper" : staves.has(2) ? "lower" : "unknown";
+}
+
+function complementEarSearchSoundingIntervals(
+  intervals: ReadonlyArray<{ startMs: number; endMs: number }>,
+  totalDurationMs: number,
+): EarSearchRestSpan[] {
+  const merged: Array<{ startMs: number; endMs: number }> = [];
+  intervals
+    .filter((interval) => interval.endMs > interval.startMs)
+    .map((interval) => ({
+      startMs: Math.max(0, interval.startMs),
+      endMs: Math.min(totalDurationMs, interval.endMs),
+    }))
+    .filter((interval) => interval.endMs > interval.startMs)
+    .sort((first, second) => first.startMs - second.startMs || first.endMs - second.endMs)
+    .forEach((interval) => {
+      const previous = merged.at(-1);
+      if (previous && interval.startMs <= previous.endMs + 1e-8) previous.endMs = Math.max(previous.endMs, interval.endMs);
+      else merged.push({ ...interval });
+    });
+  const rests: EarSearchRestSpan[] = [];
+  let cursor = 0;
+  for (const interval of merged) {
+    if (interval.startMs > cursor + 1e-8) rests.push({ startMs: cursor, endMs: interval.startMs, durationMs: interval.startMs - cursor });
+    cursor = Math.max(cursor, interval.endMs);
+  }
+  if (cursor < totalDurationMs - 1e-8) rests.push({ startMs: cursor, endMs: totalDurationMs, durationMs: totalDurationMs - cursor });
+  return rests;
+}
+
+/**
+ * Build Sound Finder's literal frame-clock playback plan. Unlike the generic
+ * reference preview, this keeps every written gap and release, and represents
+ * a note already sounding at the boundary as a non-target carry cue.
+ */
+export function buildEarSearchReferencePlan(
+  score: SheetMusicScore,
+  chunk: EarSearchChunk,
+  targetLandings: readonly EarSearchLanding[],
+  options: {
+    hand?: PracticeHand;
+    voice?: EarSearchVoice;
+    tempoBpm: number;
+    arpeggioStepMs?: number;
+  },
+): EarSearchReferencePlan {
+  if (!score || !chunk || !Array.isArray(targetLandings)) throw new TypeError("Sound Finder reference playback needs a score, frame, and target route.");
+  const practiceLayer = options.hand ?? chunk.hand;
+  const voice = options.voice ?? "upper";
+  if (!["upper", "bass", "staff-anchors", "full"].includes(voice)) throw new RangeError("Unknown Sound Finder reference voice.");
+  if (!Number.isFinite(options.tempoBpm) || options.tempoBpm <= 0 || options.tempoBpm > 400) {
+    throw new RangeError("Reference tempo must be greater than zero and no more than 400 BPM.");
+  }
+  const arpeggioStepMs = options.arpeggioStepMs ?? 55;
+  if (!Number.isFinite(arpeggioStepMs) || arpeggioStepMs < 0 || arpeggioStepMs > 500) {
+    throw new RangeError("Reference arpeggio step must be from 0 through 500 ms.");
+  }
+  const canonicalLoop = selectEarSearchChunkLoop(score, chunk, chunk.hand);
+  const selectedLoop = selectEarSearchChunkLoop(score, chunk, practiceLayer);
+  const selectedAttacks = new Map(selectedLoop.attacks.map((attack) => [attack.id, attack]));
+  const targetIndexes = new Map<string, number>();
+  targetLandings.forEach((landing, index) => {
+    if (!landing || typeof landing.id !== "string" || !landing.id.trim()) throw new TypeError(`Target landing ${index + 1} needs an ID.`);
+    if (targetIndexes.has(landing.id)) throw new RangeError("Sound Finder target landing IDs must be unique.");
+    targetIndexes.set(landing.id, index);
+  });
+  const targetById = new Map<string, EarSearchLanding>(targetLandings.map((landing) => [landing.id, landing]));
+  const millisecondsPerBeat = 60_000 / options.tempoBpm;
+  const totalDurationMs = (chunk.frameEndBeat - chunk.frameStartBeat) * millisecondsPerBeat;
+  const soundingIntervals: Array<{ startMs: number; endMs: number }> = [];
+
+  const referenceNotes = (
+    attack: Pick<SheetMusicPracticeAttack, "notes" | "arpeggiate">,
+    selectedNoteIds: ReadonlySet<string>,
+    selectedMidi: ReadonlySet<number>,
+    onsetMs: number,
+  ): EarSearchReferencePlanNote[] => {
+    const ordered = attack.notes.slice().sort((first, second) => first.pitch.midi - second.pitch.midi || first.id.localeCompare(second.id));
+    if (attack.arpeggiate === "down") ordered.reverse();
+    return ordered.flatMap((note, noteIndex) => {
+      if (selectedNoteIds.size ? !selectedNoteIds.has(note.id) : !selectedMidi.has(note.pitch.midi)) return [];
+      const onsetOffsetMs = attack.arpeggiate ? noteIndex * arpeggioStepMs : 0;
+      const writtenDurationMs = note.soundingDurationBeats * millisecondsPerBeat - onsetOffsetMs;
+      const clippedDurationMs = Math.min(writtenDurationMs, totalDurationMs - onsetMs - onsetOffsetMs);
+      if (clippedDurationMs <= 1e-8) return [];
+      const startMs = onsetMs + onsetOffsetMs;
+      soundingIntervals.push({ startMs, endMs: startMs + clippedDurationMs });
+      return [{ noteId: note.id, midi: note.pitch.midi, onsetOffsetMs, durationMs: clippedDurationMs }];
+    });
+  };
+
+  const carryCues: EarSearchReferencePlanCue[] = score.attacks
+    .filter((attack) => attack.onsetBeat < chunk.frameStartBeat - 1e-8)
+    .flatMap((sourceAttack) => {
+      let carriedNotes = sourceAttack.notes.filter((note) => note.onsetBeat + note.soundingDurationBeats > chunk.frameStartBeat + 1e-8);
+      if (chunk.hand !== "both") carriedNotes = carriedNotes.filter((note) => note.hand === chunk.hand);
+      if (practiceLayer !== chunk.hand) {
+        const staff = practiceLayer === "right" ? 1 : 2;
+        carriedNotes = carriedNotes.filter((note) => note.staff === staff);
+      }
+      if (!carriedNotes.length) return [];
+      const carriedMidi = selectEarSearchMidiNotes({
+        notes: carriedNotes,
+        midiNotes: [...new Set(carriedNotes.map((note) => note.pitch.midi))].sort((first, second) => first - second),
+      }, voice);
+      const selectedMidi = new Set(carriedMidi);
+      const notes = carriedNotes
+        .filter((note) => selectedMidi.has(note.pitch.midi))
+        .sort((first, second) => first.pitch.midi - second.pitch.midi || first.id.localeCompare(second.id))
+        .flatMap((note): EarSearchReferencePlanNote[] => {
+          const durationMs = Math.min(
+            totalDurationMs,
+            (note.onsetBeat + note.soundingDurationBeats - chunk.frameStartBeat) * millisecondsPerBeat,
+          );
+          if (durationMs <= 1e-8) return [];
+          soundingIntervals.push({ startMs: 0, endMs: durationMs });
+          return [{ noteId: note.id, midi: note.pitch.midi, onsetOffsetMs: 0, durationMs }];
+        });
+      if (!notes.length) return [];
+      return [{
+        expectedIndex: -1,
+        attackId: sourceAttack.id,
+        measureNumber: sourceAttack.measureNumber,
+        scoreBeat: chunk.frameStartBeat,
+        onsetMs: 0,
+        endMs: Math.max(...notes.map((note) => note.durationMs)),
+        notes,
+        kind: "carry" as const,
+        canonicalAttackIndex: null,
+        targetLandingIndex: null,
+        staff: earSearchStaffForNotes(carriedNotes.filter((note) => selectedMidi.has(note.pitch.midi))),
+        carriedFromBeat: sourceAttack.onsetBeat,
+      }];
+    });
+
+  const attackCues: EarSearchReferencePlanCue[] = canonicalLoop.attacks.map((attack, canonicalAttackIndex) => {
+    const target = targetById.get(attack.id);
+    const selectedAttack = selectedAttacks.get(attack.id);
+    const selectedNoteIds = new Set<string>(target?.sourceNoteIds ?? []);
+    const selectedMidi = new Set<number>(target?.notes ?? []);
+    const onsetMs = (attack.onsetBeat - chunk.frameStartBeat) * millisecondsPerBeat;
+    const notes = selectedAttack && target
+      ? referenceNotes(selectedAttack, selectedNoteIds, selectedMidi, onsetMs)
+      : [];
+    return {
+      expectedIndex: canonicalAttackIndex,
+      attackId: attack.id,
+      measureNumber: attack.measureNumber,
+      scoreBeat: attack.onsetBeat,
+      onsetMs,
+      endMs: notes.length ? Math.max(...notes.map((note) => onsetMs + note.onsetOffsetMs + note.durationMs)) : onsetMs,
+      notes,
+      kind: "attack",
+      canonicalAttackIndex,
+      targetLandingIndex: targetIndexes.get(attack.id) ?? null,
+      staff: target?.staff ?? earSearchStaffForNotes(attack.notes),
+    };
+  });
+  const cues = [...carryCues, ...attackCues].sort((first, second) => first.onsetMs - second.onsetMs
+    || (first.kind === second.kind ? 0 : first.kind === "carry" ? -1 : 1)
+    || first.attackId.localeCompare(second.attackId));
+  return {
+    startIndex: 0,
+    baseBeat: chunk.frameStartBeat,
+    tempoBpm: options.tempoBpm,
+    cues,
+    totalDurationMs,
+    truncated: false,
+    restSpans: complementEarSearchSoundingIntervals(soundingIntervals, totalDurationMs),
+  };
+}
+
 /**
  * Return the latest landing with a note that is physically sounding at this
  * playback instant. Written and compacted rests therefore remain visually
@@ -658,7 +864,7 @@ export function earSearchPlaybackLandingAt(
   }
   const active = cues.findLastIndex((cue) => cue.notes.some((note) => {
     const startMs = cue.onsetMs + note.onsetOffsetMs;
-    const durationMs = Math.max(140, note.durationMs);
+    const durationMs = Math.max(0, note.durationMs);
     return elapsedMs >= startMs && elapsedMs < startMs + durationMs;
   }));
   return active >= 0 ? active : null;
@@ -723,9 +929,9 @@ export function earSearchCollectionFromAnalysis(analysis: SheetPitchCollectionAn
 }
 
 /**
- * Sound Finder teaches pitch order rather than score timing. Preserve every
- * audible cue and its sounding duration while shortening unusually long gaps
- * so a two-measure unit remains a practical memory object.
+ * Legacy compatibility helper for callers that still request a compact pitch
+ * preview. The Sound Finder HUD uses buildEarSearchReferencePlan instead so
+ * its written frame, holds, and silence remain literal.
  */
 export function compactEarSearchReferencePlan(
   plan: SheetReferencePlan,

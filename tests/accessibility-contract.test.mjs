@@ -292,14 +292,14 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /Wrong probes do not consume a slot or erase earlier progress/);
   assert.match(finder, /Timing is not graded/);
   assert.match(finder, /MIDI remains silent/);
-  assert.match(finder, /pitch, staff position, or target key is shown/);
+  assert.match(finder, /No pitch, pending staff, or target key is shown/);
   assert.match(finder, /hintMode === "blind"/);
   assert.match(finder, /if \(hintMode === "blind"\) return `Probe \$\{probeOrdinal\} received/);
   assert.match(finder, /const primaryCue: PrimaryCue = hintMode === "blind" \? null/, "progress-only mode must not expose which target-relative cue would be primary");
   assert.match(finder, /hintMode === "blind" \? "Relationship feedback" : chordCountMismatch \? "Chord key count first"/, "progress-only mode must not reveal a chord key-count mismatch through the interval heading");
   assert.match(finder, /className=\{styles\.nextMove\}>Next move<\/em>/, "the prioritized cue needs a visible non-color label");
   assert.match(finder, /aria-current=\{primaryCue === "place" \? "step" : undefined\}/, "the prioritized cue needs semantic state as well as styling");
-  assert.match(finder, /\{timelineLandings\.map\(\(item\) =>/);
+  assert.match(finder, /timelineLandings\.length \? timelineLandings\.map\(\(item\) =>/);
   assert.match(finder, /revealed \? <section className=\{styles\.revealDrawer\}/);
   assert.match(finder, /<RevealedMap[\s\S]*timelineLength=\{timelineTotal\}/, "the exact reveal must retain the canonical phrase width when a selected staff has rests");
   assert.match(finder, /\(slot - \.5\) \/ slotCount \* 100/, "revealed pitches must use canonical timeline slots instead of filtered landing order");
@@ -309,8 +309,9 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /<small role="status" aria-live="polite">\{frozen \? "Capture is paused in the Piano input bar\. " : ""\}\{audioNotice\}<\/small>/);
   assert.doesNotMatch(finder, /midiConnected|midiStatus|onConnectMidi|MIDI not connected/, "Sound Finder must use the shared Piano input bar for device setup");
   assert.match(finder, /role="progressbar" aria-label="Hidden reference playback"/);
-  assert.match(finder, /<option value=\{32\}>32 landings<\/option>/);
-  assert.match(finder, /selectEarSearchChunkLoop\(score, chunk\)/);
+  assert.match(finder, /<option value="half-bar">/);
+  assert.match(finder, /<option value="one-bar">/);
+  assert.match(finder, /<option value="two-bars">/);
   assert.match(finder, /MAX_EAR_SEARCH_REFERENCE_VOICES = 256/);
   assert.match(finder, /timelineTotal > 8 && styles\.memoryRailDense/);
   assert.match(finder, /parseStoredScoreFlowSource/);
@@ -319,11 +320,8 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
 
   assert.match(finder, /mode\?: "classic" \| "two-hand"/);
   assert.match(finder, /<option value="staff-anchors">One anchor per staff<\/option>/);
-  assert.match(finder, /const targetById = new Map\(searchLandings\.map/);
-  assert.match(finder, /target\.sourceNoteIds\.flatMap\(\(id\) => noteById\.get\(id\) \?\? \[\]\)/,
-    "audible reference notes must come from the same staff-projected hidden targets as evaluation");
-  assert.match(finder, /buildEarSearchChunks\(score, \{ hand: "both", maxLandings \}\)/,
-    "phrase navigation must use one canonical both-staff chunk list");
+  assert.match(finder, /buildEarSearchChunks\(score, \{ hand: "both", span: timeSpan \}\)/,
+    "phrase navigation must use one canonical both-staff score-time frame list");
   assert.doesNotMatch(finder, /buildEarSearchChunks\(score, \{ hand: practiceHand/,
     "staff changes must not regenerate different phrase boundaries");
   assert.match(finder, /selectEarSearchChunkLoop\(score, chunk, practiceHand\)/,
@@ -331,22 +329,28 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /Same phrase timeline/);
   assert.doesNotMatch(finder, /setPracticeHand\(next\); setChunkIndex\(0\)/,
     "a staff-layer change must keep the current phrase index");
-  assert.match(finder, /maxLandings: canonicalLoop\.attacks\.length/,
-    "reference timing must retain every canonical timeline slot");
-  assert.match(finder, /This phrase has no \{practiceHand/,
+  assert.match(finder, /buildEarSearchReferencePlan\(score, chunk, targetLandings/,
+    "reference audio must retain the structural score-time frame rather than rebasing itself on attacks");
+  assert.doesNotMatch(finder, /compactEarSearchReferencePlan/,
+    "Sound Finder must not shorten authored holds or rest spans");
+  assert.match(finder, /referencePlan\?\.restSpans/,
+    "the HUD must expose silence from the selected score-time frame rather than discarding it");
+  assert.match(finder, /This frame has no new attack in the \{practiceHand/,
     "an empty selected staff must remain on the same phrase instead of auto-advancing");
   assert.match(finder, /const handProgress = summarizeEarSearchHandProgress\(searchLandings, matched\)/);
   assert.match(finder, /className=\{styles\.handLane\} data-lane="upper"/);
   assert.match(finder, /className=\{styles\.handLane\} data-lane="lower"/);
   assert.match(finder, /Staff lanes come from the uploaded score\. MIDI reports keys, not which hand pressed them/);
   assert.match(finder, /Pitch remains hidden/);
-  assert.match(finder, /showStaff=\{twoHand\}/,
-    "staff provenance may join exact pitch only inside the learner-opened reveal");
+  assert.match(finder, /const showStaff = twoHand \|\| caught/,
+    "a classic Sound Finder chip may disclose authored staff only after that hidden attack is caught");
+  assert.match(finder, /showStaff \? staffGlyph/,
+    "caught staff color must be reinforced by a visible non-color glyph");
   assert.match(piano, /saved\.version === 27/);
   assert.match(piano, /const session: PersistedPianoSession = \{ version: 27,/);
 
   assert.match(model, /EAR_SEARCH_MAX_LANDINGS = 32/);
-  assert.match(model, /EarSearchLandingLimit = 4 \| 6 \| 8 \| 16 \| 32/);
+  assert.match(model, /EarSearchTimeSpan = "half-bar" \| "one-bar" \| "two-bars"/);
   assert.match(model, /EarSearchVoice = "upper" \| "bass" \| "staff-anchors" \| "full"/);
   assert.match(model, /EarSearchStaff = "upper" \| "lower" \| "both" \| "unknown"/);
   assert.match(model, /const selectedStaves = new Set\(attack\.notes[\s\S]*selectedPitches\.has\(note\.pitch\.midi\)/,
@@ -359,8 +363,15 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(model, /staff === "upper" \|\| staff === "both"/);
   assert.match(model, /staff === "lower" \|\| staff === "both"/);
   assert.match(model, /sourceStartMeasureIndex/);
+  assert.match(model, /frameStartBeat/);
+  assert.match(model, /frameEndBeat/);
+  assert.match(model, /kind: "attack" \| "carry"/,
+    "notes already sounding at a frame boundary need explicit carry semantics without becoming attacks");
+  assert.match(model, /restSpans: EarSearchRestSpan\[\]/,
+    "leading, interior, and trailing silence must remain first-class score-time data");
+  assert.match(model, /export function buildEarSearchReferencePlan/);
   assert.match(model, /selectEarSearchChunkLoop/);
-  assert.match(model, /startMeasureIndex \+= 2/);
+  assert.match(model, /span === "half-bar"/);
   assert.match(model, /Non-matching probes are ignored rather than accumulated as errors/);
   assert.match(model, /intervalDirection/);
   assert.match(model, /intervalWidth/);
@@ -372,6 +383,9 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finderCss, /\.handCue/);
   assert.match(finderCss, /\.handLane\[data-lane="upper"\]/);
   assert.match(finderCss, /\.handLane\[data-lane="lower"\]/);
+  assert.match(finderCss, /\.memoryRail li\.isCaught\[data-staff="upper"\]/);
+  assert.match(finderCss, /\.memoryRail li\.isCaught\[data-staff="lower"\]/);
+  assert.match(finderCss, /\.memoryRail li\.isCaught\[data-staff="both"\]/);
   assert.match(finderCss, /\.footerDeck input\[type="range"\][\s\S]*min-height: 44px/);
   assert.match(finderCss, /@media \(max-width: 1120px\) \{[\s\S]*\.transport \{ grid-column: 1 \/ -1;/, "the command transport must wrap before a 1024px desktop clips it");
   assert.match(finderCss, /@media \(prefers-reduced-motion: reduce\)/);

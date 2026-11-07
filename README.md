@@ -10,7 +10,15 @@ Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-ma
 
 Technical Notes: [open the implementation and model reference](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical)
 
-The current milestone is **Technical Flow · Immersion First v2.32**. It provides:
+The current milestone is **Sound Finder · Score-Time Frames v2.33**. It provides:
+
+- Half-bar, one-bar, and two-bar practice frames derived from written score time instead of a requested note count. Each selection stays aligned to its authored measure position, so changing the frame size changes the musical window rather than silently rebuilding an unrelated phrase.
+
+- Full selected-frame reference playback. Notes already sounding at the frame boundary are carried into the excerpt, and leading, interior, and trailing silence or rests remain part of the clock instead of being trimmed away; the learner hears the frame's actual spacing before beginning the untimed search.
+
+- Staff provenance revealed only as notes are found. A caught landing becomes a chip marked as authored upper staff, lower staff, or both through color plus a distinct glyph and written label, while the pitch and staff of every pending landing remain hidden.
+
+The prior **Technical Flow · Immersion First v2.32** remains available and provides:
 
 - A Technical Notes page that follows the browser's ordinary document scroll. Its compact four-link jump row stays in the page flow, anchor landings retain a small readable offset, and the former Safety section has been removed.
 

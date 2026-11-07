@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ORBIT_STUDY_MUSICXML, normalizeImportedMusicXmlScore, parseMusicXml } from "../lib/musicxml-import.ts";
-import { analyzeLocalPitchCollections, buildScoreReferencePlan, normalizeSheetMusicScore } from "../lib/sheet-music-coach-model.ts";
+import { analyzeLocalPitchCollections, normalizeSheetMusicScore } from "../lib/sheet-music-coach-model.ts";
 import { parseStoredScoreFlowSource } from "../lib/score-flow-storage.ts";
 import {
   advanceEarSearchTracker,
   buildEarSearchChunks,
+  buildEarSearchReferencePlan,
   compactEarSearchReferencePlan,
   createEarSearchTracker,
   earSearchCollectionFromAnalysis,
@@ -13,7 +14,6 @@ import {
   evaluateEarSearch,
   selectEarSearchChunkLoop,
   type EarSearchLanding,
-  type EarSearchLandingLimit,
   type EarSearchProbe,
 } from "../lib/piano-ear-search-model.ts";
 
@@ -97,6 +97,38 @@ function staggeredStaffScore() {
         { id: "upper-3", kind: "note", midi: 67, offsetBeats: 3, durationBeats: 1, staff: 1, hand: "unknown" },
       ],
     }],
+  });
+}
+
+function referenceClockScore() {
+  return normalizeSheetMusicScore({
+    id: "reference-clock",
+    title: "Reference clock",
+    tempoBpm: 60,
+    measures: [
+      { number: 1, durationBeats: 4, events: [
+        { id: "held", kind: "note", midi: 60, offsetBeats: 0, durationBeats: 3, staff: 1, hand: "right" },
+        { id: "late", kind: "note", midi: 64, offsetBeats: 3.5, durationBeats: 0.25, staff: 1, hand: "right" },
+      ] },
+      { number: 2, durationBeats: 4, events: [
+        { id: "after-leading-rest", kind: "note", midi: 67, offsetBeats: 0.5, durationBeats: 0.25, staff: 1, hand: "right" },
+        { id: "after-interior-rest", kind: "note", midi: 69, offsetBeats: 1.25, durationBeats: 0.25, staff: 1, hand: "right" },
+        { id: "written-rest", kind: "rest", offsetBeats: 1.5, durationBeats: 2.5, staff: 1, hand: "right" },
+      ] },
+    ],
+  });
+}
+
+function oddMeasureScore() {
+  return normalizeSheetMusicScore({
+    id: "odd-measures",
+    title: "Odd measures",
+    tempoBpm: 96,
+    measures: Array.from({ length: 3 }, (_, index) => ({
+      number: index + 1,
+      durationBeats: 4,
+      events: [{ id: `odd-${index}`, kind: "note" as const, midi: 60 + index, offsetBeats: 0, durationBeats: 1, staff: 1, hand: "right" as const }],
+    })),
   });
 }
 
@@ -321,138 +353,150 @@ test("reference compaction shortens only silence and never creates a false overl
   assert.equal(compact.truncated, false);
 });
 
-test("score chunks and derived targets retain their source loop context", () => {
-  const score = normalizeImportedMusicXmlScore(parseMusicXml(ORBIT_STUDY_MUSICXML, "orbit-study.musicxml"));
-  const chunks = buildEarSearchChunks(score, { maxLandings: 8 });
-  assert.ok(chunks.length > 0);
-  chunks.forEach((chunk) => {
-    assert.ok(chunk.attackCount >= 2);
-    assert.ok(chunk.attackCount <= 8);
-    assert.ok(chunk.measureNumbers.length <= 2);
-  });
-  const first = chunks[0];
-  const targets = earSearchLandingsForChunk(score, first, { voice: "upper" });
-  assert.equal(targets.length, first.attackCount);
-  assert.ok(targets.every((target) => target.notes.length === 1));
-  const loop = selectEarSearchChunkLoop(score, first);
-  assert.equal(loop.attacks.length, targets.length);
+test("time spans map dense music to structural half-, one-, and two-bar frames", () => {
+  const score = denseLandingScore();
+  const halves = buildEarSearchChunks(score, { hand: "right", span: "half-bar" });
+  const bars = buildEarSearchChunks(score, { hand: "right", span: "one-bar" });
+  const pairs = buildEarSearchChunks(score, { hand: "right", span: "two-bars" });
+  assert.deepEqual(halves.map((chunk) => chunk.attackCount), [8, 8, 8, 8]);
+  assert.deepEqual(bars.map((chunk) => chunk.attackCount), [16, 16]);
+  assert.deepEqual(pairs.map((chunk) => chunk.attackCount), [32]);
+  assert.deepEqual(halves.map((chunk) => [chunk.frameStartBeat, chunk.frameEndBeat]), [[0, 2], [2, 4], [4, 6], [6, 8]]);
+  assert.deepEqual(bars.map((chunk) => [chunk.frameStartBeat, chunk.frameEndBeat]), [[0, 4], [4, 8]]);
+  assert.deepEqual(pairs.map((chunk) => [chunk.frameStartBeat, chunk.frameEndBeat]), [[0, 8]]);
 });
 
-test("canonical phrases keep Orbit starts fixed while staff layers change", () => {
-  const score = normalizeImportedMusicXmlScore(parseMusicXml(ORBIT_STUDY_MUSICXML, "orbit-study.musicxml"));
-  const canonical = buildEarSearchChunks(score, { hand: "both", maxLandings: 8 });
-  assert.deepEqual(canonical.map((chunk) => chunk.startBeat), [0, 4, 8, 12]);
-  const phraseTwo = canonical[1];
-  assert.ok(phraseTwo);
-  assert.equal(phraseTwo.ordinal, 1);
-  assert.equal(phraseTwo.startBeat, 4);
-  assert.equal(phraseTwo.endBeat, 8);
+test("frame boundaries are invariant to density and retain an odd final measure", () => {
+  const sparse = buildEarSearchChunks(denseLandingScore(10), { span: "half-bar" });
+  const dense = buildEarSearchChunks(denseLandingScore(66), { span: "half-bar" });
+  assert.deepEqual(sparse.map((chunk) => [chunk.frameStartBeat, chunk.frameEndBeat]), dense.map((chunk) => [chunk.frameStartBeat, chunk.frameEndBeat]));
+  assert.equal(buildEarSearchChunks(denseLandingScore(66), { span: "two-bars" })[0].attackCount, 66,
+    "32 remains a search safety limit, not a frame boundary");
 
+  const odd = buildEarSearchChunks(oddMeasureScore(), { span: "two-bars" });
+  assert.deepEqual(odd.map((chunk) => [chunk.sourceStartMeasureIndex, chunk.sourceEndMeasureIndex]), [[0, 1], [2, 2]]);
+  assert.deepEqual(odd.map((chunk) => [chunk.frameStartBeat, chunk.frameEndBeat]), [[0, 8], [8, 12]]);
+});
+
+test("one-attack and rest-only frames remain first-class chunks", () => {
+  const score = referenceClockScore();
+  const chunks = buildEarSearchChunks(score, { span: "half-bar" });
+  assert.deepEqual(chunks.map((chunk) => chunk.attackCount), [1, 1, 2, 0]);
+  assert.equal(chunks[3].noteSummary, "rest");
+  assert.deepEqual(selectEarSearchChunkLoop(score, chunks[3]).attacks, []);
+  assert.deepEqual(earSearchLandingsForChunk(score, chunks[3]), []);
+});
+
+test("canonical Orbit frames keep bar starts fixed while staff projections change", () => {
+  const score = normalizeImportedMusicXmlScore(parseMusicXml(ORBIT_STUDY_MUSICXML, "orbit-study.musicxml"));
+  const canonical = buildEarSearchChunks(score, { hand: "both", span: "one-bar" });
+  assert.deepEqual(canonical.map((chunk) => chunk.frameStartBeat), [0, 4, 8, 12]);
+  const phraseTwo = canonical[1];
   const upper = selectEarSearchChunkLoop(score, phraseTwo, "right");
   const lower = selectEarSearchChunkLoop(score, phraseTwo, "left");
   const both = selectEarSearchChunkLoop(score, phraseTwo, "both");
-  assert.ok(upper.attacks.every((attack) => attack.onsetBeat >= 4 && attack.onsetBeat < 8));
-  assert.ok(lower.attacks.every((attack) => attack.onsetBeat >= 4 && attack.onsetBeat < 8));
-  assert.ok(both.attacks.every((attack) => attack.onsetBeat >= 4 && attack.onsetBeat < 8));
+  for (const loop of [upper, lower, both]) {
+    assert.equal(loop.startBeat, 4);
+    assert.equal(loop.endBeat, 8);
+    assert.ok(loop.attacks.every((attack) => attack.onsetBeat >= 4 && attack.onsetBeat < 8));
+  }
   assert.deepEqual(earSearchLandingsForChunk(score, phraseTwo, { hand: "left", voice: "full" }).flatMap((item) => item.notes), [53, 60]);
 });
 
-test("staff projections retain canonical attack IDs, slots, and leading silence", () => {
+test("staff projections retain the canonical frame and silent attack slots", () => {
   const score = staggeredStaffScore();
-  const chunk = buildEarSearchChunks(score, { hand: "both", maxLandings: 4 })[0];
-  assert.ok(chunk);
+  const chunk = buildEarSearchChunks(score, { hand: "both", span: "one-bar" })[0];
   const canonicalLoop = selectEarSearchChunkLoop(score, chunk);
   const upperLoop = selectEarSearchChunkLoop(score, chunk, "right");
   const lowerLoop = selectEarSearchChunkLoop(score, chunk, "left");
   assert.deepEqual(canonicalLoop.attacks.map((attack) => attack.onsetBeat), [0, 1, 2, 3]);
   assert.deepEqual(upperLoop.attacks.map((attack) => attack.onsetBeat), [0, 2, 3]);
   assert.deepEqual(lowerLoop.attacks.map((attack) => attack.onsetBeat), [1, 2]);
-  assert.deepEqual(upperLoop.attacks.map((attack) => attack.id), [canonicalLoop.attacks[0].id, canonicalLoop.attacks[2].id, canonicalLoop.attacks[3].id]);
-  assert.deepEqual(lowerLoop.attacks.map((attack) => attack.id), [canonicalLoop.attacks[1].id, canonicalLoop.attacks[2].id]);
+  assert.deepEqual([upperLoop.startBeat, upperLoop.endBeat], [0, 4]);
+  assert.deepEqual([lowerLoop.startBeat, lowerLoop.endBeat], [0, 4]);
 
-  const upper = earSearchLandingsForChunk(score, chunk, { hand: "right", voice: "full" });
   const lower = earSearchLandingsForChunk(score, chunk, { hand: "left", voice: "full" });
-  const both = earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "full" });
-  assert.deepEqual(upper.map((item) => item.notes), [[60], [64], [67]]);
-  assert.deepEqual(lower.map((item) => item.notes), [[48], [52]]);
-  assert.deepEqual(both.map((item) => item.notes), [[60], [48], [52, 64], [67]]);
-
-  const canonicalPlan = buildScoreReferencePlan(canonicalLoop, { tempoBpm: 60, maxLandings: canonicalLoop.attacks.length });
-  const lowerIds = new Set(lower.map((item) => item.id));
-  const lowerCues = canonicalPlan.cues.filter((cue) => lowerIds.has(cue.attackId));
-  assert.equal(canonicalPlan.baseBeat, 0);
-  assert.equal(lowerCues[0].onsetMs, 1_000, "lower-staff playback retains one beat of leading silence");
+  const plan = buildEarSearchReferencePlan(score, chunk, lower, { hand: "left", voice: "full", tempoBpm: 60 });
+  const attacks = plan.cues.filter((cue) => cue.kind === "attack");
+  assert.equal(attacks.length, 4, "the canonical attack clock is never projected away");
+  assert.deepEqual(attacks.map((cue) => cue.notes.length), [0, 1, 1, 0]);
+  assert.deepEqual(attacks.map((cue) => cue.targetLandingIndex), [null, 0, 1, null]);
+  assert.deepEqual(plan.restSpans, [
+    { startMs: 0, endMs: 1_000, durationMs: 1_000 },
+    { startMs: 3_000, endMs: 4_000, durationMs: 1_000 },
+  ]);
 });
 
-test("hand-filtered chunk IDs round-trip for lower, upper, and both staffs", () => {
+test("Sound Finder reference plans preserve carries, full releases, and every kind of silence", () => {
+  const score = referenceClockScore();
+  const frames = buildEarSearchChunks(score, { hand: "both", span: "half-bar" });
+
+  const openingTargets = earSearchLandingsForChunk(score, frames[0], { hand: "right", voice: "full" });
+  const opening = buildEarSearchReferencePlan(score, frames[0], openingTargets, { hand: "right", voice: "full", tempoBpm: 60 });
+  assert.equal(opening.totalDurationMs, 2_000);
+  assert.equal(opening.cues[0].notes[0].durationMs, 2_000, "the written hold is clipped only by the frame end");
+  assert.deepEqual(opening.restSpans, []);
+
+  const carriedTargets = earSearchLandingsForChunk(score, frames[1], { hand: "right", voice: "full" });
+  const carried = buildEarSearchReferencePlan(score, frames[1], carriedTargets, { hand: "right", voice: "full", tempoBpm: 60 });
+  assert.deepEqual(carried.cues.map((cue) => cue.kind), ["carry", "attack"]);
+  assert.equal(carried.cues[0].targetLandingIndex, null);
+  assert.equal(carried.cues[0].carriedFromBeat, 0);
+  assert.equal(carried.cues[0].notes[0].durationMs, 1_000);
+  assert.equal(carried.cues[1].notes[0].durationMs, 250);
+  assert.deepEqual(carried.restSpans, [
+    { startMs: 1_000, endMs: 1_500, durationMs: 500 },
+    { startMs: 1_750, endMs: 2_000, durationMs: 250 },
+  ]);
+
+  const restsTargets = earSearchLandingsForChunk(score, frames[2], { hand: "right", voice: "full" });
+  const rests = buildEarSearchReferencePlan(score, frames[2], restsTargets, { hand: "right", voice: "full", tempoBpm: 60 });
+  assert.deepEqual(rests.restSpans, [
+    { startMs: 0, endMs: 500, durationMs: 500 },
+    { startMs: 750, endMs: 1_250, durationMs: 500 },
+    { startMs: 1_500, endMs: 2_000, durationMs: 500 },
+  ]);
+  const silent = buildEarSearchReferencePlan(score, frames[3], [], { hand: "right", voice: "full", tempoBpm: 60 });
+  assert.deepEqual(silent.cues, []);
+  assert.deepEqual(silent.restSpans, [{ startMs: 0, endMs: 2_000, durationMs: 2_000 }]);
+});
+
+test("hand-filtered chunks and IDs round-trip on the same structural clock", () => {
   const score = twoStaffRoundTripScore();
   for (const hand of ["left", "right", "both"] as const) {
-    const chunks = buildEarSearchChunks(score, { hand, maxLandings: 4 });
-    assert.ok(chunks.length > 0, hand);
-    for (const chunk of chunks) {
-      assert.equal(chunk.hand, hand);
-      assert.equal(chunk.sourceStartMeasureIndex, 0);
-      assert.equal(chunk.sourceEndMeasureIndex, 1);
-      if (hand !== "both") assert.match(chunk.startAttackId, new RegExp(`:${hand}$`));
-      const loop = selectEarSearchChunkLoop(score, chunk);
-      const targets = earSearchLandingsForChunk(score, chunk, { hand, voice: hand === "left" ? "bass" : "upper" });
-      assert.equal(loop.attacks.length, chunk.attackCount, hand);
-      assert.equal(targets.length, chunk.attackCount, hand);
-    }
+    const chunk = buildEarSearchChunks(score, { hand, span: "two-bars" })[0];
+    assert.equal(chunk.hand, hand);
+    assert.deepEqual([chunk.sourceStartMeasureIndex, chunk.sourceEndMeasureIndex], [0, 1]);
+    if (hand !== "both") assert.match(chunk.startAttackId, new RegExp(`:${hand}$`));
+    const loop = selectEarSearchChunkLoop(score, chunk);
+    const targets = earSearchLandingsForChunk(score, chunk, { hand, voice: hand === "left" ? "bass" : "upper" });
+    assert.equal(loop.attacks.length, chunk.attackCount, hand);
+    assert.equal(targets.length, chunk.attackCount, hand);
   }
 });
 
-test("synthetic boundary-tie chunk IDs round-trip through their source measure window", () => {
+test("a tied note crossing a frame boundary is carry audio, never a target attack", () => {
   const score = boundaryTieScore();
-  const chunk = buildEarSearchChunks(score, { hand: "both", maxLandings: 4 })
-    .find((candidate) => candidate.startAttackId.startsWith("boundary-"));
-  assert.ok(chunk);
-  assert.equal(chunk.sourceStartMeasureIndex, 2);
-  assert.equal(chunk.sourceEndMeasureIndex, 2);
-  assert.equal(selectEarSearchChunkLoop(score, chunk).attacks.length, chunk.attackCount);
-  assert.equal(earSearchLandingsForChunk(score, chunk, { hand: "both", voice: "full" }).length, chunk.attackCount);
-  const projected = selectEarSearchChunkLoop(score, chunk, "right");
-  assert.equal(projected.attacks[0].id, selectEarSearchChunkLoop(score, chunk).attacks[0].id);
-  assert.equal(earSearchLandingsForChunk(score, chunk, { hand: "left", voice: "full" }).length, 0,
-    "an empty lower-staff layer remains an empty projection of this phrase");
+  const measureThree = buildEarSearchChunks(score, { hand: "both", span: "one-bar" })[2];
+  const targets = earSearchLandingsForChunk(score, measureThree, { hand: "right", voice: "full" });
+  assert.ok(targets.every((target) => !target.sourceNoteIds?.includes("tie-stop")));
+  const plan = buildEarSearchReferencePlan(score, measureThree, targets, { hand: "right", voice: "full", tempoBpm: 60 });
+  const carry = plan.cues.find((cue) => cue.kind === "carry");
+  assert.ok(carry);
+  assert.equal(carry.targetLandingIndex, null);
+  assert.equal(carry.notes[0].midi, 60);
 });
 
-test("larger memory limits coalesce natural chunks inside one two-measure window", () => {
-  const score = denseLandingScore();
-  const natural = buildEarSearchChunks(score, { hand: "right", maxLandings: 8 });
-  assert.deepEqual(natural.map((chunk) => chunk.attackCount), [8, 8, 8, 8]);
-  const medium = buildEarSearchChunks(score, { hand: "right", maxLandings: 16 });
-  assert.deepEqual(medium.map((chunk) => chunk.attackCount), [16, 16]);
-  const expanded = buildEarSearchChunks(score, { hand: "right", maxLandings: 32 });
-  assert.equal(expanded.length, 1);
-  assert.equal(expanded[0].attackCount, 32);
-  assert.deepEqual(expanded[0].attackIndexes, natural.flatMap((chunk) => chunk.attackIndexes));
-  assert.equal(expanded[0].startAttackId, natural[0].startAttackId);
-  assert.equal(expanded[0].endAttackId, natural.at(-1)!.endAttackId);
-  assert.equal(expanded[0].sourceStartMeasureIndex, 0);
-  assert.equal(expanded[0].sourceEndMeasureIndex, 1);
-  assert.equal(selectEarSearchChunkLoop(score, expanded[0]).attacks.length, 32);
-  assert.equal(earSearchLandingsForChunk(score, expanded[0], { hand: "right" }).length, 32);
-  assert.throws(() => buildEarSearchChunks(score, { maxLandings: 33 as EarSearchLandingLimit }), /4, 6, 8, 16, or 32/);
-  assert.throws(() => buildEarSearchChunks(score, { maxLandings: 12 as EarSearchLandingLimit }), /4, 6, 8, 16, or 32/);
-});
-
-test("extended chunks rebalance a trailing singleton without dropping a source attack", () => {
-  const score = denseLandingScore(33);
-  const chunks = buildEarSearchChunks(score, { hand: "right", maxLandings: 32 });
-  assert.equal(chunks.length, 2);
-  assert.ok(chunks.every((chunk) => chunk.attackCount >= 2 && chunk.attackCount <= 32));
-  const attackIndexes = chunks.flatMap((chunk) => chunk.attackIndexes);
-  assert.deepEqual(attackIndexes, Array.from({ length: 33 }, (_, index) => index));
-  assert.equal(chunks.reduce((sum, chunk) => sum + chunk.attackCount, 0), 33);
-  chunks.forEach((chunk) => assert.equal(selectEarSearchChunkLoop(score, chunk).attacks.length, chunk.attackCount));
-});
-
-test("chunk-loop reconstruction rejects stale attack-count metadata", () => {
-  const score = denseLandingScore();
-  const chunk = buildEarSearchChunks(score, { hand: "right", maxLandings: 8 })[0];
+test("chunk-loop reconstruction rejects stale attack-count metadata even for empty frames", () => {
+  const score = referenceClockScore();
+  const sounding = buildEarSearchChunks(score, { span: "half-bar" })[0];
   assert.throws(
-    () => selectEarSearchChunkLoop(score, { ...chunk, attackCount: chunk.attackCount + 1 }),
-    /stale or mismatched: expected 9 landings but reconstructed 8/,
+    () => selectEarSearchChunkLoop(score, { ...sounding, attackCount: sounding.attackCount + 1 }),
+    /stale or mismatched: expected 2 landings but reconstructed 1/,
+  );
+  const silent = buildEarSearchChunks(score, { span: "half-bar" })[3];
+  assert.throws(
+    () => selectEarSearchChunkLoop(score, { ...silent, attackCount: 1 }),
+    /stale or mismatched: expected 1 landings but reconstructed 0/,
   );
 });

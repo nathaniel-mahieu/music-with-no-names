@@ -460,9 +460,13 @@
 .twoHandMemory li[data-staff="lower"] i { color: var(--ear-lower); border-color: color-mix(in srgb, var(--ear-lower) 52%, transparent); border-radius: 44% 44% 50% 50%; }
 .twoHandMemory li[data-staff="both"] i { color: var(--ear-violet); border-color: color-mix(in srgb, var(--ear-violet) 62%, transparent); border-radius: 9px; }
 .twoHandMemory li[data-staff="unknown"] i { color: var(--ear-muted); border-style: dashed; }
-.twoHandMemory li.isCaught[data-staff="upper"] i { color: #071018; background: var(--ear-upper); box-shadow: 0 0 15px rgba(134, 207, 255, .38); }
-.twoHandMemory li.isCaught[data-staff="lower"] i { color: #1a0d08; background: var(--ear-lower); box-shadow: 0 0 15px rgba(255, 174, 130, .34); }
-.twoHandMemory li.isCaught[data-staff="both"] i { color: #0f0a19; background: var(--ear-violet); box-shadow: 0 0 17px rgba(180, 155, 255, .42); }
+.memoryRail li.isCaught[data-staff="upper"] { color: var(--ear-upper); }
+.memoryRail li.isCaught[data-staff="lower"] { color: var(--ear-lower); }
+.memoryRail li.isCaught[data-staff="both"] { color: var(--ear-violet); }
+.memoryRail li.isCaught[data-staff="upper"] i { color: #071018; border-color: var(--ear-upper); background: var(--ear-upper); box-shadow: 0 0 15px rgba(134, 207, 255, .38); }
+.memoryRail li.isCaught[data-staff="lower"] i { color: #1a0d08; border-color: var(--ear-lower); background: var(--ear-lower); box-shadow: 0 0 15px rgba(255, 174, 130, .34); }
+.memoryRail li.isCaught[data-staff="both"] i { color: #0f0a19; border-color: var(--ear-violet); background: var(--ear-violet); box-shadow: 0 0 17px rgba(180, 155, 255, .42); }
+.memoryRail li.isCaught[data-staff="unknown"] i { color: var(--ear-muted); border-style: dashed; background: transparent; box-shadow: none; }
 
 .compassField {
   position: relative;
