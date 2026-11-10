@@ -11,6 +11,22 @@ test("every learning lab exposes a named semantic region", async () => {
   }
 });
 
+test("absolute-pitch color glow stays vivid, transient, and interaction-safe", async () => {
+  const [piano, css] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(piano, /\? \[\{ opacity: 0\.26 \}, \{ opacity: 0\.26 \}\]/,
+    "reduced-motion users should receive a clear cue without a moving fade");
+  assert.match(piano, /\[\{ opacity: 0\.42 \}, \{ opacity: 0\.31, offset: 0\.22 \}, \{ opacity: 0 \}\]/,
+    "the standard cue should have a clear but restrained peak and hold");
+  assert.match(piano, /duration: reducedMotion \? 330 : 820, easing: "ease-out"/);
+  assert.match(piano, /<div ref=\{pitchGlowRef\} className="piano-pitch-glow" aria-hidden="true">/);
+  assert.match(css, /\.piano-pitch-glow \{[^}]*pointer-events: none/);
+  assert.match(css, /@media \(forced-colors: active\) \{\s*\.piano-pitch-glow \{ display: none; \}/);
+});
+
 test("Sight Shapes keeps notation, interval, keyboard, and learner-report channels explicit and silent", async () => {
   const [piano, sight, sightCss, model] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),

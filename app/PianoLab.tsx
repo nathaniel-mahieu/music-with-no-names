@@ -4393,8 +4393,8 @@ export function PianoLab() {
       if (!layer?.animate) return;
       layer.getAnimations().forEach((animation) => animation.cancel());
       const frames = reducedMotion
-        ? [{ opacity: 0.18 }, { opacity: 0.18 }]
-        : [{ opacity: 0.32 }, { opacity: 0.24, offset: 0.22 }, { opacity: 0 }];
+        ? [{ opacity: 0.26 }, { opacity: 0.26 }]
+        : [{ opacity: 0.42 }, { opacity: 0.31, offset: 0.22 }, { opacity: 0 }];
       layer.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
     });
   }, []);
