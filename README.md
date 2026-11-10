@@ -10,7 +10,15 @@ Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-ma
 
 Technical Notes: [open the implementation and model reference](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical)
 
-The current milestone is **Sound Finder · Score-Time Frames v2.33**. It provides:
+The current milestone is **Sound Finder · Ear Hints + Future Echoes v2.34**. It provides:
+
+- Learner-requested attack-chip ear hints after the whole hidden frame has played. Each non-rest chip becomes an explicit replay control for that one hidden note or chord; replaying it never enters a MIDI probe, advances the secure prefix, or reveals its pitch name.
+
+- Brief future echoes when an exploratory MIDI attack burst contains a key written later in the same hidden frame. Every compatible later chip glows without revealing pitch or staff; a chord chip reports the exact fraction of its distinct target keys present, even when target-aware evaluation splits one physical chord across probes. The next required landing and already accepted probes remain excluded so the cue cannot become credit or a skip-ahead mechanism.
+
+- One shared, bounded synthesis path for full-frame references and chip ear hints, with explicit user initiation, normalized multi-key gain, the existing reference-level control, compressor protection, and cancellation when another playback starts.
+
+The prior **Sound Finder · Score-Time Frames v2.33** remains available and provides:
 
 - Half-bar, one-bar, and two-bar practice frames derived from written score time instead of a requested note count. Each selection stays aligned to its authored measure position, so changing the frame size changes the musical window rather than silently rebuilding an unrelated phrase.
 

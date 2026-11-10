@@ -380,7 +380,7 @@
 }
 
 .memoryRailDense ol {
-  grid-template-columns: repeat(8, minmax(12px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(24px, 1fr));
   align-content: center;
   gap: 7px 2px;
   overflow: visible;
@@ -401,6 +401,80 @@
 
 .memoryRailDense li.isCurrent i {
   box-shadow: 0 0 0 3px rgba(122, 184, 255, .1), 0 0 12px rgba(122, 184, 255, .32);
+}
+
+.memoryRail li.hasAttackButton {
+  display: block;
+}
+
+.memoryRail .memoryChipButton {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0;
+  color: inherit;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+
+.memoryRail .memoryChipButton:hover:not(:disabled) {
+  border-color: transparent;
+  background: rgba(255, 255, 255, .045);
+}
+
+.memoryRail .memoryChipButton:disabled {
+  opacity: .56;
+}
+
+.memoryRail .memoryChipButton:focus-visible {
+  outline-offset: 1px;
+}
+
+.memoryRail .memoryChipButton:focus-visible i {
+  outline: 2px solid var(--ear-gold);
+  outline-offset: 2px;
+}
+
+.memoryRailDense .memoryChipButton {
+  grid-template-columns: 1fr;
+  place-items: center;
+  min-height: 24px;
+}
+
+.memoryRail li[data-future-echo="true"] {
+  color: var(--ear-gold);
+}
+
+.memoryRail li[data-future-echo="true"] i {
+  position: relative;
+  color: var(--ear-gold);
+  border-color: var(--ear-gold);
+  background: var(--future-fill);
+  box-shadow: var(--future-halo);
+}
+
+.memoryRail li[data-future-echo="true"] i::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 2px solid var(--ear-gold);
+  border-radius: inherit;
+  opacity: var(--future-strength);
+  box-shadow: 0 0 18px var(--ear-gold), inset 0 0 9px rgba(255, 209, 122, .45);
+  pointer-events: none;
+  animation: futureEchoPulse 720ms ease-out both;
+}
+
+.memoryRail li[data-auditioning="true"] i {
+  color: #06130f;
+  border-color: var(--ear-teal);
+  background: var(--ear-teal);
+  box-shadow: 0 0 0 4px rgba(114, 230, 209, .12), 0 0 22px rgba(114, 230, 209, .68);
 }
 
 .memoryFooter,
@@ -1096,6 +1170,12 @@
   50% { scale: 1.035; filter: brightness(1.18); }
 }
 
+@keyframes futureEchoPulse {
+  0% { transform: scale(.78); }
+  45% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
 @media (max-width: 1120px) {
   .footerDeck { grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(110px, .7fr)) auto; gap: 8px; }
 }
@@ -1130,9 +1210,11 @@
   .memoryRail,
   .probeDock { display: block; overflow: visible; border: 0; border-bottom: 1px solid var(--ear-line); }
   .memoryRail ol { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0; }
-  .memoryRail.memoryRailDense ol { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .memoryRail.memoryRailDense ol { grid-template-columns: repeat(auto-fit, minmax(28px, 1fr)); }
   .memoryRail li { grid-template-columns: 28px 1fr; }
   .memoryRail.memoryRailDense li { grid-template-columns: 1fr; }
+  .memoryRail li.hasAttackButton,
+  .memoryRail.memoryRailDense li.hasAttackButton { display: block; }
   .memoryRail li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .compassField { min-height: 470px; }
   .twoHandCompassField { min-height: 550px; }
@@ -1185,6 +1267,8 @@
   .phaseLamp,
   .probeDock li.isAccepted > i { border-color: Highlight; background: Highlight; }
   .memoryRail li.isCurrent i { border-color: Highlight; outline: 2px dashed Highlight; outline-offset: 2px; }
+  .memoryRail li[data-future-echo="true"] i,
+  .memoryRail li[data-auditioning="true"] i { color: HighlightText; border-color: Highlight; outline: 2px solid Highlight; outline-offset: 3px; background: Highlight; }
   .soundCore { border-color: Highlight; }
   .handCue,
   .handCueCore,

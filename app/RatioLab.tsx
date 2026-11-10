@@ -1060,7 +1060,7 @@ export function RatioLab() {
 
       {activeLab !== "guide" ? <footer>
         <span>Built from frequency, time, and listening.</span>
-        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response · v2.33</span>
+        <span>Explore intervals · scales · piano + MIDI · voice pitch · hearing · harmony · rhythm · form · recordings · musical landmarks · your response · v2.34</span>
       </footer> : null}
     </main>
   );

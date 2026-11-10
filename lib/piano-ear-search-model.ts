@@ -44,6 +44,15 @@ export type EarSearchHandProgress = {
   nextStaff: EarSearchStaff | null;
 };
 
+export type EarSearchFutureEcho = {
+  landingId: string;
+  landingIndex: number;
+  matchedNoteCount: number;
+  targetNoteCount: number;
+  /** Distinct target-note coverage from zero-exclusive through one-inclusive. */
+  coverage: number;
+};
+
 /**
  * A reading chunk plus the exact practice-loop context that produced its IDs.
  * Hand-filtered and boundary-tie attacks deliberately do not share IDs with
@@ -190,6 +199,81 @@ function normalizeProbes(probes: readonly EarSearchProbe[]) {
     if (!Number.isFinite(probe.onsetMs) || probe.onsetMs < 0) throw new RangeError(`Probe ${index + 1} needs a non-negative finite onset.`);
     return { ...probe, notes: normalizeNotes(probe.notes, `Probe ${index + 1}`) };
   });
+}
+
+/**
+ * Describe which later hidden landings contain notes from one exploratory
+ * probe. The next required landing is deliberately excluded: this is a brief
+ * orientation echo, never evaluation credit and never a way to skip ahead.
+ */
+export function earSearchFutureEchoes(
+  targetInput: readonly EarSearchLanding[],
+  matchedLandings: number,
+  playedNotesInput: readonly number[],
+): EarSearchFutureEcho[] {
+  const target = normalizeTarget(targetInput);
+  if (!Number.isFinite(matchedLandings) || !Number.isInteger(matchedLandings)) {
+    throw new RangeError("Matched ear-search landings must be a finite integer.");
+  }
+  if (!Array.isArray(playedNotesInput) || !playedNotesInput.length) return [];
+  const playedNotes = new Set(playedNotesInput.filter((note) => Number.isInteger(note) && note >= 0 && note <= 127));
+  if (!playedNotes.size) return [];
+  const futureStart = Math.min(target.length, Math.max(0, matchedLandings)) + 1;
+  return target.slice(futureStart).flatMap((landing, offset) => {
+    const matchedNoteCount = landing.notes.reduce((count: number, note: number) => count + Number(playedNotes.has(note)), 0);
+    if (!matchedNoteCount) return [];
+    return [{
+      landingId: landing.id,
+      landingIndex: futureStart + offset,
+      matchedNoteCount,
+      targetNoteCount: landing.notes.length,
+      coverage: matchedNoteCount / landing.notes.length,
+    }];
+  });
+}
+
+/**
+ * Reconstruct the latest physical attack burst independently from the current
+ * target's key count. This keeps a later chord's orientation fraction intact
+ * when a singleton current target causes evaluation to split that burst into
+ * more than one rejected probe.
+ */
+export function earSearchFutureProbeNotes(
+  tracker: EarSearchTracker,
+  attackInput: readonly EarSearchAttack[],
+  chordWindowMs: number,
+) {
+  if (!tracker || !Array.isArray(tracker.recentProbes) || !Array.isArray(tracker.acceptedProbeIds)) {
+    throw new TypeError("A valid ear-search tracker is required for future orientation.");
+  }
+  if (!Number.isFinite(chordWindowMs) || chordWindowMs < 40 || chordWindowMs > 1000) {
+    throw new RangeError("The future-orientation chord window must be from 40 through 1000 ms.");
+  }
+  if (!Array.isArray(attackInput) || attackInput.length > EAR_SEARCH_MAX_PROBES) {
+    throw new RangeError(`Future orientation is limited to ${EAR_SEARCH_MAX_PROBES} raw attacks.`);
+  }
+  const latest = tracker.recentProbes.at(-1);
+  if (!latest || tracker.acceptedProbeIds.includes(latest.id)) return [];
+  const attacks = attackInput.map((attack, index) => {
+    if (!attack || !Number.isInteger(attack.id) || attack.id < 0) throw new RangeError(`Future-orientation attack ${index + 1} needs a non-negative integer ID.`);
+    assertMidi(attack.note, `Future-orientation attack ${index + 1}`);
+    if (!Number.isFinite(attack.onsetMs) || attack.onsetMs < 0) throw new RangeError(`Future-orientation attack ${index + 1} needs a non-negative finite onset.`);
+    return attack;
+  });
+  if (typeof latest.id !== "number") return latest.notes;
+  const latestEvent = [...attacks].reverse().find((attack) => attack.id === latest.id);
+  if (!latestEvent) return latest.notes;
+  const accepted = new Set(tracker.acceptedProbeIds);
+  let burstStartMs = latest.onsetMs;
+  for (let index = tracker.recentProbes.length - 2; index >= 0; index -= 1) {
+    const probe = tracker.recentProbes[index];
+    if (accepted.has(probe.id) || latestEvent.onsetMs - probe.onsetMs > chordWindowMs) break;
+    burstStartMs = Math.min(burstStartMs, probe.onsetMs);
+  }
+  const burstNotes = attacks
+    .filter((attack) => attack.id <= latestEvent.id && attack.onsetMs >= burstStartMs && attack.onsetMs <= latestEvent.onsetMs)
+    .map((attack) => attack.note);
+  return burstNotes.length ? normalizeNotes(burstNotes, "Future-orientation burst") : latest.notes;
 }
 
 function feedbackForProbe(

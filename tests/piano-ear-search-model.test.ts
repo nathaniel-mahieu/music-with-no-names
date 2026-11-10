@@ -10,6 +10,8 @@ import {
   compactEarSearchReferencePlan,
   createEarSearchTracker,
   earSearchCollectionFromAnalysis,
+  earSearchFutureEchoes,
+  earSearchFutureProbeNotes,
   earSearchLandingsForChunk,
   evaluateEarSearch,
   selectEarSearchChunkLoop,
@@ -19,6 +21,78 @@ import {
 
 const landing = (id: string, notes: number[], measureIndex = 0): EarSearchLanding => ({ id, notes, measureIndex, measureNumber: String(measureIndex + 1) });
 const probe = (id: number, notes: number[], onsetMs = id * 100): EarSearchProbe => ({ id, notes, onsetMs });
+
+test("future echoes exclude the next required landing while naming later single notes", () => {
+  const target = [landing("current", [60]), landing("future-a", [62]), landing("future-b", [64])];
+  assert.deepEqual(earSearchFutureEchoes(target, 0, [64]), [{
+    landingId: "future-b",
+    landingIndex: 2,
+    matchedNoteCount: 1,
+    targetNoteCount: 1,
+    coverage: 1,
+  }]);
+  assert.deepEqual(earSearchFutureEchoes(target, 0, [60]), []);
+});
+
+test("future echoes retain repeated-note positions without granting future credit", () => {
+  const target = [landing("current", [55]), landing("repeat-a", [60]), landing("other", [62]), landing("repeat-b", [60])];
+  assert.deepEqual(earSearchFutureEchoes(target, 0, [60]).map((echo) => [echo.landingId, echo.landingIndex]), [
+    ["repeat-a", 1],
+    ["repeat-b", 3],
+  ]);
+  assert.equal(evaluateEarSearch(target, [probe(1, [60])]).matchedLandings, 0,
+    "a future echo remains separate from secure-prefix evaluation");
+});
+
+test("future chord echoes expose distinct target coverage without extra-note inflation", () => {
+  const target = [landing("current", [48]), landing("dyad", [60, 64]), landing("triad", [60, 64, 67])];
+  assert.deepEqual(earSearchFutureEchoes(target, 0, [60, 60, 72]), [
+    { landingId: "dyad", landingIndex: 1, matchedNoteCount: 1, targetNoteCount: 2, coverage: .5 },
+    { landingId: "triad", landingIndex: 2, matchedNoteCount: 1, targetNoteCount: 3, coverage: 1 / 3 },
+  ]);
+  assert.deepEqual(earSearchFutureEchoes(target, 0, [60, 64, 72]), [
+    { landingId: "dyad", landingIndex: 1, matchedNoteCount: 2, targetNoteCount: 2, coverage: 1 },
+    { landingId: "triad", landingIndex: 2, matchedNoteCount: 2, targetNoteCount: 3, coverage: 2 / 3 },
+  ]);
+});
+
+test("future chord orientation reconstructs one physical burst when evaluation splits it", () => {
+  const target = [landing("current-single", [48]), landing("future-triad", [60, 64, 67])];
+  const attacks = [
+    { id: 0, note: 60, onsetMs: 100 },
+    { id: 1, note: 64, onsetMs: 110 },
+    { id: 2, note: 67, onsetMs: 120 },
+  ];
+  let tracker = createEarSearchTracker(target);
+  tracker = advanceEarSearchTracker(target, tracker, attacks.slice(0, 2), { chordWindowMs: 140, nowMs: 110 });
+  assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[60, 64]],
+    "the singleton current target closes evaluation after the second wrong key");
+  tracker = advanceEarSearchTracker(target, tracker, attacks.slice(2), { chordWindowMs: 140, nowMs: 300 });
+  assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[60, 64], [67]],
+    "evaluation remains target-aware and keeps its existing probe semantics");
+  const burst = earSearchFutureProbeNotes(tracker, attacks, 140);
+  assert.deepEqual(burst, [60, 64, 67]);
+  assert.deepEqual(earSearchFutureEchoes(target, tracker.matchedLandings, burst), [{
+    landingId: "future-triad",
+    landingIndex: 1,
+    matchedNoteCount: 3,
+    targetNoteCount: 3,
+    coverage: 1,
+  }]);
+});
+
+test("future echo input stays bounded and ignores empty or malformed played notes", () => {
+  const target = [landing("current", [60]), landing("future", [64])];
+  assert.deepEqual(earSearchFutureEchoes(target, 0, []), []);
+  assert.deepEqual(earSearchFutureEchoes(target, 0, [-1, 128, 64.5]), []);
+  assert.deepEqual(earSearchFutureEchoes(target, 0, [-1, 64, 128]), [{
+    landingId: "future", landingIndex: 1, matchedNoteCount: 1, targetNoteCount: 1, coverage: 1,
+  }]);
+  assert.deepEqual(earSearchFutureEchoes(target, target.length, [64]), []);
+  assert.throws(() => earSearchFutureEchoes(target, Number.NaN, [64]), /finite integer/);
+  const oversized = Array.from({ length: 33 }, (_, index) => landing(`landing-${index}`, [60 + index % 12], Math.floor(index / 17)));
+  assert.throws(() => earSearchFutureEchoes(oversized, 0, [64]), /1 through 32 landings/);
+});
 
 function twoStaffRoundTripScore() {
   return normalizeSheetMusicScore({

@@ -346,6 +346,47 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
     "a classic Sound Finder chip may disclose authored staff only after that hidden attack is caught");
   assert.match(finder, /showStaff \? staffGlyph/,
     "caught staff color must be reinforced by a visible non-color glyph");
+  const memoryChipStart = finder.indexOf("<ol ref={memoryListRef}");
+  const memoryChipEnd = finder.indexOf("<div className={styles.memoryFooter}", memoryChipStart);
+  assert.ok(memoryChipStart >= 0 && memoryChipEnd > memoryChipStart, "Sound Finder needs one inspectable attack-chip rail");
+  const memoryChipContract = finder.slice(memoryChipStart, memoryChipEnd);
+  assert.match(memoryChipContract, /<button type="button" className=\{styles\.memoryChipButton\}/,
+    "each sounding attack chip must be a native, keyboard-reachable button");
+  assert.match(memoryChipContract, /disabled=\{!hasHeard \|\| visiblePhase === "playing"\}/,
+    "single-attack ear hints must wait until the whole frame is heard and stay disabled during reference playback");
+  assert.match(memoryChipContract, /onClick=\{\(\) => void playAttackHint\(item\.landing!, item\.timelineIndex\)\}/);
+  assert.match(memoryChipContract, /Play hidden attack/,
+    "pending chip names must describe the ear-hint action without naming the pitch");
+  assert.doesNotMatch(memoryChipContract, /midiLabel|NOTE_NAMES|\.notes\.map/,
+    "the hidden attack rail must not leak exact pitch through visible or accessible chip copy");
+  assert.match(finder, /const playAttackHint = useCallback\(async \(landing: EarSearchLanding, timelineIndex: number\) => \{/);
+  assert.match(finder, /ATTACK_HINT_DURATION_SECONDS = \.72/);
+  assert.match(finder, /configureSafetyCompressor\(compressor, now\)/);
+  assert.match(finder, /\.72 \/ Math\.sqrt\(Math\.max\(1, landing\.notes\.length\)\)/,
+    "polyphonic ear hints need the same bounded loudness normalization as the phrase reference");
+  assert.match(finder, /Ear hint:[^`]*Search progress did not change/,
+    "audition feedback must make its progress-neutral behavior explicit");
+  const hintStart = finder.indexOf("const playAttackHint = useCallback");
+  const hintEnd = finder.indexOf("const memoryTargetIndex", hintStart);
+  assert.ok(hintStart >= 0 && hintEnd > hintStart, "the chip-audition callback needs an inspectable lifecycle boundary");
+  const hintContract = finder.slice(hintStart, hintEnd);
+  assert.doesNotMatch(hintContract, /setTracker\(|advanceEarSearchTracker\(/,
+    "hearing a chip must never award credit or mutate the untimed search tracker");
+
+  assert.match(finder, /const latest = tracker\?\.recentProbes\.at\(-1\)/,
+    "future echoes must derive from finalized probe clusters rather than raw held keys");
+  assert.match(finder, /tracker\.acceptedProbeIds\.includes\(latest\.id\)[\s\S]*setFutureEchoes\(\[\]\)[\s\S]*return/,
+    "a correctly accepted probe must not also illuminate repeated future occurrences");
+  assert.match(finder, /const echoNotes = earSearchFutureProbeNotes\(tracker, eventsRef\.current, gathersTexture \? clusterWindow : 40\)/,
+    "future chord fractions need a physical attack burst independent from the current target's key count");
+  assert.match(finder, /earSearchFutureEchoes\(searchLandings, tracker\.matchedLandings, echoNotes\)/);
+  assert.match(finder, /FUTURE_ECHO_MS = 850/);
+  assert.match(memoryChipContract, /data-future-echo=\{futureEcho \? "true" : undefined\}/);
+  assert.match(memoryChipContract, /futureEcho\.matchedNoteCount[^\n]*futureEcho\.targetNoteCount/,
+    "a future chord echo must expose a visible matched-over-total fraction rather than a binary chord claim");
+  assert.match(finder, /futureEchoAnnouncement/);
+  assert.match(finder, /Only explicit frame and chip ear-hint controls create sound/,
+    "the footer must describe both intentional audio paths without implying that MIDI is synthesized");
   assert.match(piano, /saved\.version === 27/);
   assert.match(piano, /const session: PersistedPianoSession = \{ version: 27,/);
 
@@ -370,6 +411,12 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(model, /restSpans: EarSearchRestSpan\[\]/,
     "leading, interior, and trailing silence must remain first-class score-time data");
   assert.match(model, /export function buildEarSearchReferencePlan/);
+  assert.match(model, /export function earSearchFutureEchoes/);
+  assert.match(model, /export function earSearchFutureProbeNotes/);
+  assert.match(model, /const futureStart = Math\.min\(target\.length, Math\.max\(0, matchedLandings\)\) \+ 1/,
+    "the current required landing must remain evaluation feedback, not a future-chip echo");
+  assert.match(model, /coverage: matchedNoteCount \/ landing\.notes\.length/,
+    "future chord glow strength must be proportional to exact target-note coverage");
   assert.match(model, /selectEarSearchChunkLoop/);
   assert.match(model, /span === "half-bar"/);
   assert.match(model, /Non-matching probes are ignored rather than accumulated as errors/);
@@ -386,10 +433,16 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finderCss, /\.memoryRail li\.isCaught\[data-staff="upper"\]/);
   assert.match(finderCss, /\.memoryRail li\.isCaught\[data-staff="lower"\]/);
   assert.match(finderCss, /\.memoryRail li\.isCaught\[data-staff="both"\]/);
+  assert.match(finderCss, /\.memoryRail \.memoryChipButton/);
+  assert.match(finderCss, /\.memoryRail li\[data-future-echo="true"\] i::after[\s\S]*opacity: var\(--future-strength\)/,
+    "future chord brightness must preserve fractional note coverage");
+  assert.match(finderCss, /\.memoryRail li\[data-auditioning="true"\] i/);
   assert.match(finderCss, /\.footerDeck input\[type="range"\][\s\S]*min-height: 44px/);
   assert.match(finderCss, /@media \(max-width: 1120px\) \{[\s\S]*\.transport \{ grid-column: 1 \/ -1;/, "the command transport must wrap before a 1024px desktop clips it");
   assert.match(finderCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(finderCss, /@media \(forced-colors: active\)/);
+  assert.match(finderCss, /@media \(forced-colors: active\)[\s\S]*\.memoryRail li\[data-future-echo="true"\] i/,
+    "future echoes need a system-color outline when glow and color are unavailable");
   assert.match(globalCss, /\.piano-hud\.is-ear-search \{[\s\S]*overflow: visible;[\s\S]*border: 0;[\s\S]*background: transparent;/);
   assert.match(globalCss, /\.piano-workspace-header \{[\s\S]*min-height: 82px;/);
   assert.match(globalCss, /\.piano-input-console \.midi-status strong,[\s\S]*white-space: nowrap;/);
