@@ -92,6 +92,7 @@ type PianoScoreFlowHudProps = {
   showConventions: boolean;
   frozen: boolean;
   onResumeCapture: () => void;
+  onPitchAttack?: (notes: readonly number[]) => void;
 };
 
 type ReadingMode = "read" | "ear" | "memory";
@@ -1225,7 +1226,7 @@ function stopAudioContext(context: AudioContext | null, master: GainNode | null)
   } catch { void context.close(); }
 }
 
-export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWindowMs, showConventions, frozen, onResumeCapture }: PianoScoreFlowHudProps) {
+export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWindowMs, showConventions, frozen, onResumeCapture, onPitchAttack }: PianoScoreFlowHudProps) {
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
   const [fileState, setFileState] = useState<"empty" | "loading" | "ready" | "error">("empty");
@@ -2012,10 +2013,13 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       });
 
       let latestStop = audioStart + 0.1;
+      const publishPitchAttack = notationLocked ? undefined : onPitchAttack;
+      const pitchAttacks: Array<{ onsetMs: number; note: number }> = [];
       for (const cue of playbackPlan.cues) {
         const voiceGain = 0.72 / Math.sqrt(Math.max(1, cue.notes.length));
         for (const note of cue.notes) {
-          const start = audioStart + (cue.onsetMs + note.onsetOffsetMs) / 1_000;
+          const onsetMs = cue.onsetMs + note.onsetOffsetMs;
+          const start = audioStart + onsetMs / 1_000;
           const duration = note.durationMs / 1_000;
           const oscillator = context.createOscillator();
           const envelope = context.createGain();
@@ -2028,9 +2032,12 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
           oscillator.connect(envelope).connect(master);
           oscillator.start(start);
           oscillator.stop(start + duration + 0.035);
+          if (publishPitchAttack) pitchAttacks.push({ onsetMs, note: note.midi });
           latestStop = Math.max(latestStop, start + duration + 0.09);
         }
       }
+      pitchAttacks.sort((first, second) => first.onsetMs - second.onsetMs);
+      let nextPitchAttack = 0;
 
       setAudioState("playing");
       setReferencePlayback({
@@ -2070,9 +2077,16 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
         // A requestAnimationFrame timestamp can come from a document timeline
         // with a different origin after a restored/navigation session.
         const visualNow = performance.now();
+        const elapsedMs = visualNow - firstPerformanceMs;
+        if (publishPitchAttack && nextPitchAttack < pitchAttacks.length && pitchAttacks[nextPitchAttack].onsetMs <= elapsedMs) {
+          const notes: number[] = [];
+          while (nextPitchAttack < pitchAttacks.length && pitchAttacks[nextPitchAttack].onsetMs <= elapsedMs) {
+            notes.push(pitchAttacks[nextPitchAttack++].note);
+          }
+          publishPitchAttack(notes);
+        }
         if (visualNow - visualUpdateMsRef.current >= 45) {
           visualUpdateMsRef.current = visualNow;
-          const elapsedMs = visualNow - firstPerformanceMs;
           if (elapsedMs < 0) {
             setReferencePlayback((current) => ({
               ...current,
@@ -2172,7 +2186,7 @@ export function PianoScoreFlowHud({ events, activeNotes, pressedNotes, chordWind
       setReferenceTimingClock(null);
       setAudioNotice("Reference playback could not start. Check site audio permission; score and MIDI visualization remain available.");
     }
-  }, [activeNotes.length, currentIndex, frozen, loop, onResumeCapture, practiceTempo, readingMode, referenceVolume, score, stopReference]);
+  }, [activeNotes.length, currentIndex, frozen, loop, onPitchAttack, onResumeCapture, practiceTempo, readingMode, referenceVolume, score, stopReference]);
 
   const playLocalReference = useCallback(async (playAlong: boolean) => {
     const element = localAudioElementRef.current;

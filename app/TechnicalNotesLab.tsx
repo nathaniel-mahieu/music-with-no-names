@@ -1,6 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { CONVENTIONAL_FLAT_PITCH_CLASSES } from "@/lib/piano-model";
+import { PITCH_CLASS_COLORS } from "@/lib/piano-pitch-color";
+import styles from "./TechnicalNotesLab.module.css";
 
 type Destination = "ratio" | "scale" | "piano" | "voice" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal";
 
@@ -8,7 +11,7 @@ const IMPLEMENTED = [
   {
     title: "Piano companion",
     status: "live MIDI · silent input",
-    body: "Sound Finder, Interval Glow, and Immersion are the primary working surfaces. Explore, Sight Shapes, and Scales remain visibly marked To do while their prototype material is refined. Secondary working views include EchoKey, Score Flow, Scale Quality, Scale Gravity, Intervals, Chords, Motion, Paths, Research, and Experience.",
+    body: "Sound Finder, Absolute Pitch, Interval Glow, and Immersion are primary working surfaces. Explore, Sight Shapes, and Scales remain visibly marked To do while their prototype material is refined. Secondary working views include EchoKey, Score Flow, Scale Quality, Scale Gravity, Intervals, Chords, Motion, Paths, Research, and Experience.",
     destination: "piano" as const,
     action: "Open Piano",
   },
@@ -109,7 +112,14 @@ export function TechnicalNotesLab({ onNavigate }: { onNavigate: (destination: De
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const firstAnswerRef = useRef<HTMLInputElement>(null);
+  const pitchAppendixRef = useRef<HTMLElement>(null);
   const check = CHECKS[checkIndex];
+
+  useEffect(() => {
+    if (window.location.hash === "#technical-pitch-associations") {
+      pitchAppendixRef.current?.scrollIntoView();
+    }
+  }, []);
 
   const nextCheck = () => {
     setCheckIndex((index) => (index + 1) % CHECKS.length);
@@ -124,7 +134,7 @@ export function TechnicalNotesLab({ onNavigate }: { onNavigate: (destination: De
         <div>
           <p className="section-kicker">Technical Notes · current release</p>
           <h1 id="technical-notes-title">What the site measures, models, stores, and leaves to you.</h1>
-          <p>Every display is browser input, a declared coordinate, a transparent teaching model, or your report. Keeping those layers separate matters more than producing one seductive score.</p>
+          <p>Every display is browser input, a declared coordinate, a transparent teaching model, or your report. Keeping those layers separate matters more than producing one seductive score. <a className={styles.referenceLink} href="#technical-pitch-associations">Piano pitch association appendix ↓</a></p>
         </div>
         <aside role="note"><span>Release boundary</span><strong>Educational, local-first, and uncalibrated.</strong><p>Automated tests cover arithmetic and software behavior—not your hardware, hearing, musical response, or learning.</p></aside>
       </header>
@@ -170,6 +180,31 @@ export function TechnicalNotesLab({ onNavigate }: { onNavigate: (destination: De
           <fieldset><legend>{check.prompt}</legend>{check.options.map((option, index) => <label key={option} className={answerRevealed && index === check.answer ? "is-answer" : ""}><input ref={index === 0 ? firstAnswerRef : undefined} type="radio" name={`technical-check-${checkIndex}`} checked={selectedAnswer === index} disabled={answerRevealed} onChange={() => setSelectedAnswer(index)} /><span>{option}</span></label>)}</fieldset>
           <div className="technical-check-actions"><button type="button" disabled={selectedAnswer == null || answerRevealed} onClick={() => setAnswerRevealed(true)}>Show why</button>{answerRevealed ? <button type="button" onClick={nextCheck}>{checkIndex === CHECKS.length - 1 ? "Start over" : "Next boundary"}</button> : null}</div>
           {answerRevealed ? <p role="status"><strong>{selectedAnswer === check.answer ? "Supported" : "Separate the layers"}</strong>{check.explanation}</p> : null}
+        </div>
+      </section>
+
+      <section id="technical-pitch-associations" ref={pitchAppendixRef} className="technical-section is-soft" aria-labelledby="technical-pitch-associations-title">
+        <div className="technical-section-heading">
+          <span>Appendix · Piano reference</span>
+          <h2 id="technical-pitch-associations-title">Pitch, color, and feeling</h2>
+          <p>One semitone advances both circles by 30°. Every octave repeats the same twelve cues. C3, C4, and C5 share blue, and C♯ and D♭ share a cue because they use the same key.</p>
+        </div>
+        <dl className="technical-glossary">
+          {PITCH_CLASS_COLORS.map(({ pitchClass, note, name, color, association, affectAngle }) => {
+            const flat = CONVENTIONAL_FLAT_PITCH_CLASSES[pitchClass];
+            return <div key={note}>
+              <dt className={styles.pitchLabel}>
+                <span className={styles.swatch} style={{ backgroundColor: color }} aria-hidden="true" />
+                {flat === note ? note : `${note} / ${flat}`}
+              </dt>
+              <dd><strong>{name}</strong> · {association}</dd>
+              <dd><code>{color}</code> · feeling angle {affectAngle}°</dd>
+            </div>;
+          })}
+        </dl>
+        <div className={styles.method}>
+          <p>The swatches hold OKLCH lightness at 0.70 and chroma at 0.12. They fit the sRGB gamut and have equal adjacent distances in OKLab, including B to C. The screen, surrounding colors, and your vision affect how those steps look. <a className={styles.referenceLink} href="https://www.w3.org/TR/css-color-4/#ok-lab">W3C OKLab and OKLCH</a></p>
+          <p>The optional feeling cues use a circle with pleasantness increasing to the right and activation increasing upward. The 30° spacing is exact on that diagram. Felt distances depend on your associations, so you can give each position a personal image or gesture and reuse it in every octave. <a className={styles.referenceLink} href="https://doi.org/10.1037/h0077714">Russell’s circumplex model of affect</a></p>
         </div>
       </section>
 

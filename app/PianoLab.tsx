@@ -150,6 +150,9 @@ import { PianoSightReadingHud } from "@/app/PianoSightReadingHud";
 import { PianoEchoKeyHud } from "@/app/PianoEchoKeyHud";
 import { PianoScoreFlowHud } from "@/app/PianoScoreFlowHud";
 import { PianoEarSearchHud } from "@/app/PianoEarSearchHud";
+import { PianoAbsolutePitchHud } from "@/app/PianoAbsolutePitchHud";
+import { usePianoTrainerTone } from "@/app/usePianoTrainerTone";
+import { PITCH_CLASS_COLORS } from "@/lib/piano-pitch-color";
 import { ECHO_KEY_LESSON_STORAGE_KEY } from "@/lib/echo-key-model";
 import { IMMERSION_HISTORY_ATTACKS, IMMERSION_MAX_FIELD_NOTES, immersionHistory } from "@/lib/piano-immersion-model";
 
@@ -204,7 +207,7 @@ type ChordMeasure = {
   commonPitchClassCount: number;
 };
 type FrameMode = "discover" | "locked";
-type FocusLens = "echo-key" | "score-flow" | "ear-search" | "ear-search-hands" | "explore" | "immersion" | "scale-quality" | "interval-glow" | "sight-shapes" | "research" | "gravity" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
+type FocusLens = "echo-key" | "score-flow" | "ear-search" | "ear-search-hands" | "explore" | "immersion" | "absolute-pitch" | "scale-quality" | "interval-glow" | "sight-shapes" | "research" | "gravity" | "intervals" | "scales" | "chords" | "motion" | "paths" | "experience";
 type FocusLensTier = "primary" | "secondary";
 type FocusLensGroup = "practice" | "develop";
 type FocusLensDefinition = {
@@ -386,6 +389,7 @@ const EVENT_X = (slot: number) => 84 + slot * 88;
 const FOCUS_LENSES: FocusLensDefinition[] = [
   { id: "immersion", label: "Immersion", description: "One living fifths-and-register sky", tier: "primary" },
   { id: "ear-search", label: "Sound Finder", description: "Untimed ear search", tier: "primary" },
+  { id: "absolute-pitch", label: "Absolute Pitch", description: "Name notes by ear", tier: "primary" },
   { id: "explore", label: "Explore", description: "Whole phrase · every representation", tier: "primary", status: "todo" },
   { id: "interval-glow", label: "Interval Glow", description: "Semitone spacing in color", tier: "primary" },
   { id: "sight-shapes", label: "Sight Shapes", description: "Staff geometry · eyes × hands × ear", tier: "primary", status: "todo" },
@@ -4324,7 +4328,8 @@ export function PianoLab() {
   const [echoKeyResetVersion, setEchoKeyResetVersion] = useState(0);
   const [scaleQualityEntryAnchorId, setScaleQualityEntryAnchorId] = useState(0);
   const isEarSearchFocus = isEarSearchLens(focusLens);
-  const isShortHudFocus = focusLens === "echo-key" || focusLens === "score-flow" || isEarSearchFocus || focusLens === "immersion" || focusLens === "scale-quality" || focusLens === "interval-glow" || focusLens === "sight-shapes" || focusLens === "research" || focusLens === "gravity";
+  const isAbsolutePitchFocus = focusLens === "absolute-pitch";
+  const isShortHudFocus = isAbsolutePitchFocus || focusLens === "echo-key" || focusLens === "score-flow" || isEarSearchFocus || focusLens === "immersion" || focusLens === "scale-quality" || focusLens === "interval-glow" || focusLens === "sight-shapes" || focusLens === "research" || focusLens === "gravity";
   const [intervalEchoTarget, setIntervalEchoTarget] = useState<IntervalEchoTarget | null>(null);
   const [ghostChord, setGhostChord] = useState<NearbyChord | null>(null);
   const [ghostNotes, setGhostNotes] = useState<number[]>([]);
@@ -4375,6 +4380,31 @@ export function PianoLab() {
   const [rememberedFrame, setRememberedFrame] = useState<ScaleCandidate | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [nowMs, setNowMs] = useState(0);
+  const pitchGlowRef = useRef<HTMLDivElement>(null);
+  const { playTone, stopTone } = usePianoTrainerTone();
+
+  const showPitchAttacks = useCallback((notes: readonly number[]) => {
+    const layers = pitchGlowRef.current?.children;
+    if (!layers) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const pitchClasses = new Set(notes.map(pitchClassFromMidi));
+    pitchClasses.forEach((pitchClass) => {
+      const layer = layers.item(pitchClass);
+      if (!layer?.animate) return;
+      layer.getAnimations().forEach((animation) => animation.cancel());
+      const frames = reducedMotion
+        ? [{ opacity: 0.18 }, { opacity: 0.18 }]
+        : [{ opacity: 0.32 }, { opacity: 0.24, offset: 0.22 }, { opacity: 0 }];
+      layer.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
+    });
+  }, []);
+
+  const playTrainerTone = useCallback(async (note: number, sound: PianoSoundModelId, revealPitchColor: boolean) => {
+    if (!revealPitchColor) pitchGlowRef.current?.getAnimations?.({ subtree: true }).forEach((animation) => animation.cancel());
+    const played = await playTone(note, sound);
+    if (played && revealPitchColor) showPitchAttacks([note]);
+    return played;
+  }, [playTone, showPitchAttacks]);
 
   useEffect(() => { frozenRef.current = frozen; }, [frozen]);
 
@@ -4623,6 +4653,7 @@ export function PianoLab() {
   }, [updateEvents]);
 
   const addEvent = useCallback((note: number, velocity: number, channel: number, source: HudNoteEvent["source"], fieldNotes: number[], atMs = currentHudTime(), midiFieldNotes?: number[]) => {
+    showPitchAttacks([note]);
     if (frozenRef.current) return;
     const event: HudNoteEvent = { id: nextIdRef.current, note, velocity, channel, source, onsetMs: atMs, keyReleaseMs: null, releaseMs: null, releaseReason: null, fieldNotes: uniqueSorted(fieldNotes), ...(midiFieldNotes ? { midiFieldNotes: uniqueSorted(midiFieldNotes) } : {}) };
     nextIdRef.current += 1;
@@ -4641,7 +4672,7 @@ export function PianoLab() {
     if (nextStable) setRememberedFrame(nextStable);
     setFocusedId(event.id);
     setNowMs(atMs);
-  }, [focusLens, isEarSearchFocus]);
+  }, [focusLens, isEarSearchFocus, showPitchAttacks]);
 
   const captureArmedDoAttack = useCallback((note: number) => {
     if (!doCaptureArmedRef.current) return;
@@ -5433,6 +5464,7 @@ export function PianoLab() {
   };
 
   const selectFocusLens = (lens: FocusLens) => {
+    if (isAbsolutePitchFocus && lens !== "absolute-pitch") stopTone();
     if (lens !== "explore") setPhraseCompareSession(null);
     if (lens === "paths") {
       setScaleWalkSession(null);
@@ -5448,7 +5480,7 @@ export function PianoLab() {
       setResolutionForkSet(null);
       landmarkLastMatchIdRef.current = phraseEvents.at(-1)?.id ?? 0;
     }
-    if ((lens === "echo-key" || lens === "score-flow" || isEarSearchLens(lens) || lens === "scale-quality") && latchedNotes.size) {
+    if ((lens === "echo-key" || lens === "score-flow" || isEarSearchLens(lens) || lens === "scale-quality" || lens === "absolute-pitch") && latchedNotes.size) {
       const atMs = currentHudTime();
       latchedNotes.forEach((_, note) => releaseEvent(note, 0, "screen", atMs, false));
       setLatchedNotes(new Map());
@@ -5960,6 +5992,13 @@ export function PianoLab() {
       className={`advanced-lab piano-lab piano-hud${focusLens === "score-flow" ? " is-score-flow" : isEarSearchFocus ? " is-ear-search" : focusLens === "scale-quality" ? " is-scale-quality" : ""}`}
       aria-labelledby="piano-workspace-title"
     >
+      <div ref={pitchGlowRef} className="piano-pitch-glow" aria-hidden="true">
+        {PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span
+          key={pitchClass}
+          data-pitch-class={pitchClass}
+          style={{ "--pitch-glow-color": color, "--pitch-glow-position": `${16 + pitchClass * 68 / 11}%` } as CSSProperties}
+        />)}
+      </div>
       <header className="piano-workspace-header">
         <div className="piano-workspace-identity">
           <p className="section-kicker">Piano workspace</p>
@@ -5974,8 +6013,8 @@ export function PianoLab() {
             <summary>Settings</summary>
             <div className="piano-workspace-settings-panel">
               <p>{displayedMidiStatus}</p>
-              {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select><small>Total maximum span · {chordWindowMs * 2} ms</small></label> : null}
-              {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button> : null}
+              {!isAbsolutePitchFocus && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <label htmlFor="hud-chord-window"><span>Chord grouping</span><select id="hud-chord-window" value={chordWindowMs} onChange={(event) => { setChordWindowMs(Number(event.target.value)); setMembershipCorrections({}); setSelectedChordId(null); }}><option value={80}>Together · 80 ms</option><option value={160}>Natural · 160 ms</option><option value={320}>Rolled · 320 ms</option></select><small>Total maximum span · {chordWindowMs * 2} ms</small></label> : null}
+              {!isAbsolutePitchFocus && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <button type="button" disabled={focusLens === "paths" || Boolean(phraseCompareSession)} aria-pressed={frameMode === "locked"} onClick={toggleFrameMode}>{phraseCompareSession ? "Frame fixed for A/B" : focusLens === "paths" ? "Frame fixed for path" : frameMode === "locked" ? "Unlock frame" : "Lock frame"}</button> : null}
               <label className="piano-convention-toggle"><input type="checkbox" checked={showConventions} onChange={(event) => setShowConventions(event.target.checked)} /><span>{isEarSearchFocus ? "Names in exact reveal" : "Theory names"}</span></label>
               {!isEarSearchFocus ? <button type="button" onClick={clearAll}>Clear piano history</button> : null}
             </div>
@@ -5986,16 +6025,18 @@ export function PianoLab() {
       <PianoFocusNavigation focusLens={focusLens} onSelect={selectFocusLens} />
       <h2 className="sr-only">{activeFocusDefinition.label}</h2>
 
-      {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <div className="piano-hud-statebar" aria-label="Current Piano frame">
+      {!isAbsolutePitchFocus && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <div className="piano-hud-statebar" aria-label="Current Piano frame">
           <span className={frameMode === "locked" ? "is-locked" : ""}>{frameMode === "locked" ? "Locked frame" : "Discovering frame"}</span>
           <strong>Do reference · {formatHz(frequencyFromMidi(doMidi))}{showConventions ? ` · ${conventionalPitchName(doMidi, framePitchPreference)}` : ""}</strong>
           <small>{latestSnapshot?.evidenceLabel ?? "Play four distinct positions before the frame can move."}</small>
           <em>{frozen ? "Capture paused" : isShortHudFocus ? `${immersionHistoryEvents.length}/${IMMERSION_HISTORY_ATTACKS} attacks` : `${phraseEvents.length} attacks`}</em>
       </div> : null}
 
-      {focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
+      {!isAbsolutePitchFocus && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
 
       {!isShortHudFocus ? <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} /> : null}
+
+      {isAbsolutePitchFocus ? <PianoAbsolutePitchHud onPlayTone={playTrainerTone} onStopTone={stopTone} /> : null}
 
       {focusLens === "immersion" ? <PianoImmersion
         events={events}
@@ -6052,6 +6093,7 @@ export function PianoLab() {
         showConventions={showConventions}
         frozen={frozen}
         onResumeCapture={resumeTrace}
+        onPitchAttack={showPitchAttacks}
       /> : null}
 
       {focusLens === "score-flow" ? <PianoScoreFlowHud
@@ -6062,6 +6104,7 @@ export function PianoLab() {
         showConventions={showConventions}
         frozen={frozen}
         onResumeCapture={resumeTrace}
+        onPitchAttack={showPitchAttacks}
       /> : null}
 
       {isEarSearchFocus ? <PianoEarSearchHud
@@ -6139,7 +6182,7 @@ export function PianoLab() {
 
       {focusLens === "chords" && chordFocusMode === "cause" ? <ControlledSonorityField session={controlledSonoritySession} activeNotes={activeNoteNumbers} doMidi={doMidi} scale={scale} soundModelId={soundModelId} showConventions={showConventions} onChooseRecipe={beginControlledSonority} onCaptureCurrent={captureCurrentSonority} onReplaceBaseline={replaceControlledSonorityBaseline} onRestart={restartControlledSonority} onEnd={() => setControlledSonoritySession(null)} /> : null}
 
-      {focusLens === "scale-quality" ? null : isShortHudFocus ? <details className="piano-immersion-keyboard">
+      {focusLens === "scale-quality" || isAbsolutePitchFocus ? null : isShortHudFocus ? <details className="piano-immersion-keyboard">
         <summary><span>{focusLens === "echo-key" || isEarSearchFocus ? "Open the blank silent hand horizon" : "Open the silent hand horizon"}</span><small>{focusLens === "echo-key" ? "Optional on-screen input without MIDI. Positions stay visually blank; screen readers receive only left-to-right physical position. Each activation records one momentary melodic attack, so repeated keys need no extra release click. Nothing here makes sound." : isEarSearchFocus ? `Optional blank-position input without MIDI. Each activation is one momentary probe; Sound Finder may say higher, lower, nearer, wider, or narrower, but does not name the target until Reveal.${focusLens === "ear-search-hands" ? " The upper/lower cue comes from the score, not from this screen key or an inferred hand." : ""} Nothing here makes sound.` : focusLens === "score-flow" ? "Optional on-screen input for score testing without MIDI. Each activation records one momentary attack, including repeated notes; Score Flow compares it with the imported notation. Nothing here makes sound." : "Optional on-screen keys for testing without MIDI. Tap once to hold, again to release; repeated attacks need a release between them. Nothing here makes sound."}</small></summary>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{VISIBLE_NOTES.map((note) => renderKey(note, !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))))}</div>
       </details> : <div className="piano-hud-keyboard-wrap">

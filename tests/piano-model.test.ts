@@ -76,6 +76,7 @@ import {
   voiceLeadingProfile,
   type TonalGravityCandidate,
 } from "../lib/piano-model.ts";
+import { PITCH_CLASS_COLORS, getPitchClassColor, pitchClassColor } from "../lib/piano-pitch-color.ts";
 
 test("maps equal-tempered MIDI notes to physical frequency", () => {
   assert.equal(frequencyFromMidi(69), 440);
@@ -87,6 +88,40 @@ test("conventional pitch labels can follow sharp or flat frame spelling", () => 
   assert.equal(conventionalPitchName(63), "D♯4");
   assert.equal(conventionalPitchName(63, "flats"), "E♭4");
   assert.equal(conventionalPitchName(66, "flats"), "G♭4");
+});
+
+test("absolute pitch cues repeat by octave and step equally around both circles", () => {
+  assert.equal(PITCH_CLASS_COLORS.length, 12);
+  assert.equal(getPitchClassColor(60).hue, 245);
+  assert.equal(getPitchClassColor(60).affectAngle, 315);
+
+  for (const current of PITCH_CLASS_COLORS) {
+    const next = PITCH_CLASS_COLORS[(current.pitchClass + 1) % 12];
+    assert.equal(getPitchClassColor(48 + current.pitchClass), current);
+    assert.equal(pitchClassColor(72 + current.pitchClass), current.color);
+    assert.equal((next.hue - current.hue + 360) % 360, 30);
+    assert.equal((next.affectAngle - current.affectAngle + 360) % 360, 30);
+  }
+});
+
+test("equal-distance pitch swatches fit sRGB without chroma compression", () => {
+  for (const { color, hue } of PITCH_CLASS_COLORS) {
+    assert.equal(color, `oklch(0.7 0.12 ${hue})`);
+    const angle = (hue * Math.PI) / 180;
+    const a = 0.12 * Math.cos(angle);
+    const b = 0.12 * Math.sin(angle);
+
+    // Convert OKLab to linear sRGB to check the display gamut before encoding.
+    const l = (0.7 + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (0.7 - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (0.7 - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    const channels = [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+    ];
+    assert.ok(channels.every((channel) => channel >= 0 && channel <= 1), color);
+  }
 });
 
 test("offers transparent shared-cycle tradeoffs for MIDI-derived reference frequencies", () => {

@@ -8657,7 +8657,31 @@ footer a {
   --hud-arrival: var(--piano-blue);
   --hud-novelty: var(--foreground);
   --hud-motion: var(--muted);
+  position: relative;
+  isolation: isolate;
   overflow: visible;
+}
+
+.piano-pitch-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.piano-pitch-glow > span {
+  position: absolute;
+  inset: 0 auto 0 var(--pitch-glow-position);
+  width: min(44%, 44rem);
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--pitch-glow-color) 50%, transparent);
+  opacity: 0;
+}
+
+@media (forced-colors: active) {
+  .piano-pitch-glow { display: none; }
 }
 
 .piano-hud.is-ear-search {
@@ -8916,7 +8940,7 @@ footer a {
   background: color-mix(in srgb, var(--surface-soft) 92%, var(--background));
 }
 
-.piano-focus-primary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.piano-focus-primary { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .piano-focus-primary > button,
 .piano-focus-more > summary,
 .piano-focus-secondary button {
@@ -12515,9 +12539,10 @@ footer a {
   .piano-model-disclosure { grid-template-columns: minmax(200px, .8fr) 180px minmax(260px, 1.3fr); }
   .piano-model-disclosure > p { grid-column: 1 / -1; }
   .piano-focus-navigation { grid-template-columns: 1fr; }
-  .piano-focus-primary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .piano-focus-primary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .piano-focus-primary > button { border-bottom: 1px solid var(--line); }
-  .piano-focus-primary > button:nth-child(3n) { border-right: 0; }
+  .piano-focus-primary > button:nth-child(4n) { border-right: 0; }
+  .piano-focus-primary > button:last-child { grid-column: span 2; }
   .piano-focus-more { border-top: 0; border-left: 0; }
   .piano-focus-more > summary { min-height: 44px; border-top: 0; }
   .piano-focus-secondary { position: static; width: auto; border-right: 0; border-bottom: 0; border-left: 0; box-shadow: none; }
@@ -12732,6 +12757,7 @@ footer a {
   .piano-focus-primary { grid-template-columns: 1fr 1fr; }
   .piano-focus-primary > button:nth-child(n) { border-right: 1px solid var(--line); }
   .piano-focus-primary > button:nth-child(2n) { border-right: 0; }
+  .piano-focus-primary > button:last-child { border-right: 0; }
   .piano-focus-primary > button > small { display: none; }
   .piano-focus-secondary section > div { grid-template-columns: 1fr 1fr; }
   .piano-focus-secondary button:nth-child(n) { border-right: 1px solid var(--line); }

@@ -56,6 +56,7 @@ type PianoEchoKeyHudProps = {
   showConventions: boolean;
   frozen: boolean;
   onResumeCapture: () => void;
+  onPitchAttack?: (notes: readonly number[]) => void;
 };
 
 type EchoPhase = "hear" | "sing" | "find" | "diagnose" | "repair" | "read" | "vary";
@@ -406,7 +407,7 @@ function ReadKeyboard({ notes, spellings, doMidi, scale, showConventions }: { no
   </figure>;
 }
 
-export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConventions, frozen, onResumeCapture }: PianoEchoKeyHudProps) {
+export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConventions, frozen, onResumeCapture, onPitchAttack }: PianoEchoKeyHudProps) {
   const initialPhrase = useMemo(() => {
     const incomingRoute = routeForScale(scale);
     return ECHO_KEY_PHRASES.find((phrase) => phrase.route === incomingRoute) ?? ECHO_KEY_PHRASES[0];
@@ -435,6 +436,7 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioMasterRef = useRef<GainNode | null>(null);
   const audioTimerRef = useRef<number | null>(null);
+  const audioPitchFrameRef = useRef<number | null>(null);
   const audioTokenRef = useRef(0);
   const recordedAttemptRef = useRef<string | null>(null);
   const eventsRef = useRef(events);
@@ -465,10 +467,16 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
     ? repairPairs.expected[0] - evaluation.divergence.performedFrom
     : 0;
 
+  const cancelPitchAttacks = useCallback(() => {
+    if (audioPitchFrameRef.current != null) window.cancelAnimationFrame(audioPitchFrameRef.current);
+    audioPitchFrameRef.current = null;
+  }, []);
+
   const stopAudio = useCallback((notice = "Playback stopped.") => {
     audioTokenRef.current += 1;
     if (audioTimerRef.current != null) window.clearTimeout(audioTimerRef.current);
     audioTimerRef.current = null;
+    cancelPitchAttacks();
     const context = audioContextRef.current;
     const master = audioMasterRef.current;
     audioContextRef.current = null;
@@ -476,9 +484,9 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
     fadeAndCloseAudio(context, master);
     setAudioState("idle");
     setAudioNotice(notice);
-  }, []);
+  }, [cancelPitchAttacks]);
 
-  const playSegments = useCallback(async (segments: ToneSegment[], notice: string, onFinished?: () => void) => {
+  const playSegments = useCallback(async (segments: ToneSegment[], notice: string, { onFinished, showPitch }: { onFinished?: () => void; showPitch?: boolean } = {}) => {
     const AudioContextConstructor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
     if (!AudioContextConstructor) {
       setAudioState("unavailable");
@@ -488,6 +496,7 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
     audioTokenRef.current += 1;
     const token = audioTokenRef.current;
     if (audioTimerRef.current != null) window.clearTimeout(audioTimerRef.current);
+    cancelPitchAttacks();
     const previous = audioContextRef.current;
     const previousMaster = audioMasterRef.current;
     audioContextRef.current = null;
@@ -514,6 +523,7 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
       compressor.connect(master).connect(activeContext.destination);
       const beatSeconds = 0.34;
       let cursor = now + 0.055;
+      const pitchAttacks: Array<{ time: number; note: number }> = [];
       segments.forEach((segment) => {
         const segmentSeconds = Math.max(0.18, segment.beats * beatSeconds);
         if (segment.note != null) {
@@ -528,15 +538,31 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
           oscillator.connect(envelope).connect(compressor);
           oscillator.start(cursor);
           oscillator.stop(cursor + segmentSeconds + 0.025);
+          if (showPitch && onPitchAttack) pitchAttacks.push({ time: cursor, note: segment.note });
         }
         cursor += segmentSeconds + 0.055;
       });
       const durationMs = Math.max(180, (cursor - now + 0.08) * 1000);
       setAudioState("playing");
       setAudioNotice(notice);
+      if (onPitchAttack && pitchAttacks.length) {
+        let nextAttack = 0;
+        const updatePitch = () => {
+          if (audioTokenRef.current !== token) return;
+          const outputTime = activeContext.currentTime - (activeContext.outputLatency || activeContext.baseLatency || 0);
+          const notes: number[] = [];
+          while (nextAttack < pitchAttacks.length && pitchAttacks[nextAttack].time <= outputTime) {
+            notes.push(pitchAttacks[nextAttack++].note);
+          }
+          if (notes.length) onPitchAttack(notes);
+          audioPitchFrameRef.current = nextAttack < pitchAttacks.length ? window.requestAnimationFrame(updatePitch) : null;
+        };
+        audioPitchFrameRef.current = window.requestAnimationFrame(updatePitch);
+      }
       audioTimerRef.current = window.setTimeout(() => {
         if (audioTokenRef.current !== token) return;
         audioTimerRef.current = null;
+        cancelPitchAttacks();
         if (activeContext.state !== "closed") void activeContext.close();
         if (audioContextRef.current === activeContext) audioContextRef.current = null;
         if (audioMasterRef.current === master) audioMasterRef.current = null;
@@ -551,38 +577,40 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
       if (audioContextRef.current === context) audioContextRef.current = null;
       if (audioMasterRef.current === master) audioMasterRef.current = null;
       if (cancelled) return false;
+      cancelPitchAttacks();
       setAudioState("unavailable");
       setAudioNotice("Reference playback could not start. Check this site’s audio permission or try another browser; the hidden exercise remains locked.");
       return false;
     }
-  }, []);
+  }, [cancelPitchAttacks, onPitchAttack]);
 
   const hearTarget = useCallback(() => {
     void playSegments(
       targetNotes.map((note, index) => ({ note, beats: phrase.beats[index] ?? 1 })),
       `Playing ${phrase.title} once. No note names or target keys are being shown.`,
-      () => setHasHeard(true),
+      { onFinished: () => setHasHeard(true) },
     );
   }, [phrase.beats, phrase.title, playSegments, targetNotes]);
 
   const playRepair = useCallback((kind: "expected" | "performed" | "contrast") => {
     if (!repairPairs) {
-      void playSegments(targetNotes.map((note, index) => ({ note, beats: phrase.beats[index] ?? 1 })), "Playing the intact target phrase once.");
+      void playSegments(targetNotes.map((note, index) => ({ note, beats: phrase.beats[index] ?? 1 })), "Playing the intact target phrase once.", { showPitch: true });
       return;
     }
     const expected = repairPairs.expected.map((note) => ({ note, beats: 1 })) satisfies ToneSegment[];
     const performed = repairPairs.performed.map((note) => ({ note, beats: 1 })) satisfies ToneSegment[];
     const segments = kind === "expected" ? expected : kind === "performed" ? performed : [...expected, { note: null, beats: 1 }, ...performed];
     const relocation = repairPlaybackShift ? ` Both links are shifted ${signedSemitoneLabel(repairPlaybackShift)} into the playable MIDI range.` : "";
-    void playSegments(segments, `${kind === "expected" ? "Playing the authored interval." : kind === "performed" ? "Playing the keyboard-supplied interval shape." : "Playing authored interval, then keyboard-supplied interval shape."}${relocation}`);
+    void playSegments(segments, `${kind === "expected" ? "Playing the authored interval." : kind === "performed" ? "Playing the keyboard-supplied interval shape." : "Playing authored interval, then keyboard-supplied interval shape."}${relocation}`, { showPitch: true });
   }, [phrase.beats, playSegments, repairPairs, repairPlaybackShift, targetNotes]);
 
   useEffect(() => () => {
     audioTokenRef.current += 1;
     if (audioTimerRef.current != null) window.clearTimeout(audioTimerRef.current);
+    cancelPitchAttacks();
     const context = audioContextRef.current;
     fadeAndCloseAudio(context, audioMasterRef.current);
-  }, []);
+  }, [cancelPitchAttacks]);
 
   useEffect(() => { eventsRef.current = events; }, [events]);
 
@@ -818,6 +846,9 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
   const frameLabel = showConventions ? conventionalPitchName(scoreDo, framePreference) : "movable Do";
   const relationalReveal = phase === "diagnose" || phase === "repair" || phase === "read" || phase === "vary";
   const frameReveal = phase === "read" || phase === "vary";
+  const frameDisclosure = phase === "repair" && onPitchAttack
+    ? "Directed semitone path revealed · pitch colors appear during repair playback"
+    : relationalReveal ? "Directed semitone path revealed · starting key still withheld" : "Starting pitch and relationship field withheld";
   const historyVeiled = phase === "hear" || phase === "sing" || phase === "find";
 
   return <section className={styles.shell} aria-labelledby="echo-key-title">
@@ -852,7 +883,7 @@ export function PianoEchoKeyHud({ events, activeNotes, doMidi, scale, showConven
 
     <div className={styles.frameLedger} role="status">
       <span>Exercise frame</span>
-      <strong>{frameReveal ? `${frameLabel} · ${frame.scale.name}` : relationalReveal ? "Directed semitone path revealed · starting key still withheld" : "Starting pitch and relationship field withheld"}</strong>
+      <strong>{frameReveal ? `${frameLabel} · ${frame.scale.name}` : frameDisclosure}</strong>
       <small>{frameChangedOutside ? "The live Piano frame changed; this exercise keeps its snapshot until you restart." : "Do and route are snapshotted for this exercise."} {MODE_COPY[attemptMode].detail}</small>
     </div>
 

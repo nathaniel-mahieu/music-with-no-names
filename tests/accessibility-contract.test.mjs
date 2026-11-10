@@ -577,7 +577,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /focusLens === "gravity" \? <PianoScaleGravityHud/);
   assert.match(piano, /focusLens === "scale-quality" \? <PianoScaleQualityHud/);
   assert.match(piano, /events=\{immersionHistoryEvents\}/);
-  assert.match(piano, /const isShortHudFocus = focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| isEarSearchFocus \|\| focusLens === "immersion" \|\| focusLens === "scale-quality" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
+  assert.match(piano, /const isShortHudFocus = isAbsolutePitchFocus \|\| focusLens === "echo-key" \|\| focusLens === "score-flow" \|\| isEarSearchFocus \|\| focusLens === "immersion" \|\| focusLens === "scale-quality" \|\| focusLens === "interval-glow" \|\| focusLens === "sight-shapes" \|\| focusLens === "research" \|\| focusLens === "gravity"/);
   assert.match(intervalGlow, /aria-labelledby="piano-interval-glow-title"/);
   assert.match(intervalGlow, /role="img" aria-labelledby="interval-glow-svg-title interval-glow-svg-desc"/);
   assert.match(intervalGlow, /octave layers shrink inward/);
@@ -812,7 +812,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-slots/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.piano-scale-gravity-degree-picker[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(forced-colors: active\)[\s\S]*\.piano-scale-gravity-hud/);
-  assert.match(css, /\.piano-focus-primary[\s\S]*repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.piano-focus-primary[\s\S]*repeat\(7, minmax\(0, 1fr\)\)/);
   assert.match(model, /IMMERSION_HISTORY_ATTACKS = 12/);
   assert.match(model, /export function immersionHistory[\s\S]*slice\(-IMMERSION_HISTORY_ATTACKS\)/);
   assert.match(model, /IMMERSION_MAX_FIELD_NOTES = 8/);

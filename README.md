@@ -10,6 +10,8 @@ Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-ma
 
 Technical Notes: [open the implementation and model reference](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical)
 
+Piano pitch associations: [open the appendix with all twelve colors and feeling cues](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical#technical-pitch-associations). The trainer, background glow, and appendix use the same [pitch class palette](lib/piano-pitch-color.ts).
+
 The current milestone is **Sound Finder · Ear Hints + Future Echoes v2.34**. It provides:
 
 - Learner-requested attack-chip ear hints after the whole hidden frame has played. Each non-rest chip becomes an explicit replay control for that one hidden note or chord; replaying it never enters a MIDI probe, advances the secure prefix, or reveals its pitch name.
