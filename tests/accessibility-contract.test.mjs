@@ -385,6 +385,20 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /Same phrase timeline/);
   assert.doesNotMatch(finder, /setPracticeHand\(next\); setChunkIndex\(0\)/,
     "a staff-layer change must keep the current phrase index");
+  const lengthHandlerStart = finder.indexOf("<select value={timeSpan}");
+  const lengthHandlerEnd = finder.indexOf("<option", lengthHandlerStart);
+  assert.ok(lengthHandlerStart >= 0 && lengthHandlerEnd > lengthHandlerStart);
+  assert.doesNotMatch(finder.slice(lengthHandlerStart, lengthHandlerEnd), /setChunkIndex/,
+    "changing the window length must keep the selected half-bar start index");
+  assert.match(finder, /aria-label="Frame start"/,
+    "a native start selector must expose the stable score addresses");
+  assert.match(finder, /Start \{formatEarSearchFrameStart\(candidate\)\}/);
+  assert.match(finder, /<span>Target notes<\/span>/,
+    "the voice reduction changes matching as well as reference listening");
+  assert.match(finder, /Only this layer is required/);
+  assert.match(finder, /earSearchLandingsForChunk\(score, chunk, \{ hand: practiceHand, voice \}\)/);
+  assert.match(finder, /advanceEarSearchTracker\(searchLandings, current, fresh/,
+    "progression must match the selected reduction, not all canonical score notes");
   assert.match(finder, /buildEarSearchReferencePlan\(score, chunk, targetLandings/,
     "reference audio must retain the structural score-time frame rather than rebasing itself on attacks");
   assert.doesNotMatch(finder, /compactEarSearchReferencePlan/,

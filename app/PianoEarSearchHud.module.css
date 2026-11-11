@@ -173,6 +173,7 @@
   display: flex;
   align-items: end;
   gap: 6px;
+  min-width: 0;
 }
 
 .transport > button {
@@ -182,7 +183,7 @@
 
 .chunkStepper {
   display: grid;
-  grid-template-columns: 44px auto 44px;
+  grid-template-columns: 44px minmax(115px, 190px) 44px;
   align-items: center;
   overflow: hidden;
   min-height: 44px;
@@ -199,11 +200,16 @@
   background: transparent;
 }
 
-.chunkStepper span {
-  color: var(--ear-muted);
+.chunkStepper select {
+  min-width: 0;
+  width: 100%;
+  padding: 0 20px 0 7px;
+  border: 0;
+  border-radius: 0;
+  color: var(--ear-ink);
+  background: transparent;
   font-size: .65rem;
   font-weight: 780;
-  white-space: nowrap;
 }
 
 .listenButton {

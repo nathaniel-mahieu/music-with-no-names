@@ -36,6 +36,7 @@ import {
   earSearchPendingDueAt,
   earSearchCollectionFromAnalysis,
   earSearchLandingsForChunk,
+  formatEarSearchFrameStart,
   selectEarSearchChunkLoop,
   summarizeEarSearchHandProgress,
   type EarSearchProbeFeedback,
@@ -462,6 +463,8 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
   const chunks = useMemo(() => score ? buildEarSearchChunks(score, { hand: "both", span: timeSpan }) : [], [score, timeSpan]);
   const safeChunkIndex = Math.min(Math.max(0, chunkIndex), Math.max(0, chunks.length - 1));
   const chunk = chunks[safeChunkIndex] ?? null;
+  const requestedHalfBars = timeSpan === "half-bar" ? 1 : timeSpan === "one-bar" ? 2 : 4;
+  const clippedAtScoreEnd = Boolean(chunk && safeChunkIndex + requestedHalfBars > chunks.length);
   const targetLandings = useMemo(() => score && chunk ? earSearchLandingsForChunk(score, chunk, { hand: practiceHand, voice }) : [], [chunk, practiceHand, score, voice]);
   const loop = useMemo(() => score && chunk ? selectEarSearchChunkLoop(score, chunk, practiceHand) : null, [chunk, practiceHand, score]);
   const referencePlan = useMemo(() => {
@@ -829,17 +832,17 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
 
   return <section className={cx(styles.shell, twoHand && styles.twoHandShell)} aria-labelledby="ear-search-title" data-phase={visiblePhase} data-mode={mode}>
     <header className={styles.commandDeck}>
-      <div className={styles.identity}><span>{twoHand ? "Sound Finder · two-staff path" : "Sound Finder · untimed score phrase"}</span><h3 id="ear-search-title">{imported.title}</h3><p>Frame {chunks.length ? safeChunkIndex + 1 : 0} of {chunks.length} · {timeSpanLabel(timeSpan)}{chunk?.measureNumbers.length ? ` · measure${chunk.measureNumbers.length === 1 ? "" : "s"} ${chunk.measureNumbers.join("–")}` : ""} · same score clock · {twoHand ? "staff route visible · pitch locked" : "pitch locked · pending staff hidden"}</p></div>
+      <div className={styles.identity}><span>{twoHand ? "Sound Finder · two-staff path" : "Sound Finder · untimed score phrase"}</span><h3 id="ear-search-title">{imported.title}</h3><p title="Start numbers mark fixed half-bar positions. Changing the window length keeps the same starting point.">Start {chunk ? formatEarSearchFrameStart(chunk) : "—"} · {timeSpanLabel(timeSpan)} window{clippedAtScoreEnd ? " · ends at score end" : ""} · {twoHand ? "staff route visible · pitch locked" : "pitch locked · pending staff hidden"}</p></div>
       <div className={cx(styles.controls, twoHand && styles.twoHandControls)}>
-        <label><span>Time frame</span><select value={timeSpan} onChange={(event) => { prepareTargetChange(); setTimeSpan(event.target.value as EarSearchTimeSpan); setChunkIndex(0); }}><option value="half-bar">½ bar · short</option><option value="one-bar">1 bar · medium</option><option value="two-bars">2 bars · long</option></select></label>
+        <label><span>Window length</span><select value={timeSpan} onChange={(event) => { prepareTargetChange("Same starting point. Hear the resized window before searching."); setTimeSpan(event.target.value as EarSearchTimeSpan); }}><option value="half-bar">½ bar · short</option><option value="one-bar">1 bar · medium</option><option value="two-bars">2 bars · long</option></select></label>
         {twoHand ? <label><span>Target texture</span><select value={voice} onChange={(event) => { prepareTargetChange(); setVoice(event.target.value as EarSearchVoice); }}><option value="staff-anchors">One anchor per staff</option><option value="full">All written keys</option></select></label> : <>
-          <label><span>Listen for</span><select value={voice} onChange={(event) => { prepareTargetChange(); setVoice(event.target.value as EarSearchVoice); }}><option value="upper">Top note each landing</option><option value="bass">Bottom note each landing</option><option value="full">Full texture</option></select></label>
-          <label><span>Practice layer</span><select value={practiceHand} onChange={(event) => { const next = event.target.value as PracticeHand; prepareTargetChange(`Same phrase timeline · ${next === "right" ? "upper" : next === "left" ? "lower" : "both"}-staff layer selected. Hear this layer before searching.`); setPracticeHand(next); }}><option value="both">Both staffs</option><option value="right">Upper staff</option><option value="left">Lower staff</option></select></label>
+          <label><span>Target notes</span><select value={voice} onChange={(event) => { prepareTargetChange("Target notes changed at the same start. Only this reduction is required; hear it before searching."); setVoice(event.target.value as EarSearchVoice); }}><option value="upper">Top note each landing</option><option value="bass">Bottom note each landing</option><option value="full">Full texture</option></select></label>
+          <label><span>Score staff</span><select value={practiceHand} onChange={(event) => { const next = event.target.value as PracticeHand; prepareTargetChange(`Same phrase timeline · ${next === "right" ? "upper" : next === "left" ? "lower" : "both"}-staff layer selected. Only this layer is required; hear it before searching.`); setPracticeHand(next); }}><option value="both">Both staffs</option><option value="right">Upper staff</option><option value="left">Lower staff</option></select></label>
         </>}
         <label><span>Hints</span><select value={hintMode} onChange={(event) => setHintMode(event.target.value as HintMode)}><option value="compass">Beginner compass</option><option value="blind">Progress only</option></select></label>
       </div>
       <div className={styles.transport}>
-        <div className={styles.chunkStepper}><button type="button" disabled={safeChunkIndex <= 0} onClick={() => { prepareTargetChange(); setChunkIndex(Math.max(0, safeChunkIndex - 1)); }} aria-label="Previous hidden frame">←</button><span>frame {chunks.length ? safeChunkIndex + 1 : 0}</span><button type="button" disabled={safeChunkIndex >= chunks.length - 1} onClick={() => { prepareTargetChange(); setChunkIndex(Math.min(chunks.length - 1, safeChunkIndex + 1)); }} aria-label="Next hidden frame">→</button></div>
+        <div className={styles.chunkStepper}><button type="button" disabled={safeChunkIndex <= 0} onClick={() => { prepareTargetChange(); setChunkIndex(Math.max(0, safeChunkIndex - 1)); }} aria-label="Previous frame start">←</button><select aria-label="Frame start" title="Fixed half-bar starts; window length does not change these numbers" value={safeChunkIndex} onChange={(event) => { prepareTargetChange(); setChunkIndex(Number(event.target.value)); }}>{chunks.map((candidate, index) => <option key={candidate.ordinal} value={index}>Start {formatEarSearchFrameStart(candidate)}</option>)}</select><button type="button" disabled={safeChunkIndex >= chunks.length - 1} onClick={() => { prepareTargetChange(); setChunkIndex(Math.min(chunks.length - 1, safeChunkIndex + 1)); }} aria-label="Next frame start">→</button></div>
         {visiblePhase === "playing" ? <button type="button" className={styles.stopButton} onClick={() => stopAudio()}>Stop</button> : <button type="button" className={styles.listenButton} disabled={!chunk || !referencePlan || referencePlan.totalDurationMs <= 0} onClick={() => void playReference()}>{hasHeard ? "Hear whole frame again" : "Hear hidden phrase"}</button>}
         {hasHeard && visiblePhase !== "playing" && !listeningOnly ? <button type="button" onClick={resetSearch}>Reset probes</button> : null}
       </div>

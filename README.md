@@ -24,7 +24,7 @@ The current milestone is **Sound Finder · Ear Hints + Future Echoes v2.34**. It
 
 The prior **Sound Finder · Score-Time Frames v2.33** remains available and provides:
 
-- Half-bar, one-bar, and two-bar practice frames derived from written score time instead of a requested note count. Each selection stays aligned to its authored measure position, so changing the frame size changes the musical window rather than silently rebuilding an unrelated phrase.
+- Half-bar, one-bar, and two-bar practice windows share one fixed half-bar start grid. The `Frame start` selector names each stable address (for example, `Start 4 · bar 2 · second half`); changing length extends only the ending, never renumbers or moves the start. Windows clip at the score end rather than snapping backward. Staff and top/bottom/full-texture reductions define both the reference audio and the required input: omitted staff slots or chord voices are not required for progression, while Full texture still requires every selected-staff key.
 
 - Full selected-frame reference playback. Notes already sounding at the frame boundary are carried into the excerpt, and leading, interior, and trailing silence or rests remain part of the clock instead of being trimmed away; the learner hears the frame's actual spacing before beginning the untimed search.
 

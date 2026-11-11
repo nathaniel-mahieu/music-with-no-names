@@ -67,6 +67,8 @@ export type EarSearchChunk = SheetReadingChunk & {
   frameStartBeat: number;
   frameEndBeat: number;
   span: EarSearchTimeSpan;
+  /** Stable half-bar origin: 0 is the bar start; 1 is its midpoint. */
+  startHalf: 0 | 1;
 };
 
 export type EarSearchReferencePlanNote = SheetReferencePlanNote;
@@ -186,7 +188,10 @@ function normalizeTarget(target: readonly EarSearchLanding[]) {
     measureIndexes.add(landing.measureIndex);
     return { ...landing, notes: normalizeNotes(landing.notes, `Target landing ${index + 1}`) };
   }).map((landing, index, normalized) => {
-    if (index === normalized.length - 1 && measureIndexes.size > 2) throw new RangeError("Ear-search targets may span at most two measures.");
+    // A two-bar window beginning halfway through a bar touches three authored
+    // measures. The frame builder bounds its actual time; the landing cap
+    // independently keeps this pitch-only target API browser-safe.
+    if (index === normalized.length - 1 && measureIndexes.size > 3) throw new RangeError("Ear-search targets may span at most three measures.");
     return landing;
   });
 }
@@ -613,10 +618,19 @@ function createEarSearchFrame(
     frameStartBeat,
     frameEndBeat,
     span,
+    startHalf: frameStartBeat > score.measures[sourceStartMeasureIndex].startBeat + 1e-8 ? 1 : 0,
   };
 }
 
-/** Build deterministic score-clock frames independent of note density. */
+/** A frame's start address stays the same when its selected length changes. */
+export function formatEarSearchFrameStart(chunk: EarSearchChunk) {
+  return `${chunk.ordinal + 1} · bar ${chunk.measureNumbers[0] ?? chunk.sourceStartMeasureIndex + 1} · ${chunk.startHalf === 0 ? "first" : "second"} half`;
+}
+
+/**
+ * Build every length on the same half-bar origin grid, independent of note
+ * density. Longer windows extend the end, never move or renumber the start.
+ */
 export function buildEarSearchChunks(
   score: SheetMusicScore,
   options: { hand?: PracticeHand; span?: EarSearchTimeSpan } = {},
@@ -624,32 +638,24 @@ export function buildEarSearchChunks(
   const hand = options.hand ?? "both";
   const span = options.span ?? "half-bar";
   if (!["half-bar", "one-bar", "two-bars"].includes(span)) throw new RangeError("Ear-search span must be half-bar, one-bar, or two-bars.");
-  const chunks: EarSearchChunk[] = [];
-  if (span === "half-bar") {
-    for (const measure of score.measures) {
-      const midpoint = measure.startBeat + measure.durationBeats / 2;
-      chunks.push(createEarSearchFrame(score, measure.index, measure.index, hand, span, measure.startBeat, midpoint, chunks.length));
-      chunks.push(createEarSearchFrame(score, measure.index, measure.index, hand, span, midpoint, measure.startBeat + measure.durationBeats, chunks.length));
-    }
-  } else {
-    const stride = span === "one-bar" ? 1 : 2;
-    for (let startMeasureIndex = 0; startMeasureIndex < score.measures.length; startMeasureIndex += stride) {
-      const endMeasureIndex = Math.min(score.measures.length - 1, startMeasureIndex + stride - 1);
-      const startMeasure = score.measures[startMeasureIndex];
-      const endMeasure = score.measures[endMeasureIndex];
-      chunks.push(createEarSearchFrame(
-        score,
-        startMeasureIndex,
-        endMeasureIndex,
-        hand,
-        span,
-        startMeasure.startBeat,
-        endMeasure.startBeat + endMeasure.durationBeats,
-        chunks.length,
-      ));
-    }
-  }
-  return chunks;
+  if (!score.measures.length) return [];
+  const boundaries = score.measures.flatMap((measure) => [measure.startBeat, measure.startBeat + measure.durationBeats / 2]);
+  const lastMeasure = score.measures.at(-1)!;
+  boundaries.push(lastMeasure.startBeat + lastMeasure.durationBeats);
+  const halfBarCount = span === "half-bar" ? 1 : span === "one-bar" ? 2 : 4;
+  return boundaries.slice(0, -1).map((startBeat, originIndex) => {
+    const endBoundaryIndex = Math.min(boundaries.length - 1, originIndex + halfBarCount);
+    return createEarSearchFrame(
+      score,
+      Math.floor(originIndex / 2),
+      Math.ceil(endBoundaryIndex / 2) - 1,
+      hand,
+      span,
+      startBeat,
+      boundaries[endBoundaryIndex],
+      originIndex,
+    );
+  });
 }
 
 function projectEarSearchAttackToStaff(attack: SheetMusicPracticeAttack, hand: PracticeHand): SheetMusicPracticeAttack | null {
