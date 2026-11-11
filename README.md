@@ -12,6 +12,8 @@ Technical Notes: [open the implementation and model reference](https://nathaniel
 
 Piano pitch associations: [open the appendix with all twelve colors and feeling cues](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical#technical-pitch-associations). The trainer, background glow, and appendix use the same [pitch class palette](lib/piano-pitch-color.ts).
 
+Absolute Pitch: [open the pitch-memory trainer and staff-color background](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=absolute-pitch). Its centered glows retain each played octave on a faint, continuous treble-and-bass staff. A written octave is seven equal staff steps; these are letter positions, not equal semitone distances. Sharps share their letter's height and show ♯. Cold-check reference tones never reveal their position or color. Other Piano views retain the ambient pitch-class gradient.
+
 The current milestone is **Sound Finder · Ear Hints + Future Echoes v2.34**. It provides:
 
 - Learner-requested attack-chip ear hints after the whole hidden frame has played. Each non-rest chip becomes an explicit replay control for that one hidden note or chord; replaying it never enters a MIDI probe, advances the secure prefix, or reveals its pitch name.

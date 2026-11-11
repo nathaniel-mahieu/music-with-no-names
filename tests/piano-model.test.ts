@@ -77,6 +77,7 @@ import {
   type TonalGravityCandidate,
 } from "../lib/piano-model.ts";
 import { PITCH_CLASS_COLORS, getPitchClassColor, pitchClassColor } from "../lib/piano-pitch-color.ts";
+import { GRAND_STAFF_LINES, MIDDLE_C_MIDI, grandStaffPosition, pitchStaffLedgerSteps, pitchStaffStep } from "../lib/piano-pitch-staff.ts";
 
 test("maps equal-tempered MIDI notes to physical frequency", () => {
   assert.equal(frequencyFromMidi(69), 440);
@@ -88,6 +89,58 @@ test("conventional pitch labels can follow sharp or flat frame spelling", () => 
   assert.equal(conventionalPitchName(63), "D♯4");
   assert.equal(conventionalPitchName(63, "flats"), "E♭4");
   assert.equal(conventionalPitchName(66, "flats"), "G♭4");
+});
+
+test("pitch glows share one written-distance grand staff centered on middle C", () => {
+  assert.equal(MIDDLE_C_MIDI, 60);
+  assert.equal(pitchStaffStep(MIDDLE_C_MIDI), 0);
+  assert.equal(grandStaffPosition(MIDDLE_C_MIDI), 0.5);
+  assert.deepEqual(GRAND_STAFF_LINES.filter(({ clef }) => clef === "treble").map(({ midi, step }) => [midi, step]),
+    [[64, -2], [67, -4], [71, -6], [74, -8], [77, -10]]);
+  assert.deepEqual(GRAND_STAFF_LINES.filter(({ clef }) => clef === "bass").map(({ midi, step }) => [midi, step]),
+    [[43, 10], [47, 8], [50, 6], [53, 4], [57, 2]]);
+  assert.equal(grandStaffPosition(77), 0);
+  assert.equal(grandStaffPosition(43), 1);
+});
+
+test("written pitch height preserves natural-step and octave spacing instead of semitone spacing", () => {
+  const naturalScale = [60, 62, 64, 65, 67, 69, 71, 72];
+  assert.deepEqual(naturalScale.map((midi) => pitchStaffStep(midi)), [0, -1, -2, -3, -4, -5, -6, -7]);
+  for (let midi = 0; midi <= 115; midi += 1) {
+    for (const spelling of ["sharps", "flats"] as const) {
+      assert.equal(pitchStaffStep(midi + 12, spelling) - pitchStaffStep(midi, spelling), -7);
+    }
+  }
+  assert.equal(pitchStaffStep(61), pitchStaffStep(60), "C sharp shares the C staff position");
+  assert.equal(pitchStaffStep(61, "flats"), pitchStaffStep(62), "D flat shares the D staff position");
+  assert.equal(pitchStaffStep(63), pitchStaffStep(62), "D sharp shares the D staff position");
+  assert.equal(pitchStaffStep(63, "flats"), pitchStaffStep(64), "E flat shares the E staff position");
+});
+
+test("ledger-range pitch coordinates remain unsquashed and invalid keys fail explicitly", () => {
+  assert.ok(grandStaffPosition(0) > 1);
+  assert.ok(grandStaffPosition(127) < 0);
+  assert.equal(pitchStaffStep(36) - pitchStaffStep(48), 7);
+  assert.equal(pitchStaffStep(84) - pitchStaffStep(96), 7);
+  for (const midi of [-1, 128, 60.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => pitchStaffStep(midi), RangeError);
+    assert.throws(() => grandStaffPosition(midi), RangeError);
+  }
+});
+
+test("pitch glow ledger lines use actual written lines without inventing extra staff lines", () => {
+  assert.deepEqual(pitchStaffLedgerSteps(60), [0]);
+  assert.deepEqual(pitchStaffLedgerSteps(61), [0]);
+  assert.deepEqual(pitchStaffLedgerSteps(59), []);
+  assert.deepEqual(pitchStaffLedgerSteps(62), []);
+  assert.deepEqual(pitchStaffLedgerSteps(79), [], "G5 is a space above the treble staff");
+  assert.deepEqual(pitchStaffLedgerSteps(81), [-12], "A5 needs the first upper ledger line");
+  assert.deepEqual(pitchStaffLedgerSteps(83), [-12], "B5 sits in the next space");
+  assert.deepEqual(pitchStaffLedgerSteps(84), [-12, -14]);
+  assert.deepEqual(pitchStaffLedgerSteps(41), [], "F2 is a space below the bass staff");
+  assert.deepEqual(pitchStaffLedgerSteps(40), [12]);
+  assert.deepEqual(pitchStaffLedgerSteps(38), [12]);
+  assert.deepEqual(pitchStaffLedgerSteps(36), [12, 14]);
 });
 
 test("absolute pitch cues repeat by octave and step equally around both circles", () => {

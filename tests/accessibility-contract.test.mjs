@@ -22,13 +22,34 @@ test("absolute-pitch color glow stays vivid, transient, and interaction-safe", a
   assert.match(piano, /\[\{ opacity: 0\.42 \}, \{ opacity: 0\.31, offset: 0\.22 \}, \{ opacity: 0 \}\]/,
     "the standard cue should have a clear but restrained peak and hold");
   assert.match(piano, /duration: reducedMotion \? 330 : 820, easing: "ease-out"/);
-  assert.match(piano, /<div ref=\{pitchGlowRef\} className="piano-pitch-glow" aria-hidden="true">/);
+  assert.match(piano, /<div ref=\{pitchGlowRef\} className=\{`piano-pitch-glow\$\{isAbsolutePitchFocus \? " is-staff" : ""\}`\} aria-hidden="true">/);
   assert.match(css, /\.piano-pitch-glow \{[^}]*position: fixed;[^}]*inset: 0;[^}]*border-radius: 0/,
     "the transient pitch wash should reach the viewport background beyond the bounded HUD");
   assert.match(css, /\.piano-pitch-glow \{[^}]*pointer-events: none/);
   assert.doesNotMatch(css, /\.piano-pitch-glow(?: > span)? \{[^}]*(?:backdrop-filter|filter: blur|will-change)/,
     "the viewport wash should not reserve expensive full-screen compositor layers");
-  assert.match(css, /@media \(forced-colors: active\) \{\s*\.piano-pitch-glow \{ display: none; \}/);
+  assert.match(css, /@media \(forced-colors: active\) \{\s*\.piano-pitch-staff,\s*\.piano-pitch-glow \{ display: none; \}/);
+});
+
+test("Absolute Pitch places independent octave colors on one continuous background grand staff", async () => {
+  const [piano, hud, css] = await Promise.all([
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoAbsolutePitchHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(piano, /const PITCH_STAFF_NOTES = Array\.from\(\{ length: 128 \}/);
+  assert.match(piano, /\.map\(\(note\) => isAbsolutePitchFocus \? note : pitchClassFromMidi\(note\)\)/,
+    "same-color octave attacks must stay separate on the staff");
+  assert.match(piano, /isAbsolutePitchFocus \? <div className="piano-pitch-staff" aria-hidden="true">/);
+  assert.match(piano, /data-midi-note=\{midi\}/);
+  assert.match(piano, /data-staff-step=\{step\}/);
+  assert.match(piano, /ledgerSteps\.map/);
+  assert.match(piano, /className="piano-pitch-staff-accidental">♯/);
+  assert.match(css, /--pitch-staff-step-size: clamp\(5px, 1\.6svh, 20px\)/);
+  assert.match(css, /top: calc\(var\(--pitch-staff-middle-c\) \+ var\(--pitch-staff-position\) \* var\(--pitch-staff-step-size\)\)/);
+  assert.match(css, /\.piano-pitch-glow\.is-staff > span > \* \{[^}]*left: 50%/);
+  assert.match(css, /\.piano-pitch-staff \{[^}]*pointer-events: none/);
+  assert.match(hud, /seven written steps higher on the background staff/);
 });
 
 test("raw MIDI chord feedback precedes frame-batched analysis without losing device timing", async () => {

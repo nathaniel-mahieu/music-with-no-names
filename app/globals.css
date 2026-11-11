@@ -8680,7 +8680,99 @@ footer a {
   opacity: 0;
 }
 
+.piano-pitch-staff,
+.piano-pitch-glow.is-staff {
+  --pitch-staff-step-size: clamp(5px, 1.6svh, 20px);
+  --pitch-staff-middle-c: 54svh;
+}
+
+.piano-pitch-staff {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  overflow: hidden;
+  color: #bbc1cc;
+  pointer-events: none;
+}
+
+.piano-pitch-staff > i {
+  position: absolute;
+  top: calc(var(--pitch-staff-middle-c) + var(--pitch-staff-position) * var(--pitch-staff-step-size));
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+  opacity: .13;
+}
+
+.piano-pitch-staff-clef {
+  position: absolute;
+  left: clamp(14px, 4vw, 80px);
+  font-family: "Noto Music", "Bravura Text", "Apple Symbols", serif;
+  font-weight: 400;
+  line-height: 1;
+  opacity: .18;
+  transform: translateY(-50%);
+}
+
+.piano-pitch-staff-clef.is-treble {
+  top: calc(var(--pitch-staff-middle-c) - 4 * var(--pitch-staff-step-size));
+  font-size: calc(12 * var(--pitch-staff-step-size));
+}
+
+.piano-pitch-staff-clef.is-bass {
+  top: calc(var(--pitch-staff-middle-c) + 6 * var(--pitch-staff-step-size));
+  font-size: calc(7 * var(--pitch-staff-step-size));
+}
+
+.piano-pitch-glow.is-staff > span {
+  inset: 0;
+  width: auto;
+  transform: none;
+  background: none;
+}
+
+.piano-pitch-glow.is-staff > span > * {
+  position: absolute;
+  top: calc(var(--pitch-staff-middle-c) + var(--pitch-staff-position) * var(--pitch-staff-step-size));
+  left: 50%;
+}
+
+.piano-pitch-staff-wash {
+  width: min(44%, 44rem);
+  height: calc(8 * var(--pitch-staff-step-size));
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent, var(--pitch-glow-color) 50%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 45%, #000 55%, transparent);
+}
+
+.piano-pitch-staff-head {
+  width: calc(1.35 * var(--pitch-staff-step-size));
+  height: calc(.9 * var(--pitch-staff-step-size));
+  border-radius: 50%;
+  background: var(--pitch-glow-color);
+  transform: translate(-50%, -50%) rotate(-18deg);
+}
+
+.piano-pitch-staff-ledger {
+  width: calc(2.5 * var(--pitch-staff-step-size));
+  height: 1px;
+  background: #bbc1cc;
+  transform: translate(-50%, -50%);
+}
+
+.piano-pitch-staff-accidental {
+  margin-left: calc(-2 * var(--pitch-staff-step-size));
+  color: var(--pitch-glow-color);
+  font-family: "Noto Music", "Apple Symbols", serif;
+  font-size: calc(2.1 * var(--pitch-staff-step-size));
+  font-weight: 400;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
 @media (forced-colors: active) {
+  .piano-pitch-staff,
   .piano-pitch-glow { display: none; }
 }
 

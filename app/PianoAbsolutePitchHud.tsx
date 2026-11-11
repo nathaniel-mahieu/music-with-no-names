@@ -359,7 +359,7 @@ export function PianoAbsolutePitchHud({ onPlayTone, onStopTone }: PianoAbsoluteP
     {mode === "explore" ? <div className={styles.stage}>
       <section className={styles.instructions}>
         <h4>Same color, different octave</h4>
-        <p>Each semitone advances one position around the wheel. An octave returns to the same position and color.</p>
+        <p>An octave returns to the same color, seven written steps higher on the background staff. Sharps share their letter’s height; ♯ marks the raised pitch.</p>
         <div className={styles.octaves} role="group" aria-label="Octave">
           {ABSOLUTE_PITCH_OCTAVES.map((octave) => <button key={octave} type="button"
             aria-pressed={octave === exploreOctave} onClick={() => hearExploreNote(exploreNote, octave)}>Octave {octave}</button>)}
