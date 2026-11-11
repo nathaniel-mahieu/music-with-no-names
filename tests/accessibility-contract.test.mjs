@@ -67,6 +67,30 @@ test("raw MIDI chord feedback precedes frame-batched analysis without losing dev
     "page-hide persistence should include attacks waiting for the next paint");
 });
 
+test("Sound Finder opens probing without a reference and Stop cancels listening before rearming", async () => {
+  const finder = await readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8");
+  assert.match(finder, /if \(phase !== "ready" \|\| !searchLandings\.length\) return;[\s\S]*createEarSearchTracker\(searchLandings, probeBoundaryRef\.current\.eventId\)/);
+  assert.match(finder, /const captureProbeBoundary = useCallback\(\(\) => \{\s*probeBoundaryRef\.current = \{ eventId: newestEventId\(eventsRef\.current\), atMs: performance\.now\(\) \}/);
+  const stopStart = finder.indexOf("const stopReferenceAndProbe =");
+  const stopEnd = finder.indexOf("useEffect", stopStart);
+  assert.match(finder.slice(stopStart, stopEnd), /stopAudio\(\);\s*beginProbeSearch\(/,
+    "Stop must invalidate audio before arming fresh keyboard input");
+  assert.match(finder, /onClick=\{stopReferenceAndProbe\}>Stop/);
+  assert.match(finder, /event\.onsetMs >= probeBoundaryRef\.current\.atMs/,
+    "pre-Stop events published in a later paint must not receive retroactive credit");
+  assert.match(finder, /stopAudio\("Preparing the hidden reference[^\n]*"playing"\)/,
+    "asynchronous audio preparation must not reopen probes before playback");
+  assert.match(finder, /disabled=\{visiblePhase === "playing" \|\| !searchLandings\.length\}/,
+    "Reveal should remain explicit without requiring a whole-frame listen");
+  assert.doesNotMatch(finder, /waiting-release|Search begins only after playback finishes|Hear the whole frame first/);
+  assert.match(finder, /probes ready · reference optional/);
+  const oversizeStart = finder.indexOf("if (scheduledVoiceCount > MAX_EAR_SEARCH_REFERENCE_VOICES)");
+  const oversizeEnd = finder.indexOf("if (frozen)", oversizeStart);
+  assert.ok(oversizeStart >= 0 && oversizeEnd > oversizeStart);
+  assert.doesNotMatch(finder.slice(oversizeStart, oversizeEnd), /stopAudio\(|setPhase\(|setTracker\(/,
+    "refusing oversized reference audio must preserve the active search and its event boundary");
+});
+
 test("Sight Shapes keeps notation, interval, keyboard, and learner-report channels explicit and silent", async () => {
   const [piano, sight, sightCss, model] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
@@ -422,8 +446,10 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   const memoryChipContract = finder.slice(memoryChipStart, memoryChipEnd);
   assert.match(memoryChipContract, /<button type="button" className=\{styles\.memoryChipButton\}/,
     "each sounding attack chip must be a native, keyboard-reachable button");
-  assert.match(memoryChipContract, /disabled=\{!hasHeard \|\| visiblePhase === "playing"\}/,
-    "single-attack ear hints must wait until the whole frame is heard and stay disabled during reference playback");
+  assert.match(memoryChipContract, /disabled=\{visiblePhase === "playing"\}/,
+    "single-attack ear hints are optional at any time except during full reference playback");
+  assert.doesNotMatch(memoryChipContract, /!hasHeard|Hear the whole frame first/,
+    "ear hints must not force a whole-frame listen");
   assert.match(memoryChipContract, /onClick=\{\(\) => void playAttackHint\(item\.landing!, item\.timelineIndex\)\}/);
   assert.match(memoryChipContract, /Play hidden attack/,
     "pending chip names must describe the ear-hint action without naming the pitch");

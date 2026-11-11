@@ -16,7 +16,9 @@ Absolute Pitch: [open the pitch-memory trainer and staff-color background](https
 
 The current milestone is **Sound Finder · Ear Hints + Future Echoes v2.34**. It provides:
 
-- Learner-requested attack-chip ear hints after the whole hidden frame has played. Each non-rest chip becomes an explicit replay control for that one hidden note or chord; replaying it never enters a MIDI probe, advances the secure prefix, or reveals its pitch name.
+- Immediate silent probing without a required reference listen. Stop cancels playback and opens a fresh probe boundary immediately; held keys and attacks from playback never receive retroactive credit. Reference playback is optional and suspends probe evaluation only while it is playing.
+
+- Learner-requested attack-chip ear hints are available without a whole-frame listen. Each non-rest chip is an explicit replay control for that one hidden note or chord; replaying it never enters a MIDI probe, advances the secure prefix, or reveals its pitch name. Exact notation still opens only on explicit Reveal.
 
 - Brief future echoes when an exploratory MIDI attack burst contains a key written later in the same hidden frame. Every compatible later chip glows without revealing pitch or staff; a chord chip reports the exact fraction of its distinct target keys present, even when target-aware evaluation splits one physical chord across probes. The next required landing and already accepted probes remain excluded so the cue cannot become credit or a skip-ahead mechanism.
 
@@ -26,7 +28,7 @@ The prior **Sound Finder · Score-Time Frames v2.33** remains available and prov
 
 - Half-bar, one-bar, and two-bar practice windows share one fixed half-bar start grid. The `Frame start` selector names each stable address (for example, `Start 4 · bar 2 · second half`); changing length extends only the ending, never renumbers or moves the start. Windows clip at the score end rather than snapping backward. Staff and top/bottom/full-texture reductions define both the reference audio and the required input: omitted staff slots or chord voices are not required for progression, while Full texture still requires every selected-staff key.
 
-- Full selected-frame reference playback. Notes already sounding at the frame boundary are carried into the excerpt, and leading, interior, and trailing silence or rests remain part of the clock instead of being trimmed away; the learner hears the frame's actual spacing before beginning the untimed search.
+- Optional full selected-frame reference playback. Notes already sounding at the frame boundary are carried into the excerpt, and leading, interior, and trailing silence or rests remain part of the clock instead of being trimmed away. The learner can probe first, listen when useful, or Stop at any point to return to the untimed search.
 
 - Staff provenance revealed only as notes are found. A caught landing becomes a chip marked as authored upper staff, lower staff, or both through color plus a distinct glyph and written label, while the pitch and staff of every pending landing remain hidden.
 
@@ -116,7 +118,7 @@ The prior **Sound Finder · Extended Ear Search v2.25** remains available and pr
 
 - A beginner compass that keeps four kinds of evidence separate: coarse register/place, higher-or-lower pitch direction, interval contour and narrower/wider reach from the last caught anchor, and cautious inside/outside nearby-collection context. An octave copy can be recognized as the same pitch family without becoming an exact success.
 
-- A stricter Progress-only mode that withholds those compass hints. Neither mode exposes target names, staff height, exact semitone corrections, or destination keys while searching; the learner must explicitly choose `Reveal exact map` after hearing the phrase.
+- A stricter Progress-only mode that withholds those compass hints. Neither mode exposes target names, staff height, exact semitone corrections, or destination keys while searching; exact pitches appear only when the learner explicitly chooses `Reveal exact map`. Reference listening is optional.
 
 - A neutral playback pulse, a compact hidden-memory matrix that remains legible through thirty-two landings, a recent-probe trail, prominent listening/searching/complete state, independent tempo and reference-level controls, and an exact post-reveal semitone map. A pathological full-texture reference is refused with a useful shorter-span or single-voice remedy instead of overwhelming the browser. No aggregate goodness, musicality, talent, or timing score is invented.
 

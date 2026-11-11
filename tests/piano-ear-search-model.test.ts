@@ -388,6 +388,79 @@ test("durable tracking keeps a caught prefix through long pauses and more than 6
   assert.deepEqual(tracker.acceptedProbeIds, [1, 72]);
 });
 
+test("a fresh silent search accepts its first attack without any reference-playback prerequisite", () => {
+  const target = [landing("first", [60]), landing("repeat", [60])];
+  let tracker = createEarSearchTracker(target);
+  tracker = advanceEarSearchTracker(target, tracker, [{ id: 0, note: 60, onsetMs: 0 }], {
+    chordWindowMs: 40, nowMs: 0,
+  });
+  assert.equal(tracker.matchedLandings, 1);
+  assert.deepEqual(tracker.acceptedProbeIds, [0]);
+
+  // A held key supplies no new attack. Re-delivering its recorded event cannot
+  // satisfy the repeated landing, but a fresh attack can, however long it takes.
+  const held = advanceEarSearchTracker(target, tracker, [{ id: 0, note: 60, onsetMs: 0 }], {
+    chordWindowMs: 40, nowMs: 120_000,
+  });
+  assert.equal(held, tracker);
+  tracker = advanceEarSearchTracker(target, held, [{ id: 1, note: 60, onsetMs: 120_001 }], {
+    chordWindowMs: 40, nowMs: 120_001,
+  });
+  assert.equal(tracker.complete, true);
+  assert.deepEqual(tracker.acceptedProbeIds, [0, 1]);
+});
+
+test("a Stop event cutoff ignores old listening attacks but keeps the first fresh post-Stop probe", () => {
+  const target = [landing("first", [60]), landing("next", [64])];
+  const duringReference = [
+    { id: 49, note: 60, onsetMs: 1_000 },
+    { id: 50, note: 64, onsetMs: 1_020 },
+  ];
+  let tracker = createEarSearchTracker(target, 50);
+  const before = advanceEarSearchTracker(target, tracker, duringReference, {
+    chordWindowMs: 40, nowMs: 1_100,
+  });
+  assert.equal(before, tracker);
+  assert.equal(before.matchedLandings, 0);
+
+  tracker = advanceEarSearchTracker(target, before, [
+    ...duringReference,
+    { id: 51, note: 60, onsetMs: 1_101 },
+  ], { chordWindowMs: 40, nowMs: 1_101 });
+  assert.equal(tracker.matchedLandings, 1, "the first new key must not be swallowed into a later activation boundary");
+  assert.deepEqual(tracker.acceptedProbeIds, [51]);
+  tracker = advanceEarSearchTracker(target, tracker, [{ id: 52, note: 64, onsetMs: 901_101 }], {
+    chordWindowMs: 40, nowMs: 901_101,
+  });
+  assert.equal(tracker.complete, true);
+  assert.deepEqual(tracker.acceptedProbeIds, [51, 52]);
+});
+
+test("a key held across Stop is not a fresh chord member and cannot leak listening input into progress", () => {
+  const target = [landing("chord", [60, 64])];
+  let tracker = createEarSearchTracker(target, 7);
+  tracker = advanceEarSearchTracker(target, tracker, [
+    { id: 7, note: 60, onsetMs: 900 },
+    { id: 8, note: 64, onsetMs: 1_001 },
+  ], { chordWindowMs: 240, nowMs: 1_500 });
+  assert.equal(tracker.complete, false);
+  assert.equal(tracker.latest?.texture, "fewer-keys");
+  assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[64]]);
+
+  tracker = advanceEarSearchTracker(target, tracker, [
+    { id: 9, note: 60, onsetMs: 2_000 },
+    { id: 10, note: 64, onsetMs: 2_008 },
+  ], { chordWindowMs: 240, nowMs: 2_500 });
+  assert.equal(tracker.complete, true);
+  assert.deepEqual(tracker.acceptedProbeIds, [10]);
+  const complete = advanceEarSearchTracker(target, tracker, [{ id: 11, note: 61, onsetMs: 3_000 }], {
+    chordWindowMs: 240, nowMs: 3_500,
+  });
+  assert.equal(complete.complete, true);
+  assert.equal(complete.matchedLandings, 1);
+  assert.deepEqual(complete.acceptedProbeIds, [10], "later exploratory attacks must not erase the secure prefix");
+});
+
 test("target-aware gathering locks an accepted chord before the next fast landing", () => {
   const target = [landing("chord", [60, 64]), landing("next", [67])];
   let tracker = createEarSearchTracker(target, 0);

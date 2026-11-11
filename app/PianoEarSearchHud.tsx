@@ -70,7 +70,7 @@ type PianoEarSearchHudProps = {
   mode?: "classic" | "two-hand";
 };
 
-type SearchPhase = "ready" | "playing" | "waiting-release" | "searching" | "complete" | "unavailable";
+type SearchPhase = "ready" | "playing" | "searching" | "complete";
 type HintMode = "blind" | "compass";
 type PrimaryCue = "texture" | "interval" | "place" | "direction" | null;
 
@@ -96,11 +96,11 @@ function signed(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function timelineStoneLabel(timelineIndex: number, targetIndex: number | null, matched: number, hasHeard: boolean, isStaffRest = false) {
+function timelineStoneLabel(timelineIndex: number, targetIndex: number | null, matched: number, canProbe: boolean, isStaffRest = false) {
   if (isStaffRest) return `Landing ${timelineIndex + 1} · rest in selected staff layer`;
   if (targetIndex === null) return `Landing ${timelineIndex + 1} · hidden; choose a shorter frame to search`;
   return targetIndex < matched ? `Landing ${timelineIndex + 1} caught`
-    : targetIndex === matched && hasHeard ? `Landing ${timelineIndex + 1} is current`
+    : targetIndex === matched && canProbe ? `Landing ${timelineIndex + 1} is current`
       : `Landing ${timelineIndex + 1} hidden`;
 }
 
@@ -141,7 +141,7 @@ function closeAudio(context: AudioContext | null, master: GainNode | null) {
 }
 
 function placeCopy(feedback: EarSearchProbeFeedback | null) {
-  if (!feedback) return { title: "No probe yet", body: "Touch a key after the reference releases." };
+  if (!feedback) return { title: "No probe yet", body: "Touch a key. Listening to the reference is optional." };
   if (feedback.status === "caught") return { title: "Place caught", body: "That landing is now held in memory." };
   if (feedback.pitchFamily === "same-family") return {
     title: "Right pitch family",
@@ -185,7 +185,7 @@ function collectionCopy(feedback: EarSearchProbeFeedback | null) {
 }
 
 function textureCopy(feedback: EarSearchProbeFeedback | null) {
-  if (!feedback) return { title: "Chord shape waits", body: "Play the gathered keys after the hidden texture ends." };
+  if (!feedback) return { title: "Chord shape waits", body: "Play the gathered keys together; listening is optional." };
   if (feedback.texture === "caught") return { title: "Chord shape caught", body: "Key count, members, and voicing all agree." };
   if (feedback.texture === "fewer-keys") return { title: "Add a chord member", body: "This probe has fewer gathered keys than the hidden landing." };
   if (feedback.texture === "more-keys") return { title: "Use fewer chord members", body: "This probe has more gathered keys than the hidden landing." };
@@ -233,10 +233,8 @@ function feedbackAnnouncement(
   probeOrdinal: number,
   primaryCue: PrimaryCue,
 ) {
-  if (phase === "playing") return "Hidden reference is playing. Listen; keyboard probes do not count yet.";
-  if (phase === "waiting-release") return "Reference finished. Release every held or sustained key before searching.";
-  if (phase === "ready") return "Ready to hear the hidden phrase. Search begins only after playback finishes.";
-  if (phase === "unavailable") return "Reference audio needs attention before this search can begin.";
+  if (phase === "playing") return "Hidden reference is playing. Press Stop to start probing immediately.";
+  if (phase === "ready") return "Choose a searchable frame, or listen to its holds and rests. Reference playback is optional.";
   if (complete) return `Phrase found. ${total} of ${total} hidden landings caught.`;
   if (!feedback) return `Ready for landing ${matched + 1} of ${total}. Timing is not graded.`;
   if (feedback.status === "caught") return `Landing caught. ${matched} of ${total} secure. Timing was not graded.`;
@@ -291,7 +289,7 @@ function RevealedMap({ notes, timelineLength, showConventions, showStaff = false
   </div>;
 }
 
-export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConventions, frozen, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
+export function PianoEarSearchHud({ events, chordWindowMs, showConventions, frozen, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
   const twoHand = mode === "two-hand";
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
@@ -318,7 +316,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
   const [audioNotice, setAudioNotice] = useState("Reference frames and attack hints play only after explicit controls. MIDI input remains silent.");
   const gathersTexture = voice === "full" || voice === "staff-anchors";
   const eventsRef = useRef(events);
-  const activeNotesRef = useRef(activeNotes);
+  const probeBoundaryRef = useRef({ eventId: newestEventId(events), atMs: 0 });
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioMasterRef = useRef<GainNode | null>(null);
   const audioTimerRef = useRef<number | null>(null);
@@ -331,7 +329,9 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
   const memoryListRef = useRef<HTMLOListElement | null>(null);
 
   useEffect(() => { eventsRef.current = events; }, [events]);
-  useEffect(() => { activeNotesRef.current = activeNotes; }, [activeNotes]);
+  const captureProbeBoundary = useCallback(() => {
+    probeBoundaryRef.current = { eventId: newestEventId(eventsRef.current), atMs: performance.now() };
+  }, []);
 
   const disposeAudio = useCallback((clearAudition = true) => {
     audioTokenRef.current += 1;
@@ -403,7 +403,8 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
   const installScore = useCallback((nextImported: ImportedMusicXmlScore, xml: string, persist: boolean) => {
     if (nextImported.partNames.length !== 1) throw new Error(`Sound Finder evaluates one MusicXML part at a time. This file contains ${nextImported.partNames.length}; export the piano part alone first.`);
     const normalized = normalizeImportedMusicXmlScore(nextImported);
-    stopAudio("New score ready. Hear a hidden phrase when you are ready.");
+    captureProbeBoundary();
+    stopAudio("Score ready. Start probing now, or listen to the hidden reference.");
     setImported(nextImported);
     setScore(normalized);
     setFileState("ready");
@@ -422,7 +423,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
         setFileNotice("Score loaded in memory; this browser could not retain it after navigation.");
       }
     }
-  }, [stopAudio]);
+  }, [captureProbeBoundary, stopAudio]);
 
   useEffect(() => {
     const task = window.setTimeout(() => {
@@ -499,12 +500,36 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
     }));
   }, [imported, loop, searchLandings]);
 
+  // Readiness is independent of listening. The boundary is captured in the
+  // initiating action, not here, so the first post-selection key cannot vanish.
+  useEffect(() => {
+    if (phase !== "ready" || !searchLandings.length) return;
+    setTracker(createEarSearchTracker(searchLandings, probeBoundaryRef.current.eventId));
+    setClusterClockMs(0);
+    setPhase("searching");
+  }, [phase, searchLandings]);
+
+  const beginProbeSearch = useCallback((notice: string) => {
+    if (frozen) onResumeCapture();
+    captureProbeBoundary();
+    clearFutureEchoes();
+    setTracker(searchLandings.length ? createEarSearchTracker(searchLandings, probeBoundaryRef.current.eventId) : null);
+    setClusterClockMs(0);
+    setPhase(searchLandings.length ? "searching" : "ready");
+    setAudioNotice(notice);
+  }, [captureProbeBoundary, clearFutureEchoes, frozen, onResumeCapture, searchLandings]);
+
+  const stopReferenceAndProbe = useCallback(() => {
+    stopAudio();
+    beginProbeSearch("Reference stopped. New key attacks count now; the notes stay hidden.");
+  }, [beginProbeSearch, stopAudio]);
+
   useEffect(() => {
     if (phase !== "searching" || !searchLandings.length) return;
     const task = window.setTimeout(() => setTracker((current) => {
       if (!current) return current;
       const fresh = events
-        .filter((event) => event.id > current.processedThroughEventId)
+        .filter((event) => event.id > current.processedThroughEventId && event.onsetMs >= probeBoundaryRef.current.atMs)
         .map((event) => ({ id: event.id, note: event.note, onsetMs: event.onsetMs }));
       const newestOnset = fresh.at(-1)?.onsetMs ?? current.pendingAttacks.at(-1)?.onsetMs ?? 0;
       return advanceEarSearchTracker(searchLandings, current, fresh, {
@@ -566,25 +591,14 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
     return () => window.clearTimeout(task);
   }, [clearFutureEchoes, clusterWindow, gathersTexture, phase, searchLandings, timelineLandings, tracker]);
 
-  useEffect(() => {
-    if (phase !== "waiting-release" || activeNotes.length) return;
-    if (searchLandings.length) setTracker(createEarSearchTracker(searchLandings, newestEventId(eventsRef.current)));
-    setClusterClockMs(0);
-    setPhase("searching");
-    setAudioNotice("All keys released. Search at your own pace; onset timing is ignored.");
-  }, [activeNotes.length, phase, searchLandings]);
-
   const resetSearch = () => {
-    if (frozen) onResumeCapture();
-    clearFutureEchoes();
-    if (searchLandings.length) setTracker(createEarSearchTracker(searchLandings, newestEventId(eventsRef.current)));
-    setClusterClockMs(0);
+    disposeAudio();
     setRevealed(false);
-    setPhase(activeNotes.length ? "waiting-release" : "searching");
-    setAudioNotice(activeNotes.length ? "Release every key to begin a clean search." : "Fresh search. The phrase remains hidden and timing is not graded.");
+    beginProbeSearch("Fresh search. New key attacks count now; listening is optional.");
   };
 
-  const prepareTargetChange = (notice = "Phrase changed. Hear the new hidden unit before searching.") => {
+  const prepareTargetChange = (notice = "Frame changed. Start probing now, or listen to the reference.") => {
+    captureProbeBoundary();
     clearFutureEchoes();
     stopAudio(notice);
     setHasHeard(false);
@@ -597,20 +611,22 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
     if (!score || !referencePlan || referencePlan.totalDurationMs <= 0) return;
     const scheduledVoiceCount = referencePlan.cues.reduce((count, cue) => count + cue.notes.length, 0);
     if (scheduledVoiceCount > MAX_EAR_SEARCH_REFERENCE_VOICES) {
-      stopAudio(`This texture would schedule ${scheduledVoiceCount} synthesized voices for one playback; the browser-safe limit is ${MAX_EAR_SEARCH_REFERENCE_VOICES}. Choose staff anchors, a single outer voice, or a shorter time frame.`);
+      // Refusing oversized audio must not reopen an old input boundary or
+      // erase progress in the still-valid silent search.
+      setAudioNotice(`This texture would schedule ${scheduledVoiceCount} synthesized voices for one playback; the browser-safe limit is ${MAX_EAR_SEARCH_REFERENCE_VOICES}. Silent probing is unchanged. Choose staff anchors, a single outer voice, or a shorter time frame to listen.`);
       return;
     }
     if (frozen) onResumeCapture();
     clearFutureEchoes();
-    stopAudio("Preparing the hidden reference…", "ready");
+    // Gate preparation too: context.resume() can await a browser gesture.
+    stopAudio("Preparing the hidden reference… Stop at any time to start probing.", "playing");
     setRevealed(false);
     setHasHeard(false);
     setTracker(null);
     setClusterClockMs(0);
     const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextConstructor) {
-      setPhase("unavailable");
-      setAudioNotice("Reference audio is unavailable in this browser. Try a current Chrome, Edge, Safari, or Firefox release.");
+      beginProbeSearch("Reference audio is unavailable. Silent keyboard probing is still ready.");
       return;
     }
     const token = audioTokenRef.current + 1;
@@ -680,9 +696,6 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
         setPlaybackProgress(1);
         setPlaybackSoundingLanding(null);
         setHasHeard(true);
-        const boundary = newestEventId(eventsRef.current);
-        setTracker(searchLandings.length ? createEarSearchTracker(searchLandings, boundary) : null);
-        setClusterClockMs(0);
         if (tooDense) {
           setPhase("complete");
           setAudioNotice(`Full ${timeSpanLabel(timeSpan)} frame heard. It contains ${targetLandings.length} attacks, above the ${EAR_SEARCH_MAX_LANDINGS}-attack search limit; choose a shorter frame to probe it safely.`);
@@ -691,12 +704,8 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
           setAudioNotice(referencePlan.cues.some((cue) => cue.notes.length)
             ? "Full frame heard, including the carried or held sound. This layer has no new attack to find; replay it or choose another frame."
             : "Full rest frame heard on its written clock. There is no attack to find in this layer; replay it or choose another frame.");
-        } else if (activeNotesRef.current.length) {
-          setPhase("waiting-release");
-          setAudioNotice("Reference finished. Release every held or sustained key before the search begins.");
         } else {
-          setPhase("searching");
-          setAudioNotice("Full frame finished. Take your time and probe the keyboard; timing is not graded.");
+          beginProbeSearch("Full frame finished. New key attacks count now; timing is not graded.");
         }
       }, Math.max(80, (Math.max(latestStop, audioStart + totalDurationMs / 1_000) - context.currentTime) * 1_000));
     } catch {
@@ -704,13 +713,12 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
       if (audioTokenRef.current !== token) return;
       if (audioContextRef.current === context) audioContextRef.current = null;
       if (audioMasterRef.current === master) audioMasterRef.current = null;
-      setPhase("unavailable");
-      setAudioNotice("Reference playback could not start. Check this site's audio permission and try again.");
+      beginProbeSearch("Reference playback could not start. Silent probing is ready; check audio permission if you want to listen.");
     }
-  }, [clearFutureEchoes, frozen, onResumeCapture, referencePlan, referenceVolume, score, searchLandings, stopAudio, targetLandings.length, timeSpan, tooDense, twoHand, voice]);
+  }, [beginProbeSearch, clearFutureEchoes, frozen, onResumeCapture, referencePlan, referenceVolume, score, searchLandings, stopAudio, targetLandings.length, timeSpan, tooDense, twoHand, voice]);
 
   const playAttackHint = useCallback(async (landing: EarSearchLanding, timelineIndex: number) => {
-    if (!hasHeard || phase === "playing" || !landing.notes.length) return;
+    if (phase === "playing" || !landing.notes.length) return;
     disposeAudio();
     const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextConstructor) {
@@ -767,7 +775,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
       setAuditioningAttackId(null);
       setAudioNotice("The selected attack hint could not play. Check this site's audio permission and try again.");
     }
-  }, [disposeAudio, hasHeard, phase, referenceVolume]);
+  }, [disposeAudio, phase, referenceVolume]);
 
   const memoryTargetIndex = Math.min(tracker?.matchedLandings ?? 0, Math.max(0, searchLandings.length - 1));
   const memoryTargetId = searchLandings[memoryTargetIndex]?.id;
@@ -785,7 +793,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
 
   if (!score || !imported) return <section className={cx(styles.shell, twoHand && styles.twoHandShell)} aria-labelledby="ear-search-title" data-mode={mode}>
     <header className={styles.emptyHeader}>
-      <div><span>{twoHand ? "Sound Finder · two-staff ear search" : "Sound Finder · beginner ear search"}</span><h3 id="ear-search-title">{twoHand ? "Hear both staffs. Find their route through the score." : "Hear a hidden score span. Find it without seeing the answer."}</h3><p>{twoHand ? "The notes stay hidden, while the score tells you whether the next landing belongs to the upper staff, lower staff, or both together. MIDI stays silent and never guesses which physical hand you used." : "Choose half a bar, one bar, or two bars of written time. Held notes and rests stay in the frame; then you can probe for each new attack without a clock. MIDI stays silent."}</p></div>
+      <div><span>{twoHand ? "Sound Finder · two-staff ear search" : "Sound Finder · beginner ear search"}</span><h3 id="ear-search-title">{twoHand ? "Hear both staffs. Find their route through the score." : "Hear a hidden score span. Find it without seeing the answer."}</h3><p>{twoHand ? "The notes stay hidden, while the score tells you whether the next landing belongs to the upper staff, lower staff, or both together. Reference playback is optional. MIDI stays silent and never guesses which physical hand you used." : "Choose half a bar, one bar, or two bars of written time and start probing immediately. Listen when useful; Stop returns to probing. MIDI stays silent."}</p></div>
     </header>
     <div className={styles.importPanel}>
       <div className={styles.importOrbit} aria-hidden="true"><i /><i /><i /><b /></div>
@@ -794,6 +802,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
   </section>;
 
   const visiblePhase: SearchPhase = phase === "searching" && evaluation?.complete ? "complete" : phase;
+  const canProbe = visiblePhase === "searching";
   const feedback = visiblePhase === "searching" || visiblePhase === "complete" ? evaluation?.latest ?? null : null;
   const matched = visiblePhase === "searching" || visiblePhase === "complete" ? evaluation?.matchedLandings ?? 0 : 0;
   const total = searchLandings.length;
@@ -816,11 +825,9 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
         : feedback.pitchFamily === "same-family" ? "place" : "direction";
   const accepted = new Set(evaluation?.acceptedProbeIds ?? []);
   const phaseTitle = visiblePhase === "playing" ? frameHasSound ? "Listen · the whole frame is sounding" : "Listen · hold the written silence"
-    : visiblePhase === "waiting-release" ? "Release the keyboard to open a clean search"
       : visiblePhase === "searching" ? "Your time · there is no clock"
         : visiblePhase === "complete" ? listeningOnly ? tooDense ? "Frame heard · shorten it to begin searching" : "Frame heard · no new attack to search" : "Phrase found · hold the shape in memory"
-          : visiblePhase === "unavailable" ? "Audio needs attention"
-            : listeningOnly ? "Hear the complete score-time frame" : "Hear first · then search from memory";
+            : listeningOnly ? "Hear the complete score-time frame" : "Start probing · listening is optional";
   const handProgress = summarizeEarSearchHandProgress(searchLandings, matched);
   const playbackCue = playbackSoundingLanding == null ? null : referencePlan?.cues[playbackSoundingLanding] ?? null;
   const currentStaff: StaffCue = visiblePhase === "playing"
@@ -828,23 +835,35 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
     : handProgress.nextStaff;
   const handCueVerb = visiblePhase === "playing" ? playbackCue == null ? "Between sounds" : playbackCue.kind === "carry" ? "Held into frame" : "Sounding now"
     : visiblePhase === "complete" ? "Route complete"
-      : hasHeard ? "Next landing" : "Opening landing";
+      : canProbe ? "Next landing" : "Opening landing";
+  const centralInstruction = visiblePhase === "playing"
+    ? "Listen while the hidden reference plays, or press Stop to probe now. Keys played during reference playback do not count."
+    : visiblePhase === "searching"
+      ? feedback?.status === "caught"
+        ? twoHand ? `That score landing is secure. The next belongs to ${staffLabel(handProgress.nextStaff).toLowerCase()}.` : "That attack is found; its chip now shows the score-authored staff. Hold the accepted sound, then search for the next relationship."
+        : "Wrong probes do not consume a slot or erase earlier progress. Look down at your hands for as long as you need."
+      : visiblePhase === "complete" && !listeningOnly
+        ? "The route is found. Replay it, reset your probes, or choose Reveal. No notation opens automatically."
+        : listeningOnly
+          ? tooDense ? "Choose a shorter window to probe this frame, or listen to its complete texture."
+            : "This layer has no new attack to match. You can listen to its holds and rests, change the layer, or select another start."
+          : "Play a fresh key attack to begin. Listening to the reference is optional; Stop always returns to probing.";
 
   return <section className={cx(styles.shell, twoHand && styles.twoHandShell)} aria-labelledby="ear-search-title" data-phase={visiblePhase} data-mode={mode}>
     <header className={styles.commandDeck}>
       <div className={styles.identity}><span>{twoHand ? "Sound Finder · two-staff path" : "Sound Finder · untimed score phrase"}</span><h3 id="ear-search-title">{imported.title}</h3><p title="Start numbers mark fixed half-bar positions. Changing the window length keeps the same starting point.">Start {chunk ? formatEarSearchFrameStart(chunk) : "—"} · {timeSpanLabel(timeSpan)} window{clippedAtScoreEnd ? " · ends at score end" : ""} · {twoHand ? "staff route visible · pitch locked" : "pitch locked · pending staff hidden"}</p></div>
       <div className={cx(styles.controls, twoHand && styles.twoHandControls)}>
-        <label><span>Window length</span><select value={timeSpan} onChange={(event) => { prepareTargetChange("Same starting point. Hear the resized window before searching."); setTimeSpan(event.target.value as EarSearchTimeSpan); }}><option value="half-bar">½ bar · short</option><option value="one-bar">1 bar · medium</option><option value="two-bars">2 bars · long</option></select></label>
+        <label><span>Window length</span><select value={timeSpan} onChange={(event) => { prepareTargetChange("Same starting point. Probe the resized window now, or listen first."); setTimeSpan(event.target.value as EarSearchTimeSpan); }}><option value="half-bar">½ bar · short</option><option value="one-bar">1 bar · medium</option><option value="two-bars">2 bars · long</option></select></label>
         {twoHand ? <label><span>Target texture</span><select value={voice} onChange={(event) => { prepareTargetChange(); setVoice(event.target.value as EarSearchVoice); }}><option value="staff-anchors">One anchor per staff</option><option value="full">All written keys</option></select></label> : <>
-          <label><span>Target notes</span><select value={voice} onChange={(event) => { prepareTargetChange("Target notes changed at the same start. Only this reduction is required; hear it before searching."); setVoice(event.target.value as EarSearchVoice); }}><option value="upper">Top note each landing</option><option value="bass">Bottom note each landing</option><option value="full">Full texture</option></select></label>
-          <label><span>Score staff</span><select value={practiceHand} onChange={(event) => { const next = event.target.value as PracticeHand; prepareTargetChange(`Same phrase timeline · ${next === "right" ? "upper" : next === "left" ? "lower" : "both"}-staff layer selected. Only this layer is required; hear it before searching.`); setPracticeHand(next); }}><option value="both">Both staffs</option><option value="right">Upper staff</option><option value="left">Lower staff</option></select></label>
+          <label><span>Target notes</span><select value={voice} onChange={(event) => { prepareTargetChange("Target notes changed at the same start. Only this reduction is required; probes are ready now."); setVoice(event.target.value as EarSearchVoice); }}><option value="upper">Top note each landing</option><option value="bass">Bottom note each landing</option><option value="full">Full texture</option></select></label>
+          <label><span>Score staff</span><select value={practiceHand} onChange={(event) => { const next = event.target.value as PracticeHand; prepareTargetChange(`Same phrase timeline · ${next === "right" ? "upper" : next === "left" ? "lower" : "both"}-staff layer selected. Only this layer is required; probes are ready now.`); setPracticeHand(next); }}><option value="both">Both staffs</option><option value="right">Upper staff</option><option value="left">Lower staff</option></select></label>
         </>}
         <label><span>Hints</span><select value={hintMode} onChange={(event) => setHintMode(event.target.value as HintMode)}><option value="compass">Beginner compass</option><option value="blind">Progress only</option></select></label>
       </div>
       <div className={styles.transport}>
         <div className={styles.chunkStepper}><button type="button" disabled={safeChunkIndex <= 0} onClick={() => { prepareTargetChange(); setChunkIndex(Math.max(0, safeChunkIndex - 1)); }} aria-label="Previous frame start">←</button><select aria-label="Frame start" title="Fixed half-bar starts; window length does not change these numbers" value={safeChunkIndex} onChange={(event) => { prepareTargetChange(); setChunkIndex(Number(event.target.value)); }}>{chunks.map((candidate, index) => <option key={candidate.ordinal} value={index}>Start {formatEarSearchFrameStart(candidate)}</option>)}</select><button type="button" disabled={safeChunkIndex >= chunks.length - 1} onClick={() => { prepareTargetChange(); setChunkIndex(Math.min(chunks.length - 1, safeChunkIndex + 1)); }} aria-label="Next frame start">→</button></div>
-        {visiblePhase === "playing" ? <button type="button" className={styles.stopButton} onClick={() => stopAudio()}>Stop</button> : <button type="button" className={styles.listenButton} disabled={!chunk || !referencePlan || referencePlan.totalDurationMs <= 0} onClick={() => void playReference()}>{hasHeard ? "Hear whole frame again" : "Hear hidden phrase"}</button>}
-        {hasHeard && visiblePhase !== "playing" && !listeningOnly ? <button type="button" onClick={resetSearch}>Reset probes</button> : null}
+        {visiblePhase === "playing" ? <button type="button" className={styles.stopButton} onClick={stopReferenceAndProbe}>Stop</button> : <button type="button" className={styles.listenButton} disabled={!chunk || !referencePlan || referencePlan.totalDurationMs <= 0} onClick={() => void playReference()}>{hasHeard ? "Hear whole frame again" : "Hear hidden phrase"}</button>}
+        {visiblePhase !== "playing" && !listeningOnly ? <button type="button" onClick={resetSearch}>Reset probes</button> : null}
       </div>
     </header>
 
@@ -856,14 +875,14 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
 
       <div className={styles.stage}>
         <aside className={cx(styles.memoryRail, timelineTotal > 8 && styles.memoryRailDense, twoHand && styles.twoHandMemory)} aria-label={twoHand ? "Two-staff hidden phrase memory" : "Hidden phrase memory"} data-density={timelineTotal > 8 ? "dense" : "standard"}>
-          <div><span>{twoHand ? "Two-staff route" : "Shared score clock"}</span><strong>{listeningOnly ? tooDense ? `${targetLandings.length} attacks · listening only` : "No new attack · listening only" : `${matched} / ${total} attacks found`}</strong><small>{twoHand ? "↑ upper · ↓ lower · ↕ both together · — rest. Pitch stays hidden." : `${timelineTotal} written attack${timelineTotal === 1 ? "" : "s"}${staffRestCount ? ` · ${staffRestCount} rest${staffRestCount === 1 ? "" : "s"} in this layer` : ""} · ${restSpanCount} silence span${restSpanCount === 1 ? "" : "s"}. Staff appears only after a find.`} After the frame, select ▶ to replay one attack. Gold ↗ or n/m is a future echo, never credit.</small>{!targetLandings.length ? <small role="status">This frame has no new attack in the {practiceHand === "right" ? "upper" : practiceHand === "left" ? "lower" : "selected"} staff. Hear its holds and rests on the unchanged score clock.</small> : tooDense ? <small role="status">This frame exceeds the {EAR_SEARCH_MAX_LANDINGS}-attack search limit. Hear it intact, then choose a shorter time frame for probing.</small> : null}{twoHand ? <div className={styles.handTotals}>
+          <div><span>{twoHand ? "Two-staff route" : "Shared score clock"}</span><strong>{listeningOnly ? tooDense ? `${targetLandings.length} attacks · listening only` : "No new attack · listening only" : `${matched} / ${total} attacks found`}</strong><small>{twoHand ? "↑ upper · ↓ lower · ↕ both together · — rest. Pitch stays hidden." : `${timelineTotal} written attack${timelineTotal === 1 ? "" : "s"}${staffRestCount ? ` · ${staffRestCount} rest${staffRestCount === 1 ? "" : "s"} in this layer` : ""} · ${restSpanCount} silence span${restSpanCount === 1 ? "" : "s"}. Staff appears only after a find.`} Select ▶ for an attack ear hint. Gold ↗ or n/m is a future echo, never credit.</small>{!targetLandings.length ? <small role="status">This frame has no new attack in the {practiceHand === "right" ? "upper" : practiceHand === "left" ? "lower" : "selected"} staff. Hear its holds and rests on the unchanged score clock.</small> : tooDense ? <small role="status">This frame exceeds the {EAR_SEARCH_MAX_LANDINGS}-attack search limit. Hear it intact, then choose a shorter time frame for probing.</small> : null}{twoHand ? <div className={styles.handTotals}>
             <span data-staff="upper" role="progressbar" aria-label="Upper staff landings caught" aria-valuemin={0} aria-valuemax={handProgress.upper.total} aria-valuenow={handProgress.upper.caught}><b>U</b><em>upper</em><strong>{handProgress.upper.caught}/{handProgress.upper.total}</strong></span>
             <span data-staff="lower" role="progressbar" aria-label="Lower staff landings caught" aria-valuemin={0} aria-valuemax={handProgress.lower.total} aria-valuenow={handProgress.lower.caught}><b>L</b><em>lower</em><strong>{handProgress.lower.caught}/{handProgress.lower.total}</strong></span>
           </div> : null}</div>
           <ol ref={memoryListRef}>{timelineLandings.length ? timelineLandings.map((item) => {
-            const label = timelineStoneLabel(item.timelineIndex, item.targetIndex, matched, hasHeard, item.isStaffRest);
+            const label = timelineStoneLabel(item.timelineIndex, item.targetIndex, matched, canProbe, item.isStaffRest);
             const caught = item.targetIndex !== null && item.targetIndex < matched;
-            const current = item.targetIndex !== null && item.targetIndex === matched && !evaluation?.complete && hasHeard;
+            const current = item.targetIndex !== null && item.targetIndex === matched && !evaluation?.complete && canProbe;
             const showStaff = twoHand || caught;
             const visibleStaff = showStaff ? item.landing?.staff ?? "unknown" : item.isStaffRest ? "rest" : "hidden";
             const futureEcho = futureEchoes.find((echo) => echo.landingId === item.id);
@@ -874,13 +893,13 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
               "--future-fill": `rgba(255, 209, 122, ${(.1 + futureEcho.coverage * .38).toFixed(3)})`,
               "--future-halo": `0 0 ${(7 + futureEcho.coverage * 14).toFixed(1)}px rgba(255, 209, 122, ${(.14 + futureEcho.coverage * .5).toFixed(3)})`,
             } as CSSProperties) : undefined;
-            return <li key={item.id} data-staff={visibleStaff} data-future-echo={futureEcho ? "true" : undefined} data-auditioning={auditioning ? "true" : undefined} style={futureStyle} aria-label={item.isStaffRest ? label : undefined} className={cx(item.isStaffRest && styles.isRest, item.landing && styles.hasAttackButton, caught && styles.isCaught, current && styles.isCurrent)}>{item.landing ? <button type="button" className={styles.memoryChipButton} disabled={!hasHeard || visiblePhase === "playing"} onClick={() => void playAttackHint(item.landing!, item.timelineIndex)} aria-label={`Play hidden attack ${item.timelineIndex + 1} as an ear hint.${futureEcho ? ` ${futureEcho.matchedNoteCount} of ${futureEcho.targetNoteCount} notes in this later attack were present in your last probe.` : ""}${showStaff ? ` ${staffLabel(item.landing.staff)}.` : ""}${!hasHeard ? " Hear the whole frame first to unlock this ear hint." : ""}`}><i aria-hidden="true">{auditioning ? "♪" : futureEcho ? futureEcho.targetNoteCount === 1 ? "↗" : futureFraction : showStaff ? staffGlyph(item.landing.staff) : "▶"}</i><span className={timelineTotal > 8 ? "sr-only" : undefined}>{futureEcho ? `${item.timelineIndex + 1} · future ${futureFraction} present` : showStaff ? `${item.timelineIndex + 1} · ${staffLabel(item.landing.staff)}` : `${item.timelineIndex + 1} · hear attack`}</span></button> : <><i aria-hidden="true">—</i><span className={timelineTotal > 8 ? "sr-only" : undefined}>{`${item.timelineIndex + 1} · staff rest`}</span></>}</li>;
+            return <li key={item.id} data-staff={visibleStaff} data-future-echo={futureEcho ? "true" : undefined} data-auditioning={auditioning ? "true" : undefined} style={futureStyle} aria-label={item.isStaffRest ? label : undefined} className={cx(item.isStaffRest && styles.isRest, item.landing && styles.hasAttackButton, caught && styles.isCaught, current && styles.isCurrent)}>{item.landing ? <button type="button" className={styles.memoryChipButton} disabled={visiblePhase === "playing"} onClick={() => void playAttackHint(item.landing!, item.timelineIndex)} aria-label={`Play hidden attack ${item.timelineIndex + 1} as an ear hint.${futureEcho ? ` ${futureEcho.matchedNoteCount} of ${futureEcho.targetNoteCount} notes in this later attack were present in your last probe.` : ""}${showStaff ? ` ${staffLabel(item.landing.staff)}.` : ""}`}><i aria-hidden="true">{auditioning ? "♪" : futureEcho ? futureEcho.targetNoteCount === 1 ? "↗" : futureFraction : showStaff ? staffGlyph(item.landing.staff) : "▶"}</i><span className={timelineTotal > 8 ? "sr-only" : undefined}>{futureEcho ? `${item.timelineIndex + 1} · future ${futureFraction} present` : showStaff ? `${item.timelineIndex + 1} · ${staffLabel(item.landing.staff)}` : `${item.timelineIndex + 1} · hear attack`}</span></button> : <><i aria-hidden="true">—</i><span className={timelineTotal > 8 ? "sr-only" : undefined}>{`${item.timelineIndex + 1} · staff rest`}</span></>}</li>;
           }) : <li data-staff="rest" aria-label="Full frame rest; no written attack" className={styles.isRest}><i aria-hidden="true">—</i><span>full frame · rest</span></li>}</ol>
           <div className={styles.memoryFooter}><strong>{timeSpanLabel(timeSpan)} score-time frame{twoHand && handProgress.shared.total ? ` · ${handProgress.shared.total} together` : ""}</strong><span>{restSpanCount ? `${restSpanCount} silence span${restSpanCount === 1 ? "" : "s"} · ${(restDurationMs / 1_000).toFixed(1)} s at this tempo` : "Sound continues across the full frame"}</span><small>{twoHand ? "Staff lanes come from the uploaded score. MIDI reports keys, not which hand pressed them. " : ""}No early, late, or tempo judgment. Leading, interior, and trailing rests plus written holds use the whole selected frame.</small></div>
         </aside>
 
         <main className={cx(styles.compassField, twoHand && styles.twoHandCompassField)}>
-          <div className={styles.playbackLine} role="progressbar" aria-label="Hidden reference playback" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(playbackProgress * 100)}><i style={{ width: `${playbackProgress * 100}%` }} /><span>{visiblePhase === "playing" ? `${Math.round(playbackProgress * 100)}% of ${timeSpanLabel(timeSpan)} · ${playbackCue ? playbackCue.kind === "carry" ? "held sound" : "new attack sounding" : "rest / silence"}` : visiblePhase === "complete" ? listeningOnly ? "whole score-time frame heard" : "all selected-staff attacks found" : hasHeard ? "whole frame held in memory" : "reference has not played"}</span></div>
+          <div className={styles.playbackLine} role="progressbar" aria-label="Hidden reference playback" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(playbackProgress * 100)}><i style={{ width: `${playbackProgress * 100}%` }} /><span>{visiblePhase === "playing" ? `${Math.round(playbackProgress * 100)}% of ${timeSpanLabel(timeSpan)} · ${playbackCue ? playbackCue.kind === "carry" ? "held sound" : "new attack sounding" : "rest / silence"}` : visiblePhase === "complete" ? listeningOnly ? "whole score-time frame heard" : "all selected-staff attacks found" : hasHeard ? "whole frame heard · probing is ready" : canProbe ? "probes ready · reference optional" : "reference optional"}</span></div>
           {twoHand ? <div className={styles.handCue} data-staff={currentStaff ?? "complete"} role="group" aria-label={`${handCueVerb}: ${staffLabel(currentStaff)}. Pitch remains hidden.`}>
             <div className={styles.handLane} data-lane="upper" data-active={currentStaff === "upper" || currentStaff === "both"}><span>Upper staff</span><strong>written score lane</strong><small>{handProgress.upper.caught} of {handProgress.upper.total} caught</small></div>
             <div className={styles.handCueCore}><i aria-hidden="true">{staffGlyph(currentStaff)}</i><span>{handCueVerb}</span><strong>{staffLabel(currentStaff)}</strong><small>{currentStaff === "both" ? "One landing · gather both staff anchors" : currentStaff === "silence" ? "Hold the gap; the next pitch stays hidden" : currentStaff == null ? "Replay before revealing" : "Pitch remains hidden"}</small></div>
@@ -893,7 +912,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
             <article className={styles.intervalChannel} data-active={Boolean(feedback) && hintMode !== "blind"} data-primary={primaryCue === "interval" || primaryCue === "texture"} aria-current={primaryCue === "interval" || primaryCue === "texture" ? "step" : undefined} data-caught={feedback?.status === "caught"}><b className={styles.cueGlyph} aria-hidden="true">{hintMode === "blind" ? "·" : chordCountMismatch ? textureGlyph(feedback) : intervalGlyph(feedback)}</b><span>{hintMode === "blind" ? "Relationship feedback" : chordCountMismatch ? "Chord key count first" : "Relationship from last caught landing"}{primaryCue === "interval" || primaryCue === "texture" ? <em className={styles.nextMove}>Next move</em> : null}</span><strong>{hintMode === "blind" ? "Held back" : chordCountMismatch ? texture.title : interval.title}</strong><small>{hintMode === "blind" ? "No contour or width cue in this mode." : chordCountMismatch ? texture.body : `${interval.body}${gathersTexture ? ` Texture: ${texture.title}. ${texture.body}` : ""}`}</small></article>
             <article className={styles.collectionChannel} data-active={Boolean(feedback) && hintMode !== "blind" && !chordCountMismatch} data-tertiary="true" data-caught={feedback?.status === "caught"}><b className={styles.cueGlyph} aria-hidden="true">{hintMode === "blind" || chordCountMismatch ? "·" : collectionGlyph(feedback)}</b><span>Collection context</span><strong>{hintMode === "blind" ? "Held back" : chordCountMismatch ? "Wait for chord shape" : collectionCue.title}</strong><small>{hintMode === "blind" ? "No local collection cue in this mode." : chordCountMismatch ? "Collection membership is secondary until the gathered key count matches." : collectionCue.body}</small></article>
           </div>
-          <div className={styles.centralInstruction}><strong>{phaseTitle}</strong><p>{visiblePhase === "playing" ? twoHand ? "Let each held sound, attack, and silent region bind to its authored upper, lower, or joined staff lane without exposing pitch." : "Hear each held sound, new attack, and silent region occupy its real place in the frame. Pitch and pending staff stay hidden." : visiblePhase === "searching" ? feedback?.status === "caught" ? twoHand ? `That score landing is secure. The next belongs to ${staffLabel(handProgress.nextStaff).toLowerCase()}.` : "That attack is found; its chip now shows the score-authored staff. Hold the accepted sound, then search for the next relationship." : "Wrong probes do not consume a slot or erase earlier progress. Look down at your hands for as long as you need." : visiblePhase === "complete" ? listeningOnly ? tooDense ? "The full frame stayed intact. Choose a shorter time frame to turn its dense attack stream into a safe untimed search." : frameHasSound ? "This layer contains a carry or held sound but no new attack to match. Replay it, change staff layer, or move to another frame." : "This is a genuine silent frame. Keep its duration in memory, then replay it or move to another frame." : twoHand ? "Both staff paths are found. Replay the phrase once before revealing exact pitches." : "Replay it from memory before revealing. Success does not open notation automatically." : listeningOnly ? "Press Hear hidden phrase. Sound Finder will play the entire authored frame even when it contains only a held note or rests." : "Press Hear hidden phrase. Notes played before the reference ends cannot satisfy the target."}</p></div>
+          <div className={styles.centralInstruction}><strong>{phaseTitle}</strong><p>{centralInstruction}</p></div>
         </main>
 
         <aside className={styles.probeDock}>
@@ -908,7 +927,7 @@ export function PianoEarSearchHud({ events, activeNotes, chordWindowMs, showConv
         <label><span>Frame + hint level · {referenceVolume}%</span><input type="range" min={0} max={100} value={referenceVolume} aria-label="Sound Finder frame and hint level" aria-valuetext={`${referenceVolume} percent`} onChange={(event) => { const value = Number(event.target.value); setReferenceVolume(value); const context = audioContextRef.current; const master = audioMasterRef.current; if (context && master && context.state !== "closed") master.gain.setTargetAtTime(referenceGain(value), context.currentTime, .025); }} /></label>
         <label><span>Tempo · {tempoPercent}%</span><input type="range" min={45} max={100} step={1} value={tempoPercent} aria-label="Hidden phrase tempo" aria-valuetext={`${tempoPercent} percent of score tempo`} onChange={(event) => { prepareTargetChange(); setTempoPercent(Number(event.target.value)); }} /></label>
         {gathersTexture ? <label><span>Multi-key gather</span><select value={clusterWindow} onChange={(event) => setClusterWindow(Number(event.target.value) as 140 | 240 | 480)}><option value={140}>Close · 140 ms</option><option value={240}>Beginner · 240 ms</option><option value={480}>Build slowly · 480 ms</option></select></label> : null}
-        <button ref={revealButtonRef} type="button" className={styles.revealButton} disabled={!hasHeard || !searchLandings.length} aria-pressed={revealed} onClick={() => revealed ? closeReveal(false) : setRevealed(true)}>{revealed ? "Hide exact map" : "Reveal exact map"}</button>
+        <button ref={revealButtonRef} type="button" className={styles.revealButton} disabled={visiblePhase === "playing" || !searchLandings.length} aria-pressed={revealed} onClick={() => revealed ? closeReveal(false) : setRevealed(true)}>{revealed ? "Hide exact map" : "Reveal exact map"}</button>
       </footer>
 
       {revealed ? <section className={styles.revealDrawer} role="dialog" aria-modal="true" aria-labelledby="ear-search-reveal-title" onKeyDown={handleRevealKeyDown}><header><div><span>Chosen disclosure · after listening</span><h4 id="ear-search-reveal-title">Connect the remembered sound to exact semitone places.</h4></div><button ref={revealCloseRef} type="button" onClick={() => closeReveal()}>Close exact map</button></header><RevealedMap notes={searchLandings.map((landing) => ({ ...landing, timelineIndex: (timelineLandings.find((item) => item.id === landing.id)?.timelineIndex ?? 0) + 1 }))} timelineLength={timelineTotal} showConventions={showConventions} showStaff /></section> : null}
