@@ -31,6 +31,21 @@ test("absolute-pitch color glow stays vivid, transient, and interaction-safe", a
   assert.match(css, /@media \(forced-colors: active\) \{\s*\.piano-pitch-glow \{ display: none; \}/);
 });
 
+test("raw MIDI chord feedback precedes frame-batched analysis without losing device timing", async () => {
+  const piano = await readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8");
+  const attack = piano.slice(piano.indexOf("  const addEvent = useCallback("), piano.indexOf("  const captureArmedDoAttack ="));
+  assert.match(attack, /showPitchAttacks\(\[note\]\);\s*if \(frozenRef\.current\) return/);
+  assert.match(attack, /phraseEventsRef\.current = nextPhraseEvents;[\s\S]*eventsRef\.current = nextEvents;[\s\S]*publishEvents\(\)/);
+  assert.doesNotMatch(attack, /setPhraseEvents|setEvents\(|scaleFrameTimeline|setTimeout|await /,
+    "raw note-on must not wait for analysis, rendering, audio, or a chord grouping timer");
+  assert.match(piano, /midiMessageTimeStamp\(event\.timeStamp, performance\.now\(\)\)/);
+  assert.match(piano, /const phraseSnapshots = useMemo\(\(\) => isAbsolutePitchFocus \? \[\]/);
+  assert.match(piano, /const motifTransformations = useMemo\(\(\) => isAbsolutePitchFocus \? \[\]/);
+  assert.match(piano, /const measures = useMemo<EventMeasure\[\]>\(\(\) => isAbsolutePitchFocus \? \[\]/);
+  assert.match(piano, /const latestSession = \{ \.\.\.session, phraseEvents: phraseEventsRef\.current \}/,
+    "page-hide persistence should include attacks waiting for the next paint");
+});
+
 test("Sight Shapes keeps notation, interval, keyboard, and learner-report channels explicit and silent", async () => {
   const [piano, sight, sightCss, model] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
