@@ -393,7 +393,11 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /<option value="one-bar">/);
   assert.match(finder, /<option value="two-bars">/);
   assert.match(finder, /MAX_EAR_SEARCH_REFERENCE_VOICES = 256/);
-  assert.match(finder, /timelineTotal > 8 && styles\.memoryRailDense/);
+  assert.match(finder, /cx\(styles\.memoryRail, styles\.memoryRailDense, twoHand && styles\.twoHandMemory\)/,
+    "every Shared score clock must use the compact chip grid, even for short frames");
+  assert.match(finder, /data-density="dense"/);
+  assert.doesNotMatch(finder, /timelineTotal > 8/,
+    "short frames must not switch back to text rows");
   assert.match(finder, /parseStoredScoreFlowSource/);
   assert.match(finder, /window\.sessionStorage\.setItem\(SCORE_FLOW_STORAGE_KEY/);
   assert.doesNotMatch(finder, /localStorage|fetch\(|XMLHttpRequest|navigator\.sendBeacon|new FormData/);
@@ -444,6 +448,9 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   const memoryChipEnd = finder.indexOf("<div className={styles.memoryFooter}", memoryChipStart);
   assert.ok(memoryChipStart >= 0 && memoryChipEnd > memoryChipStart, "Sound Finder needs one inspectable attack-chip rail");
   const memoryChipContract = finder.slice(memoryChipStart, memoryChipEnd);
+  assert.match(memoryChipContract, /<span className="sr-only">full frame · rest<\/span>/);
+  assert.equal((memoryChipContract.match(/<span className="sr-only">/g) ?? []).length, 3,
+    "attack, selected-staff rest, and full-frame rest labels must all stay visually compact");
   assert.match(memoryChipContract, /<button type="button" className=\{styles\.memoryChipButton\}/,
     "each sounding attack chip must be a native, keyboard-reachable button");
   assert.match(memoryChipContract, /disabled=\{visiblePhase === "playing"\}/,
