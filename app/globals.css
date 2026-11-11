@@ -8663,11 +8663,11 @@ footer a {
 }
 
 .piano-pitch-glow {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 6;
   overflow: hidden;
-  border-radius: inherit;
+  border-radius: 0;
   pointer-events: none;
 }
 

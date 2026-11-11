@@ -23,7 +23,11 @@ test("absolute-pitch color glow stays vivid, transient, and interaction-safe", a
     "the standard cue should have a clear but restrained peak and hold");
   assert.match(piano, /duration: reducedMotion \? 330 : 820, easing: "ease-out"/);
   assert.match(piano, /<div ref=\{pitchGlowRef\} className="piano-pitch-glow" aria-hidden="true">/);
+  assert.match(css, /\.piano-pitch-glow \{[^}]*position: fixed;[^}]*inset: 0;[^}]*border-radius: 0/,
+    "the transient pitch wash should reach the viewport background beyond the bounded HUD");
   assert.match(css, /\.piano-pitch-glow \{[^}]*pointer-events: none/);
+  assert.doesNotMatch(css, /\.piano-pitch-glow(?: > span)? \{[^}]*(?:backdrop-filter|filter: blur|will-change)/,
+    "the viewport wash should not reserve expensive full-screen compositor layers");
   assert.match(css, /@media \(forced-colors: active\) \{\s*\.piano-pitch-glow \{ display: none; \}/);
 });
 
