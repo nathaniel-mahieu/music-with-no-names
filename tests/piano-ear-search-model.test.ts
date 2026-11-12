@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import "./piano-ear-search-session.test.ts";
 import { ORBIT_STUDY_MUSICXML, normalizeImportedMusicXmlScore, parseMusicXml } from "../lib/musicxml-import.ts";
 import { analyzeLocalPitchCollections, normalizeSheetMusicScore } from "../lib/sheet-music-coach-model.ts";
 import { parseStoredScoreFlowSource } from "../lib/score-flow-storage.ts";

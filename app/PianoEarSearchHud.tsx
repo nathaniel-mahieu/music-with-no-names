@@ -50,6 +50,7 @@ import {
 import { configureSafetyCompressor, loudnessControlGain } from "@/lib/audio-level";
 import { frequencyFromMidi } from "@/lib/piano-model";
 import { parseStoredScoreFlowSource, SCORE_FLOW_HISTORY_STORAGE_KEY, SCORE_FLOW_STORAGE_KEY } from "@/lib/score-flow-storage";
+import { rearmEarSearchTracker } from "@/lib/piano-ear-search-session";
 
 type EarSearchHudEvent = {
   id: number;
@@ -509,11 +510,14 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     setPhase("searching");
   }, [phase, searchLandings]);
 
-  const beginProbeSearch = useCallback((notice: string) => {
+  const beginProbeSearch = useCallback((notice: string, resetProgress = false) => {
     if (frozen) onResumeCapture();
     captureProbeBoundary();
     clearFutureEchoes();
-    setTracker(searchLandings.length ? createEarSearchTracker(searchLandings, probeBoundaryRef.current.eventId) : null);
+    const boundaryId = probeBoundaryRef.current.eventId;
+    setTracker((current) => searchLandings.length
+      ? rearmEarSearchTracker(searchLandings, current, boundaryId, { resetProgress })
+      : null);
     setClusterClockMs(0);
     setPhase(searchLandings.length ? "searching" : "ready");
     setAudioNotice(notice);
@@ -521,7 +525,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
 
   const stopReferenceAndProbe = useCallback(() => {
     stopAudio();
-    beginProbeSearch("Reference stopped. New key attacks count now; the notes stay hidden.");
+    beginProbeSearch("Reference stopped. Your finds are kept; new key attacks count now.");
   }, [beginProbeSearch, stopAudio]);
 
   useEffect(() => {
@@ -594,7 +598,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const resetSearch = () => {
     disposeAudio();
     setRevealed(false);
-    beginProbeSearch("Fresh search. New key attacks count now; listening is optional.");
+    beginProbeSearch("Fresh search. New key attacks count now; listening is optional.", true);
   };
 
   const prepareTargetChange = (notice = "Frame changed. Start probing now, or listen to the reference.") => {
@@ -622,7 +626,8 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     stopAudio("Preparing the hidden reference… Stop at any time to start probing.", "playing");
     setRevealed(false);
     setHasHeard(false);
-    setTracker(null);
+    // Keep the accepted checkpoint while listening. Only unfinished chord
+    // gathering is discarded when probing resumes at its fresh input boundary.
     setClusterClockMs(0);
     const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextConstructor) {
@@ -705,7 +710,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
             ? "Full frame heard, including the carried or held sound. This layer has no new attack to find; replay it or choose another frame."
             : "Full rest frame heard on its written clock. There is no attack to find in this layer; replay it or choose another frame.");
         } else {
-          beginProbeSearch("Full frame finished. New key attacks count now; timing is not graded.");
+          beginProbeSearch("Full frame finished. Your finds are kept. Continue probing, or choose Reset probes for a fresh search.");
         }
       }, Math.max(80, (Math.max(latestStop, audioStart + totalDurationMs / 1_000) - context.currentTime) * 1_000));
     } catch {
@@ -804,7 +809,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const visiblePhase: SearchPhase = phase === "searching" && evaluation?.complete ? "complete" : phase;
   const canProbe = visiblePhase === "searching";
   const feedback = visiblePhase === "searching" || visiblePhase === "complete" ? evaluation?.latest ?? null : null;
-  const matched = visiblePhase === "searching" || visiblePhase === "complete" ? evaluation?.matchedLandings ?? 0 : 0;
+  const matched = evaluation?.matchedLandings ?? 0;
   const total = searchLandings.length;
   const timelineTotal = timelineLandings.length;
   const staffRestCount = timelineLandings.filter((item) => item.isStaffRest).length;
@@ -837,7 +842,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     : visiblePhase === "complete" ? "Route complete"
       : canProbe ? "Next landing" : "Opening landing";
   const centralInstruction = visiblePhase === "playing"
-    ? "Listen while the hidden reference plays, or press Stop to probe now. Keys played during reference playback do not count."
+    ? "Listen again without losing your finds, or press Stop to probe now. Keys played during reference playback do not count."
     : visiblePhase === "searching"
       ? feedback?.status === "caught"
         ? twoHand ? `That score landing is secure. The next belongs to ${staffLabel(handProgress.nextStaff).toLowerCase()}.` : "That attack is found; its chip now shows the score-authored staff. Hold the accepted sound, then search for the next relationship."

@@ -4349,6 +4349,9 @@ export function PianoLab() {
   const [scaleQualityEntryAnchorId, setScaleQualityEntryAnchorId] = useState(0);
   const isEarSearchFocus = isEarSearchLens(focusLens);
   const isAbsolutePitchFocus = focusLens === "absolute-pitch";
+  // Sound Finder retains a much longer raw-input history than the live HUDs.
+  // Its own incremental score tracker does not need hidden scale/spectrum work.
+  const skipHiddenAnalysis = isAbsolutePitchFocus || isEarSearchFocus;
   const isShortHudFocus = isAbsolutePitchFocus || focusLens === "echo-key" || focusLens === "score-flow" || isEarSearchFocus || focusLens === "immersion" || focusLens === "scale-quality" || focusLens === "interval-glow" || focusLens === "sight-shapes" || focusLens === "research" || focusLens === "gravity";
   const [intervalEchoTarget, setIntervalEchoTarget] = useState<IntervalEchoTarget | null>(null);
   const [ghostChord, setGhostChord] = useState<NearbyChord | null>(null);
@@ -4647,13 +4650,13 @@ export function PianoLab() {
     if (!attack) return;
     setFocusedId(attack.id);
     setNowMs(attack.onsetMs);
-    if (isAbsolutePitchFocus) return;
+    if (skipHiddenAnalysis) return;
     const frameEvidence = frameLearningAnchorIdRef.current == null
       ? phrase
       : phrase.filter((item) => item.id > frameLearningAnchorIdRef.current!);
     const nextStable = scaleFrameTimeline(frameEvidence.map((item) => item.note)).at(-1)?.stable;
     if (nextStable) setRememberedFrame(nextStable);
-  }, [isAbsolutePitchFocus]);
+  }, [skipHiddenAnalysis]);
   const { schedule: publishEvents, cancel: cancelEventPublication } = usePianoFramePublisher(publishEventsNow);
 
   const updateEvents = useCallback((updater: (current: HudNoteEvent[]) => HudNoteEvent[]) => {
@@ -4718,7 +4721,7 @@ export function PianoLab() {
   const frameEvidenceEvents = useMemo(() => frameLearningAnchorId == null
     ? phraseEvents
     : phraseEvents.filter((event) => event.id > frameLearningAnchorId), [frameLearningAnchorId, phraseEvents]);
-  const phraseSnapshots = useMemo(() => isAbsolutePitchFocus ? [] : scaleFrameTimeline(frameEvidenceEvents.map((event) => event.note)), [frameEvidenceEvents, isAbsolutePitchFocus]);
+  const phraseSnapshots = useMemo(() => skipHiddenAnalysis ? [] : scaleFrameTimeline(frameEvidenceEvents.map((event) => event.note)), [frameEvidenceEvents, skipHiddenAnalysis]);
   const snapshots = phraseSnapshots.length >= events.length
     ? phraseSnapshots.slice(-events.length)
     : [...Array.from({ length: events.length - phraseSnapshots.length }, () => undefined), ...phraseSnapshots];
@@ -4803,9 +4806,9 @@ export function PianoLab() {
   const articulationEvidence = useMemo(() => focusLens === "motion"
     ? articulationTimeline(phraseEvents, nowMs || phraseEvents.at(-1)?.onsetMs || 0)
     : [], [focusLens, nowMs, phraseEvents]);
-  const motifTransformations = useMemo(() => isAbsolutePitchFocus ? [] : detectMotifTransformations(phraseEvents, 3), [isAbsolutePitchFocus, phraseEvents]);
-  const immersionHistoryEvents = useMemo(() => immersionHistory(phraseEvents), [phraseEvents]);
-  const immersionMotifs = useMemo(() => isAbsolutePitchFocus ? [] : detectMotifTransformations(immersionHistoryEvents, 3), [immersionHistoryEvents, isAbsolutePitchFocus]);
+  const motifTransformations = useMemo(() => skipHiddenAnalysis ? [] : detectMotifTransformations(phraseEvents, 3), [skipHiddenAnalysis, phraseEvents]);
+  const immersionHistoryEvents = useMemo(() => skipHiddenAnalysis ? [] : immersionHistory(phraseEvents), [phraseEvents, skipHiddenAnalysis]);
+  const immersionMotifs = useMemo(() => skipHiddenAnalysis ? [] : detectMotifTransformations(immersionHistoryEvents, 3), [immersionHistoryEvents, skipHiddenAnalysis]);
   const motifEchoAttempt = useMemo(() => motifEchoSession
     ? phraseEvents.filter((event) => event.id > motifEchoSession.anchorEventId).slice(0, motifEchoSession.sourceEvents.length)
     : [], [motifEchoSession, phraseEvents]);
@@ -4820,7 +4823,7 @@ export function PianoLab() {
     const timer = window.setTimeout(() => setPulseMirrorSession((current) => current && !current.capturedTapEventIds.length ? { ...current, capturedTapEventIds } : current), 0);
     return () => window.clearTimeout(timer);
   }, [pulseMirrorModel, pulseMirrorSession]);
-  const chordGestures = useMemo(() => isAbsolutePitchFocus ? [] : groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events, isAbsolutePitchFocus]);
+  const chordGestures = useMemo(() => skipHiddenAnalysis ? [] : groupChordGestures(events, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, events, skipHiddenAnalysis]);
   const chordMeasures = useMemo(() => measureChordGestures(
     chordGestures,
     membershipCorrections,
@@ -4829,7 +4832,7 @@ export function PianoLab() {
     soundModelId,
     isShortHudFocus ? IMMERSION_MAX_FIELD_NOTES : Number.POSITIVE_INFINITY,
   ), [chordGestures, doMidi, isShortHudFocus, membershipCorrections, scale, soundModelId]);
-  const immersionChordGestures = useMemo(() => isAbsolutePitchFocus ? [] : groupChordGestures(immersionHistoryEvents, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, immersionHistoryEvents, isAbsolutePitchFocus]);
+  const immersionChordGestures = useMemo(() => skipHiddenAnalysis ? [] : groupChordGestures(immersionHistoryEvents, chordWindowMs, chordWindowMs * 2, boundaryCorrections), [boundaryCorrections, chordWindowMs, immersionHistoryEvents, skipHiddenAnalysis]);
   const immersionChordMeasures = useMemo(() => measureChordGestures(immersionChordGestures, membershipCorrections, doMidi, scale, soundModelId, IMMERSION_MAX_FIELD_NOTES).slice(-4), [doMidi, immersionChordGestures, membershipCorrections, scale, soundModelId]);
   const selectedChordMeasure = chordMeasures.find((measure) => measure.gesture.id === selectedChordId) ?? chordMeasures.at(-1) ?? null;
   const effectiveSelectedChordId = selectedChordMeasure?.gesture.id ?? null;
@@ -4890,11 +4893,11 @@ export function PianoLab() {
   const pressedNoteNumbers = useMemo(() => uniqueSorted(Array.from(midi.pressed)), [midi.pressed]);
   const immersionTimeBucket = activeNoteNumbers.length ? Math.floor(nowMs / 500) : 0;
   const immersionGravityCandidates = useMemo(() => {
-    if (isAbsolutePitchFocus) return [];
+    if (skipHiddenAnalysis) return [];
     const latestEvidenceMs = immersionHistoryEvents.reduce((latest, event) => Math.max(latest, event.releaseMs ?? event.keyReleaseMs ?? event.onsetMs), immersionHistoryEvents.at(-1)?.onsetMs ?? 0);
     const observationMs = immersionTimeBucket ? Math.max(latestEvidenceMs, immersionTimeBucket * 500) : latestEvidenceMs;
     return tonalGravityCandidates(immersionHistoryEvents, observationMs, 3);
-  }, [immersionHistoryEvents, immersionTimeBucket, isAbsolutePitchFocus]);
+  }, [immersionHistoryEvents, immersionTimeBucket, skipHiddenAnalysis]);
   const immersionActiveNotes = useMemo(() => activeNoteNumbers.map((note) => ({
     note,
     velocity: activeNotesMap.get(note) ?? 0,
@@ -4904,7 +4907,7 @@ export function PianoLab() {
   const immersionLatestOnsetMs = phraseEvents.at(-1)?.onsetMs ?? 0;
   const immersionNearbyReady = Boolean(phraseEvents.length && nowMs - immersionLatestOnsetMs >= 420);
   useEffect(() => {
-    if (!phraseEvents.length) return;
+    if (skipHiddenAnalysis || !phraseEvents.length) return;
     if (!isShortHudFocus) {
       const interval = window.setInterval(() => setNowMs(currentHudTime()), 120);
       return () => window.clearInterval(interval);
@@ -4917,7 +4920,7 @@ export function PianoLab() {
     const remainingMs = Math.max(16, immersionLatestOnsetMs + 420 - currentHudTime() + 16);
     const timeout = window.setTimeout(() => setNowMs(currentHudTime()), remainingMs);
     return () => window.clearTimeout(timeout);
-  }, [activeNoteNumbers.length, immersionLatestOnsetMs, immersionNearbyReady, isShortHudFocus, phraseEvents.length]);
+  }, [activeNoteNumbers.length, immersionLatestOnsetMs, immersionNearbyReady, isShortHudFocus, phraseEvents.length, skipHiddenAnalysis]);
   useEffect(() => {
     if (focusLens !== "chords" || chordFocusMode !== "cause" || !controlledSonoritySession || controlledSonoritySession.baselineNotes || !controlledSonoritySession.targetNotes.length) return;
     if (!sameMidiNotes(activeNoteNumbers, controlledSonoritySession.targetNotes)) return;
@@ -4966,7 +4969,7 @@ export function PianoLab() {
   const lastField = events.at(-1)?.fieldNotes ?? [];
   const fieldNotes = activeNoteNumbers.length ? activeNoteNumbers : lastField;
   const fieldIsLive = activeNoteNumbers.length > 0;
-  const analysisNotes = isAbsolutePitchFocus ? [] : selectedChordMeasure?.interpretedNotes ?? fieldNotes;
+  const analysisNotes = skipHiddenAnalysis ? [] : selectedChordMeasure?.interpretedNotes ?? fieldNotes;
   const soundingAnalysisNotes = selectedChordMeasure?.audibleNotes ?? analysisNotes;
   const soundingSemitoneProfile = semitoneFieldProfile(soundingAnalysisNotes, doMidi);
   const liveFieldMatchesDisplayed = fieldIsLive && sameMidiNotes(activeNoteNumbers, soundingAnalysisNotes);
@@ -4993,7 +4996,7 @@ export function PianoLab() {
   const controlledSonorityComparison = controlledSonoritySession?.baselineNotes ? controlledSonorityChange(controlledSonoritySession.baselineNotes, activeNoteNumbers) : null;
   const focusedEvent = events.find((event) => event.id === focusedId) ?? events.at(-1) ?? null;
 
-  const measures = useMemo<EventMeasure[]>(() => isAbsolutePitchFocus ? [] : events.map((event, index) => {
+  const measures = useMemo<EventMeasure[]>(() => skipHiddenAnalysis ? [] : events.map((event, index) => {
     const notes = uniqueSorted(event.fieldNotes);
     const maximumPerceptionNotes = isShortHudFocus ? IMMERSION_MAX_FIELD_NOTES : Number.POSITIVE_INFINITY;
     const perception = notes.length >= 2 && notes.length <= maximumPerceptionNotes
@@ -5010,7 +5013,7 @@ export function PianoLab() {
       novelty: previous ? (events.slice(0, index).some((prior) => pitchClassFromMidi(prior.note) === pitchClassFromMidi(event.note)) ? Math.min(0.35, interval / 36) : Math.min(1, 0.72 + interval / 48)) : 0,
       motion: previous ? Math.min(1, interval / 7) : 0,
     };
-  }), [doMidi, events, isAbsolutePitchFocus, isShortHudFocus, scale, soundModelId]);
+  }), [doMidi, events, skipHiddenAnalysis, isShortHudFocus, scale, soundModelId]);
 
   const currentMeasure = measures.at(-1);
   const previousMeasure = measures.at(-2);

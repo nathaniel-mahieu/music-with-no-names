@@ -6,6 +6,8 @@ Public site: [nathaniel-mahieu.github.io/music-with-no-names](https://nathaniel-
 
 Sound Finder: [open the untimed ear-search HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=ear-search)
 
+Replaying the hidden reference or pressing Stop preserves already-found attacks. Only **Reset probes** or a changed score/frame/staff/texture starts a new search. Unfinished chords do not bridge listening; notes played during the reference are excluded when probing resumes. Sound Finder keeps its full input history without running hidden full-phrase scale, motif, and spectrum analyses on every key press.
+
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
 Technical Notes: [open the implementation and model reference](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical)

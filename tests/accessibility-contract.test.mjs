@@ -93,11 +93,32 @@ test("raw MIDI chord feedback precedes frame-batched analysis without losing dev
   assert.doesNotMatch(attack, /setPhraseEvents|setEvents\(|scaleFrameTimeline|setTimeout|await /,
     "raw note-on must not wait for analysis, rendering, audio, or a chord grouping timer");
   assert.match(piano, /midiMessageTimeStamp\(event\.timeStamp, performance\.now\(\)\)/);
-  assert.match(piano, /const phraseSnapshots = useMemo\(\(\) => isAbsolutePitchFocus \? \[\]/);
-  assert.match(piano, /const motifTransformations = useMemo\(\(\) => isAbsolutePitchFocus \? \[\]/);
-  assert.match(piano, /const measures = useMemo<EventMeasure\[\]>\(\(\) => isAbsolutePitchFocus \? \[\]/);
+  assert.match(piano, /const skipHiddenAnalysis = isAbsolutePitchFocus \|\| isEarSearchFocus/);
+  assert.match(piano, /const phraseSnapshots = useMemo\(\(\) => skipHiddenAnalysis \? \[\]/);
+  assert.match(piano, /const motifTransformations = useMemo\(\(\) => skipHiddenAnalysis \? \[\]/);
+  assert.match(piano, /const measures = useMemo<EventMeasure\[\]>\(\(\) => skipHiddenAnalysis \? \[\]/);
+  const publication = piano.slice(piano.indexOf("const publishEventsNow ="), piano.indexOf("const updateEvents ="));
+  assert.match(publication, /if \(skipHiddenAnalysis\) return;[\s\S]*scaleFrameTimeline/,
+    "long Sound Finder histories must not trigger hidden full-phrase analysis on each attack");
   assert.match(piano, /const latestSession = \{ \.\.\.session, phraseEvents: phraseEventsRef\.current \}/,
     "page-hide persistence should include attacks waiting for the next paint");
+});
+
+test("Sound Finder replay and Stop preserve finds while explicit Reset clears them", async () => {
+  const finder = await readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8");
+  const playback = finder.slice(finder.indexOf("const playReference ="), finder.indexOf("const playAttackHint ="));
+  assert.doesNotMatch(playback, /setTracker\(null\)/,
+    "listening again must not silently return the expected attack to the beginning");
+  assert.match(finder, /const beginProbeSearch = useCallback\(\(notice: string, resetProgress = false\)/);
+  assert.match(finder, /rearmEarSearchTracker\(searchLandings, current, boundaryId, \{ resetProgress \}\)/);
+  assert.match(finder, /const matched = evaluation\?\.matchedLandings \?\? 0/,
+    "the shared score clock must keep its caught chips visible during replay too");
+  const reset = finder.slice(finder.indexOf("const resetSearch ="), finder.indexOf("const prepareTargetChange ="));
+  assert.match(reset, /beginProbeSearch\([^\n]*, true\)/);
+  const selection = finder.slice(finder.indexOf("const prepareTargetChange ="), finder.indexOf("const playReference ="));
+  assert.match(selection, /setTracker\(null\)/,
+    "a changed target must still discard the previous phrase's checkpoint");
+  assert.match(playback, /Your finds are kept\. Continue probing, or choose Reset probes/);
 });
 
 test("Sound Finder opens probing without a reference and Stop cancels listening before rearming", async () => {
@@ -777,7 +798,7 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(piano, /The fifths compass changes Do while retaining the selected route/);
   assert.match(piano, /const selectScaleRoute/);
   assert.doesNotMatch(piano, /immersionChordGestures\.slice\(-5\)/);
-  assert.match(piano, /const immersionHistoryEvents = useMemo\(\(\) => immersionHistory\(phraseEvents\)/);
+  assert.match(piano, /const immersionHistoryEvents = useMemo\(\(\) => skipHiddenAnalysis \? \[\] : immersionHistory\(phraseEvents\)/);
   assert.match(piano, /groupChordGestures\(immersionHistoryEvents[\s\S]*measureChordGestures\(immersionChordGestures[\s\S]*IMMERSION_MAX_FIELD_NOTES\)\.slice\(-4\)/);
   assert.match(piano, /phraseEvents=\{immersionHistoryEvents\}/);
   assert.match(piano, /\$\{immersionHistoryEvents\.length\}\/\$\{IMMERSION_HISTORY_ATTACKS\} attacks/);
