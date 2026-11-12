@@ -1,0 +1,123 @@
+.menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.menu > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--muted);
+  background: var(--background);
+  font-size: .7rem;
+  line-height: 1.3;
+  list-style: none;
+  cursor: pointer;
+}
+
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary::after { margin-left: 3px; content: "+"; }
+.menu[open] > summary::after { content: "−"; }
+.menu[open] > summary { color: var(--foreground); }
+.menu > summary small { color: var(--faint); font-size: .58rem; }
+
+.panel {
+  position: absolute;
+  z-index: 120;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  width: min(330px, calc(100vw - 36px));
+  max-height: calc(100svh - 110px);
+  gap: 13px;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--foreground);
+  background: var(--background);
+  box-shadow: 0 16px 44px rgb(0 0 0 / .3);
+  text-align: left;
+}
+
+.heading { display: grid; gap: 4px; }
+.heading > strong { font-size: .85rem; font-weight: 600; }
+.heading > span { color: var(--muted); font-size: .63rem; }
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+.panel .presets button {
+  min-height: 44px;
+  margin: 0;
+  padding: 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--foreground);
+  background: transparent;
+  font: inherit;
+  font-size: .71rem;
+  cursor: pointer;
+}
+
+.panel .presets button[aria-pressed="true"] {
+  color: var(--background);
+  background: var(--foreground);
+}
+
+.mode { display: grid; gap: 6px; color: var(--muted); font-size: .65rem; }
+.mode select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--foreground);
+  background: var(--background);
+  font: inherit;
+  font-size: .71rem;
+}
+
+.effects {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.effects legend { margin-bottom: 5px; padding: 0; color: var(--muted); font-size: .65rem; }
+.effects > label { display: flex; min-height: 52px; align-items: center; gap: 11px; cursor: pointer; }
+.effects input { width: 18px; height: 18px; flex-shrink: 0; margin: 0; accent-color: var(--foreground); }
+.effects label:has(input:disabled) { opacity: .5; cursor: default; }
+.modeNote { color: var(--muted); font-size: .62rem; line-height: 1.45; }
+.effects label > span { display: grid; gap: 3px; padding-block: 7px; }
+.effects strong { font-size: .72rem; font-weight: 500; }
+.effects small { color: var(--muted); font-size: .61rem; line-height: 1.4; }
+.panel > p { margin: 0; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: .62rem; line-height: 1.5; }
+
+.menu > summary:focus-visible,
+.panel button:focus-visible,
+.panel select:focus-visible,
+.panel input:focus-visible { outline: 2px solid var(--foreground); outline-offset: 3px; }
+
+@media (max-width: 620px) {
+  .menu > summary { padding-inline: 9px; }
+  .panel { right: 0; }
+}
+
+@media (forced-colors: active) {
+  .menu > summary,
+  .panel,
+  .panel .presets button,
+  .mode select { color: CanvasText; border-color: CanvasText; background: Canvas; }
+  .panel .presets button[aria-pressed="true"] { color: HighlightText; background: Highlight; }
+  .heading > span,
+  .mode,
+  .effects legend,
+  .effects small,
+  .panel > p { color: CanvasText; }
+}

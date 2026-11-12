@@ -42,6 +42,7 @@ import { ScaleLab } from "./ScaleLab";
 import { PianoLab } from "./PianoLab";
 import { VoiceLab } from "./VoiceLab";
 import { TechnicalNotesLab } from "./TechnicalNotesLab";
+import { PitchVisualSettingsMenu } from "./PitchVisualSettings";
 
 type Timbre = "sine" | "harmonic";
 type LabId = "guide" | "ratio" | "scale" | "piano" | "voice" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal" | "technical";
@@ -789,6 +790,7 @@ export function RatioLab() {
               ))}
             </div>
           </details>
+          <PitchVisualSettingsMenu />
         </nav>
       </header>
 

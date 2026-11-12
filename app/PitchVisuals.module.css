@@ -1,0 +1,61 @@
+.staff,
+.glow,
+.notes {
+  --pitch-staff-step-size: clamp(5px, 1.6svh, 20px);
+  --pitch-staff-middle-c: 54svh;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.staff[hidden], .glow[hidden], .notes[hidden] { display: none; }
+.staff { z-index: 0; color: #c5ccd8; }
+.baseline { opacity: .1; }
+.staffPulse { opacity: 0; }
+.marginStaff { z-index: 7; opacity: 0; }
+.glow { z-index: 8; }
+.notes { z-index: 9; }
+
+.staff > i {
+  position: absolute;
+  top: calc(var(--pitch-staff-middle-c) + var(--pitch-staff-position) * var(--pitch-staff-step-size));
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+}
+
+.clef {
+  position: absolute;
+  left: clamp(14px, 4vw, 80px);
+  font-family: "Noto Music", "Bravura Text", "Apple Symbols", serif;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.treble { top: calc(var(--pitch-staff-middle-c) - 4 * var(--pitch-staff-step-size)); font-size: calc(12 * var(--pitch-staff-step-size)); }
+.bass { top: calc(var(--pitch-staff-middle-c) + 6 * var(--pitch-staff-step-size)); font-size: calc(7 * var(--pitch-staff-step-size)); }
+.glow > span, .notes > span { position: absolute; inset: 0; opacity: 0; }
+.staffGlow > span > *, .notes > span > * {
+  position: absolute;
+  top: calc(var(--pitch-staff-middle-c) + var(--pitch-staff-position) * var(--pitch-staff-step-size));
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.wash {
+  width: 100vw;
+  height: calc(9 * var(--pitch-staff-step-size));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pitch-glow-color) 25%, transparent), var(--pitch-glow-color) 50%, color-mix(in srgb, var(--pitch-glow-color) 25%, transparent));
+  mask-image: linear-gradient(180deg, transparent, #000 45%, #000 55%, transparent);
+}
+.taperedNote { width: min(76vw, 1100px); height: calc(1.05 * var(--pitch-staff-step-size)); overflow: visible; fill: var(--pitch-glow-color); }
+.notehead { width: calc(1.4 * var(--pitch-staff-step-size)); height: calc(.95 * var(--pitch-staff-step-size)); border-radius: 50%; background: var(--pitch-glow-color); transform: translate(-50%, -50%) rotate(-18deg) !important; }
+.ledger { width: calc(3.2 * var(--pitch-staff-step-size)); height: 1px; background: #d4dbe7; }
+.accidental { margin-left: calc(-2.2 * var(--pitch-staff-step-size)); color: var(--pitch-glow-color); font-family: "Noto Music", "Apple Symbols", serif; font-size: calc(2.1 * var(--pitch-staff-step-size)); font-weight: 400; line-height: 1; }
+.verticalGlow > span { inset: 0 auto 0 var(--pitch-glow-position); width: min(44%, 44rem); transform: translateX(-50%); background: linear-gradient(90deg, transparent, var(--pitch-glow-color) 50%, transparent); }
+
+@media (forced-colors: active) {
+  .staff, .glow, .notes { display: none; }
+}

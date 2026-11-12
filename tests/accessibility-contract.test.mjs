@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
+import "./piano-pitch-visual-settings.test.ts";
 
 const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab"];
 
@@ -11,44 +12,76 @@ test("every learning lab exposes a named semantic region", async () => {
   }
 });
 
-test("absolute-pitch color glow stays vivid, transient, and interaction-safe", async () => {
-  const [piano, css] = await Promise.all([
-    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+test("site-wide pitch flashes stay vivid, transient, persistent, and interaction-safe", async () => {
+  const [visuals, css, layout, ratio, settings] = await Promise.all([
+    readFile(new URL("../app/PitchVisuals.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PitchVisuals.module.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/RatioLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PitchVisualSettings.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(piano, /\? \[\{ opacity: 0\.26 \}, \{ opacity: 0\.26 \}\]/,
-    "reduced-motion users should receive a clear cue without a moving fade");
-  assert.match(piano, /\[\{ opacity: 0\.42 \}, \{ opacity: 0\.31, offset: 0\.22 \}, \{ opacity: 0 \}\]/,
-    "the standard cue should have a clear but restrained peak and hold");
-  assert.match(piano, /duration: reducedMotion \? 330 : 820, easing: "ease-out"/);
-  assert.match(piano, /<div ref=\{pitchGlowRef\} className=\{`piano-pitch-glow\$\{isAbsolutePitchFocus \? " is-staff" : ""\}`\} aria-hidden="true">/);
-  assert.match(css, /\.piano-pitch-glow \{[^}]*position: fixed;[^}]*inset: 0;[^}]*border-radius: 0/,
-    "the transient pitch wash should reach the viewport background beyond the bounded HUD");
-  assert.match(css, /\.piano-pitch-glow \{[^}]*pointer-events: none/);
-  assert.doesNotMatch(css, /\.piano-pitch-glow(?: > span)? \{[^}]*(?:backdrop-filter|filter: blur|will-change)/,
-    "the viewport wash should not reserve expensive full-screen compositor layers");
-  assert.match(css, /@media \(forced-colors: active\) \{\s*\.piano-pitch-staff,\s*\.piano-pitch-glow \{ display: none; \}/);
+  assert.match(layout, /<PitchVisualProvider>\{children\}<\/PitchVisualProvider>/,
+    "one provider must sit outside the changing lab/HUD subtree");
+  assert.match(ratio, /<PitchVisualSettingsMenu\s*\/>/);
+  assert.match(visuals, /\? \[\{ opacity: peak \* \.72 \}, \{ opacity: peak \* \.72 \}\]/,
+    "reduced-motion users should receive a fixed cue without a moving fade");
+  assert.match(visuals, /\[\{ opacity: peak \}, \{ opacity: hold, offset: \.22 \}, \{ opacity: 0 \}\]/);
+  assert.match(visuals, /animate\(glowRef\.current\?\.children\.item\(note\), \.42, \.31\)/);
+  assert.match(visuals, /duration: reducedMotion \? 330 : 820, easing: "ease-out"/);
+  assert.match(visuals, /window\.localStorage\.getItem\(PITCH_VISUAL_SETTINGS_STORAGE_KEY\)/);
+  assert.match(visuals, /window\.localStorage\.setItem\(PITCH_VISUAL_SETTINGS_STORAGE_KEY, serializePitchVisualSettings\(normalized\)\)/);
+  assert.match(visuals, /window\.addEventListener\("storage", sync\)/,
+    "saved visual preferences should also synchronize across open tabs");
+  assert.match(settings, /aria-label="Site-wide pitch visual settings"/);
+  assert.match(settings, /setAllPitchVisualEffects\(settings, true\)/);
+  assert.match(settings, /setAllPitchVisualEffects\(settings, false\)/);
+  for (const layer of ["glowFlash", "noteFlash", "staffFlash"]) {
+    assert.match(settings, new RegExp(`type="checkbox"[^>\\n]*checked=\\{settings\\.${layer}\\}`));
+  }
+  assert.match(settings, /<option value="vertical">Vertical glow · original<\/option>/);
+  assert.match(visuals, /data-pitch-visual="glow"[^>]*aria-hidden="true"/);
+  assert.match(css, /\.staff,\s*\.glow,\s*\.notes \{[^}]*position: fixed;[^}]*inset: 0;[^}]*pointer-events: none/,
+    "the inert visual layer must cover the viewport beyond the HUD");
+  assert.doesNotMatch(css, /backdrop-filter|filter: blur|will-change/,
+    "full-screen flashes should not reserve expensive permanent compositor layers");
+  assert.match(css, /@media \(forced-colors: active\) \{\s*\.staff, \.glow, \.notes \{ display: none; \}/);
 });
 
-test("Absolute Pitch places independent octave colors on one continuous background grand staff", async () => {
-  const [piano, hud, css] = await Promise.all([
+test("site-wide staff flashes preserve written pitch, HUD occlusion, and hidden-reference safety", async () => {
+  const [piano, visuals, hud, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PitchVisuals.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PianoAbsolutePitchHud.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/PitchVisuals.module.css", import.meta.url), "utf8"),
   ]);
-  assert.match(piano, /const PITCH_STAFF_NOTES = Array\.from\(\{ length: 128 \}/);
-  assert.match(piano, /\.map\(\(note\) => isAbsolutePitchFocus \? note : pitchClassFromMidi\(note\)\)/,
+  assert.match(visuals, /const STAFF_NOTES = Array\.from\(\{ length: 128 \}/);
+  assert.match(visuals, /staffMode \? valid : new Set\(\[\.\.\.valid\]\.map\(\(note\) => note % 12\)\)/,
     "same-color octave attacks must stay separate on the staff");
-  assert.match(piano, /isAbsolutePitchFocus \? <div className="piano-pitch-staff" aria-hidden="true">/);
-  assert.match(piano, /data-midi-note=\{midi\}/);
-  assert.match(piano, /data-staff-step=\{step\}/);
-  assert.match(piano, /ledgerSteps\.map/);
-  assert.match(piano, /className="piano-pitch-staff-accidental">♯/);
+  assert.match(visuals, /data-midi-note=\{midi\}/);
+  assert.match(visuals, /data-staff-step=\{step\}/);
+  assert.match(visuals, /ledgerSteps\.map/);
+  assert.match(visuals, /className=\{styles\.accidental\}>♯/);
+  assert.match(visuals, /<svg className=\{styles\.taperedNote\}[^>]*><path d=\{TAPERED_NOTE_PATH\}/,
+    "a crisp pointed note marker should be distinct from the diffuse wash");
+  assert.match(visuals, /data-pitch-staff="background"/);
+  assert.match(visuals, /data-pitch-staff="margin-flash"/);
+  assert.match(visuals, /setProperty\("clip-path", empty \? "none" : `polygon\(evenodd/,
+    "foreground staff flashes must be clipped around the HUD rather than through it");
+  assert.match(visuals, /new ResizeObserver\(update\)/);
+  assert.match(visuals, /window\.addEventListener\("scroll", update, \{ passive: true, capture: true \}\)/);
   assert.match(css, /--pitch-staff-step-size: clamp\(5px, 1\.6svh, 20px\)/);
   assert.match(css, /top: calc\(var\(--pitch-staff-middle-c\) \+ var\(--pitch-staff-position\) \* var\(--pitch-staff-step-size\)\)/);
-  assert.match(css, /\.piano-pitch-glow\.is-staff > span > \* \{[^}]*left: 50%/);
-  assert.match(css, /\.piano-pitch-staff \{[^}]*pointer-events: none/);
+  assert.match(css, /\.staffGlow > span > \*, \.notes > span > \* \{[^}]*left: 50%/);
+  assert.match(css, /\.wash \{[^}]*width: 100vw/);
+  assert.match(css, /\.glow \{ z-index: 8; \}/);
+  assert.match(piano, /if \(!revealPitchColor\) clearFlashes\(\);[\s\S]*if \(played && revealPitchColor && token === toneVisualTokenRef\.current\) showPitchAttacks\(\[note\]\)/,
+    "hidden reference playback must clear existing flashes and never reveal its pitch");
+  assert.match(visuals, /!pianoActiveRef\.current && data\.length >= 3/,
+    "the remembered site-wide MIDI listener must not duplicate Piano's immediate flashes");
+  assert.match(piano, /rememberMidiInput\(input \?\? null\)/);
+  assert.match(visuals, /getAnimations\?\.\(\{ subtree: true \}\)\.forEach\(\(animation\) => animation\.cancel\(\)\)/,
+    "cold-reference cancellation must clear every independently animated flash layer");
   assert.match(hud, /seven written steps higher on the background staff/);
 });
 

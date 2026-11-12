@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PitchVisualProvider } from "./PitchVisuals";
 
 const title = "Music With No Names · Sound Labs";
 export const dynamic = "force-static";
@@ -39,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><PitchVisualProvider>{children}</PitchVisualProvider></body>
     </html>
   );
 }

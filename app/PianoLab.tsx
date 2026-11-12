@@ -152,8 +152,7 @@ import { PianoScoreFlowHud } from "@/app/PianoScoreFlowHud";
 import { PianoEarSearchHud } from "@/app/PianoEarSearchHud";
 import { PianoAbsolutePitchHud } from "@/app/PianoAbsolutePitchHud";
 import { usePianoTrainerTone } from "@/app/usePianoTrainerTone";
-import { getPitchClassColor, PITCH_CLASS_COLORS } from "@/lib/piano-pitch-color";
-import { GRAND_STAFF_LINES, pitchStaffLedgerSteps, pitchStaffStep } from "@/lib/piano-pitch-staff";
+import { usePitchVisuals } from "./PitchVisuals";
 import { createPianoFramePublisher, midiMessageTimeStamp } from "@/lib/piano-live-input";
 import { ECHO_KEY_LESSON_STORAGE_KEY } from "@/lib/echo-key-model";
 import { IMMERSION_HISTORY_ATTACKS, IMMERSION_MAX_FIELD_NOTES, immersionHistory } from "@/lib/piano-immersion-model";
@@ -164,18 +163,14 @@ type MidiInputLike = {
   manufacturer?: string | null;
   state?: string;
   onmidimessage: ((event: { data: Uint8Array; timeStamp?: number }) => void) | null;
+  addEventListener?: (type: "midimessage", listener: (event: { data: Uint8Array }) => void) => void;
+  removeEventListener?: (type: "midimessage", listener: (event: { data: Uint8Array }) => void) => void;
 };
 type MidiAccessLike = { inputs: Map<string, MidiInputLike>; onstatechange: (() => void) | null };
 type NavigatorWithMidi = Navigator & {
   requestMIDIAccess?: (options?: { sysex?: boolean }) => Promise<MidiAccessLike>;
 };
 const MIDI_SESSION_CONNECT_KEY = "music-with-no-names:midi-connected:v1";
-const PITCH_STAFF_NOTES = Array.from({ length: 128 }, (_, midi) => ({
-  midi,
-  ...getPitchClassColor(midi),
-  step: pitchStaffStep(midi),
-  ledgerSteps: pitchStaffLedgerSteps(midi),
-}));
 type HudNoteEvent = {
   id: number;
   note: number;
@@ -936,6 +931,7 @@ function usePianoFramePublisher(publish: () => void) {
 }
 
 function useMidiKeyboard(callbacks: MidiCallbacks) {
+  const { rememberMidiInput } = usePitchVisuals();
   const accessRef = useRef<MidiAccessLike | null>(null);
   const selectedInputIdRef = useRef("");
   const pressedRef = useRef(new Set<number>());
@@ -1061,6 +1057,7 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
 
   useEffect(() => {
     const input = accessRef.current?.inputs.get(selectedInputId);
+    rememberMidiInput(input ?? null);
     if (!input) return;
     clear();
     setPhase("connected");
@@ -1106,7 +1103,7 @@ function useMidiKeyboard(callbacks: MidiCallbacks) {
       }
     };
     return () => { input.onmidimessage = null; };
-  }, [clear, publish, selectedInputId]);
+  }, [clear, publish, selectedInputId, rememberMidiInput]);
 
   useEffect(() => () => { if (accessRef.current) accessRef.current.onstatechange = null; }, []);
 
@@ -4403,33 +4400,21 @@ export function PianoLab() {
   const [rememberedFrame, setRememberedFrame] = useState<ScaleCandidate | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [nowMs, setNowMs] = useState(0);
-  const pitchGlowRef = useRef<HTMLDivElement>(null);
+  const { flashNotes: showPitchAttacks, clearFlashes, setPianoActive } = usePitchVisuals();
   const { playTone, stopTone } = usePianoTrainerTone();
+  const toneVisualTokenRef = useRef(0);
 
-  const showPitchAttacks = useCallback((notes: readonly number[]) => {
-    const layers = pitchGlowRef.current?.children;
-    if (!layers) return;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const attacks = new Set(notes
-      .filter((note) => Number.isInteger(note) && note >= 0 && note <= 127)
-      .map((note) => isAbsolutePitchFocus ? note : pitchClassFromMidi(note)));
-    attacks.forEach((note) => {
-      const layer = layers.item(note);
-      if (!layer?.animate) return;
-      layer.getAnimations().forEach((animation) => animation.cancel());
-      const frames = reducedMotion
-        ? [{ opacity: 0.26 }, { opacity: 0.26 }]
-        : [{ opacity: 0.42 }, { opacity: 0.31, offset: 0.22 }, { opacity: 0 }];
-      layer.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
-    });
-  }, [isAbsolutePitchFocus]);
+  useEffect(() => { setPianoActive(true); return () => setPianoActive(false); }, [setPianoActive]);
+  useEffect(() => () => { toneVisualTokenRef.current += 1; clearFlashes(); }, [focusLens, clearFlashes]);
+  const stopTrainerTone = useCallback(() => { toneVisualTokenRef.current += 1; stopTone(); }, [stopTone]);
 
   const playTrainerTone = useCallback(async (note: number, sound: PianoSoundModelId, revealPitchColor: boolean) => {
-    if (!revealPitchColor) pitchGlowRef.current?.getAnimations?.({ subtree: true }).forEach((animation) => animation.cancel());
+    const token = ++toneVisualTokenRef.current;
+    if (!revealPitchColor) clearFlashes();
     const played = await playTone(note, sound);
-    if (played && revealPitchColor) showPitchAttacks([note]);
+    if (played && revealPitchColor && token === toneVisualTokenRef.current) showPitchAttacks([note]);
     return played;
-  }, [playTone, showPitchAttacks]);
+  }, [playTone, showPitchAttacks, clearFlashes]);
 
   useEffect(() => { frozenRef.current = frozen; }, [frozen]);
 
@@ -6035,29 +6020,6 @@ export function PianoLab() {
       className={`advanced-lab piano-lab piano-hud${focusLens === "score-flow" ? " is-score-flow" : isEarSearchFocus ? " is-ear-search" : focusLens === "scale-quality" ? " is-scale-quality" : ""}`}
       aria-labelledby="piano-workspace-title"
     >
-      {isAbsolutePitchFocus ? <div className="piano-pitch-staff" aria-hidden="true">
-        {GRAND_STAFF_LINES.map(({ midi, step, clef }) => <i key={midi} data-clef={clef} data-staff-step={step} style={{ "--pitch-staff-position": step } as CSSProperties} />)}
-        <span className="piano-pitch-staff-clef is-treble">𝄞</span>
-        <span className="piano-pitch-staff-clef is-bass">𝄢</span>
-      </div> : null}
-      <div ref={pitchGlowRef} className={`piano-pitch-glow${isAbsolutePitchFocus ? " is-staff" : ""}`} aria-hidden="true">
-        {isAbsolutePitchFocus ? PITCH_STAFF_NOTES.map(({ midi, pitchClass, color, step, ledgerSteps }) => <span
-          key={midi}
-          data-midi-note={midi}
-          data-pitch-class={pitchClass}
-          data-staff-step={step}
-          style={{ "--pitch-glow-color": color, "--pitch-staff-position": step } as CSSProperties}
-        >
-          <i className="piano-pitch-staff-wash" />
-          {ledgerSteps.map((ledgerStep) => <i className="piano-pitch-staff-ledger" key={ledgerStep} style={{ "--pitch-staff-position": ledgerStep } as CSSProperties} />)}
-          <i className="piano-pitch-staff-head" />
-          {[1, 3, 6, 8, 10].includes(pitchClass) ? <b className="piano-pitch-staff-accidental">♯</b> : null}
-        </span>) : PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span
-          key={pitchClass}
-          data-pitch-class={pitchClass}
-          style={{ "--pitch-glow-color": color, "--pitch-glow-position": `${16 + pitchClass * 68 / 11}%` } as CSSProperties}
-        />)}
-      </div>
       <header className="piano-workspace-header">
         <div className="piano-workspace-identity">
           <p className="section-kicker">Piano workspace</p>
@@ -6095,7 +6057,7 @@ export function PianoLab() {
 
       {!isShortHudFocus ? <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} /> : null}
 
-      {isAbsolutePitchFocus ? <PianoAbsolutePitchHud onPlayTone={playTrainerTone} onStopTone={stopTone} /> : null}
+      {isAbsolutePitchFocus ? <PianoAbsolutePitchHud onPlayTone={playTrainerTone} onStopTone={stopTrainerTone} /> : null}
 
       {focusLens === "immersion" ? <PianoImmersion
         events={events}
