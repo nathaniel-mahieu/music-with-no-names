@@ -48,7 +48,7 @@ test("site-wide pitch flashes stay vivid, transient, persistent, and interaction
   assert.match(css, /@media \(forced-colors: active\) \{\s*\.staff, \.glow, \.notes \{ display: none; \}/);
 });
 
-test("site-wide staff flashes preserve written pitch, HUD occlusion, and hidden-reference safety", async () => {
+test("site-wide staff flashes overlay content with synchronized left quarter notes and hidden-reference safety", async () => {
   const [piano, visuals, hud, css] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/PitchVisuals.tsx", import.meta.url), "utf8"),
@@ -65,11 +65,19 @@ test("site-wide staff flashes preserve written pitch, HUD occlusion, and hidden-
   assert.match(visuals, /<svg className=\{styles\.taperedNote\}[^>]*><path d=\{TAPERED_NOTE_PATH\}/,
     "a crisp pointed note marker should be distinct from the diffuse wash");
   assert.match(visuals, /data-pitch-staff="background"/);
-  assert.match(visuals, /data-pitch-staff="margin-flash"/);
-  assert.match(visuals, /setProperty\("clip-path", empty \? "none" : `polygon\(evenodd/,
-    "foreground staff flashes must be clipped around the HUD rather than through it");
-  assert.match(visuals, /new ResizeObserver\(update\)/);
-  assert.match(visuals, /window\.addEventListener\("scroll", update, \{ passive: true, capture: true \}\)/);
+  assert.match(visuals, /\{children\}[\s\S]*ref=\{foregroundStaffRef\}[\s\S]*data-pitch-staff="foreground-flash"/);
+  assert.doesNotMatch(visuals, /clip-path|ResizeObserver|marginStaffRef/,
+    "flashing staff lines must cross the HUD and page content, without an occlusion mask");
+  assert.match(css, /\.foregroundStaff \{ z-index: 7; opacity: 0; \}/);
+  assert.match(visuals, /animate\(foregroundStaffRef\.current, \.62, \.42\)/);
+  assert.match(visuals, /<span key=\{midi\} data-midi-note=\{midi\}[^>]*>[\s\S]*data-quarter-note=\{midi\}[\s\S]*className=\{styles\.taperedNote\}/,
+    "quarter note and tapered marker must share the same animated per-note layer");
+  assert.match(visuals, /viewBox="-2\.3 -8 4\.6 16"/);
+  assert.match(visuals, /<ellipse cx="0" cy="0"/,
+    "the notehead, not the stem's bounding box, must sit at the exact staff pitch");
+  assert.match(visuals, /y1=\{ledgerStep - step\} y2=\{ledgerStep - step\}/);
+  assert.match(visuals, /"M-1 \.24V7" : "M1 -\.24V-7"/);
+  assert.match(css, /\.notes > span > \.quarterNote \{ left: clamp\(112px, 11vw, 180px\)/);
   assert.match(css, /--pitch-staff-step-size: clamp\(5px, 1\.6svh, 20px\)/);
   assert.match(css, /top: calc\(var\(--pitch-staff-middle-c\) \+ var\(--pitch-staff-position\) \* var\(--pitch-staff-step-size\)\)/);
   assert.match(css, /\.staffGlow > span > \*, \.notes > span > \* \{[^}]*left: 50%/);

@@ -64,11 +64,11 @@ export function PitchVisualSettingsMenu() {
         </label>
         <label>
           <input type="checkbox" disabled={settings.mode === "vertical"} checked={settings.noteFlash} onChange={(event) => setSettings({ ...settings, noteFlash: event.target.checked })} />
-          <span><strong>Tapered note flash</strong><small>A clear, pointed marker at the played pitch</small></span>
+          <span><strong>Tapered note flash</strong><small>Pointed marker + a quarter note at the left</small></span>
         </label>
         <label>
           <input type="checkbox" disabled={settings.mode === "vertical"} checked={settings.staffFlash} onChange={(event) => setSettings({ ...settings, staffFlash: event.target.checked })} />
-          <span><strong>Staff flash</strong><small>Lines and clefs show the note’s position</small></span>
+          <span><strong>Staff flash</strong><small>Lines and clefs flash over the page content</small></span>
         </label>
       </fieldset>
       {settings.mode === "vertical" ? <small className={styles.modeNote}>Original vertical bands use Glow flash only. Your note and staff preferences are kept for staff layout.</small> : null}

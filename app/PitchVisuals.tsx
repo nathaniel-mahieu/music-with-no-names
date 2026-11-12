@@ -45,8 +45,7 @@ function StaffLines() {
 export function PitchVisualProvider({ children }: { children: ReactNode }) {
   const [settings, setSettingsState] = useState<PitchVisualSettings>(DEFAULT_PITCH_VISUAL_SETTINGS);
   const settingsRef = useRef(settings);
-  const staffRef = useRef<HTMLDivElement>(null);
-  const marginStaffRef = useRef<HTMLDivElement>(null);
+  const foregroundStaffRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
   const pianoActiveRef = useRef(false);
@@ -54,7 +53,7 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
   const midiInputRef = useRef<MidiVisualInput | null>(null);
 
   const clearFlashes = useCallback(() => {
-    for (const ref of [staffRef, marginStaffRef, glowRef, noteRef]) {
+    for (const ref of [foregroundStaffRef, glowRef, noteRef]) {
       ref.current?.getAnimations?.({ subtree: true }).forEach((animation) => animation.cancel());
     }
   }, []);
@@ -85,25 +84,6 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
     return () => { window.removeEventListener("storage", sync); clearFlashes(); midiCleanupRef.current?.(); };
   }, [clearFlashes]);
 
-  useEffect(() => {
-    // Cache the HUD boundary on layout/scroll, never force a layout for each MIDI attack.
-    const stage = document.getElementById("lab-stage");
-    if (!stage) return;
-    const update = () => {
-      const rect = stage.getBoundingClientRect();
-      const left = Math.max(0, rect.left), right = Math.min(window.innerWidth, rect.right);
-      const top = Math.max(0, rect.top), bottom = Math.min(window.innerHeight, rect.bottom);
-      const empty = right <= left || bottom <= top;
-      marginStaffRef.current?.style.setProperty("clip-path", empty ? "none" : `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${left}px ${top}px, ${left}px ${bottom}px, ${right}px ${bottom}px, ${right}px ${top}px, ${left}px ${top}px)`);
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(stage);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, { passive: true, capture: true });
-    return () => { observer.disconnect(); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
-  }, []);
-
   const flashNotes = useCallback((notes: readonly number[]) => {
     const current = settingsRef.current;
     // A setting is saved synchronously; wait for its matching DOM layout before
@@ -128,8 +108,7 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
     }
     if (staffMode && current.noteFlash) valid.forEach((note) => animate(noteRef.current?.children.item(note), .86, .65));
     if (staffMode && current.staffFlash) {
-      animate(staffRef.current, .26, .17);
-      animate(marginStaffRef.current, .62, .42);
+      animate(foregroundStaffRef.current, .62, .42);
     }
   }, []);
 
@@ -153,14 +132,19 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
   const staffVisible = settings.mode === "staff" && settings.staffFlash;
   return <PitchVisualContext.Provider value={value}>
     <div className={`${styles.staff} ${styles.baseline}`} hidden={!staffVisible} aria-hidden="true" data-pitch-staff="background"><StaffLines /></div>
-    <div ref={staffRef} className={`${styles.staff} ${styles.staffPulse}`} hidden={!staffVisible} aria-hidden="true"><StaffLines /></div>
     {children}
-    <div ref={marginStaffRef} className={`${styles.staff} ${styles.marginStaff}`} hidden={!staffVisible} aria-hidden="true" data-pitch-staff="margin-flash"><StaffLines /></div>
+    <div ref={foregroundStaffRef} className={`${styles.staff} ${styles.foregroundStaff}`} hidden={!staffVisible} aria-hidden="true" data-pitch-staff="foreground-flash"><StaffLines /></div>
     <div ref={glowRef} className={`${styles.glow} ${settings.mode === "staff" ? styles.staffGlow : styles.verticalGlow}`} data-pitch-visual="glow" data-mode={settings.mode} hidden={!settings.glowFlash} aria-hidden="true">
       {settings.mode === "staff" ? STAFF_NOTES.map(({ midi, pitchClass, color, step }) => <span key={midi} data-midi-note={midi} data-pitch-class={pitchClass} data-staff-step={step} style={{ "--pitch-glow-color": color, "--pitch-staff-position": step } as CSSProperties}><i className={styles.wash} /></span>) : PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span key={pitchClass} data-pitch-class={pitchClass} style={{ "--pitch-glow-color": color, "--pitch-glow-position": `${16 + pitchClass * 68 / 11}%` } as CSSProperties} />)}
     </div>
     <div ref={noteRef} className={styles.notes} data-pitch-visual="note" hidden={settings.mode !== "staff" || !settings.noteFlash} aria-hidden="true">
       {STAFF_NOTES.map(({ midi, pitchClass, color, step, ledgerSteps }) => <span key={midi} data-midi-note={midi} data-staff-step={step} style={{ "--pitch-glow-color": color, "--pitch-staff-position": step } as CSSProperties}>
+        <svg className={styles.quarterNote} data-quarter-note={midi} viewBox="-2.3 -8 4.6 16" data-stem={step <= (midi >= 60 ? -6 : 6) ? "down" : "up"}>
+          {ledgerSteps.map((ledgerStep) => <line key={ledgerStep} x1="-1.6" x2="1.6" y1={ledgerStep - step} y2={ledgerStep - step} className={styles.quarterLedger} />)}
+          <ellipse cx="0" cy="0" rx="1.15" ry=".78" transform="rotate(-18)" />
+          <path className={styles.quarterStem} d={step <= (midi >= 60 ? -6 : 6) ? "M-1 .24V7" : "M1 -.24V-7"} />
+          {[1, 3, 6, 8, 10].includes(pitchClass) ? <text x="-2.4" y=".7" className={styles.quarterAccidental}>♯</text> : null}
+        </svg>
         <svg className={styles.taperedNote} viewBox="0 0 1000 32" preserveAspectRatio="none"><path d={TAPERED_NOTE_PATH} /></svg>
         {ledgerSteps.map((ledgerStep) => <i className={styles.ledger} key={ledgerStep} style={{ "--pitch-staff-position": ledgerStep } as CSSProperties} />)}
         <i className={styles.notehead} />
