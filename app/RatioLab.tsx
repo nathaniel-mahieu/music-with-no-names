@@ -78,6 +78,8 @@ const PIANO_LENS_LABELS: Record<PianoSessionSummary["focusLens"], string> = {
   "ear-search-hands": "two-staff sound finder",
   explore: "whole-phrase",
   immersion: "immersive-sky",
+  "absolute-pitch": "pitch-memory trainer",
+  "anchor-drill": "spaced anchor drill",
   "scale-quality": "scale-quality-explorer",
   "interval-glow": "interval-glow-hud",
   "sight-shapes": "sight-shapes-reader",

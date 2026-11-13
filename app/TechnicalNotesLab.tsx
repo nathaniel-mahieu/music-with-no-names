@@ -11,7 +11,7 @@ const IMPLEMENTED = [
   {
     title: "Piano companion",
     status: "live MIDI · silent input",
-    body: "Sound Finder, Absolute Pitch, Interval Glow, and Immersion are primary working surfaces. Explore, Sight Shapes, and Scales remain visibly marked To do while their prototype material is refined. Secondary working views include EchoKey, Score Flow, Scale Quality, Scale Gravity, Intervals, Chords, Motion, Paths, Research, and Experience.",
+    body: "Sound Finder, Absolute Pitch, Anchor Drill, Interval Glow, and Immersion are primary working surfaces. Explore, Sight Shapes, and Scales remain visibly marked To do while their prototype material is refined. Secondary working views include EchoKey, Score Flow, Scale Quality, Scale Gravity, Intervals, Chords, Motion, Paths, Research, and Experience.",
     destination: "piano" as const,
     action: "Open Piano",
   },
@@ -50,6 +50,7 @@ const MODELS = [
   ["mwno-ear-2", "Roughness, critical-band energy, spectral overlap, harmonic-template, and fusion teaching hypotheses for declared spectra."],
   ["mwno-sonority-2", "Separate sonority structure, sensory proxies, recent motion, and conditional affordances; never an emotion or consonance verdict."],
   ["mwno-piano-77", "The current bounded MIDI relationship system, including its semitone, scale, chord, phrase, Immersion, Research, and score-practice coordinates."],
+  ["mwno-anchor-1", "Anchor Drill prompt scheduling: per-pitch-class spacing and a device-local heard-as record for one chosen anchor. It chooses what is asked next and is not a measure of absolute pitch or ability."],
   ["mwno-voice-2", "Uncalibrated monophonic pitch estimation. The live implementation uses a 0.0015 RMS gate, a bounded 35–2400 Hz search, periodicity rejection, and target-relative smoothing."],
   ["mwno-rhythm-3", "Chord-clustered onset and release evidence, learner-declared pulse, and local timing ratios without beat or groove inference."],
   ["mwno-prediction-2", "Piece-local transition counts and explicit synthetic teaching priors; surprise is conditional on the declared predictor."],

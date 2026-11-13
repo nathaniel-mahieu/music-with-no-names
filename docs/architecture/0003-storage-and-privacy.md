@@ -13,6 +13,7 @@ Use browser storage only for explicitly local response observations and bounded 
 - **Ephemeral:** decoded recording buffers, active oscillator nodes, explicitly enabled microphone waveform windows, derived live vocal-pitch estimates, and temporary visualization state.
 - **Tab-scoped lesson continuity:** bounded MIDI events and exercise coordinates, explicit attempt boundaries, temporary self-reports, and small validated derived histories. These disappear with the tab session and are not exported.
 - **Device-local:** independent listener ratings and model/response comparison observations.
+- **Device-local scheduling state:** bounded counts and timestamps that only decide what a trainer asks next, such as the Absolute Pitch cold-check history and the Anchor Drill's per-anchor heard-as record and spacing intervals. Each record is validated on read, has a visible deletion control beside it, is never exported or uploaded, and is never presented as a rate, ability, or progress measure. Spaced prompts need this state to outlive a tab; nothing else may use that reason.
 - **Portable by explicit action:** analysis JSON and personal rating JSON.
 - **Never persisted or uploaded:** copyrighted audio, microphone audio, microphone-derived pitch history, identity-linked listening history.
 

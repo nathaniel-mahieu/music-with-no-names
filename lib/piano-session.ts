@@ -7,6 +7,8 @@ export const PIANO_SESSION_LENSES = [
   "ear-search-hands",
   "explore",
   "immersion",
+  "absolute-pitch",
+  "anchor-drill",
   "scale-quality",
   "interval-glow",
   "sight-shapes",

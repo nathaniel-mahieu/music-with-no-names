@@ -281,7 +281,12 @@ export function earSearchFutureProbeNotes(
   return burstNotes.length ? normalizeNotes(burstNotes, "Future-orientation burst") : latest.notes;
 }
 
-function feedbackForProbe(
+/**
+ * Describe one probe relative to the expected landing and, when present, the
+ * previous landing. Exported so single-note trainers such as the Anchor Drill
+ * can reuse the same direction, register, proximity, family, and width cues.
+ */
+export function earSearchProbeFeedback(
   probe: EarSearchProbe,
   expected: EarSearchLanding,
   previous: EarSearchLanding | null,
@@ -393,10 +398,10 @@ export function evaluateEarSearch(
   const latest = !latestProbe
     ? null
     : latestCaught
-      ? feedbackForProbe(latestProbe, target[Math.max(0, matchedLandings - 1)], matchedLandings > 1 ? target[matchedLandings - 2] : null, collection, true)
+      ? earSearchProbeFeedback(latestProbe, target[Math.max(0, matchedLandings - 1)], matchedLandings > 1 ? target[matchedLandings - 2] : null, collection, true)
       : complete
         ? null
-        : feedbackForProbe(latestProbe, target[matchedLandings], matchedLandings ? target[matchedLandings - 1] : null, collection, false);
+        : earSearchProbeFeedback(latestProbe, target[matchedLandings], matchedLandings ? target[matchedLandings - 1] : null, collection, false);
   return { totalLandings: target.length, matchedLandings, complete, acceptedProbeIds, latest };
 }
 
@@ -501,7 +506,7 @@ export function advanceEarSearchTracker(
     const expected = target[next.matchedLandings];
     const previous = next.matchedLandings ? target[next.matchedLandings - 1] : null;
     const caught = sameNotes(probe.notes, expected.notes);
-    next.latest = feedbackForProbe(probe, expected, previous, options.collection ?? null, caught);
+    next.latest = earSearchProbeFeedback(probe, expected, previous, options.collection ?? null, caught);
     next.probeCount += 1;
     next.recentProbes = [...next.recentProbes, probe].slice(-EAR_SEARCH_RECENT_PROBES);
     if (caught) {

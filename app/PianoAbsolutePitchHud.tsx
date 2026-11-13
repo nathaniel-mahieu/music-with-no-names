@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import {
+  ABSOLUTE_PITCH_ANCHOR_STORAGE_KEY,
   ABSOLUTE_PITCH_CLASSES,
+  ABSOLUTE_PITCH_COLD_HISTORY_STORAGE_KEY,
   ABSOLUTE_PITCH_OCTAVES,
   ABSOLUTE_PITCH_PRACTICE_SOUND,
   ABSOLUTE_PITCH_TRANSFER_SOUND,
@@ -48,9 +50,9 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "explore", label: "Color wheel" },
   { id: "anchor", label: "Hum an anchor" },
 ];
-const HISTORY_KEY = "piano-absolute-pitch-cold-history-v1";
+const HISTORY_KEY = ABSOLUTE_PITCH_COLD_HISTORY_STORAGE_KEY;
 const LEVELS_KEY = "piano-absolute-pitch-practice-levels-v1";
-const ANCHOR_KEY = "piano-absolute-pitch-anchor-v1";
+const ANCHOR_KEY = ABSOLUTE_PITCH_ANCHOR_STORAGE_KEY;
 const CHANGE_EVENT = "piano-absolute-pitch-storage";
 
 function readStorage(key: string) {

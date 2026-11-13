@@ -5,6 +5,10 @@ export const ABSOLUTE_PITCH_CLASSES = Array.from({ length: 12 }, (_, pitchClass)
 export const ABSOLUTE_PITCH_OCTAVES = [3, 4, 5] as const;
 export const ABSOLUTE_PITCH_PRACTICE_SOUND = "harmonic" satisfies PianoSoundModelId;
 export const ABSOLUTE_PITCH_TRANSFER_SOUND = "mellow-piano" satisfies PianoSoundModelId;
+export const ABSOLUTE_PITCH_TRANSFER_OCTAVES = [2, 6] as const;
+/** Device-local keys shared by the Absolute Pitch trainer and the Anchor Drill. */
+export const ABSOLUTE_PITCH_ANCHOR_STORAGE_KEY = "piano-absolute-pitch-anchor-v1";
+export const ABSOLUTE_PITCH_COLD_HISTORY_STORAGE_KEY = "piano-absolute-pitch-cold-history-v1";
 
 export type AbsolutePitchTrial = {
   midi: number;

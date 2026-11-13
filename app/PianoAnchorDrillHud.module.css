@@ -1,0 +1,315 @@
+.shell {
+  --drill-ink: #f4f1e9;
+  --drill-muted: #b2b9c9;
+  --drill-line: rgb(183 200 233 / .22);
+  --drill-accent: #83e2dd;
+  --drill-warm: #ffd4bb;
+  --drill-gap: clamp(16px, 3vw, 36px);
+  color: var(--drill-ink);
+  background: rgb(6 11 20 / .72);
+  border: 1px solid var(--drill-line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.header {
+  padding: 20px var(--drill-gap) 16px;
+  border-bottom: 1px solid var(--drill-line);
+}
+
+.header > span {
+  color: var(--drill-accent);
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.shell h3,
+.shell h4,
+.shell p {
+  margin: 0;
+}
+
+.header h3 {
+  margin-block: 3px 6px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.65rem, 3.5vw, 2.6rem);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.header p { max-width: 70ch; }
+
+.shell p,
+.control {
+  color: var(--drill-muted);
+  font-size: .85rem;
+  line-height: 1.5;
+}
+
+.shell h4 {
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.shell button,
+.shell select {
+  min-height: 44px;
+  padding: 7px 13px;
+  color: var(--drill-ink);
+  border: 1px solid var(--drill-line);
+  border-radius: 8px;
+  background: #111929;
+  font: inherit;
+  font-size: .82rem;
+}
+
+.shell button { cursor: pointer; }
+
+.shell button:hover:not(:disabled),
+.shell .primary {
+  border-color: var(--drill-accent);
+  background: #152e3b;
+}
+
+.shell button:focus-visible,
+.shell select:focus-visible,
+.gridViewport:focus-visible {
+  outline: 2px solid var(--drill-accent);
+  outline-offset: 3px;
+}
+
+.shell button:disabled,
+.shell button[aria-disabled="true"] {
+  opacity: .52;
+  cursor: default;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  align-items: start;
+  gap: var(--drill-gap);
+  padding: var(--drill-gap);
+}
+
+.setup,
+.round,
+.record {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  justify-items: start;
+}
+
+.setup h4:not(:first-child) { margin-top: 8px; }
+
+.round { justify-items: center; }
+
+.control,
+.roundControls,
+.judgments,
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.anchorLine,
+.reveal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.anchorLine strong,
+.reveal strong {
+  color: var(--drill-ink);
+}
+
+.reveal { align-items: start; }
+.reveal .swatch { margin-top: .3em; }
+.reveal small { display: block; }
+
+.stepper button {
+  min-width: 44px;
+  font-size: 1.05rem;
+}
+
+.stepper output {
+  min-width: 2ch;
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.judgments button { min-width: 84px; }
+
+.notice {
+  padding: 10px 12px;
+  border: 1px solid var(--drill-line);
+  border-radius: 10px;
+}
+
+.notice button { margin-left: 6px; }
+
+.error { color: var(--drill-warm) !important; }
+
+.swatch {
+  display: inline-block;
+  width: .75rem;
+  height: .75rem;
+  flex: none;
+  border-radius: 50%;
+}
+
+.wheel {
+  position: relative;
+  width: min(100%, 22rem);
+  aspect-ratio: 1;
+}
+
+.ring {
+  position: absolute;
+  inset: 10%;
+  border: 1px solid var(--drill-line);
+  border-radius: 50%;
+}
+
+.wheelCenter {
+  position: absolute;
+  inset: 30%;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.wheelCenter .swatch {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.wheelCenter strong { font-size: 1.35rem; }
+
+.wheelCenter span {
+  color: var(--drill-muted);
+  font-size: .72rem;
+}
+
+.shell .wheelNote {
+  position: absolute;
+  inset-block-start: var(--note-top);
+  inset-inline-start: var(--note-left);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 48px;
+  padding: 4px 6px;
+  transform: translate(-50%, -50%);
+}
+
+.shell .wheelNote:disabled { opacity: 1; }
+.shell .wheelNote[data-role="rest"] { color: var(--drill-muted); border-style: dashed; }
+.shell .wheelNote[data-role="rest"]:disabled { opacity: .5; }
+.shell .wheelNote[data-role="anchor"] { border-color: var(--drill-accent); border-width: 2px; }
+.shell .wheelNote[data-role="target"] { border-color: rgb(244 241 233 / .6); }
+.shell .wheelNote[data-result="target"] { border-color: var(--drill-accent); background: #152e3b; }
+.shell .wheelNote[data-result="answered"] { border-color: var(--drill-warm); }
+.wheelNote b { font-weight: 700; }
+
+.legend { font-size: .74rem !important; }
+
+.record {
+  padding: var(--drill-gap);
+  border-top: 1px solid var(--drill-line);
+}
+
+.gridViewport {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.grid {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: .76rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.grid caption {
+  padding: 0 0 8px;
+  color: var(--drill-muted);
+  text-align: left;
+}
+
+.grid th,
+.grid td {
+  padding: 5px 4px;
+  border: 1px solid var(--drill-line);
+}
+
+.grid th {
+  color: var(--drill-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.grid th .swatch {
+  width: .55rem;
+  height: .55rem;
+  margin-right: 4px;
+}
+
+.grid td { color: var(--drill-muted); }
+
+.grid td[style] {
+  color: var(--drill-ink);
+  background: rgb(255 212 187 / calc(.1 + var(--cell-strength) * .3));
+}
+
+.grid td[data-diagonal] { border-color: rgb(131 226 221 / .6); }
+
+.grid td[data-diagonal][style] {
+  background: rgb(131 226 221 / calc(.1 + var(--cell-strength) * .3));
+}
+
+.grid tr[data-anchor] th { color: var(--drill-ink); }
+
+@media (max-width: 760px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  .round { justify-items: start; }
+}
+
+@media (max-width: 400px) {
+  .wheel {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    aspect-ratio: auto;
+  }
+
+  .ring { display: none; }
+
+  .wheelCenter {
+    position: static;
+    grid-column: 1 / -1;
+    padding-bottom: 7px;
+  }
+
+  .shell .wheelNote {
+    position: static;
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .grid td[style] { background: none; }
+  .shell .wheelNote[data-result] { border-width: 3px; }
+}
