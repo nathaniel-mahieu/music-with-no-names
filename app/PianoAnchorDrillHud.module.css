@@ -216,8 +216,6 @@
 .shell .wheelNote:disabled { opacity: 1; }
 .shell .wheelNote[data-role="rest"] { color: var(--drill-muted); border-style: dashed; }
 .shell .wheelNote[data-role="rest"]:disabled { opacity: .5; }
-.shell .wheelNote[data-role="anchor"] { border-color: var(--drill-accent); border-width: 2px; }
-.shell .wheelNote[data-role="target"] { border-color: rgb(244 241 233 / .6); }
 .shell .wheelNote[data-result="target"] { border-color: var(--drill-accent); background: #152e3b; }
 .shell .wheelNote[data-result="answered"] { border-color: var(--drill-warm); }
 .wheelNote b { font-weight: 700; }

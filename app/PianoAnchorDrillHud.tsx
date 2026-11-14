@@ -288,25 +288,27 @@ export function PianoAnchorDrillHud({ events, frozen, onResumeCapture, onPlayTon
   }
 
   async function replayFeedback(heard: AnchorDrillPrompt, answeredMidi: number | null) {
+    // The learner's own choice sounds first, so the hidden tone lands last as the correction to keep.
     const ticket = ++request.current;
-    let played = false;
-    try {
-      played = await onPlayTone(heard.targetMidi, heard.sound, true);
-    } catch {
-      played = false;
-    }
-    if (request.current !== ticket) return;
-    if (!played) {
-      setAudioError(true);
-      return;
-    }
-    if (answeredMidi == null || answeredMidi === heard.targetMidi) return;
-    await new Promise((resolve) => window.setTimeout(resolve, FEEDBACK_GAP_MS));
-    if (request.current !== ticket) return;
-    try {
-      await onPlayTone(answeredMidi, heard.sound, true);
-    } catch {
-      // The spoken and visual feedback already carries the comparison.
+    const sequence = answeredMidi == null || answeredMidi === heard.targetMidi
+      ? [heard.targetMidi]
+      : [answeredMidi, heard.targetMidi];
+    for (const [index, midi] of sequence.entries()) {
+      if (index > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, FEEDBACK_GAP_MS));
+        if (request.current !== ticket) return;
+      }
+      let played = false;
+      try {
+        played = await onPlayTone(midi, heard.sound, true);
+      } catch {
+        played = false;
+      }
+      if (request.current !== ticket) return;
+      if (!played) {
+        setAudioError(true);
+        return;
+      }
     }
   }
 
@@ -483,10 +485,10 @@ export function PianoAnchorDrillHud({ events, frozen, onResumeCapture, onPlayTon
             const entry = PITCH_CLASS_COLORS[pitchClass];
             const angle = pitchClass * Math.PI / 6;
             const role = isAnchor ? "anchor" : inTargets ? "in play" : inPool ? "nearby contrast" : "not in play";
-            const mark = feedbackTarget === pitchClass ? "✓" : feedbackAnswered === pitchClass ? "✕" : isAnchor ? "⌂" : inTargets ? "•" : "";
+            const mark = feedbackTarget === pitchClass ? "✓" : feedbackAnswered === pitchClass ? "✕" : "";
             const result = feedbackTarget === pitchClass ? ", the hidden tone" : feedbackAnswered === pitchClass ? ", your answer" : "";
             return <button key={entry.note} type="button" className={styles.wheelNote} disabled={!answering}
-              data-role={isAnchor ? "anchor" : inTargets ? "target" : inPool ? "pool" : "rest"}
+              data-role={inPool ? "pool" : "rest"}
               data-result={feedbackTarget === pitchClass ? "target" : feedbackAnswered === pitchClass ? "answered" : undefined}
               aria-label={`${entry.note}, ${entry.name}, ${role}${inPool && nowMs > 0 ? `, ${due ? "due now" : formatDueIn(dueInMs)}` : ""}${answered ? `, recognised ${correct} of ${answered}` : ""}${result}`}
               onClick={() => prompt && submit([anchorDrillAnswerNote(prompt.targetMidi, pitchClass)], null, true)}
@@ -498,14 +500,14 @@ export function PianoAnchorDrillHud({ events, frozen, onResumeCapture, onPlayTon
             </button>;
           })}
         </div>
-        <p className={styles.legend}>⌂ anchor · • in play · ✓ hidden tone · ✕ your answer</p>
+        <p className={styles.legend}>✓ hidden tone · ✕ your answer</p>
 
         {answering ? <p role="status">Press the key you think it is, choose its place on the ring, or choose below, same, or above.</p> : null}
         {feedback && !answering ? <p className={styles.reveal} role="status">
           <PitchSwatch pitchClass={feedback.outcome.heardPitchClass} />
           <span><strong>{feedbackTitle(feedback)}</strong>{" "}
             <small>{conventionalPitchName(feedback.prompt.targetMidi)} · {PITCH_CLASS_COLORS[feedback.outcome.heardPitchClass].name} · {describeOffset(feedback.outcome.targetOffset)}{feedback.prompt.sound === ABSOLUTE_PITCH_TRANSFER_SOUND ? " · transfer sound, outer octave" : ""}.</small>{" "}
-            <small>{feedback.answeredMidi != null && feedback.answeredMidi !== feedback.prompt.targetMidi ? "You hear the hidden tone, then your answer." : "You hear the hidden tone once more."}</small></span>
+            <small>{feedback.answeredMidi != null && feedback.answeredMidi !== feedback.prompt.targetMidi ? "You hear your answer, then the hidden tone." : "You hear the hidden tone once more."}</small></span>
         </p> : null}
         {audioError ? <p className={styles.error} role="alert">Audio could not start. Choose “Hidden tone now” to try again; some browsers need a click before each sound.</p> : null}
       </section>
