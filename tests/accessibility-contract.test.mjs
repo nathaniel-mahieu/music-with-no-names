@@ -129,6 +129,34 @@ test("Sound Finder replay and Stop preserve finds while explicit Reset clears th
   assert.match(playback, /Your finds are kept\. Continue probing, or choose Reset probes/);
 });
 
+test("Sound Finder keeps score replacement available after loading without discarding a failed import", async () => {
+  const [finder, css] = await Promise.all([
+    readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoEarSearchHud.module.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(finder, /const scorePicker = <label/);
+  assert.equal((finder.match(/id="ear-search-upload"/g) ?? []).length, 1,
+    "reuse one picker instead of mounting duplicate file input IDs");
+  assert.match(finder, /aria-label=\{score \? "Change score" : "Choose score"\}/);
+  const loadedView = finder.slice(finder.indexOf("data-phase={visiblePhase}"));
+  assert.match(loadedView, /className=\{styles\.identity\}[\s\S]*\{scorePicker\}<\/div>/);
+  assert.match(loadedView, /className=\{styles\.scoreImportNotice\} role=\{fileState === "error" \? "alert" : "status"\}/);
+  const handler = finder.slice(finder.indexOf("const onFileChange ="), finder.indexOf("const loadDemo ="));
+  assert.match(handler, /event\.target\.value = "";\s*if \(!file\) return/,
+    "cancelling keeps the song and reselecting the same file remains possible");
+  assert.match(handler, /await importMusicXmlFile\(file\);\s*if \(importTokenRef\.current !== token\) return;\s*installScore/,
+    "only the latest successfully parsed import may replace the current song");
+  assert.match(handler, /Your current song is still loaded/);
+  assert.doesNotMatch(handler, /setScore\(null\)|setImported\(null\)/);
+  const installer = finder.slice(finder.indexOf("const installScore ="), finder.indexOf("const onFileChange ="));
+  assert.match(installer, /normalizeImportedMusicXmlScore\(nextImported\);[\s\S]*captureProbeBoundary\(\);[\s\S]*clearFutureEchoes\(\);[\s\S]*stopAudio\(/);
+  for (const reset of ["setChunkIndex(0)", "setHasHeard(false)", "setRevealed(false)", "setTracker(null)", "setClusterClockMs(0)"]) {
+    assert.ok(installer.includes(reset), `replacement must ${reset}`);
+  }
+  assert.match(css, /\.scoreUpload \{[^}]*min-height: 44px/);
+  assert.match(css, /\.identity > \.scoreUpload \{[^}]*grid-column: 2/);
+});
+
 test("Sound Finder opens probing without a reference and Stop cancels listening before rearming", async () => {
   const finder = await readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8");
   assert.match(finder, /if \(phase !== "ready" \|\| !searchLandings\.length\) return;[\s\S]*createEarSearchTracker\(searchLandings, probeBoundaryRef\.current\.eventId\)/);

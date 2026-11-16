@@ -317,6 +317,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const [audioNotice, setAudioNotice] = useState("Reference frames and attack hints play only after explicit controls. MIDI input remains silent.");
   const gathersTexture = voice === "full" || voice === "staff-anchors";
   const eventsRef = useRef(events);
+  const importTokenRef = useRef(0);
   const probeBoundaryRef = useRef({ eventId: newestEventId(events), atMs: 0 });
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioMasterRef = useRef<GainNode | null>(null);
@@ -363,6 +364,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   }, [disposeAudio]);
 
   useEffect(() => () => {
+    importTokenRef.current += 1;
     disposeAudio(false);
     if (futureEchoTimerRef.current != null) window.clearTimeout(futureEchoTimerRef.current);
   }, [disposeAudio]);
@@ -404,7 +406,9 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const installScore = useCallback((nextImported: ImportedMusicXmlScore, xml: string, persist: boolean) => {
     if (nextImported.partNames.length !== 1) throw new Error(`Sound Finder evaluates one MusicXML part at a time. This file contains ${nextImported.partNames.length}; export the piano part alone first.`);
     const normalized = normalizeImportedMusicXmlScore(nextImported);
+    importTokenRef.current += 1;
     captureProbeBoundary();
+    clearFutureEchoes();
     stopAudio("Score ready. Start probing now, or listen to the hidden reference.");
     setImported(nextImported);
     setScore(normalized);
@@ -414,6 +418,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     setHasHeard(false);
     setRevealed(false);
     setTracker(null);
+    setClusterClockMs(0);
     if (persist) {
       try {
         window.sessionStorage.removeItem(SCORE_FLOW_STORAGE_KEY);
@@ -424,10 +429,12 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
         setFileNotice("Score loaded in memory; this browser could not retain it after navigation.");
       }
     }
-  }, [captureProbeBoundary, stopAudio]);
+  }, [captureProbeBoundary, clearFutureEchoes, stopAudio]);
 
   useEffect(() => {
+    const restoreToken = importTokenRef.current;
     const task = window.setTimeout(() => {
+      if (importTokenRef.current !== restoreToken) return;
       try {
         const saved = parseStoredScoreFlowSource(window.sessionStorage.getItem(SCORE_FLOW_STORAGE_KEY));
         if (!saved) return;
@@ -444,18 +451,23 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    const token = ++importTokenRef.current;
     setFileState("loading");
     setFileNotice("Reading the score locally…");
     try {
       const result = await importMusicXmlFile(file);
+      if (importTokenRef.current !== token) return;
       installScore(result.score, result.xml, true);
     } catch (error) {
+      if (importTokenRef.current !== token) return;
       setFileState("error");
-      setFileNotice(error instanceof Error ? error.message : "This score could not be read.");
+      const message = error instanceof Error ? error.message : "This score could not be read.";
+      setFileNotice(score ? `Could not change score. Your current song is still loaded. ${message}` : message);
     }
   };
 
   const loadDemo = () => {
+    importTokenRef.current += 1;
     try { installScore(parseMusicXml(ORBIT_STUDY_MUSICXML, "orbit-study.musicxml"), ORBIT_STUDY_MUSICXML, true); }
     catch (error) { setFileState("error"); setFileNotice(error instanceof Error ? error.message : "The demo could not be opened."); }
   };
@@ -796,13 +808,18 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     else if (itemBottom > list.scrollTop + list.clientHeight) list.scrollTop = itemBottom - list.clientHeight;
   }, [chunk?.id, memoryProgressIndex, timelineLandings.length]);
 
+  const scorePicker = <label htmlFor="ear-search-upload" className={styles.scoreUpload} title="Open MusicXML: .mxl, .musicxml, or .xml. Your current score stays loaded until the replacement is ready." data-loading={fileState === "loading"}>
+    <span>{fileState === "loading" ? "Reading score…" : score ? "Change score" : "Choose score"}</span>
+    <input id="ear-search-upload" aria-label={score ? "Change score" : "Choose score"} type="file" accept=".mxl,.musicxml,.xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml,application/xml,text/xml" onChange={onFileChange} disabled={fileState === "loading"} />
+  </label>;
+
   if (!score || !imported) return <section className={cx(styles.shell, twoHand && styles.twoHandShell)} aria-labelledby="ear-search-title" data-mode={mode}>
     <header className={styles.emptyHeader}>
       <div><span>{twoHand ? "Sound Finder · two-staff ear search" : "Sound Finder · beginner ear search"}</span><h3 id="ear-search-title">{twoHand ? "Hear both staffs. Find their route through the score." : "Hear a hidden score span. Find it without seeing the answer."}</h3><p>{twoHand ? "The notes stay hidden, while the score tells you whether the next landing belongs to the upper staff, lower staff, or both together. Reference playback is optional. MIDI stays silent and never guesses which physical hand you used." : "Choose half a bar, one bar, or two bars of written time and start probing immediately. Listen when useful; Stop returns to probing. MIDI stays silent."}</p></div>
     </header>
     <div className={styles.importPanel}>
       <div className={styles.importOrbit} aria-hidden="true"><i /><i /><i /><b /></div>
-      <div><strong>No local score is ready.</strong><p>Sound Finder reuses the MusicXML retained by Score Flow when available. You can also choose the score here; it remains in this browser tab.</p><div><label htmlFor="ear-search-upload">Choose score<input id="ear-search-upload" type="file" accept=".mxl,.musicxml,.xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml,application/xml,text/xml" onChange={onFileChange} /></label><button type="button" onClick={loadDemo}>Try original Orbit Study</button></div><small role={fileState === "error" ? "alert" : "status"}>{fileNotice}</small></div>
+      <div><strong>No local score is ready.</strong><p>Sound Finder reuses the MusicXML retained by Score Flow when available. You can also choose the score here; it remains in this browser tab.</p><div>{scorePicker}<button type="button" onClick={loadDemo}>Try original Orbit Study</button></div><small role={fileState === "error" ? "alert" : "status"}>{fileNotice}</small></div>
     </div>
   </section>;
 
@@ -856,7 +873,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
 
   return <section className={cx(styles.shell, twoHand && styles.twoHandShell)} aria-labelledby="ear-search-title" data-phase={visiblePhase} data-mode={mode}>
     <header className={styles.commandDeck}>
-      <div className={styles.identity}><span>{twoHand ? "Sound Finder · two-staff path" : "Sound Finder · untimed score phrase"}</span><h3 id="ear-search-title">{imported.title}</h3><p title="Start numbers mark fixed half-bar positions. Changing the window length keeps the same starting point.">Start {chunk ? formatEarSearchFrameStart(chunk) : "—"} · {timeSpanLabel(timeSpan)} window{clippedAtScoreEnd ? " · ends at score end" : ""} · {twoHand ? "staff route visible · pitch locked" : "pitch locked · pending staff hidden"}</p></div>
+      <div className={styles.identity}><span>{twoHand ? "Sound Finder · two-staff path" : "Sound Finder · untimed score phrase"}</span><h3 id="ear-search-title" title={`${imported.title} · ${imported.fileName}`}>{imported.title}</h3><p title="Start numbers mark fixed half-bar positions. Changing the window length keeps the same starting point.">Start {chunk ? formatEarSearchFrameStart(chunk) : "—"} · {timeSpanLabel(timeSpan)} window{clippedAtScoreEnd ? " · ends at score end" : ""} · {twoHand ? "staff route visible · pitch locked" : "pitch locked · pending staff hidden"}</p>{scorePicker}</div>
       <div className={cx(styles.controls, twoHand && styles.twoHandControls)}>
         <label><span>Window length</span><select value={timeSpan} onChange={(event) => { prepareTargetChange("Same starting point. Probe the resized window now, or listen first."); setTimeSpan(event.target.value as EarSearchTimeSpan); }}><option value="half-bar">½ bar · short</option><option value="one-bar">1 bar · medium</option><option value="two-bars">2 bars · long</option></select></label>
         {twoHand ? <label><span>Target texture</span><select value={voice} onChange={(event) => { prepareTargetChange(); setVoice(event.target.value as EarSearchVoice); }}><option value="staff-anchors">One anchor per staff</option><option value="full">All written keys</option></select></label> : <>
@@ -871,6 +888,8 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
         {visiblePhase !== "playing" && !listeningOnly ? <button type="button" onClick={resetSearch}>Reset probes</button> : null}
       </div>
     </header>
+
+    {fileState === "loading" || fileState === "error" ? <p className={styles.scoreImportNotice} role={fileState === "error" ? "alert" : "status"}>{fileNotice}</p> : null}
 
     {!chunks.length ? <div className={styles.noChunks}><strong>No score-time frame exists here.</strong><p>Try another score. Sound Finder keeps authored time and does not invent material outside it.</p></div> : <>
       <div className={styles.statusStrip}>

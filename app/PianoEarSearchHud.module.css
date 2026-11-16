@@ -134,6 +134,14 @@
   white-space: nowrap;
 }
 
+.identity { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: center; min-width: 0; }
+.identity > span, .identity > h3 { grid-column: 1 / -1; }
+.identity > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identity > p { grid-column: 1; }
+.identity > .scoreUpload { grid-column: 2; grid-row: 3; padding-inline: 10px; white-space: nowrap; font-size: .64rem; }
+.scoreImportNotice { margin: 0; padding: 10px 16px; color: var(--ear-muted); border-bottom: 1px solid var(--ear-line); font-size: .72rem; line-height: 1.5; }
+.scoreImportNotice[role="alert"] { color: var(--ear-rose); }
+
 .controls {
   display: grid;
   grid-template-columns: repeat(4, minmax(92px, 1fr));
@@ -1119,7 +1127,7 @@
 .importPanel > div:last-child > p { color: var(--ear-muted); font-size: .76rem; line-height: 1.5; }
 .importPanel > div:last-child > div { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.importPanel label {
+.scoreUpload {
   display: grid;
   place-items: center;
   min-height: 44px;
@@ -1133,13 +1141,15 @@
   cursor: pointer;
 }
 
-.importPanel input[type="file"] {
+.scoreUpload input[type="file"] {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+.scoreUpload[data-loading="true"] { opacity: .65; cursor: progress; }
 
 .importPanel button { padding: 0 15px; }
 .importPanel small { color: var(--ear-muted); font-size: .66rem; }
@@ -1268,7 +1278,8 @@
   .revealPlotViewport { color: CanvasText; border-color: CanvasText; background: Canvas; }
   .shell button,
   .shell select,
-  .importPanel label { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
+  .scoreUpload { color: ButtonText; border-color: ButtonText; background: ButtonFace; }
+  .scoreImportNotice, .scoreImportNotice[role="alert"] { color: CanvasText; border-color: CanvasText; }
   .memoryRail li.isCaught i,
   .phaseLamp,
   .probeDock li.isAccepted > i { border-color: Highlight; background: Highlight; }
