@@ -1,5 +1,6 @@
 .staff,
 .glow,
+.edgeGlow,
 .notes {
   --pitch-staff-step-size: clamp(5px, 1.6svh, 20px);
   --pitch-staff-middle-c: 54svh;
@@ -10,12 +11,25 @@
   user-select: none;
 }
 
-.staff[hidden], .glow[hidden], .notes[hidden] { display: none; }
+.staff[hidden], .glow[hidden], .edgeGlow[hidden], .notes[hidden] { display: none; }
 .staff { z-index: 0; color: #c5ccd8; }
 .baseline { opacity: .1; }
 .foregroundStaff { z-index: 7; opacity: 0; }
 .glow { z-index: 8; }
+.edgeGlow { z-index: 8; }
 .notes { z-index: 9; }
+
+.edgeGlow > span {
+  --edge-glow-width: clamp(28px, 7vmin, 90px);
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  opacity: 0;
+  background:
+    linear-gradient(90deg, var(--pitch-glow-color), transparent var(--edge-glow-width), transparent calc(100% - var(--edge-glow-width)), var(--pitch-glow-color)),
+    linear-gradient(180deg, var(--pitch-glow-color), transparent var(--edge-glow-width), transparent calc(100% - var(--edge-glow-width)), var(--pitch-glow-color));
+  box-shadow: inset 0 0 0 1px var(--pitch-glow-color);
+}
 
 .staff > i {
   position: absolute;
@@ -60,5 +74,5 @@
 .verticalGlow > span { inset: 0 auto 0 var(--pitch-glow-position); width: min(44%, 44rem); transform: translateX(-50%); background: linear-gradient(90deg, transparent, var(--pitch-glow-color) 50%, transparent); }
 
 @media (forced-colors: active) {
-  .staff, .glow, .notes { display: none; }
+  .staff, .glow, .edgeGlow, .notes { display: none; }
 }

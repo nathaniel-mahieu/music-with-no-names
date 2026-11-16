@@ -47,13 +47,14 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
   const settingsRef = useRef(settings);
   const foregroundStaffRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
+  const edgeGlowRef = useRef<HTMLDivElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
   const pianoActiveRef = useRef(false);
   const midiCleanupRef = useRef<(() => void) | null>(null);
   const midiInputRef = useRef<MidiVisualInput | null>(null);
 
   const clearFlashes = useCallback(() => {
-    for (const ref of [foregroundStaffRef, glowRef, noteRef]) {
+    for (const ref of [foregroundStaffRef, glowRef, edgeGlowRef, noteRef]) {
       ref.current?.getAnimations?.({ subtree: true }).forEach((animation) => animation.cancel());
     }
   }, []);
@@ -105,6 +106,10 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
     if (current.glowFlash) {
       const attacks = staffMode ? valid : new Set([...valid].map((note) => note % 12));
       attacks.forEach((note) => animate(glowRef.current?.children.item(note), .42, .31));
+      // Window edges share pitch-class color in either layout. Octave doublings
+      // restart one halo instead of stacking identical full-screen layers.
+      const edgeAttacks = new Set([...valid].map((note) => note % 12));
+      edgeAttacks.forEach((pitchClass) => animate(edgeGlowRef.current?.children.item(pitchClass), .46, .31));
     }
     if (staffMode && current.noteFlash) valid.forEach((note) => animate(noteRef.current?.children.item(note), .86, .65));
     if (staffMode && current.staffFlash) {
@@ -136,6 +141,9 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
     <div ref={foregroundStaffRef} className={`${styles.staff} ${styles.foregroundStaff}`} hidden={!staffVisible} aria-hidden="true" data-pitch-staff="foreground-flash"><StaffLines /></div>
     <div ref={glowRef} className={`${styles.glow} ${settings.mode === "staff" ? styles.staffGlow : styles.verticalGlow}`} data-pitch-visual="glow" data-mode={settings.mode} hidden={!settings.glowFlash} aria-hidden="true">
       {settings.mode === "staff" ? STAFF_NOTES.map(({ midi, pitchClass, color, step }) => <span key={midi} data-midi-note={midi} data-pitch-class={pitchClass} data-staff-step={step} style={{ "--pitch-glow-color": color, "--pitch-staff-position": step } as CSSProperties}><i className={styles.wash} /></span>) : PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span key={pitchClass} data-pitch-class={pitchClass} style={{ "--pitch-glow-color": color, "--pitch-glow-position": `${16 + pitchClass * 68 / 11}%` } as CSSProperties} />)}
+    </div>
+    <div ref={edgeGlowRef} className={styles.edgeGlow} data-pitch-visual="edges" hidden={!settings.glowFlash} aria-hidden="true">
+      {PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span key={pitchClass} data-pitch-class={pitchClass} style={{ "--pitch-glow-color": color } as CSSProperties} />)}
     </div>
     <div ref={noteRef} className={styles.notes} data-pitch-visual="note" hidden={settings.mode !== "staff" || !settings.noteFlash} aria-hidden="true">
       {STAFF_NOTES.map(({ midi, pitchClass, color, step, ledgerSteps }) => <span key={midi} data-midi-note={midi} data-staff-step={step} style={{ "--pitch-glow-color": color, "--pitch-staff-position": step } as CSSProperties}>

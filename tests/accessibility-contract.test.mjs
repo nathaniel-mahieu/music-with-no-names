@@ -41,11 +41,37 @@ test("site-wide pitch flashes stay vivid, transient, persistent, and interaction
   }
   assert.match(settings, /<option value="vertical">Vertical glow · original<\/option>/);
   assert.match(visuals, /data-pitch-visual="glow"[^>]*aria-hidden="true"/);
-  assert.match(css, /\.staff,\s*\.glow,\s*\.notes \{[^}]*position: fixed;[^}]*inset: 0;[^}]*pointer-events: none/,
+  assert.match(css, /\.staff,\s*\.glow,\s*\.edgeGlow,\s*\.notes \{[^}]*position: fixed;[^}]*inset: 0;[^}]*pointer-events: none/,
     "the inert visual layer must cover the viewport beyond the HUD");
   assert.doesNotMatch(css, /backdrop-filter|filter: blur|will-change/,
     "full-screen flashes should not reserve expensive permanent compositor layers");
-  assert.match(css, /@media \(forced-colors: active\) \{\s*\.staff, \.glow, \.notes \{ display: none; \}/);
+  assert.match(css, /@media \(forced-colors: active\) \{\s*\.staff, \.glow, \.edgeGlow, \.notes \{ display: none; \}/);
+});
+
+test("page-edge pitch colors share the note fade, saved glow switch, and hidden-reference cancellation", async () => {
+  const [visuals, css, palette] = await Promise.all([
+    readFile(new URL("../app/PitchVisuals.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PitchVisuals.module.css", import.meta.url), "utf8"),
+    import("../lib/piano-pitch-color.ts"),
+  ]);
+  assert.equal(palette.PITCH_CLASS_COLORS.length, 12,
+    "the edge effect should allocate one layer per pitch class, not per MIDI octave");
+  const edgeLayer = visuals.match(/<div ref=\{edgeGlowRef\}[\s\S]*?<\/div>/)?.[0] ?? "";
+  assert.match(edgeLayer, /data-pitch-visual="edges" hidden=\{!settings\.glowFlash\} aria-hidden="true"/);
+  assert.match(edgeLayer, /PITCH_CLASS_COLORS\.map\(\(\{ pitchClass, color \}\) => <span key=\{pitchClass\} data-pitch-class=\{pitchClass\}/);
+  assert.match(edgeLayer, /"--pitch-glow-color": color/);
+  const glowEffects = visuals.slice(visuals.indexOf("if (current.glowFlash) {"), visuals.indexOf("if (staffMode && current.noteFlash)"));
+  assert.match(glowEffects, /const edgeAttacks = new Set\(\[\.\.\.valid\]\.map\(\(note\) => note % 12\)\)/,
+    "simultaneous octave doublings should restart one edge color instead of stacking duplicate halos");
+  assert.match(glowEffects, /animate\(edgeGlowRef\.current\?\.children\.item\(pitchClass\), \.46, \.31\)/,
+    "edge colors must use the same 820 ms / reduced-motion 330 ms animation helper as played notes");
+  const cancellation = visuals.slice(visuals.indexOf("const clearFlashes ="), visuals.indexOf("const setSettings ="));
+  assert.match(cancellation, /for \(const ref of \[[^\]]*edgeGlowRef[^\]]*\]\)/);
+  assert.match(cancellation, /animation\.cancel\(\)/,
+    "All off, hidden references, and navigation must clear edge animations as well as note flashes");
+  assert.match(css, /\.edgeGlow \{ z-index: 8; \}/);
+  assert.match(css, /\.edgeGlow > span \{[^}]*inset: 0;[^}]*opacity: 0;[^}]*linear-gradient\(90deg,[^}]*linear-gradient\(180deg,/,
+    "the inert halo must start transparent and cover all four viewport edges");
 });
 
 test("site-wide staff flashes overlay content with synchronized left quarter notes and hidden-reference safety", async () => {
