@@ -60,7 +60,7 @@ export function PitchVisualSettingsMenu() {
         <legend>Flash layers</legend>
         <label>
           <input type="checkbox" checked={settings.glowFlash} onChange={(event) => setSettings({ ...settings, glowFlash: event.target.checked })} />
-          <span><strong>Glow flash</strong><small>Page color + a crisp rim and soft edge fade</small></span>
+          <span><strong>Glow flash</strong><small>Page color + a crisp rim with a broad inward fade</small></span>
         </label>
         <label>
           <input type="checkbox" disabled={settings.mode === "vertical"} checked={settings.noteFlash} onChange={(event) => setSettings({ ...settings, noteFlash: event.target.checked })} />

@@ -36,15 +36,27 @@
 }
 
 .edgeGlow > span {
-  --edge-glow-width: clamp(28px, 7vmin, 90px);
+  --edge-glow-shoulder: color-mix(in srgb, var(--pitch-glow-color) 74%, transparent);
+  --edge-glow-middle: color-mix(in srgb, var(--pitch-glow-color) 38%, transparent);
+  --edge-glow-tail: color-mix(in srgb, var(--pitch-glow-color) 12%, transparent);
   position: absolute;
-  inset: 0;
-  border-radius: 18px;
+  inset: var(--pitch-rim-inset, 0);
   opacity: 0;
+  /* Each axis uses its own screen fraction. Full color meets the 3px rim,
+     then rolls inward without a seam, leaving the central 36% clear. */
   background:
-    linear-gradient(90deg, var(--pitch-glow-color), transparent var(--edge-glow-width), transparent calc(100% - var(--edge-glow-width)), var(--pitch-glow-color)),
-    linear-gradient(180deg, var(--pitch-glow-color), transparent var(--edge-glow-width), transparent calc(100% - var(--edge-glow-width)), var(--pitch-glow-color));
-  box-shadow: inset 0 0 0 1px var(--pitch-glow-color);
+    linear-gradient(90deg,
+      var(--pitch-glow-color) 0, var(--pitch-glow-color) 3px,
+      var(--edge-glow-shoulder) 6%, var(--edge-glow-middle) 14%, var(--edge-glow-tail) 24%,
+      transparent 32%, transparent 68%,
+      var(--edge-glow-tail) 76%, var(--edge-glow-middle) 86%, var(--edge-glow-shoulder) 94%,
+      var(--pitch-glow-color) calc(100% - 3px), var(--pitch-glow-color) 100%),
+    linear-gradient(180deg,
+      var(--pitch-glow-color) 0, var(--pitch-glow-color) 3px,
+      var(--edge-glow-shoulder) 6%, var(--edge-glow-middle) 14%, var(--edge-glow-tail) 24%,
+      transparent 32%, transparent 68%,
+      var(--edge-glow-tail) 76%, var(--edge-glow-middle) 86%, var(--edge-glow-shoulder) 94%,
+      var(--pitch-glow-color) calc(100% - 3px), var(--pitch-glow-color) 100%);
 }
 
 .staff > i {

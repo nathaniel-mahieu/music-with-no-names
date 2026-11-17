@@ -64,15 +64,18 @@ test("page-edge pitch colors share the note fade, saved glow switch, and hidden-
   const glowEffects = visuals.slice(visuals.indexOf("if (current.glowFlash) {"), visuals.indexOf("if (staffMode && current.noteFlash)"));
   assert.match(glowEffects, /const edgeAttacks = new Set\(\[\.\.\.valid\]\.map\(\(note\) => note % 12\)\)/,
     "simultaneous octave doublings should restart one edge color instead of stacking duplicate halos");
-  assert.match(glowEffects, /animate\(edgeGlowRef\.current\?\.children\.item\(pitchClass\), \.46, \.31\)/,
-    "edge colors must use the same 820 ms / reduced-motion 330 ms animation helper as played notes");
+  assert.match(glowEffects, /animateEdge\(halo\);\s*animateEdge\(rim\)/,
+    "the broad wash and hard border must share one full-opacity fade instead of a brightness seam");
+  assert.doesNotMatch(glowEffects, /\.46,\s*\.31/,
+    "the old subdued halo must not return behind the opaque band");
   const cancellation = visuals.slice(visuals.indexOf("const clearFlashes ="), visuals.indexOf("const setSettings ="));
   assert.match(cancellation, /for \(const ref of \[[^\]]*edgeGlowRef[^\]]*\]\)/);
+  assert.match(cancellation, /for \(const ref of \[[^\]]*edgeRimRef[^\]]*\]\)/);
   assert.match(cancellation, /animation\.cancel\(\)/,
     "All off, hidden references, and navigation must clear edge animations as well as note flashes");
   assert.match(css, /\.edgeGlow \{ z-index: 8; \}/);
-  assert.match(css, /\.edgeGlow > span \{[^}]*inset: 0;[^}]*opacity: 0;[^}]*linear-gradient\(90deg,[^}]*linear-gradient\(180deg,/,
-    "the inert halo must start transparent and cover all four viewport edges");
+  assert.match(css, /\.edgeGlow > span \{[^}]*inset: var\(--pitch-rim-inset, 0\);[^}]*opacity: 0;[^}]*linear-gradient\(90deg,[^}]*linear-gradient\(180deg,/,
+    "the inert halo must start transparent and follow its matching chord band's inset on all four edges");
 });
 
 test("site-wide staff flashes overlay content with synchronized left quarter notes and hidden-reference safety", async () => {

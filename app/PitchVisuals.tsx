@@ -104,7 +104,9 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
         : [{ opacity: peak }, { opacity: hold, offset: .22 }, { opacity: 0 }];
       element.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
     };
-    const animateRim = (element: Element | null | undefined) => {
+    // Border and inward wash use the same envelope so their join never has an
+    // opacity step, including while a cue is fading or motion is reduced.
+    const animateEdge = (element: Element | null | undefined) => {
       if (!element?.animate) return;
       element.getAnimations().forEach((animation) => animation.cancel());
       const frames = reducedMotion
@@ -130,7 +132,7 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
         .map(readRimSlot)
         .filter((slot): slot is number => slot != null));
       [...edgeAttacks].forEach((pitchClass) => {
-        animate(edgeGlowRef.current?.children.item(pitchClass), .46, .31);
+        const halo = edgeGlowRef.current?.children.item(pitchClass) as HTMLElement | null;
         const rim = edgeRimRef.current?.children.item(pitchClass) as HTMLElement | null;
         if (!rim) return;
         const retainedSlot = isRimAnimating(rim) ? readRimSlot(rim) : null;
@@ -139,8 +141,11 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
           ?? 0;
         activeRimSlots.add(slot);
         rim.dataset.rimSlot = String(slot);
-        rim.style.setProperty("--pitch-rim-inset", `${slot * 3}px`);
-        animateRim(rim);
+        const rimInset = `${slot * 3}px`;
+        rim.style.setProperty("--pitch-rim-inset", rimInset);
+        halo?.style.setProperty("--pitch-rim-inset", rimInset);
+        animateEdge(halo);
+        animateEdge(rim);
       });
     }
     if (staffMode && current.noteFlash) valid.forEach((note) => animate(noteRef.current?.children.item(note), .86, .65));
