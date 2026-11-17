@@ -496,6 +496,76 @@ test("full-texture settle rejects overfull chords independently of attack order"
   }
 });
 
+test("a 17-key exploratory burst rejects a 16-key target without crashing and can recover", () => {
+  const expected = Array.from({ length: 16 }, (_, index) => 40 + index);
+  const target = [landing("dense-chord", expected)];
+  const overfull = Array.from({ length: 17 }, (_, index) => ({ id: index + 1, note: 40 + index, onsetMs: 100 + index }));
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), overfull, { chordWindowMs: 240, nowMs: 116 });
+  assert.equal(tracker.complete, false);
+  assert.equal(tracker.matchedLandings, 0);
+  assert.equal(tracker.latest?.texture, "more-keys");
+  assert.deepEqual(tracker.recentProbes[0].notes, Array.from({ length: 17 }, (_, index) => 40 + index),
+    "retain the extra key instead of clipping the probe into the correct target");
+  assert.deepEqual(tracker.pendingAttacks, []);
+
+  const correct = expected.map((note, index) => ({ id: 18 + index, note, onsetMs: 1_000 + index }));
+  tracker = advanceEarSearchTracker(target, tracker, correct, { chordWindowMs: 240, nowMs: 1_100 });
+  assert.equal(tracker.complete, true);
+  assert.deepEqual(tracker.acceptedProbeIds, [33]);
+  assert.equal(tracker.probeCount, 2);
+});
+
+test("duplicate-heavy dense probes normalize distinct keys without a 16-attack exception", () => {
+  const target = [landing("dense-chord", Array.from({ length: 16 }, (_, index) => 40 + index))];
+  const repeated = Array.from({ length: 17 }, (_, index) => ({ id: index + 1, note: 60, onsetMs: 100 + index }));
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), repeated, { chordWindowMs: 240, nowMs: 116 });
+  assert.equal(tracker.complete, false);
+  assert.equal(tracker.latest?.texture, "fewer-keys");
+  assert.deepEqual(tracker.recentProbes[0].notes, [60]);
+});
+
+test("future orientation safely retains a full MIDI-range physical burst", () => {
+  const target = [landing("current", [60]), landing("future", [0, 127])];
+  const attacks = Array.from({ length: 128 }, (_, note) => ({ id: note + 1, note, onsetMs: 100 + note }));
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), attacks, { chordWindowMs: 240, nowMs: 227 });
+  assert.equal(tracker.matchedLandings, 0);
+  const notes = earSearchFutureProbeNotes(tracker, attacks, 240);
+  assert.deepEqual(notes, Array.from({ length: 128 }, (_, note) => note));
+  assert.deepEqual(earSearchFutureEchoes(target, 0, notes), [{
+    landingId: "future", landingIndex: 1, matchedNoteCount: 2, targetNoteCount: 2, coverage: 1,
+  }]);
+});
+
+test("future orientation accepts more than 16 raw attacks even when only two keys repeat", () => {
+  const target = [landing("current", [48]), landing("future", [60, 64])];
+  const attacks = Array.from({ length: 18 }, (_, index) => ({ id: index + 1, note: index % 2 ? 64 : 60, onsetMs: 100 + index }));
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), attacks, { chordWindowMs: 240, nowMs: 117 });
+  assert.deepEqual(earSearchFutureProbeNotes(tracker, attacks, 240), [60, 64]);
+  assert.equal(tracker.matchedLandings, 0);
+});
+
+test("large probe support preserves strict target, raw-attack, and MIDI bounds", () => {
+  const target = [landing("current", [60])];
+  assert.throws(() => createEarSearchTracker([landing("too-many-target-keys", Array.from({ length: 17 }, (_, index) => 40 + index))]), /1 through 16 keys/);
+  const allKeys = Array.from({ length: 128 }, (_, note) => note);
+  const overfull = evaluateEarSearch(target, [probe(1, allKeys)]);
+  assert.equal(overfull.complete, false);
+  assert.equal(overfull.latest?.texture, "more-keys");
+  assert.equal(evaluateEarSearch(target, [probe(1, Array(4096).fill(60))]).complete, true,
+    "duplicate raw attacks still represent one distinct pitch in an already grouped probe");
+  assert.throws(() => evaluateEarSearch(target, [probe(1, Array(4097).fill(60))]), /4096 raw key attacks/);
+  for (const invalid of [-1, 128, Number.NaN, 60.5]) {
+    assert.throws(() => evaluateEarSearch(target, [probe(1, [...allKeys.slice(0, 17), invalid])]), /MIDI key/);
+  }
+  assert.throws(() => evaluateEarSearch(target, [probe(1, Array(17))]), /MIDI key/);
+  const tracker = createEarSearchTracker(target, 0);
+  const oversized = Array.from({ length: 4097 }, (_, index) => ({ id: index + 1, note: 60, onsetMs: index }));
+  assert.throws(() => advanceEarSearchTracker(target, tracker, oversized, { chordWindowMs: 240, nowMs: 5_000 }), /4096 raw attacks/);
+  assert.throws(() => earSearchFutureProbeNotes(tracker, oversized, 240), /4096 raw attacks/);
+  const rejected = advanceEarSearchTracker(target, tracker, [{ id: 1, note: 61, onsetMs: 100 }], { chordWindowMs: 40, nowMs: 100 });
+  assert.throws(() => earSearchFutureProbeNotes(rejected, [{ id: 1, note: 128, onsetMs: 100 }], 240), /MIDI key/);
+});
+
 test("full-texture settle rejects a dyad for a singleton landing", () => {
   const target = [landing("single", [60])];
   const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [

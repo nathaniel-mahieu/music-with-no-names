@@ -442,6 +442,45 @@ test("Score Flow keeps local score practice, silent MIDI, and diagnostic evidenc
   assert.doesNotMatch(scoreFlowCss, /forced-color-adjust:\s*none/);
 });
 
+test("Sound Finder suspends stale hints while preserving finds and keeps its blank keyboard movable", async () => {
+  const [finder, piano, keyboard, session, css] = await Promise.all([
+    readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-screen-keyboard.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-ear-search-session.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/PianoEarSearchHud.module.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(finder, /const canProbe = visiblePhase === "searching" && !frozen/);
+  assert.match(finder, /const feedback = !frozen &&/);
+  assert.match(finder, /if \(frozen \|\| phase !== "searching" \|\| !searchLandings.length\) return/);
+  assert.match(finder, /if \(frozen \|\| phase !== "searching" \|\| !tracker\?\.pendingAttacks.length\) return/);
+  assert.match(finder, /Capture paused · hints are not updating/);
+  assert.match(finder, /styles\.resumeHintsButton\} onClick=\{onResumeCapture\}>Resume hints/);
+  assert.match(finder, /styles\[`phase_\$\{hintsPaused \? "paused" : visiblePhase\}`\]/);
+  assert.match(finder, /frozen \|\| phase !== "searching" \|\| !tracker \|\| !tracker.latest \|\| !latest/,
+    "resuming must not re-flash a historical future echo before any new probe arrives");
+  assert.match(finder, /if \(tracker.latest.probeId !== latest.id\) return/);
+  assert.match(finder, /!feedback && matched > 0[\s\S]*Next relationship waits/,
+    "a replay must not tell a learner to find an anchor that is already secure");
+  assert.match(css, /\.phase_paused \{[^}]*background: transparent;[^}]*box-shadow: none;/);
+  assert.match(session, /latest: checkpoint.complete \? checkpoint.latest : null/);
+  const pauseStart = finder.indexOf("if (!frozen) return;");
+  const pauseEnd = finder.indexOf("const beginProbeSearch", pauseStart);
+  assert.ok(pauseStart >= 0 && pauseEnd > pauseStart);
+  assert.match(finder.slice(pauseStart, pauseEnd), /captureProbeBoundary\(\)/,
+    "the input boundary must be captured on Pause, never on Resume where the first fresh key could be lost");
+  assert.match(finder.slice(pauseStart, pauseEnd), /rearmEarSearchTracker\(searchLandings, current, boundaryId\)/);
+  assert.match(piano, /aria-label="Choose the on-screen octave range"/);
+  assert.match(piano, /↓ Lower octave/);
+  assert.match(piano, /Higher octave ↑/);
+  assert.match(piano, /Only the screen keys move\. MIDI and your search stay unchanged/);
+  assert.match(piano, /isEarSearchFocus \? earSearchScreenWindow.notes : VISIBLE_NOTES/);
+  assert.match(keyboard, /DEFAULT_PIANO_SCREEN_START = 48/);
+  assert.match(keyboard, /MAX_PIANO_SCREEN_START = 120/);
+  assert.doesNotMatch(keyboard, /targetLandings|searchLandings|expectedNote|midiLabel|NOTE_NAMES/,
+    "manual range navigation must not derive or reveal the hidden score target");
+});
+
 test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-leaking", async () => {
   const [piano, finder, finderCss, globalCss, model, session, ratio] = await Promise.all([
     readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8"),
@@ -502,7 +541,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /role="dialog" aria-modal="true"/);
   assert.match(finder, /role="region" tabIndex=\{0\} aria-label="Scrollable revealed phrase pitch map"/);
   assert.match(finder, /role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(finder, /<small role="status" aria-live="polite">\{frozen \? "Capture is paused in the Piano input bar\. " : ""\}\{audioNotice\}<\/small>/);
+  assert.match(finder, /<small role="status" aria-live="polite">\{hintsPaused \? "Keyboard colors are live; no new probes are counted until capture resumes\." : audioNotice\}<\/small>/);
   assert.doesNotMatch(finder, /midiConnected|midiStatus|onConnectMidi|MIDI not connected/, "Sound Finder must use the shared Piano input bar for device setup");
   assert.match(finder, /role="progressbar" aria-label="Hidden reference playback"/);
   assert.match(finder, /<option value="half-bar">/);
@@ -729,7 +768,7 @@ test("EchoKey preserves an ear-first boundary while keeping every later represen
   assert.match(piano, /focusLens === "echo-key" \? <PianoEchoKeyHud/);
   assert.match(piano, /Silent MIDI maps each attack/);
   assert.match(echo, /MIDI tells us which keys arrived—not why/);
-  assert.match(piano, /physical position \$\{echoKeyPosition\} of \$\{VISIBLE_NOTES\.length\} from the left/);
+  assert.match(piano, /physical position \$\{echoKeyPosition\} of \$\{visibleKeyCount\} from the left/);
   assert.match(piano, /EchoKey reveals relationship labels in its Read step/);
   assert.match(piano, /VISIBLE_NOTES\.map\(\(note\) => renderKey\(note, !WHITE_PITCH_CLASSES\.has/);
   assert.match(piano, /relationshipBlind \? strikeEchoScreenKey\(note\) : toggleScreenKey\(note\)/);

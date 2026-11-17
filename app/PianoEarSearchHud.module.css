@@ -254,6 +254,9 @@
 .phase_playing { border-color: var(--ear-gold); background: var(--ear-gold); box-shadow: 0 0 18px var(--ear-gold); }
 .phase_searching { border-color: var(--ear-blue); background: var(--ear-blue); box-shadow: 0 0 15px rgba(122, 184, 255, .6); }
 .phase_complete { border-color: var(--ear-teal); background: var(--ear-teal); box-shadow: 0 0 18px rgba(114, 230, 209, .8); }
+.phase_paused { border-color: var(--ear-muted); background: transparent; box-shadow: none; }
+.statusStrip.isCapturePaused { grid-template-columns: 14px minmax(0, 1fr) auto; background: rgba(72, 54, 24, .32); }
+.resumeHintsButton { min-height: 44px; padding: 0 12px; color: var(--ear-gold) !important; border-color: rgba(255, 209, 122, .5) !important; }
 .phase_waiting-release,
 .phase_unavailable { border-color: var(--ear-rose); background: var(--ear-rose); }
 
@@ -1222,6 +1225,8 @@
   .transport > button { flex: 1; }
   .chunkStepper { flex: 1 1 180px; }
   .statusStrip { grid-template-columns: 12px minmax(0, 1fr); }
+  .statusStrip.isCapturePaused { grid-template-columns: 12px minmax(0, 1fr); }
+  .resumeHintsButton { grid-column: 2; justify-self: start; }
   .stage { display: block; height: auto; min-height: 0; }
   .memoryRail,
   .probeDock { display: block; overflow: visible; border: 0; border-bottom: 1px solid var(--ear-line); }

@@ -155,6 +155,7 @@ import { PianoAnchorDrillHud } from "@/app/PianoAnchorDrillHud";
 import { usePianoTrainerTone } from "@/app/usePianoTrainerTone";
 import { usePitchVisuals } from "./PitchVisuals";
 import { createPianoFramePublisher, midiMessageTimeStamp } from "@/lib/piano-live-input";
+import { DEFAULT_PIANO_SCREEN_START, pianoScreenKeyboardWindow, pianoScreenKeyPlacement, pianoScreenRangeLabel } from "@/lib/piano-screen-keyboard";
 import { ECHO_KEY_LESSON_STORAGE_KEY } from "@/lib/echo-key-model";
 import { IMMERSION_HISTORY_ATTACKS, IMMERSION_MAX_FIELD_NOTES, immersionHistory } from "@/lib/piano-immersion-model";
 
@@ -4349,6 +4350,8 @@ export function PianoLab() {
   const [sightShapesResetVersion, setSightShapesResetVersion] = useState(0);
   const [echoKeyResetVersion, setEchoKeyResetVersion] = useState(0);
   const [scaleQualityEntryAnchorId, setScaleQualityEntryAnchorId] = useState(0);
+  const [earSearchScreenStart, setEarSearchScreenStart] = useState(DEFAULT_PIANO_SCREEN_START);
+  const earSearchScreenWindow = useMemo(() => pianoScreenKeyboardWindow(earSearchScreenStart), [earSearchScreenStart]);
   const isEarSearchFocus = isEarSearchLens(focusLens);
   const isAbsolutePitchFocus = focusLens === "absolute-pitch";
   const isAnchorDrillFocus = focusLens === "anchor-drill";
@@ -5952,7 +5955,9 @@ export function PianoLab() {
     const scoreFlowInput = focusLens === "score-flow";
     const earSearchInput = isEarSearchFocus;
     const relationshipBlind = echoKeyBlind || scoreFlowInput || earSearchInput;
-    const echoKeyPosition = VISIBLE_NOTES.indexOf(note) + 1;
+    const screenKey = earSearchInput ? pianoScreenKeyPlacement(note, earSearchScreenWindow) : null;
+    const echoKeyPosition = screenKey?.physicalPosition ?? VISIBLE_NOTES.indexOf(note) + 1;
+    const visibleKeyCount = screenKey?.totalKeys ?? VISIBLE_NOTES.length;
     const active = activeNotesMap.has(note);
     const pressed = midi.pressed.has(note);
     const sustained = midi.sustained.has(note);
@@ -5978,11 +5983,11 @@ export function PianoLab() {
     const home = !relationshipBlind && context.stepsWithinOctave === 0;
     const className = ["piano-key", black ? "is-black" : "is-white", !relationshipBlind && context.inScale ? "is-in-scale" : "", active ? "is-active" : "", pressed ? "is-pressed" : "", sustained ? "is-sustained" : "", !relationshipBlind && focused ? "is-focused" : "", !relationshipBlind && attacked ? "is-chord-member" : "", !relationshipBlind && inherited && chordMember ? "is-inherited" : "", !relationshipBlind && inheritedExcluded ? "is-excluded" : "", !relationshipBlind && ghost ? "is-ghost" : "", !relationshipBlind && sonorityGhost ? "is-sonority-target" : "", !relationshipBlind && scaleWalkTarget ? "is-scale-walk-target" : "", !relationshipBlind && scaleFingerprintTarget ? "is-scale-builder-target" : "", home ? "is-home" : ""].filter(Boolean).join(" ");
     const style = ({
-      "--key-left": black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
-      "--key-width": `${100 / WHITE_NOTES.length}%`,
+      "--key-left": screenKey ? `${screenKey.leftPercent}%` : black ? `${(WHITE_NOTES.filter((white) => white < note).length / WHITE_NOTES.length) * 100}%` : `${(WHITE_NOTES.indexOf(note) / WHITE_NOTES.length) * 100}%`,
+      "--key-width": `${screenKey?.whiteWidthPercent ?? 100 / WHITE_NOTES.length}%`,
     } as CSSProperties);
     const keyLabel = relationshipBlind
-      ? `Silent ${black ? "raised" : "lower"} key, physical position ${echoKeyPosition} of ${VISIBLE_NOTES.length} from the left${active ? ", active" : ""}${sustained ? ", sustained by pedal" : ""}; ${echoKeyBlind ? "EchoKey reveals relationship labels in its Read step" : earSearchInput ? "Sound Finder returns only categorical hidden-target hints until you choose Reveal" : "Score Flow compares this momentary attack with the imported notation"}`
+      ? `Silent ${black ? "raised" : "lower"} key, physical position ${echoKeyPosition} of ${visibleKeyCount} from the left${active ? ", active" : ""}${sustained ? ", sustained by pedal" : ""}; ${echoKeyBlind ? "EchoKey reveals relationship labels in its Read step" : earSearchInput ? "Sound Finder returns only categorical hidden-target hints until you choose Reveal" : "Score Flow compares this momentary attack with the imported notation"}`
       : `${context.syllable}, ${context.inScale ? "in" : "outside"} the current route, ${formatHz(context.frequencyHz)} under the A4=440 reference${showConventions ? `, ${conventionalPitchName(note, framePitchPreference)}` : ""}${sustained ? ", sustained by pedal" : ""}${attacked ? ", attacked in selected chord" : inheritedExcluded ? ", sounding but excluded from selected chord interpretation" : inherited ? ", inherited and included in selected chord interpretation" : ""}${chordGhost ? ", silent chord target" : resolutionGhost ? ", silent resolution target, any octave" : landmarkGhost ? ", silent landmark path target" : sonorityGhost ? ", silent controlled sonority reference" : scaleWalkTarget ? ", silent guided scale-walk target" : scaleFingerprintTarget ? ", silent performed fingerprint target" : ""}`;
     return <button key={note} type="button" className={className} style={style} aria-pressed={relationshipBlind ? undefined : active} aria-label={keyLabel} onClick={() => relationshipBlind ? strikeEchoScreenKey(note) : toggleScreenKey(note)}><span>{relationshipBlind ? active ? "●" : "" : context.inScale || active || home || ghost || scaleWalkTarget || scaleFingerprintTarget ? context.syllable : "·"}</span>{showConventions && !relationshipBlind ? <small>{conventionalPitchName(note, framePitchPreference)}</small> : null}</button>;
   };
@@ -6221,7 +6226,15 @@ export function PianoLab() {
 
       {focusLens === "scale-quality" || isPitchTrainerFocus ? null : isShortHudFocus ? <details className="piano-immersion-keyboard">
         <summary><span>{focusLens === "echo-key" || isEarSearchFocus ? "Open the blank silent hand horizon" : "Open the silent hand horizon"}</span><small>{focusLens === "echo-key" ? "Optional on-screen input without MIDI. Positions stay visually blank; screen readers receive only left-to-right physical position. Each activation records one momentary melodic attack, so repeated keys need no extra release click. Nothing here makes sound." : isEarSearchFocus ? `Optional blank-position input without MIDI. Each activation is one momentary probe; Sound Finder may say higher, lower, nearer, wider, or narrower, but does not name the target until Reveal.${focusLens === "ear-search-hands" ? " The upper/lower cue comes from the score, not from this screen key or an inferred hand." : ""} Nothing here makes sound.` : focusLens === "score-flow" ? "Optional on-screen input for score testing without MIDI. Each activation records one momentary attack, including repeated notes; Score Flow compares it with the imported notation. Nothing here makes sound." : "Optional on-screen keys for testing without MIDI. Tap once to hold, again to release; repeated attacks need a release between them. Nothing here makes sound."}</small></summary>
-        <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{VISIBLE_NOTES.map((note) => renderKey(note, !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))))}</div>
+        {isEarSearchFocus ? <div className="piano-screen-range" role="group" aria-label="Choose the on-screen octave range">
+          <div><span>On-screen range</span><strong role="status" aria-live="polite">{pianoScreenRangeLabel(earSearchScreenWindow.octavesFromCenter)}</strong><small>Only the screen keys move. MIDI and your search stay unchanged.</small></div>
+          <div className="piano-screen-range-actions">
+            <button type="button" disabled={!earSearchScreenWindow.canMoveLower} onClick={() => setEarSearchScreenStart((start) => pianoScreenKeyboardWindow(start - 12).start)}>↓ Lower octave</button>
+            <button type="button" disabled={earSearchScreenWindow.octavesFromCenter === 0} onClick={() => setEarSearchScreenStart(DEFAULT_PIANO_SCREEN_START)}>Center</button>
+            <button type="button" disabled={!earSearchScreenWindow.canMoveHigher} onClick={() => setEarSearchScreenStart((start) => pianoScreenKeyboardWindow(start + 12).start)}>Higher octave ↑</button>
+          </div>
+        </div> : null}
+        <div className={`piano-keyboard hud-keyboard${isEarSearchFocus ? " piano-ear-search-keyboard" : ""}`} role="group" aria-label={isEarSearchFocus ? "Silent movable-range on-screen piano" : "Silent two-octave on-screen piano"}>{(isEarSearchFocus ? earSearchScreenWindow.notes : VISIBLE_NOTES).map((note) => renderKey(note, !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))))}</div>
       </details> : <div className="piano-hud-keyboard-wrap">
         <div className="hud-panel-heading"><span>Held + grouped notes</span><strong>Persistent keyboard field</strong><small>gold attacked · dotted inherited member · crossed inherited exclusion · dashed silent target · double mark Do</small></div>
         <div className="piano-keyboard hud-keyboard" role="group" aria-label="Silent two-octave on-screen piano">{VISIBLE_NOTES.map((note) => renderKey(note, !WHITE_PITCH_CLASSES.has(pitchClassFromMidi(note))))}</div>

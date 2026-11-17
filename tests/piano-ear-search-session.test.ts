@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import "./piano-screen-keyboard.test.ts";
 import { advanceEarSearchTracker, createEarSearchTracker, type EarSearchAttack, type EarSearchLanding } from "../lib/piano-ear-search-model.ts";
 import { rearmEarSearchTracker } from "../lib/piano-ear-search-session.ts";
 
@@ -23,7 +24,8 @@ test("repeated reference listens retain the secure prefix and continue at the ne
     assert.deepEqual(tracker.acceptedProbeIds, beforeListen.acceptedProbeIds);
     assert.deepEqual(tracker.recentProbes, beforeListen.recentProbes);
     assert.equal(tracker.probeCount, beforeListen.probeCount);
-    assert.deepEqual(tracker.latest, beforeListen.latest);
+    assert.deepEqual(tracker.latest, tracker.complete ? beforeListen.latest : null,
+      "old directional instructions must not masquerade as a fresh post-listen hint");
     assert.equal(tracker.processedThroughEventId, eventId);
     assert.deepEqual(tracker.pendingAttacks, []);
   }
@@ -39,6 +41,7 @@ test("a replay preserves a completed route while an explicit reset clears it", (
   assert.equal(replayed.matchedLandings, 1);
   assert.equal(replayed.probeCount, 1);
   assert.deepEqual(replayed.acceptedProbeIds, [1]);
+  assert.equal(replayed.latest?.status, "caught");
   const reset = rearmEarSearchTracker(target, replayed, 9, { resetProgress: true });
   assert.equal(reset.complete, false);
   assert.equal(reset.matchedLandings, 0);
@@ -47,6 +50,22 @@ test("a replay preserves a completed route while an explicit reset clears it", (
   assert.deepEqual(reset.recentProbes, []);
   assert.equal(reset.latest, null);
   assert.equal(reset.processedThroughEventId, 9);
+});
+
+test("pausing clears stale directions without erasing finds and the first resumed key updates the hint", () => {
+  const target = [landing("first", [60]), landing("next", [48])];
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [attack(1, 60, 100), attack(2, 72, 200)], { chordWindowMs: 40, nowMs: 200 });
+  assert.equal(tracker.matchedLandings, 1);
+  assert.equal(tracker.latest?.pitchDirection, "lower");
+  tracker = rearmEarSearchTracker(target, tracker, 2);
+  assert.equal(tracker.latest, null);
+  assert.equal(tracker.matchedLandings, 1);
+  assert.equal(tracker.probeCount, 2);
+  assert.equal(tracker.recentProbes.length, 2);
+  tracker = advanceEarSearchTracker(target, tracker, [attack(3, 36, 300)], { chordWindowMs: 40, nowMs: 300 });
+  assert.equal(tracker.latest?.pitchDirection, "higher");
+  tracker = advanceEarSearchTracker(target, tracker, [attack(4, 48, 400)], { chordWindowMs: 40, nowMs: 400 });
+  assert.equal(tracker.complete, true);
 });
 
 test("an unfinished pre-listen chord cannot join a post-listen key", () => {

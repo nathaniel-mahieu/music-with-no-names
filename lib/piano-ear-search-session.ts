@@ -22,5 +22,8 @@ export function rearmEarSearchTracker(
     ...checkpoint,
     processedThroughEventId: Math.max(checkpoint.processedThroughEventId, processedThroughEventId),
     pendingAttacks: [],
+    // The checkpoint remembers finds, not a live instruction about a key
+    // played before listening or pausing. Completed success stays truthful.
+    latest: checkpoint.complete ? checkpoint.latest : null,
   };
 }

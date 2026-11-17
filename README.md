@@ -10,6 +10,8 @@ Choose **Change score** beside the song title to open another `.mxl`, `.musicxml
 
 Replaying the hidden reference or pressing Stop preserves already-found attacks. Only **Reset probes** or a changed score/frame/staff/texture starts a new search. Unfinished chords do not bridge listening; notes played during the reference are excluded when probing resumes. Sound Finder keeps its full input history without running hidden full-phrase scale, motif, and spectrum analyses on every key press.
 
+Paused capture now visibly suspends directional hints instead of leaving an old instruction active. **Resume hints** reconnects to the shared capture control without clearing your finds; replay and resume wait for a fresh probe before giving a new direction. The blank on-screen keyboard has manual **Lower octave / Center / Higher octave** controls, so bass and high-register notes are reachable without revealing the target or transposing MIDI. Dense and duplicate-heavy probes are diagnosed without truncating them to a false match or crashing the tracker.
+
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
 Technical Notes: [open the implementation and model reference](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical)

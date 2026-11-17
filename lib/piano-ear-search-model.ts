@@ -153,6 +153,17 @@ function normalizeNotes(notes: readonly number[], label: string) {
   return [...new Set(notes)].sort((first, second) => first - second);
 }
 
+function normalizeProbeNotes(notes: readonly number[], label: string) {
+  // A target is limited to 16 keys, but an exploratory burst can be larger or
+  // contain repeated attacks. Keep every distinct MIDI key so an overfull probe
+  // stays wrong instead of crashing or being truncated into a false success.
+  if (!Array.isArray(notes) || !notes.length || notes.length > EAR_SEARCH_MAX_PROBES) {
+    throw new RangeError(`${label} needs from 1 through ${EAR_SEARCH_MAX_PROBES} raw key attacks.`);
+  }
+  for (const [index, note] of notes.entries()) assertMidi(note, `${label} key ${index + 1}`);
+  return [...new Set(notes)].sort((first, second) => first - second);
+}
+
 function sameNotes(first: readonly number[], second: readonly number[]) {
   return first.length === second.length && first.every((note, index) => note === second[index]);
 }
@@ -202,7 +213,7 @@ function normalizeProbes(probes: readonly EarSearchProbe[]) {
   return probes.map((probe, index) => {
     if (!probe || (typeof probe.id !== "string" && typeof probe.id !== "number")) throw new TypeError(`Probe ${index + 1} needs an ID.`);
     if (!Number.isFinite(probe.onsetMs) || probe.onsetMs < 0) throw new RangeError(`Probe ${index + 1} needs a non-negative finite onset.`);
-    return { ...probe, notes: normalizeNotes(probe.notes, `Probe ${index + 1}`) };
+    return { ...probe, notes: normalizeProbeNotes(probe.notes, `Probe ${index + 1}`) };
   });
 }
 
@@ -278,7 +289,7 @@ export function earSearchFutureProbeNotes(
   const burstNotes = attacks
     .filter((attack) => attack.id <= latestEvent.id && attack.onsetMs >= burstStartMs && attack.onsetMs <= latestEvent.onsetMs)
     .map((attack) => attack.note);
-  return burstNotes.length ? normalizeNotes(burstNotes, "Future-orientation burst") : latest.notes;
+  return burstNotes.length ? normalizeProbeNotes(burstNotes, "Future-orientation burst") : latest.notes;
 }
 
 /**
@@ -500,7 +511,7 @@ export function advanceEarSearchTracker(
     next.pendingAttacks = [];
     const probe: EarSearchProbe = {
       id: raw.at(-1)!.id,
-      notes: normalizeNotes(raw.map((attack) => attack.note), `Probe ${next.probeCount + 1}`),
+      notes: normalizeProbeNotes(raw.map((attack) => attack.note), `Probe ${next.probeCount + 1}`),
       onsetMs: raw[0].onsetMs,
     };
     const expected = target[next.matchedLandings];
