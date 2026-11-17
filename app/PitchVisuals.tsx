@@ -11,6 +11,7 @@ const STAFF_NOTES = Array.from({ length: 128 }, (_, midi) => ({
 }));
 // A convex, note-shaped lens: a readable center with long, pointed shoulders.
 const TAPERED_NOTE_PATH = "M0 16 C180 16 400 0 500 0 C600 0 820 16 1000 16 C820 16 600 32 500 32 C400 32 180 16 0 16Z";
+const EDGE_RIM_SLOTS = 12;
 
 type MidiVisualEvent = { data: Uint8Array };
 type MidiVisualInput = {
@@ -48,13 +49,14 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
   const foregroundStaffRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const edgeGlowRef = useRef<HTMLDivElement>(null);
+  const edgeRimRef = useRef<HTMLDivElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
   const pianoActiveRef = useRef(false);
   const midiCleanupRef = useRef<(() => void) | null>(null);
   const midiInputRef = useRef<MidiVisualInput | null>(null);
 
   const clearFlashes = useCallback(() => {
-    for (const ref of [foregroundStaffRef, glowRef, edgeGlowRef, noteRef]) {
+    for (const ref of [foregroundStaffRef, glowRef, edgeGlowRef, edgeRimRef, noteRef]) {
       ref.current?.getAnimations?.({ subtree: true }).forEach((animation) => animation.cancel());
     }
   }, []);
@@ -102,6 +104,14 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
         : [{ opacity: peak }, { opacity: hold, offset: .22 }, { opacity: 0 }];
       element.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
     };
+    const animateRim = (element: Element | null | undefined) => {
+      if (!element?.animate) return;
+      element.getAnimations().forEach((animation) => animation.cancel());
+      const frames = reducedMotion
+        ? [{ opacity: 1 }, { opacity: 1 }]
+        : [{ opacity: 1 }, { opacity: 1, offset: .22 }, { opacity: 0 }];
+      element.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
+    };
     const staffMode = current.mode === "staff";
     if (current.glowFlash) {
       const attacks = staffMode ? valid : new Set([...valid].map((note) => note % 12));
@@ -109,7 +119,29 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
       // Window edges share pitch-class color in either layout. Octave doublings
       // restart one halo instead of stacking identical full-screen layers.
       const edgeAttacks = new Set([...valid].map((note) => note % 12));
-      edgeAttacks.forEach((pitchClass) => animate(edgeGlowRef.current?.children.item(pitchClass), .46, .31));
+      const rimLayers = Array.from(edgeRimRef.current?.children ?? []) as HTMLElement[];
+      const isRimAnimating = (rim: HTMLElement) => rim.getAnimations().some((animation) => animation.playState === "running" || animation.pending);
+      const readRimSlot = (rim: HTMLElement) => {
+        const slot = Number(rim.dataset.rimSlot);
+        return Number.isInteger(slot) && slot >= 0 && slot < EDGE_RIM_SLOTS ? slot : null;
+      };
+      const activeRimSlots = new Set(rimLayers
+        .filter(isRimAnimating)
+        .map(readRimSlot)
+        .filter((slot): slot is number => slot != null));
+      [...edgeAttacks].forEach((pitchClass) => {
+        animate(edgeGlowRef.current?.children.item(pitchClass), .46, .31);
+        const rim = edgeRimRef.current?.children.item(pitchClass) as HTMLElement | null;
+        if (!rim) return;
+        const retainedSlot = isRimAnimating(rim) ? readRimSlot(rim) : null;
+        const slot = retainedSlot
+          ?? Array.from({ length: EDGE_RIM_SLOTS }, (_, candidate) => candidate).find((candidate) => !activeRimSlots.has(candidate))
+          ?? 0;
+        activeRimSlots.add(slot);
+        rim.dataset.rimSlot = String(slot);
+        rim.style.setProperty("--pitch-rim-inset", `${slot * 3}px`);
+        animateRim(rim);
+      });
     }
     if (staffMode && current.noteFlash) valid.forEach((note) => animate(noteRef.current?.children.item(note), .86, .65));
     if (staffMode && current.staffFlash) {
@@ -143,6 +175,9 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
       {settings.mode === "staff" ? STAFF_NOTES.map(({ midi, pitchClass, color, step }) => <span key={midi} data-midi-note={midi} data-pitch-class={pitchClass} data-staff-step={step} style={{ "--pitch-glow-color": color, "--pitch-staff-position": step } as CSSProperties}><i className={styles.wash} /></span>) : PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span key={pitchClass} data-pitch-class={pitchClass} style={{ "--pitch-glow-color": color, "--pitch-glow-position": `${16 + pitchClass * 68 / 11}%` } as CSSProperties} />)}
     </div>
     <div ref={edgeGlowRef} className={styles.edgeGlow} data-pitch-visual="edges" hidden={!settings.glowFlash} aria-hidden="true">
+      {PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span key={pitchClass} data-pitch-class={pitchClass} style={{ "--pitch-glow-color": color } as CSSProperties} />)}
+    </div>
+    <div ref={edgeRimRef} className={styles.edgeRim} data-pitch-visual="edge-rim" hidden={!settings.glowFlash} aria-hidden="true">
       {PITCH_CLASS_COLORS.map(({ pitchClass, color }) => <span key={pitchClass} data-pitch-class={pitchClass} style={{ "--pitch-glow-color": color } as CSSProperties} />)}
     </div>
     <div ref={noteRef} className={styles.notes} data-pitch-visual="note" hidden={settings.mode !== "staff" || !settings.noteFlash} aria-hidden="true">

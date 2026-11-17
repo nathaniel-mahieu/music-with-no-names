@@ -32,6 +32,7 @@ import {
 } from "@/lib/piano-sound-model";
 import { sonorityPerceptionModel } from "@/lib/sonority-model";
 import type { LivePulseMirror } from "@/lib/rhythm-model";
+import { PITCH_CLASS_COLORS } from "@/lib/piano-pitch-color";
 import {
   IMMERSION_HISTORY_ATTACKS,
   IMMERSION_MAX_FIELD_NOTES,
@@ -51,7 +52,7 @@ import {
   immersionRecentPath,
   immersionReleaseProvenSilence,
   immersionRhythmLens,
-  immersionRoleColor,
+  immersionPitchColor,
   immersionSameNoteField,
   immersionScaleSectors,
   immersionTrail,
@@ -141,6 +142,7 @@ const COSMIC_DUST = Array.from({ length: 54 }, (_, index) => ({
   radius: 0.65 + (index % 4) * 0.42,
   opacity: 0.14 + (index % 5) * 0.055,
 }));
+const PITCH_PALETTE_SWATCH = `conic-gradient(${PITCH_CLASS_COLORS.map(({ color }, index) => `${color} ${index * 30}deg ${(index + 1) * 30}deg`).join(", ")})`;
 
 function evidenceWord(value: number | null) {
   if (value == null) return "not available";
@@ -250,6 +252,8 @@ function ChordFingeringGraphic({
       {whiteNotes.map((note, index) => <rect
         key={`white-${note}`}
         className={`is-white${fingerByNote.has(note) ? " is-chord-key" : ""}`}
+        data-midi-note={note}
+        style={{ "--immersion-pitch": immersionPitchColor({ note }) } as CSSProperties}
         x={index * keyWidth + .5}
         y={.5}
         width={keyWidth - 1}
@@ -262,6 +266,8 @@ function ChordFingeringGraphic({
         return <rect
           key={`black-${note}`}
           className={`is-black${fingerByNote.has(note) ? " is-chord-key" : ""}`}
+          data-midi-note={note}
+          style={{ "--immersion-pitch": immersionPitchColor({ note }) } as CSSProperties}
           x={x}
           y={0}
           width={blackWidth}
@@ -481,6 +487,7 @@ export const PianoImmersion = memo(function PianoImmersion({
   const fieldPoint = fieldCenter(fieldNotes, doMidi);
   const fieldCloud = immersionCloudBounds(fieldNotes, doMidi);
   const doDirection = immersionDirectionPoint(pitchClassFromMidi(doMidi), 326);
+  const tonicColor = immersionPitchColor({ note: doMidi });
   const homeAtField = immersionDirectionPoint(pitchClassFromMidi(doMidi), fieldPoint.radius);
   const visibleClouds = chordMeasures.slice(-4).map((measure, index) => ({
     measure,
@@ -978,7 +985,7 @@ export const PianoImmersion = memo(function PianoImmersion({
         <div>
           <span>Immersion · analysis only</span>
           <h3 id="piano-immersion-title">Resonance Sky</h3>
-          <p>The center now uses one fifths crown and simple attack circles: direction is pitch-class motion by fifths, depth is semitone register, and only sounding state adds an outer ring. Notes and chord groups now share the newest {IMMERSION_HISTORY_ATTACKS} attacks, so both histories age out together. Meter, chord identity, and five-note scale possibilities stay in the edge panels where their meaning can be stated directly.</p>
+          <p>Direction follows fifths; depth follows semitone register. Note colors match Absolute Pitch and stay fixed across octaves and changes of Do. Filled circles are in the selected route; hollow dashed circles are outside it. An outer ring marks sounding keys. Notes and chord groups share the newest {IMMERSION_HISTORY_ATTACKS} attacks.</p>
         </div>
         <label className="piano-immersion-model" htmlFor="immersion-sound-model">
           <span>Assumed spectrum</span>
@@ -997,9 +1004,9 @@ export const PianoImmersion = memo(function PianoImmersion({
           <desc id="piano-immersion-svg-description">{visualSummary}</desc>
           <defs>
             <radialGradient id={`${instanceId}-home-well`}>
-              <stop offset="0" stopColor="#ffd36a" stopOpacity="0.44" />
-              <stop offset="0.42" stopColor="#ffd36a" stopOpacity="0.12" />
-              <stop offset="1" stopColor="#ffd36a" stopOpacity="0" />
+              <stop offset="0" stopColor={tonicColor} stopOpacity="0.44" />
+              <stop offset="0.42" stopColor={tonicColor} stopOpacity="0.12" />
+              <stop offset="1" stopColor={tonicColor} stopOpacity="0" />
             </radialGradient>
             {visibleClouds.map(({ measure, gradientId }) => {
               const notes = [...new Set(measure.interpretedNotes)];
@@ -1009,7 +1016,7 @@ export const PianoImmersion = memo(function PianoImmersion({
               return <linearGradient key={gradientId} id={gradientId} x1="0" y1="0" x2="1" y2="1">
                 {colorNotes.map((note, index) => {
                   const point = immersionPitchPoint(note, doMidi);
-                  return <stop key={note} offset={`${colorNotes.length <= 1 ? 50 : index / (colorNotes.length - 1) * 100}%`} stopColor={immersionRoleColor(point, routePitchClasses.has(point.pitchClass))} stopOpacity={measure === matchingChord ? 0.22 : 0.1} />;
+                  return <stop key={note} data-pitch-class={point.pitchClass} offset={`${colorNotes.length <= 1 ? 50 : index / (colorNotes.length - 1) * 100}%`} stopColor={immersionPitchColor(point)} stopOpacity={measure === matchingChord ? 0.22 : 0.1} />;
                 })}
               </linearGradient>;
             })}
@@ -1038,14 +1045,14 @@ export const PianoImmersion = memo(function PianoImmersion({
               const label = sector.inRoute
                 ? showConventions ? CONVENTIONAL_PITCH_CLASSES[sector.pitchClass] : scale.solfege[sector.degreeIndex]
                 : "";
-              return <g key={sector.pitchClass} className={`${sector.inRoute ? "is-route" : "is-outside-route"} ${seenCount ? "is-seen" : ""} ${sector.degreeIndex === 0 ? "is-home" : ""}`} style={{ "--immersion-pitch": immersionRoleColor(point, sector.inRoute) } as CSSProperties}>
+              return <g key={sector.pitchClass} data-pitch-class={sector.pitchClass} className={`${sector.inRoute ? "is-route" : "is-outside-route"} ${seenCount ? "is-seen" : ""} ${sector.degreeIndex === 0 ? "is-home" : ""}`} style={{ "--immersion-pitch": immersionPitchColor(point) } as CSSProperties}>
                 <path d={immersionArcPath(sector.pitchClass, 326, sector.inRoute ? 22 : 13)}><title>{label || pitchClassLabel(sector.pitchClass, doMidi, scale, showConventions)} · {sector.inRoute ? `selected route degree ${sector.degreeIndex + 1}` : "outside the selected route"} · {seenCount || "no"} retained attack{seenCount === 1 ? "" : "s"}</title></path>
                 {label ? <text x={labelPoint.x} y={labelPoint.y + 4}>{label}</text> : null}
               </g>;
             })}
           </g>
 
-          <g className="immersion-do-meridian">
+          <g className="immersion-do-meridian" style={{ "--immersion-pitch": tonicColor } as CSSProperties}>
             <line x1="600" y1="350" x2={doDirection.x} y2={doDirection.y} />
             {fieldNotes.length ? <circle cx={homeAtField.x} cy={homeAtField.y} r={38 + tendency.homeEvidence * 40} fill={`url(#${instanceId}-home-well)`} /> : null}
             <circle cx={doDirection.x} cy={doDirection.y} r="9" />
@@ -1082,7 +1089,7 @@ export const PianoImmersion = memo(function PianoImmersion({
               <path d={`M ${segment.from.x.toFixed(2)} ${segment.from.y.toFixed(2)} L ${segment.to.x.toFixed(2)} ${segment.to.y.toFixed(2)}`} />
               <title>{keyMove(segment.steps)} over {Math.round(segment.gapMs)} milliseconds; {segment.sameGroup ? "inside one timing group" : "between timing groups"}</title>
             </g>)}
-            {contour.points.map((point) => <circle key={point.event.id} cx={point.x} cy={point.y} r={point.event.id === latestEvent?.id ? 4.6 : 2.8} />)}
+            {contour.points.map((point) => <circle key={point.event.id} data-midi-note={point.event.note} cx={point.x} cy={point.y} r={point.event.id === latestEvent?.id ? 4.6 : 2.8} style={{ "--immersion-pitch": immersionPitchColor({ note: point.event.note }) } as CSSProperties} />)}
           </g> : null}
 
           <g className="immersion-attack-gaps" aria-label="Latest attack path; broken segments contain release-proven silence">
@@ -1125,11 +1132,11 @@ export const PianoImmersion = memo(function PianoImmersion({
             {trail.map(({ event, point, recency }) => {
               const recentIndex = events.findIndex((recent) => recent.id === event.id);
               const inScale = routePitchClasses.has(point.pitchClass);
-              const color = immersionRoleColor(point, inScale);
+              const color = immersionPitchColor(point);
               const size = 4.5 + Math.max(0, Math.min(127, event.velocity)) / 127 * 8.5;
               const isLatest = event.id === latestEvent?.id;
               const recurrenceCount = seenPitchCounts.get(point.pitchClass) ?? 1;
-              return <g key={event.id} className={`piano-immersion-note ${recentIndex >= 0 ? "is-microscope" : "is-memory"} ${recentIndex >= 0 && recentIndex < Math.max(0, events.length - 5) ? "is-older-label" : ""} ${isLatest ? "is-latest" : ""}`} style={{ "--immersion-pitch": color, "--immersion-recency": 0.18 + recency * 0.82 } as CSSProperties}>
+              return <g key={event.id} data-midi-note={event.note} className={`piano-immersion-note ${recentIndex >= 0 ? "is-microscope" : "is-memory"} ${recentIndex >= 0 && recentIndex < Math.max(0, events.length - 5) ? "is-older-label" : ""} ${isLatest ? "is-latest" : ""}`} style={{ "--immersion-pitch": color, "--immersion-recency": 0.18 + recency * 0.82 } as CSSProperties}>
                 <title>{noteLabel(event.note, doMidi, scale, showConventions)} · MIDI key {event.note} · {inScale ? "inside" : "outside"} selected route · pitch class appears {recurrenceCount} time{recurrenceCount === 1 ? "" : "s"} in retained memory</title>
                 <circle className={inScale ? "cosmos-node is-route" : "cosmos-node is-outside-route"} cx={point.x} cy={point.y} r={size} />
                 {recentIndex >= 0 && !isLatest && recurrenceCount === 1 ? <text x={point.x + 11} y={point.y - 10}>{recentIndex + 1}</text> : null}
@@ -1140,9 +1147,8 @@ export const PianoImmersion = memo(function PianoImmersion({
           <g className="immersion-active-stars" aria-label={`${activeNotes.length} held or pedal-sustained positions`}>
             {activeNotes.map((active) => {
               const point = immersionPitchPoint(active.note, doMidi);
-              const inScale = routePitchClasses.has(point.pitchClass);
               const size = 8 + Math.max(0, Math.min(127, active.velocity)) / 127 * 9;
-              return <g key={active.note} className={`${active.pressed ? "is-pressed" : ""} ${active.sustained ? "is-sustained" : ""}`} style={{ "--immersion-pitch": immersionRoleColor(point, inScale) } as CSSProperties}>
+              return <g key={active.note} data-midi-note={active.note} className={`${active.pressed ? "is-pressed" : ""} ${active.sustained ? "is-sustained" : ""}`} style={{ "--immersion-pitch": immersionPitchColor(point) } as CSSProperties}>
                 <circle className="immersion-active-corona" cx={point.x} cy={point.y} r={size + 9} />
                 <circle className="immersion-active-core" cx={point.x} cy={point.y} r={size} />
                 {active.sustained ? <circle className="immersion-pedal-ring" cx={point.x} cy={point.y} r={size + 15} /> : null}
@@ -1312,6 +1318,8 @@ export const PianoImmersion = memo(function PianoImmersion({
                 const isRoute = degreeIndex >= 0;
                 return <span
                   key={position}
+                  data-pitch-class={pitchClassFromMidi(doMidi + position)}
+                  style={{ "--immersion-pitch": immersionPitchColor({ note: doMidi + position }) } as CSSProperties}
                   className={`${isRoute ? "is-route" : "is-outside-route"}${recentScalePositions.has(position) ? " is-recent" : ""}${latestScalePosition === position ? " is-latest" : ""}${activeScalePositions.has(position) ? " is-active" : ""}`}
                   aria-hidden="true"
                 >
@@ -1331,7 +1339,7 @@ export const PianoImmersion = memo(function PianoImmersion({
 
       <section className="piano-immersion-map-key" aria-label="Persistent circle-of-fifths visual key">
         <span className="is-crown"><i aria-hidden="true" /><strong>One fifths crown</strong><small>solid labeled arc = selected scale position · thin unlabeled arc = another pitch class · no attack-density bars</small></span>
-        <span className="is-attack"><i aria-hidden="true" /><strong>Attack circle</strong><small>filled = inside selected route · hollow dashed = outside · stronger outline = latest attack</small></span>
+        <span className="is-attack"><i aria-hidden="true" style={{ background: PITCH_PALETTE_SWATCH }} /><strong>Fixed note colors</strong><small>same palette as Absolute Pitch · filled = inside selected route · hollow dashed = outside · stronger outline = latest attack</small></span>
         <span className="is-sounding"><i aria-hidden="true" /><strong>Sounding outline</strong><small>solid outer ring = key down · dashed outer ring = pedal-sustained; attack order and timing live in the Rhythm and Semitone Path panels</small></span>
       </section>
 
@@ -1366,11 +1374,11 @@ export const PianoImmersion = memo(function PianoImmersion({
       <details className="piano-immersion-guide">
         <summary>Read the sky · open the visual key</summary>
         <div className="piano-immersion-legend" aria-label="How to read Resonance Sky">
-          <span className="is-pitch"><i aria-hidden="true" /><strong>Attack circle</strong><small>direction = fifths · depth = semitone register · hue = role around Do · size = MIDI attack velocity, not acoustic loudness</small></span>
+          <span className="is-pitch"><i aria-hidden="true" style={{ background: PITCH_PALETTE_SWATCH }} /><strong>Attack circle</strong><small>direction = fifths · depth = semitone register · color = fixed pitch class, matching Absolute Pitch · size = MIDI attack velocity, not acoustic loudness. Color is a learning convention, not an intrinsic property of sound.</small></span>
           <span className="is-route"><i aria-hidden="true" /><strong>Single route crown</strong><small>solid labeled arcs are the selected route · thin dashed unlabeled arcs are the other five pitch classes; the crown does not count attacks</small></span>
           <span className="is-interval"><i aria-hidden="true" /><strong>Interval fiber</strong><small>dash density shows 12-TET mismatch to the named reference; √2 is a geometric midpoint, not an integer ratio</small></span>
           <span className="is-semitone"><i aria-hidden="true" /><strong>Semitone horizon</strong><small>numbered circles show the sounding pair spans folded into one octave; size counts how many pairs share that spacing</small></span>
-          <span className="is-chord"><i aria-hidden="true" /><strong>Chord membrane</strong><small>inner hull = interpreted members · faint outer hull = everything sounding · long dash = incomplete catalog fit · dotted overtrace = rolled timing</small></span>
+          <span className="is-chord"><i aria-hidden="true" /><strong>Chord membrane</strong><small>gradient blends its members’ fixed note colors · inner hull = interpreted members · faint outer hull = everything sounding · long dash = incomplete catalog fit · dotted overtrace = rolled timing</small></span>
           <span className="is-context"><i aria-hidden="true" /><strong>Selected-Do pull + crunch</strong><small>gold arrow = selected-frame pull heuristic · coral haze = modeled field roughness under the chosen spectrum</small></span>
           <span className="is-time"><i aria-hidden="true" /><strong>Memory + contour</strong><small>cosmic wake preserves fifths/register geography; the lower horizon shows attack time and physical rise/fall; broken wake needs release-proven silence</small></span>
         </div>

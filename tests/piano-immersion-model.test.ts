@@ -20,6 +20,7 @@ import {
   immersionLatestTransition,
   immersionMeterGrid,
   immersionPhraseNewness,
+  immersionPitchColor,
   immersionPitchPoint,
   immersionRecentPath,
   immersionReleaseProvenSilence,
@@ -29,29 +30,57 @@ import {
   immersionTrail,
   planImmersionAnnotations,
 } from "../lib/piano-immersion-model.ts";
+import { getPitchClassColor, pitchClassColor } from "../lib/piano-pitch-color.ts";
 import { PIANO_SCALES } from "../lib/piano-model.ts";
 import { livePulseMirror } from "../lib/rhythm-model.ts";
 
 const brightScale = PIANO_SCALES.find((scale) => scale.id === "bright-seven")!;
 
-test("keeps pitch direction stable while Do reinterprets relational hue", () => {
+test("keeps pitch identity and direction stable while Do reinterprets relative fifths role", () => {
   const underC = immersionPitchPoint(64, 60);
   const underG = immersionPitchPoint(64, 67);
   assert.equal(underC.angleDegrees, underG.angleDegrees);
+  assert.equal(underC.radius, underG.radius);
   assert.equal(underC.x, underG.x);
   assert.equal(underC.y, underG.y);
   assert.notEqual(underC.relativeFifthStep, underG.relativeFifthStep);
-  assert.notEqual(underC.hue, underG.hue);
+  assert.equal(underC.hue, underG.hue);
+  assert.equal(underC.hue, getPitchClassColor(64).hue);
+  assert.equal(immersionPitchColor(underC), immersionPitchColor(underG));
+  assert.equal(immersionPitchColor(underC), pitchClassColor(64));
 });
 
-test("octave copies share fifths direction and add equal register depth", () => {
+test("every MIDI note and selected Do use the canonical octave-repeating pitch palette", () => {
+  for (let note = 0; note <= 127; note += 1) {
+    const expected = getPitchClassColor(note);
+    for (let doPitchClass = 0; doPitchClass < 12; doPitchClass += 1) {
+      const point = immersionPitchPoint(note, 60 + doPitchClass);
+      assert.equal(point.hue, expected.hue, `MIDI ${note}, Do pitch class ${doPitchClass}`);
+      assert.equal(immersionPitchColor(point), expected.color, `MIDI ${note}, Do pitch class ${doPitchClass}`);
+    }
+  }
+});
+
+test("octave copies share pitch color and fifths direction while adding equal register depth", () => {
   const lower = immersionPitchPoint(48, 60);
   const middle = immersionPitchPoint(60, 60);
   const upper = immersionPitchPoint(72, 60);
   assert.equal(lower.angleDegrees, middle.angleDegrees);
   assert.equal(middle.angleDegrees, upper.angleDegrees);
+  assert.equal(lower.hue, middle.hue);
+  assert.equal(middle.hue, upper.hue);
+  assert.equal(immersionPitchColor(lower), immersionPitchColor(middle));
+  assert.equal(immersionPitchColor(middle), immersionPitchColor(upper));
   assert.ok(Math.abs((middle.radius - lower.radius) - (upper.radius - middle.radius)) < 1e-12);
   assert.ok(Math.abs(middle.radius - lower.radius - 33) < 1e-12);
+});
+
+test("selected-route membership cannot recolor an absolute pitch identity", () => {
+  const point = immersionPitchPoint(66, 60);
+  const invokeWithLegacyScaleFlag = immersionPitchColor as (value: Pick<typeof point, "note">, inScale?: boolean) => string;
+  assert.equal(immersionPitchColor.length, 1, "pitch color must not accept selected-route membership as an input");
+  assert.equal(invokeWithLegacyScaleFlag(point, true), pitchClassColor(66));
+  assert.equal(invokeWithLegacyScaleFlag(point, false), pitchClassColor(66));
 });
 
 test("bounds trail and dense interval fields deterministically", () => {

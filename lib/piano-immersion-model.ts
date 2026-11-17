@@ -13,6 +13,7 @@ import {
   type LivePulseMirror,
   type LiveRhythmPhraseEvent,
 } from "./rhythm-model.ts";
+import { getPitchClassColor, pitchClassColor } from "./piano-pitch-color.ts";
 
 export const IMMERSION_VIEWBOX = { width: 1200, height: 700, centerX: 600, centerY: 350 } as const;
 export const IMMERSION_HISTORY_ATTACKS = 12;
@@ -208,7 +209,7 @@ export function immersionSameNoteField(first: number[], second: number[]) {
  * The sky keeps one fixed circle-of-fifths orientation so a changing frame does
  * not move performed notes. Radius is an equal-key/log-frequency register
  * coordinate; every unclamped octave therefore adds the same radial distance.
- * Hue is relational and can change when the learner moves Do.
+ * Hue follows the shared Absolute Pitch palette, independent of movable Do.
  */
 export function immersionPitchPoint(noteInput: number, doMidiInput: number): ImmersionPitchPoint {
   const note = safeMidi(noteInput);
@@ -220,7 +221,7 @@ export function immersionPitchPoint(noteInput: number, doMidiInput: number): Imm
   const angleDegrees = fifthStep * 30 - 90;
   const angle = angleDegrees * Math.PI / 180;
   const radius = clamp(72 + (note - 21) * 2.75, 42, 326);
-  const hue = modulo(42 + relativeFifthStep * 30, 360);
+  const hue = getPitchClassColor(note).hue;
   return {
     note,
     pitchClass,
@@ -248,8 +249,9 @@ export function immersionDirectionPoint(pitchClassInput: number, radius: number)
   };
 }
 
-export function immersionRoleColor(point: ImmersionPitchPoint, inScale: boolean) {
-  return `hsl(${point.hue} ${inScale ? 82 : 42}% ${inScale ? 66 : 62}%)`;
+/** Pitch identity stays fixed; route membership belongs to outlines and labels. */
+export function immersionPitchColor(point: Pick<ImmersionPitchPoint, "note">) {
+  return pitchClassColor(point.note);
 }
 
 export function immersionArcPath(pitchClassInput: number, radius: number, spanDegrees = 18) {

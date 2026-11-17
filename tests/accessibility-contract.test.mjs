@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import "./piano-pitch-visual-settings.test.ts";
+import "./piano-pitch-rim.test.mjs";
 
 const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab"];
 
@@ -989,6 +990,46 @@ test("immersive piano HUDs plus vocal pitch match keep visual channels named, bo
   assert.match(immersion, /One fifths crown/);
   assert.match(immersion, /no attack-density bars/);
   assert.match(immersion, /Attack circle/);
+  assert.match(model, /import \{ getPitchClassColor, pitchClassColor \} from "\.\/piano-pitch-color\.ts"/);
+  assert.match(model, /const hue = getPitchClassColor\(note\)\.hue/,
+    "immersion pitch points must inherit the canonical octave-repeating pitch hue");
+  assert.match(model, /export function immersionPitchColor\(point: Pick<ImmersionPitchPoint, "note">\) \{\s*return pitchClassColor\(point\.note\);\s*\}/,
+    "one note-only helper must own pitch identity color without accepting selected-route membership");
+  assert.doesNotMatch(model, /immersionRoleColor/);
+  assert.doesNotMatch(immersion, /immersionRoleColor/);
+  assert.match(immersion, /import \{ PITCH_CLASS_COLORS \} from "@\/lib\/piano-pitch-color"/);
+  assert.match(immersion, /const PITCH_PALETTE_SWATCH = `conic-gradient\(\$\{PITCH_CLASS_COLORS\.map/,
+    "legend palettes must be derived from the same twelve canonical pitch colors");
+  assert.equal((immersion.match(/style=\{\{ background: PITCH_PALETTE_SWATCH \}\}/g) ?? []).length, 2,
+    "both the persistent key and expanded legend must show the canonical palette");
+  assert.equal((immersion.match(/data-midi-note=\{note\}\s*style=\{\{ "--immersion-pitch": immersionPitchColor\(\{ note \}\) \} as CSSProperties\}/g) ?? []).length, 2,
+    "both white and black fingering keys must expose and color their exact MIDI note");
+  assert.match(css, /\.piano-immersion-fingering \.is-white\.is-chord-key \{ fill: var\(--immersion-pitch\); \}/);
+  assert.match(css, /\.piano-immersion-fingering \.is-black\.is-chord-key \{ fill: var\(--immersion-pitch\); stroke: #f4f0e8; \}/);
+  assert.match(immersion, /data-pitch-class=\{pitchClassFromMidi\(doMidi \+ position\)\}[\s\S]{0,180}"--immersion-pitch": immersionPitchColor\(\{ note: doMidi \+ position \}\)/,
+    "each semitone cell must derive pitch class and color from its actual Do-relative MIDI position");
+  assert.match(css, /\.piano-immersion-scale-grid > span\.is-route \{ background: color-mix\(in oklch, var\(--immersion-pitch\) 17%, transparent\); \}/);
+  assert.match(css, /\.piano-immersion-scale-grid b \{[\s\S]*background: var\(--immersion-pitch\)/,
+    "recent-path dots must retain canonical pitch identity color");
+  assert.match(css, /\.piano-immersion-scale-grid > span\.is-latest b \{ outline: 2px double #f4f0e8; outline-offset: 2px; \}/,
+    "latest status must add a neutral double outline instead of replacing pitch color");
+  assert.match(immersion, /const tonicColor = immersionPitchColor\(\{ note: doMidi \}\)/);
+  assert.match(immersion, /<radialGradient id=\{`\$\{instanceId\}-home-well`\}>[\s\S]*stopColor=\{tonicColor\}/,
+    "the Do well must use Do's absolute pitch identity color");
+  assert.match(immersion, /<stop key=\{note\} data-pitch-class=\{point\.pitchClass\}[\s\S]*stopColor=\{immersionPitchColor\(point\)\}/,
+    "chord membranes must retain the canonical color of each contributing pitch class");
+  assert.match(immersion, /<g key=\{sector\.pitchClass\} data-pitch-class=\{sector\.pitchClass\}[\s\S]*"--immersion-pitch": immersionPitchColor\(point\)/,
+    "the fifths crown may encode route membership in outline and labels but not by recoloring pitch identity");
+  assert.match(immersion, /className="immersion-do-meridian" style=\{\{ "--immersion-pitch": tonicColor \}/);
+  assert.match(immersion, /<circle key=\{point\.event\.id\} data-midi-note=\{point\.event\.note\}[\s\S]*immersionPitchColor\(\{ note: point\.event\.note \}\)/,
+    "attack-contour points must expose and color their exact MIDI note");
+  assert.match(immersion, /<g key=\{event\.id\} data-midi-note=\{event\.note\}[\s\S]*"--immersion-pitch": color/,
+    "retained stars must expose their exact MIDI note and canonical pitch color");
+  assert.match(immersion, /<g key=\{active\.note\} data-midi-note=\{active\.note\}[\s\S]*"--immersion-pitch": immersionPitchColor\(point\)/,
+    "sounding stars must expose their exact MIDI note and canonical pitch color");
+  assert.match(immersion, /"--immersion-crunch": currentCrunch/);
+  assert.match(immersion, /"--immersion-pull": tendency\.homePull/,
+    "physical and contextual metrics must remain separate from pitch identity color");
   assert.doesNotMatch(immersion, /feGaussianBlur|<filter /);
   assert.doesNotMatch(immersion, /tabIndex=\{?[1-9]/);
   assert.match(research, /<section className="piano-research-hud" aria-labelledby="piano-research-title">/);
