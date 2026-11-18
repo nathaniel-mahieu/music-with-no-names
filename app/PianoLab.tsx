@@ -6059,14 +6059,14 @@ export function PianoLab() {
       <PianoFocusNavigation focusLens={focusLens} onSelect={selectFocusLens} />
       <h2 className="sr-only">{activeFocusDefinition.label}</h2>
 
-      {!isPitchTrainerFocus && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <div className="piano-hud-statebar" aria-label="Current Piano frame">
+      {!isPitchTrainerFocus && focusLens !== "immersion" && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <div className="piano-hud-statebar" aria-label="Current Piano frame">
           <span className={frameMode === "locked" ? "is-locked" : ""}>{frameMode === "locked" ? "Locked frame" : "Discovering frame"}</span>
           <strong>Do reference · {formatHz(frequencyFromMidi(doMidi))}{showConventions ? ` · ${conventionalPitchName(doMidi, framePitchPreference)}` : ""}</strong>
           <small>{latestSnapshot?.evidenceLabel ?? "Play four distinct positions before the frame can move."}</small>
           <em>{frozen ? "Capture paused" : isShortHudFocus ? `${immersionHistoryEvents.length}/${IMMERSION_HISTORY_ATTACKS} attacks` : `${phraseEvents.length} attacks`}</em>
       </div> : null}
 
-      {!isPitchTrainerFocus && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
+      {!isPitchTrainerFocus && focusLens !== "immersion" && focusLens !== "echo-key" && focusLens !== "score-flow" && !isEarSearchFocus && focusLens !== "scale-quality" ? <RouteSelector scale={scale} doMidi={doMidi} frameMode={frameMode} showConventions={showConventions} doCaptureArmed={doCaptureArmed} onSelect={selectScaleRoute} onToggleDoCapture={toggleDoCapture} /> : null}
 
       {!isShortHudFocus ? <SoundModelDisclosure value={soundModelId} onChange={setSoundModelId} /> : null}
 
@@ -6101,6 +6101,7 @@ export function PianoLab() {
         soundModelId={soundModelId}
         showConventions={showConventions}
         onSoundModelChange={setSoundModelId}
+        onSelectScale={selectScaleRoute}
         onToggleDoCapture={toggleDoCapture}
         onResetFrameFromPlaying={resetFrameFromPlaying}
       /> : null}
