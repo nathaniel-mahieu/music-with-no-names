@@ -8,7 +8,7 @@ import "./piano-pitch-markers.test.mjs";
 import "./piano-ear-search-preferences.test.ts";
 import "./piano-ear-search-gather-contract.test.mjs";
 
-const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab"];
+const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab", "ColorTextureLab"];
 
 test("every learning lab exposes a named semantic region", async () => {
   for (const lab of LABS) {
@@ -1571,7 +1571,7 @@ test("focus, reduced-motion, and non-color contracts are present", async () => {
     "the Piano identity and input console must stack before their fixed minimum tracks can overflow");
   assert.match(ratio, /<details className="lab-nav-more"/);
   assert.match(ratio, /const PRIMARY_LAB_IDS: LabId\[\] = \["guide", "piano", "voice"\]/);
-  assert.match(ratio, /const WORKSPACE_LAB_IDS = new Set<LabId>\(\["guide", "piano", "voice", "technical"\]\)/);
+  assert.match(ratio, /const WORKSPACE_LAB_IDS = new Set<LabId>\(\["guide", "piano", "voice", "technical", "color-texture"\]\)/);
   assert.match(ratio, /\{ label: "Music and reference", labs: \["recording", "atlas", "personal", "technical"\] \}/);
   assert.match(ratio, /\{!WORKSPACE_LAB_IDS\.has\(activeLab\) \? <section className="hero">/);
   assert.match(ratio, /activeLab === "technical" \?[\s\S]{0,80}<TechnicalNotesLab/);

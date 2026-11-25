@@ -42,10 +42,11 @@ import { ScaleLab } from "./ScaleLab";
 import { PianoLab } from "./PianoLab";
 import { VoiceLab } from "./VoiceLab";
 import { TechnicalNotesLab } from "./TechnicalNotesLab";
+import { ColorTextureLab } from "./ColorTextureLab";
 import { PitchVisualSettingsMenu } from "./PitchVisualSettings";
 
 type Timbre = "sine" | "harmonic";
-type LabId = "guide" | "ratio" | "scale" | "piano" | "voice" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal" | "technical";
+type LabId = "guide" | "ratio" | "scale" | "piano" | "voice" | "ear" | "harmony" | "rhythm" | "journey" | "recording" | "atlas" | "personal" | "technical" | "color-texture";
 
 const LABS: { id: LabId; label: string }[] = [
   { id: "guide", label: "Start" },
@@ -55,6 +56,7 @@ const LABS: { id: LabId; label: string }[] = [
   { id: "voice", label: "Voice" },
   { id: "ear", label: "Ear" },
   { id: "harmony", label: "Harmony" },
+  { id: "color-texture", label: "Color & Texture" },
   { id: "rhythm", label: "Rhythm" },
   { id: "journey", label: "Journey" },
   { id: "recording", label: "Recording" },
@@ -64,9 +66,9 @@ const LABS: { id: LabId; label: string }[] = [
 ];
 
 const PRIMARY_LAB_IDS: LabId[] = ["guide", "piano", "voice"];
-const WORKSPACE_LAB_IDS = new Set<LabId>(["guide", "piano", "voice", "technical"]);
+const WORKSPACE_LAB_IDS = new Set<LabId>(["guide", "piano", "voice", "technical", "color-texture"]);
 const SUPPORT_LAB_GROUPS: Array<{ label: string; labs: LabId[] }> = [
-  { label: "Pitch relationships", labs: ["ratio", "scale", "harmony"] },
+  { label: "Pitch relationships", labs: ["ratio", "scale", "harmony", "color-texture"] },
   { label: "Time and listening", labs: ["ear", "rhythm", "journey"] },
   { label: "Music and reference", labs: ["recording", "atlas", "personal", "technical"] },
 ];
@@ -184,6 +186,15 @@ const LAB_COPY: Record<
     principleTop: "Hands move",
     principleMain: "→ field changes",
     principleBottom: "experience remains yours",
+  },
+  "color-texture": {
+    eyebrow: "Authored musical color studies",
+    title: "Hear a progression become color and texture.",
+    description:
+      "Play composed melodic and harmonic constructions. Follow vivid note colors, octave lightness, and contextual textures through a chosen key and progression.",
+    principleTop: "Authored notes",
+    principleMain: "→ color → contextual texture",
+    principleBottom: "visual teaching metaphors, open to your experience",
   },
   rhythm: {
     eyebrow: "Find rhythm inside your own phrase",
@@ -823,7 +834,7 @@ export function RatioLab() {
         </div>
       </section> : null}
 
-      <div id="lab-stage" className={`lab-stage${activeLab === "guide" ? " is-start" : activeLab === "piano" ? " is-piano" : activeLab === "voice" ? " is-voice" : activeLab === "technical" ? " is-technical" : ""}`} tabIndex={-1}>
+      <div id="lab-stage" className={`lab-stage${activeLab === "guide" ? " is-start" : activeLab === "piano" || activeLab === "color-texture" ? " is-piano" : activeLab === "voice" ? " is-voice" : activeLab === "technical" ? " is-technical" : ""}`} tabIndex={-1}>
         {activeLab === "guide" ? (
           <GuideLab onNavigate={selectLab} />
         ) : activeLab === "ratio" ? (
@@ -1041,6 +1052,8 @@ export function RatioLab() {
           <ScaleLab onNavigate={selectLab} />
         ) : activeLab === "piano" ? (
           <PianoLab />
+        ) : activeLab === "color-texture" ? (
+          <ColorTextureLab />
         ) : activeLab === "voice" ? (
           <VoiceLab />
         ) : activeLab === "technical" ? (
