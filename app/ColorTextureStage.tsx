@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getDemoPitchColor,
   type DemoFrame,
   type DemoSequence,
   type TextureRole,
 } from "@/lib/piano-color-texture-model";
+import styles from "./ColorTextureLab.module.css";
 
 type ColorTextureStageProps = {
   frame: DemoFrame;
@@ -16,6 +17,7 @@ type ColorTextureStageProps = {
   textures: boolean;
   selectedMidi: number | null;
   sequence: DemoSequence;
+  onNoteActivate: (midi: number) => void;
 };
 
 type Rgb = [number, number, number];
@@ -309,6 +311,11 @@ export function ColorTextureStage(props: ColorTextureStageProps) {
   const propsRef = useRef(props);
   const reducedRef = useRef(false);
   const requestPaintRef = useRef<(() => void) | null>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const targets = useMemo(
+    () => size.width > 0 && size.height > 0 ? layoutOrbs(props.frame, size.width, size.height) : [],
+    [props.frame, size.width, size.height],
+  );
 
   useEffect(() => {
     const previous = propsRef.current;
@@ -360,6 +367,9 @@ export function ColorTextureStage(props: ColorTextureStageProps) {
       const ratio = Math.min(2, window.devicePixelRatio || 1);
       const pixelWidth = Math.max(1, Math.round(nextWidth * ratio));
       const pixelHeight = Math.max(1, Math.round(nextHeight * ratio));
+      if (nextWidth !== width || nextHeight !== height) {
+        setSize((previous) => previous.width === nextWidth && previous.height === nextHeight ? previous : { width: nextWidth, height: nextHeight });
+      }
       const changed = nextWidth !== width || nextHeight !== height || canvas!.width !== pixelWidth || canvas!.height !== pixelHeight;
       width = nextWidth;
       height = nextHeight;
@@ -406,5 +416,19 @@ export function ColorTextureStage(props: ColorTextureStageProps) {
     };
   }, []);
 
-  return <canvas ref={canvasRef} aria-hidden="true" style={{ display: "block", width: "100%", height: "100%" }} />;
+  return <div className={styles.stageSurface} role="group" aria-label="Play notes in the color field">
+    <canvas ref={canvasRef} aria-hidden="true" />
+    {targets.map((orb, index) => {
+      const note = getDemoPitchColor(orb.note.midi).note;
+      const diameter = Math.max(44, orb.radius * 2 + 16);
+      return <button
+        key={`${orb.note.voice}-${orb.note.midi}-${index}`}
+        type="button"
+        className={styles.orbButton}
+        aria-label={`Play ${note}, ${orb.note.voice}`}
+        onClick={() => props.onNoteActivate(orb.note.midi)}
+        style={{ left: orb.x, top: orb.y, width: diameter, height: diameter }}
+      />;
+    })}
+  </div>;
 }

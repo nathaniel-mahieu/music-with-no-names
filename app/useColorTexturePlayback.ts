@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { configureSafetyCompressor, equalPowerMixGains, SYNTH_MASTER_GAIN } from "@/lib/audio-level";
+import { configureSafetyCompressor, equalPowerMixGains, SYNTH_COHERENT_PEAK, SYNTH_MASTER_GAIN } from "@/lib/audio-level";
 import type { DemoFrame, DemoSequence } from "@/lib/piano-color-texture-model";
 
 type AudioContextWindow = Window & { webkitAudioContext?: typeof AudioContext };
@@ -22,6 +22,17 @@ type ScheduledVoice = {
   part: DemoFrame["notes"][number]["voice"];
   startsAt: number;
   endsAt: number;
+};
+type VoiceOwner = {
+  context: AudioContext;
+  master: GainNode;
+  voices: Set<ScheduledVoice>;
+  onEmpty?: () => void;
+};
+type AuditionBus = VoiceOwner & {
+  compressor: DynamicsCompressorNode;
+  pending: Array<{ midi: number; requestedAtMs: number }>;
+  starting: boolean;
 };
 type PlaybackSession = {
   context: AudioContext;
@@ -46,6 +57,11 @@ type PlaybackSession = {
 const LOOKAHEAD_SECONDS = .18;
 const START_LEAD_SECONDS = .025;
 const PARTIALS = [1, .23, .08, .025];
+const MAX_AUDITION_VOICES = 8;
+const AUDITION_SECONDS = 1.5;
+const AUDITION_LEAD_SECONDS = .014;
+const VOICE_PEAK = .64;
+const VOICE_SUSTAIN = .39;
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -71,7 +87,7 @@ function sessionBeat(session: PlaybackSession) {
   return ((beat % total) + total) % total;
 }
 
-function disconnectVoice(session: PlaybackSession, voice: ScheduledVoice) {
+function disconnectVoice(session: VoiceOwner, voice: ScheduledVoice) {
   voice.oscillators.forEach((oscillator) => {
     oscillator.onended = null;
     oscillator.disconnect();
@@ -79,6 +95,87 @@ function disconnectVoice(session: PlaybackSession, voice: ScheduledVoice) {
   voice.levels.forEach((level) => level.disconnect());
   voice.envelope.disconnect();
   session.voices.delete(voice);
+  if (session.voices.size === 0) session.onEmpty?.();
+}
+
+function closeAuditionBus(bus: AuditionBus) {
+  bus.onEmpty = undefined;
+  bus.pending.length = 0;
+  bus.context.onstatechange = null;
+  const fading = bus.context.state === "running" && bus.voices.size > 0;
+  if (bus.context.state !== "closed") {
+    const now = bus.context.currentTime;
+    bus.master.gain.cancelScheduledValues(now);
+    bus.master.gain.setTargetAtTime(0, now, .006);
+    bus.voices.forEach((voice) => cancelVoice(voice, now + (fading ? .025 : 0)));
+  }
+  const release = () => {
+    bus.voices.forEach((voice) => disconnectVoice(bus, voice));
+    bus.master.disconnect();
+    bus.compressor.disconnect();
+    if (bus.context.state !== "closed") void bus.context.close().catch(() => {});
+  };
+  if (fading) window.setTimeout(release, 35);
+  else release();
+}
+
+function voiceWeight(voice: DemoFrame["notes"][number]["voice"]) {
+  return voice === "melody" ? 1 : voice === "bass" ? .72 : .62;
+}
+
+function passageVoiceMixGain(sequence: DemoSequence) {
+  return equalPowerMixGains(Array.from({ length: Math.max(1, ...sequence.frames.map((frame) => frame.notes.length)) }, () => 1))[0];
+}
+
+function auditionMasterGain(sequence: DemoSequence) {
+  // Reserve the study's worst coherent peak before allowing preview overlap.
+  // Both buses retain the same waveform and envelope; only their budgets differ.
+  const waveformPeak = VOICE_PEAK * PARTIALS.reduce((sum, amplitude) => sum + amplitude, 0) / Math.hypot(...PARTIALS);
+  const studyWeights = Math.max(0, ...sequence.frames.map((frame) => frame.notes.reduce((sum, note) => sum + voiceWeight(note.voice), 0)));
+  const studyPeak = SYNTH_MASTER_GAIN * passageVoiceMixGain(sequence) * studyWeights * waveformPeak;
+  const auditionMixGain = equalPowerMixGains(Array.from({ length: MAX_AUDITION_VOICES }, () => 1))[0];
+  const headroom = Math.max(0, SYNTH_COHERENT_PEAK * .9 - studyPeak);
+  return Math.min(SYNTH_MASTER_GAIN, headroom / (MAX_AUDITION_VOICES * auditionMixGain * waveformPeak));
+}
+
+function synthesizeVoice(owner: VoiceOwner, midi: number, part: ScheduledVoice["part"], cycle: number, when: number, duration: number, mix: number) {
+  const fundamental = 440 * 2 ** ((midi - 69) / 12);
+  const partials = PARTIALS.map((amplitude, index) => ({ amplitude, multiple: index + 1 }))
+    .filter(({ multiple }) => fundamental * multiple < owner.context.sampleRate / 2);
+  const normalization = Math.hypot(...partials.map(({ amplitude }) => amplitude));
+  if (!normalization) return;
+  const envelope = owner.context.createGain();
+  const attack = Math.min(.016, duration * .12);
+  const decay = Math.min(.18, duration * .35);
+  const release = Math.min(.16, duration * .25);
+  const peak = VOICE_PEAK * mix;
+  const sustain = VOICE_SUSTAIN * mix;
+  const end = when + duration;
+  envelope.gain.setValueAtTime(.0001, when);
+  envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, peak), when + attack);
+  envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, sustain), when + attack + decay);
+  envelope.gain.setValueAtTime(Math.max(.0001, sustain), Math.max(when + attack + decay, end - release));
+  envelope.gain.exponentialRampToValueAtTime(.0001, end);
+  envelope.connect(owner.master);
+  const voice: ScheduledVoice = { oscillators: [], levels: [], envelope, cycle, cancelled: false, midi, part, startsAt: when, endsAt: end };
+  owner.voices.add(voice);
+  let remaining = partials.length;
+  partials.forEach(({ amplitude, multiple }) => {
+    const oscillator = owner.context.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.value = fundamental * multiple;
+    const level = owner.context.createGain();
+    level.gain.value = amplitude / normalization;
+    oscillator.connect(level).connect(envelope);
+    voice.oscillators.push(oscillator);
+    voice.levels.push(level);
+    oscillator.onended = () => {
+      remaining -= 1;
+      if (remaining === 0) disconnectVoice(owner, voice);
+    };
+    oscillator.start(when);
+    oscillator.stop(end + .008);
+  });
 }
 
 function cancelVoice(voice: ScheduledVoice, when: number) {
@@ -140,47 +237,9 @@ function scheduleFrame(session: PlaybackSession, frameIndex: number, cycle: numb
     if (isContinuation && [...session.voices].some((voice) => !voice.cancelled
       && voice.cycle === cycle && voice.midi === note.midi && voice.part === note.voice
       && voice.startsAt <= when + .001 && voice.endsAt >= when + .001)) return;
-    const fundamental = 440 * 2 ** ((note.midi - 69) / 12);
-    const partials = PARTIALS.map((amplitude, index) => ({ amplitude, multiple: index + 1 }))
-      .filter(({ multiple }) => fundamental * multiple < session.context.sampleRate / 2);
-    const normalization = Math.hypot(...partials.map(({ amplitude }) => amplitude));
-    if (!normalization) return;
     const chainEnd = continuationEndBeat(session.sequence, frameIndex, note);
     const noteDuration = duration + (chainEnd - frame.beat - frame.durationBeats) * session.secondsPerBeat;
-    const weight = note.voice === "melody" ? 1 : note.voice === "bass" ? .72 : .62;
-    const mix = weight * session.voiceMixGain;
-    const envelope = session.context.createGain();
-    const attack = Math.min(.016, noteDuration * .12);
-    const decay = Math.min(.18, noteDuration * .35);
-    const release = Math.min(.16, noteDuration * .25);
-    const peak = .64 * mix;
-    const sustain = .39 * mix;
-    const end = when + noteDuration;
-    envelope.gain.setValueAtTime(.0001, when);
-    envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, peak), when + attack);
-    envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, sustain), when + attack + decay);
-    envelope.gain.setValueAtTime(Math.max(.0001, sustain), Math.max(when + attack + decay, end - release));
-    envelope.gain.exponentialRampToValueAtTime(.0001, end);
-    envelope.connect(session.master);
-    const voice: ScheduledVoice = { oscillators: [], levels: [], envelope, cycle, cancelled: false, midi: note.midi, part: note.voice, startsAt: when, endsAt: end };
-    session.voices.add(voice);
-    let remaining = partials.length;
-    partials.forEach(({ amplitude, multiple }) => {
-      const oscillator = session.context.createOscillator();
-      oscillator.type = "sine";
-      oscillator.frequency.value = fundamental * multiple;
-      const level = session.context.createGain();
-      level.gain.value = amplitude / normalization;
-      oscillator.connect(level).connect(envelope);
-      voice.oscillators.push(oscillator);
-      voice.levels.push(level);
-      oscillator.onended = () => {
-        remaining -= 1;
-        if (remaining === 0) disconnectVoice(session, voice);
-      };
-      oscillator.start(when);
-      oscillator.stop(end + .008);
-    });
+    synthesizeVoice(session, note.midi, note.voice, cycle, when, noteDuration, voiceWeight(note.voice) * session.voiceMixGain);
   });
 }
 
@@ -189,10 +248,94 @@ export function useColorTexturePlayback(sequence: DemoSequence, tempo: number, l
   const configRef = useRef({ sequence, tempo, loop });
   configRef.current = { sequence, tempo, loop };
   const sessionRef = useRef<PlaybackSession | null>(null);
+  const auditionRef = useRef<AuditionBus | null>(null);
+  const auditionGenerationRef = useRef(0);
   const positionRef = useRef(0);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const [state, setState] = useState<TransportState>({ isPlaying: false, isStarting: false, beat: 0, frameIndex: 0, error: "" });
+  const [auditionError, setAuditionError] = useState("");
+
+  const closeAuditions = useCallback(() => {
+    auditionGenerationRef.current += 1;
+    const bus = auditionRef.current;
+    auditionRef.current = null;
+    if (bus) closeAuditionBus(bus);
+  }, []);
+
+  const auditionNote = useCallback((midi: number) => {
+    if (!mountedRef.current || document.hidden || !Number.isInteger(midi) || midi < 0 || midi > 127) return;
+    setAuditionError("");
+    let bus = auditionRef.current;
+    if (!bus) {
+      const AudioContextConstructor = window.AudioContext ?? (window as AudioContextWindow).webkitAudioContext;
+      if (!AudioContextConstructor) {
+        setAuditionError("Preview sound is unavailable in this browser.");
+        return;
+      }
+      let context: AudioContext | null = null;
+      try {
+        context = new AudioContextConstructor({ latencyHint: "interactive" });
+        const compressor = context.createDynamicsCompressor();
+        configureSafetyCompressor(compressor, context.currentTime);
+        const master = context.createGain();
+        master.gain.setValueAtTime(auditionMasterGain(configRef.current.sequence), context.currentTime);
+        master.connect(compressor).connect(context.destination);
+        bus = { context, master, compressor, voices: new Set(), pending: [], starting: false };
+        auditionRef.current = bus;
+      } catch {
+        if (context && context.state !== "closed") void context.close().catch(() => {});
+        setAuditionError("Preview sound could not start. Tap a note to try again.");
+        return;
+      }
+    }
+    const owner = bus;
+    const requestedAtMs = window.performance?.now?.() ?? Date.now();
+    owner.pending.push({ midi, requestedAtMs });
+    if (owner.pending.length > MAX_AUDITION_VOICES) owner.pending.shift();
+    const generation = auditionGenerationRef.current;
+    const flush = () => {
+      if (!mountedRef.current || auditionRef.current !== owner || auditionGenerationRef.current !== generation) return;
+      if (document.hidden || owner.context.state !== "running") {
+        closeAuditions();
+        return;
+      }
+      owner.starting = false;
+      owner.onEmpty = () => {
+        if (auditionRef.current === owner && !owner.starting && owner.pending.length === 0) closeAuditions();
+      };
+      owner.context.onstatechange = () => {
+        if (auditionRef.current === owner && owner.context.state !== "running") closeAuditions();
+      };
+      const pending = owner.pending.splice(0);
+      const earliestRequest = pending[0]?.requestedAtMs ?? requestedAtMs;
+      const voiceMixGain = equalPowerMixGains(Array.from({ length: MAX_AUDITION_VOICES }, () => 1))[0];
+      pending.forEach((request) => {
+        const now = owner.context.currentTime;
+        const live = [...owner.voices].filter((voice) => !voice.cancelled);
+        if (live.length >= MAX_AUDITION_VOICES) {
+          const oldest = live.reduce((first, voice) => voice.startsAt < first.startsAt ? voice : first);
+          oldest.envelope.gain.cancelScheduledValues(now);
+          oldest.envelope.gain.setTargetAtTime(0, now, .0025);
+          // The stolen note is silent before the replacement's short lead-in.
+          cancelVoice(oldest, now + .010);
+        }
+        const when = now + AUDITION_LEAD_SECONDS + Math.max(0, request.requestedAtMs - earliestRequest) / 1000;
+        synthesizeVoice(owner, request.midi, "melody", 0, when, AUDITION_SECONDS, voiceMixGain);
+      });
+    };
+    if (owner.starting) return;
+    if (owner.context.state === "running") {
+      flush();
+      return;
+    }
+    owner.starting = true;
+    void owner.context.resume().then(flush).catch(() => {
+      if (auditionRef.current !== owner || auditionGenerationRef.current !== generation) return;
+      closeAuditions();
+      if (mountedRef.current) setAuditionError("Preview sound could not start. Tap a note to try again.");
+    });
+  }, [closeAuditions]);
 
   const dispose = useCallback(() => {
     generationRef.current += 1;
@@ -203,9 +346,10 @@ export function useColorTexturePlayback(sequence: DemoSequence, tempo: number, l
 
   const stop = useCallback(() => {
     dispose();
+    closeAuditions();
     positionRef.current = 0;
     if (mountedRef.current) setState((current) => ({ ...current, isPlaying: false, isStarting: false, beat: 0, frameIndex: 0 }));
-  }, [dispose]);
+  }, [closeAuditions, dispose]);
 
   const pause = useCallback(() => {
     const session = sessionRef.current;
@@ -213,8 +357,9 @@ export function useColorTexturePlayback(sequence: DemoSequence, tempo: number, l
     const currentSequence = session?.sequence ?? configRef.current.sequence;
     positionRef.current = position;
     dispose();
+    closeAuditions();
     if (mountedRef.current) setState((current) => ({ ...current, isPlaying: false, isStarting: false, beat: position, frameIndex: frameAtBeat(currentSequence, position) }));
-  }, [dispose]);
+  }, [closeAuditions, dispose]);
 
   const startAt = useCallback(async (requestedBeat: number) => {
     dispose();
@@ -252,7 +397,7 @@ export function useColorTexturePlayback(sequence: DemoSequence, tempo: number, l
         lastPublishedAt: -Infinity, lastPublishedFrame: -1,
         // A passage-wide budget lets a tied voice keep its level as chords
         // change, without increasing the maximum coherent output budget.
-        voiceMixGain: equalPowerMixGains(Array.from({ length: Math.max(1, ...passage.frames.map((frame) => frame.notes.length)) }, () => 1))[0],
+        voiceMixGain: passageVoiceMixGain(passage),
       };
       sessionRef.current = session;
       if (context.state !== "running") await context.resume();
@@ -361,8 +506,9 @@ export function useColorTexturePlayback(sequence: DemoSequence, tempo: number, l
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
       dispose();
+      closeAuditions();
     };
-  }, [dispose, pause]);
+  }, [closeAuditions, dispose, pause]);
 
   useEffect(() => { stop(); }, [sequence, tempo, stop]);
 
@@ -383,5 +529,5 @@ export function useColorTexturePlayback(sequence: DemoSequence, tempo: number, l
     }
   }, [loop]);
 
-  return { ...state, play, pause, stop, seek };
+  return { ...state, error: auditionError || state.error, play, pause, stop, seek, auditionNote };
 }

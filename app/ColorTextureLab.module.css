@@ -44,10 +44,18 @@
 .stageState { display: inline-flex; align-items: center; gap: 7px; color: #8e9f9d; font-size: 10px; }
 .stageState i { width: 5px; height: 5px; border-radius: 50%; background: #73817c; }
 .stageState[data-playing="true"] i { background: #b6d7ab; box-shadow: 0 0 12px #b6d7ab66; }
-.stageIndex { color: #c6d1ca; font: 10px ui-monospace, SFMono-Regular, monospace; }
+.stageHint { color: var(--ct-muted); font-size: 11px; text-align: center; }
+.stageIndex { flex-shrink: 0; color: #c6d1ca; font: 10px ui-monospace, SFMono-Regular, monospace; }
 .stageIndex > span { color: #5b6a69; }
 .canvasWrap { position: relative; min-width: 0; min-height: 250px; height: clamp(250px, 31svh, 390px); flex: 1; }
-.canvasWrap > canvas { position: absolute; inset: 0; }
+.stageSurface, .stageSurface > canvas { position: absolute; inset: 0; }
+.stageSurface > canvas { display: block; width: 100%; height: 100%; }
+.orbButton { position: absolute; transform: translate(-50%, -50%); padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; touch-action: manipulation; }
+@media (hover: hover) {
+  .orbButton:hover { border-color: #e2f6ee80; box-shadow: 0 0 15px #e2f6ee26; }
+}
+.orbButton:active { background: #e2f6ee28; }
+.orbButton:focus-visible { outline: 2px solid #e2f6ee; outline-offset: 3px; }
 .stageBottom { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 0 22px 18px; color: var(--ct-faint); font-size: 10px; }
 .stageBottom > span { min-width: 0; max-width: 80%; line-height: 1.5; }
 .separator { margin: 0 10px; color: #465855; }
@@ -149,5 +157,7 @@
 @media (forced-colors: active) {
   .shell { border-color: CanvasText; }
   .play, .rewind, .moment, .note { border: 1px solid ButtonText; }
+  .orbButton { forced-color-adjust: none; }
+  .orbButton:focus-visible { outline-color: Highlight; }
   .moment[data-current="true"], .note[aria-pressed="true"] { outline: 2px solid Highlight; }
 }

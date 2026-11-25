@@ -147,8 +147,10 @@ function createHarness() {
     constructor() {
       this.gain = new FakeAudioParam();
       this.disconnected = false;
+      this.connections = [];
     }
     connect(next) {
+      this.connections.push(next);
       return next;
     }
     disconnect() {
@@ -212,6 +214,7 @@ function createHarness() {
 
   const browserWindow = {
     AudioContext: FakeAudioContext,
+    performance: { now: () => clockMs },
     setInterval(callback) {
       const id = nextId++;
       intervals.set(id, callback);
@@ -511,4 +514,98 @@ test("a tied melody survives chord changes, is audible after seeks, and starts f
   harness.advance(6.12);
   const loopMelodies = looping.oscillators.filter((oscillator) => oscillator.frequency.value === frequency(60));
   assert.equal(loopMelodies.length, 2, "each loop starts one new melody chain");
+});
+
+test("idle auditions overlap for their sustained tails and release the audio context afterward", (t) => {
+  const harness = createHarness();
+  t.after(() => harness.unmount());
+  harness.render().auditionNote(60);
+  const context = harness.contexts[0];
+  const first = context.oscillators.find((oscillator) => oscillator.frequency.value === frequency(60));
+  assert(first, "the first explicit audition sounds its selected MIDI pitch");
+  assert(Math.abs(first.stopTime - first.startTime - 1.5) < .02, "the audition retains approximately 1.5 seconds of sound");
+
+  harness.advance(.2);
+  harness.render().auditionNote(64);
+  const second = context.oscillators.find((oscillator) => oscillator.frequency.value === frequency(64));
+  assert(second, "the next click sounds a different selected MIDI pitch");
+  assert(first.stopTime > second.startTime, "a new audition does not cut off the previous tail");
+  harness.advance(.03);
+  assert(first.startTime < context.currentTime && first.stopTime > context.currentTime);
+  assert(second.startTime < context.currentTime && second.stopTime > context.currentTime);
+  assert.equal(harness.contexts.length, 1, "overlapping previews share one bounded audition bus");
+  assert.equal(harness.render().isPlaying, false, "auditioning does not start the authored study");
+  assert.equal(harness.render().beat, 0);
+  assert.equal(harness.intervals.size, 0);
+  assert.equal(harness.animationFrames.size, 0);
+
+  harness.advance(1.6);
+  assert.equal(context.state, "closed", "the idle bus closes after its last tail");
+  assert(context.gains.every((node) => node.disconnected));
+  harness.render().auditionNote(67);
+  assert.equal(harness.contexts.length, 2, "a later explicit click can create a fresh preview bus");
+});
+
+test("rapid auditions stay bounded and do not replace the playing study", async (t) => {
+  const harness = createHarness();
+  t.after(() => harness.unmount());
+  await harness.render().play();
+  const studyContext = harness.contexts[0];
+  harness.advance(.2);
+  harness.render().auditionNote(72);
+  const previewContext = harness.contexts[1];
+  for (let index = 0; index < 20; index += 1) harness.render().auditionNote(60 + index % 12);
+  harness.advance(.03);
+
+  const activeOscillators = previewContext.oscillators.filter((oscillator) => oscillator.startTime <= previewContext.currentTime
+    && oscillator.stopTime > previewContext.currentTime);
+  const activeVoices = new Set(activeOscillators.map((oscillator) => oscillator.connections[0]?.connections[0]));
+  assert(activeVoices.size > 1, "rapid clicks can overlap");
+  assert(activeVoices.size <= 8, "the audition voice limit remains bounded");
+  assert.equal(studyContext.state, "running");
+  assert.equal(harness.render().isPlaying, true);
+  assert(harness.render().beat > .19, "the study's audio clock keeps advancing");
+
+  const waveformPeak = .64 * (1 + .23 + .08 + .025) / Math.hypot(1, .23, .08, .025);
+  const studyPeak = studyContext.gains[0].gain.value * waveformPeak;
+  const auditionPeak = previewContext.gains[0].gain.value * 8 / Math.sqrt(8) * waveformPeak;
+  assert(studyPeak + auditionPeak <= .24, "study and preview buses fit inside the shared coherent output budget");
+
+  harness.document.hidden = true;
+  harness.documentEvents.get("visibilitychange")();
+  harness.advance(.06);
+  assert(harness.contexts.every((context) => context.state === "closed"));
+  assert.equal(harness.render().isPlaying, false);
+});
+
+test("idle audition startup and tails are cancelled by lifecycle or configuration changes", async (t) => {
+  const harness = createHarness();
+  t.after(() => harness.unmount());
+  harness.render().auditionNote(60);
+  harness.setTempo(90);
+  harness.advance(.06);
+  assert.equal(harness.contexts[0].state, "closed");
+
+  harness.render().auditionNote(62);
+  harness.setSequence(makeSequence("a-new-preview-context"));
+  harness.advance(.06);
+  assert.equal(harness.contexts[1].state, "closed");
+
+  const pendingHarness = createHarness();
+  t.after(() => pendingHarness.unmount());
+  const gate = pendingHarness.suspendNextResume();
+  pendingHarness.render().auditionNote(64);
+  pendingHarness.document.hidden = true;
+  pendingHarness.documentEvents.get("visibilitychange")();
+  gate.resolve();
+  await gate.promise;
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(pendingHarness.contexts[0].state, "closed");
+  assert.equal(pendingHarness.contexts[0].oscillators.length, 0, "late activation after hiding cannot sound an audition");
+  assert.equal(pendingHarness.render().error, "");
+
+  harness.render().auditionNote(67);
+  harness.unmount();
+  assert(harness.contexts.every((context) => context.state === "closed"));
 });

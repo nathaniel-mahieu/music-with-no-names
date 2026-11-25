@@ -83,10 +83,11 @@ export function ColorTextureLab() {
       <div className={styles.viewport}>
         <div className={styles.stageHeading}>
           <span className={styles.stageState} data-playing={playback.isPlaying}><i aria-hidden="true" />{stateLabel}</span>
+          <span className={styles.stageHint}>Tap notes to hear them overlap</span>
           <span className={styles.stageIndex}>{String(frameIndex + 1).padStart(2, "0")} <span>/ {String(sequence.frames.length).padStart(2, "0")}</span></span>
         </div>
         <div className={styles.canvasWrap}>
-          <ColorTextureStage sequence={sequence} frame={frame} nextFrame={nextFrame} beat={playback.beat} isPlaying={playback.isPlaying} textures={textures} selectedMidi={selectedNote?.midi ?? null} />
+          <ColorTextureStage sequence={sequence} frame={frame} nextFrame={nextFrame} beat={playback.beat} isPlaying={playback.isPlaying} textures={textures} selectedMidi={selectedNote?.midi ?? null} onNoteActivate={playback.auditionNote} />
         </div>
         <div className={styles.stageBottom}>
           <span>{keyName}<span className={styles.separator}>/</span>{definition.subtitle}</span>
@@ -105,11 +106,22 @@ export function ColorTextureLab() {
           <div><span>{material.material}</span><strong>{material.name}</strong></div>
         </div>
         <p className={styles.contextDescription}>{selectedNote ? material.explanation : frame.description}</p>
-        <div className={styles.notesHeading}><span>Sounding voices</span><small>Select to inspect</small></div>
+        <div className={styles.notesHeading}><span>Sounding voices</span><small>Play and inspect</small></div>
         <div className={styles.noteList}>
           {frame.notes.map((note, index) => {
             const color = getDemoPitchColor(note.midi);
-            return <button type="button" key={`${note.voice}-${note.midi}-${index}`} className={styles.note} aria-pressed={note.midi === selectedNote?.midi} onClick={() => setSelectedMidi((current) => current === note.midi ? null : note.midi)} aria-label={`Inspect ${color.note}, degree ${note.degree}, ${note.voice}, ${MATERIALS[note.role].name}`} style={{ "--note-color": color.color, "--octave-gray": color.gray } as CSSProperties}>
+            return <button
+              type="button"
+              key={`${note.voice}-${note.midi}-${index}`}
+              className={styles.note}
+              aria-pressed={note.midi === selectedNote?.midi}
+              aria-label={`Play and inspect ${color.note}, degree ${note.degree}, ${note.voice}, ${MATERIALS[note.role].name}`}
+              style={{ "--note-color": color.color, "--octave-gray": color.gray } as CSSProperties}
+              onClick={() => {
+                playback.auditionNote(note.midi);
+                setSelectedMidi((current) => current === note.midi ? null : note.midi);
+              }}
+            >
               <span className={styles.noteColor} aria-hidden="true" /><strong>{color.note}</strong><span>{note.degree}</span><small>{note.voice}</small>
             </button>;
           })}
