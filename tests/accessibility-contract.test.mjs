@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import "./piano-pitch-visual-settings.test.ts";
 import "./piano-pitch-rim.test.mjs";
 import "./piano-pitch-names.test.mjs";
+import "./piano-pitch-markers.test.mjs";
 
 const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab"];
 

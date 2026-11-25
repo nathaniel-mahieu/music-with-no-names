@@ -118,6 +118,16 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
         : [{ opacity: 1 }, { opacity: 1, offset: .22 }, { opacity: 0 }];
       return element.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
     };
+    // Keep the written note and tapered spike solid while the softer wash
+    // recedes. Only the final fifth of the cue fades; reduced motion is solid.
+    const animateMarker = (element: Element | null | undefined) => {
+      if (!element?.animate) return;
+      element.getAnimations().forEach((animation) => animation.cancel());
+      const frames = reducedMotion
+        ? [{ opacity: 1 }, { opacity: 1 }]
+        : [{ opacity: 1 }, { opacity: 1, offset: .8 }, { opacity: 0 }];
+      element.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "linear" });
+    };
     const staffMode = current.mode === "staff";
     if (current.glowFlash) {
       const attacks = staffMode ? valid : new Set([...valid].map((note) => note % 12));
@@ -152,7 +162,7 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
         animateEdge(rim);
       });
     }
-    if (staffMode && current.noteFlash) valid.forEach((note) => animate(noteRef.current?.children.item(note), .86, .65));
+    if (staffMode && current.noteFlash) valid.forEach((note) => animateMarker(noteRef.current?.children.item(note)));
     if (staffMode && current.staffFlash) {
       animate(foregroundStaffRef.current, .62, .42);
     }
