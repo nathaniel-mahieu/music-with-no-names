@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import "./piano-pitch-visual-settings.test.ts";
 import "./piano-pitch-rim.test.mjs";
+import "./piano-pitch-names.test.mjs";
 
 const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab"];
 
@@ -37,7 +38,7 @@ test("site-wide pitch flashes stay vivid, transient, persistent, and interaction
   assert.match(settings, /aria-label="Site-wide pitch visual settings"/);
   assert.match(settings, /setAllPitchVisualEffects\(settings, true\)/);
   assert.match(settings, /setAllPitchVisualEffects\(settings, false\)/);
-  for (const layer of ["glowFlash", "noteFlash", "staffFlash"]) {
+  for (const layer of ["glowFlash", "noteFlash", "staffFlash", "nameFlash"]) {
     assert.match(settings, new RegExp(`type="checkbox"[^>\\n]*checked=\\{settings\\.${layer}\\}`));
   }
   assert.match(settings, /<option value="vertical">Vertical glow · original<\/option>/);

@@ -5,6 +5,7 @@ export type PitchVisualSettings = {
   glowFlash: boolean;
   noteFlash: boolean;
   staffFlash: boolean;
+  nameFlash: boolean;
 };
 
 /** Browser-local preferences shared by every view, not by one Piano HUD. */
@@ -15,6 +16,7 @@ export const DEFAULT_PITCH_VISUAL_SETTINGS: Readonly<PitchVisualSettings> = Obje
   glowFlash: true,
   noteFlash: true,
   staffFlash: true,
+  nameFlash: true,
 });
 
 /** Retain valid individual choices; do not coerce strings or truthy values. */
@@ -22,11 +24,15 @@ export function normalizePitchVisualSettings(value: unknown): PitchVisualSetting
   const source = value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+  // Older saved "All off" preferences predate the name layer. Keep that
+  // explicit opt-out instead of silently introducing a new visible effect.
+  const legacyAllOff = source.glowFlash === false && source.noteFlash === false && source.staffFlash === false;
   return {
     mode: source.mode === "staff" || source.mode === "vertical" ? source.mode : DEFAULT_PITCH_VISUAL_SETTINGS.mode,
     glowFlash: typeof source.glowFlash === "boolean" ? source.glowFlash : DEFAULT_PITCH_VISUAL_SETTINGS.glowFlash,
     noteFlash: typeof source.noteFlash === "boolean" ? source.noteFlash : DEFAULT_PITCH_VISUAL_SETTINGS.noteFlash,
     staffFlash: typeof source.staffFlash === "boolean" ? source.staffFlash : DEFAULT_PITCH_VISUAL_SETTINGS.staffFlash,
+    nameFlash: typeof source.nameFlash === "boolean" ? source.nameFlash : legacyAllOff ? false : DEFAULT_PITCH_VISUAL_SETTINGS.nameFlash,
   };
 }
 
@@ -50,5 +56,6 @@ export function setAllPitchVisualEffects(settings: PitchVisualSettings, enabled:
     glowFlash: enabled,
     noteFlash: enabled,
     staffFlash: enabled,
+    nameFlash: enabled,
   };
 }

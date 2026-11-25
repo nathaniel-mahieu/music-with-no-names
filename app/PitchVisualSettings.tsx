@@ -11,8 +11,8 @@ export function PitchVisualSettingsMenu() {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const descriptionId = useId();
   const modeId = useId();
-  const allOn = settings.glowFlash && settings.noteFlash && settings.staffFlash;
-  const allOff = !settings.glowFlash && !settings.noteFlash && !settings.staffFlash;
+  const allOn = settings.glowFlash && settings.noteFlash && settings.staffFlash && settings.nameFlash;
+  const allOff = !settings.glowFlash && !settings.noteFlash && !settings.staffFlash && !settings.nameFlash;
 
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
@@ -63,6 +63,10 @@ export function PitchVisualSettingsMenu() {
           <span><strong>Glow flash</strong><small>Page color + a crisp rim with a broad inward fade</small></span>
         </label>
         <label>
+          <input type="checkbox" checked={settings.nameFlash} onChange={(event) => setSettings({ ...settings, nameFlash: event.target.checked })} />
+          <span><strong>Note name flash</strong><small>Bold pitch names in their note colors</small></span>
+        </label>
+        <label>
           <input type="checkbox" disabled={settings.mode === "vertical"} checked={settings.noteFlash} onChange={(event) => setSettings({ ...settings, noteFlash: event.target.checked })} />
           <span><strong>Tapered note flash</strong><small>Pointed marker + a quarter note at the left</small></span>
         </label>
@@ -71,7 +75,7 @@ export function PitchVisualSettingsMenu() {
           <span><strong>Staff flash</strong><small>Lines and clefs flash over the page content</small></span>
         </label>
       </fieldset>
-      {settings.mode === "vertical" ? <small className={styles.modeNote}>Original vertical bands use Glow flash only. Your note and staff preferences are kept for staff layout.</small> : null}
+      {settings.mode === "vertical" ? <small className={styles.modeNote}>Glow and note names work in this layout. Your tapered-note and staff preferences are kept for staff layout.</small> : null}
       <p id={descriptionId}>Responds to your played keys, without adding sound. Hidden reference notes stay hidden.</p>
     </div>
   </details>;

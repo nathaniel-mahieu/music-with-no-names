@@ -51,14 +51,18 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
   const edgeGlowRef = useRef<HTMLDivElement>(null);
   const edgeRimRef = useRef<HTMLDivElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLDivElement>(null);
+  const nameAnimationsRef = useRef(new Map<number, Animation>());
   const pianoActiveRef = useRef(false);
   const midiCleanupRef = useRef<(() => void) | null>(null);
   const midiInputRef = useRef<MidiVisualInput | null>(null);
 
   const clearFlashes = useCallback(() => {
-    for (const ref of [foregroundStaffRef, glowRef, edgeGlowRef, edgeRimRef, noteRef]) {
+    for (const ref of [foregroundStaffRef, glowRef, edgeGlowRef, edgeRimRef, noteRef, nameRef]) {
       ref.current?.getAnimations?.({ subtree: true }).forEach((animation) => animation.cancel());
     }
+    nameAnimationsRef.current.clear();
+    for (const label of Array.from(nameRef.current?.children ?? [])) (label as HTMLElement).hidden = true;
   }, []);
 
   const setSettings = useCallback((next: PitchVisualSettings) => {
@@ -92,7 +96,7 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
     // A setting is saved synchronously; wait for its matching DOM layout before
     // addressing layers (128 written pitches vs 12 vertical pitch classes).
     if (glowRef.current?.dataset.mode !== current.mode) return;
-    if (!current.glowFlash && !current.noteFlash && !current.staffFlash) return;
+    if (!current.glowFlash && !current.noteFlash && !current.staffFlash && !current.nameFlash) return;
     const valid = new Set(notes.filter((note) => Number.isInteger(note) && note >= 0 && note <= 127));
     if (!valid.size) return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -107,12 +111,12 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
     // Border and inward wash use the same envelope so their join never has an
     // opacity step, including while a cue is fading or motion is reduced.
     const animateEdge = (element: Element | null | undefined) => {
-      if (!element?.animate) return;
+      if (!element?.animate) return null;
       element.getAnimations().forEach((animation) => animation.cancel());
       const frames = reducedMotion
         ? [{ opacity: 1 }, { opacity: 1 }]
         : [{ opacity: 1 }, { opacity: 1, offset: .22 }, { opacity: 0 }];
-      element.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
+      return element.animate(frames, { duration: reducedMotion ? 330 : 820, easing: "ease-out" });
     };
     const staffMode = current.mode === "staff";
     if (current.glowFlash) {
@@ -151,6 +155,25 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
     if (staffMode && current.noteFlash) valid.forEach((note) => animate(noteRef.current?.children.item(note), .86, .65));
     if (staffMode && current.staffFlash) {
       animate(foregroundStaffRef.current, .62, .42);
+    }
+    if (current.nameFlash) {
+      // Reuse twelve DOM labels: raw note-on messages need no React render or
+      // chord delay, and octave doublings share one pitch-class name.
+      const pitchClasses = new Set([...valid].map((note) => note % 12));
+      pitchClasses.forEach((pitchClass) => {
+        const label = nameRef.current?.children.item(pitchClass) as HTMLElement | null;
+        if (!label) return;
+        label.hidden = false;
+        const animation = animateEdge(label);
+        if (!animation) { label.hidden = true; return; }
+        nameAnimationsRef.current.set(pitchClass, animation);
+        animation.onfinish = () => {
+          // A queued old finish must never hide a freshly retriggered name.
+          if (nameAnimationsRef.current.get(pitchClass) !== animation) return;
+          nameAnimationsRef.current.delete(pitchClass);
+          label.hidden = true;
+        };
+      });
     }
   }, []);
 
@@ -197,6 +220,11 @@ export function PitchVisualProvider({ children }: { children: ReactNode }) {
         {ledgerSteps.map((ledgerStep) => <i className={styles.ledger} key={ledgerStep} style={{ "--pitch-staff-position": ledgerStep } as CSSProperties} />)}
         <i className={styles.notehead} />
         {[1, 3, 6, 8, 10].includes(pitchClass) ? <b className={styles.accidental}>♯</b> : null}
+      </span>)}
+    </div>
+    <div ref={nameRef} className={styles.names} data-pitch-visual="names" hidden={!settings.nameFlash} aria-hidden="true">
+      {PITCH_CLASS_COLORS.map(({ pitchClass, color, note, alternateNote }) => <span key={pitchClass} data-pitch-class={pitchClass} hidden style={{ "--pitch-glow-color": color } as CSSProperties}>
+        <strong>{note}</strong>{alternateNote ? <small>= {alternateNote}</small> : null}
       </span>)}
     </div>
   </PitchVisualContext.Provider>;

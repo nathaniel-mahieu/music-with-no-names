@@ -1,4 +1,4 @@
-import { CONVENTIONAL_PITCH_CLASSES, pitchClassFromMidi } from "./piano-model.ts";
+import { CONVENTIONAL_FLAT_PITCH_CLASSES, CONVENTIONAL_PITCH_CLASSES, pitchClassFromMidi } from "./piano-model.ts";
 
 const LIGHTNESS = 0.7;
 const CHROMA = 0.12;
@@ -29,6 +29,9 @@ export const PITCH_CLASS_COLORS = CONVENTIONAL_PITCH_CLASSES.map((note, pitchCla
   return {
     pitchClass,
     note,
+    // MIDI gives pitch identity, not score spelling. Keep the staff's sharp
+    // spelling primary, with a common flat equivalent only when it differs.
+    alternateNote: CONVENTIONAL_FLAT_PITCH_CLASSES[pitchClass] === note ? null : CONVENTIONAL_FLAT_PITCH_CLASSES[pitchClass],
     name,
     hue,
     color: `oklch(${LIGHTNESS} ${CHROMA} ${hue})`,

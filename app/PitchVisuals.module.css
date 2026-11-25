@@ -101,7 +101,39 @@
 .accidental { margin-left: calc(-2.2 * var(--pitch-staff-step-size)); color: var(--pitch-glow-color); font-family: "Noto Music", "Apple Symbols", serif; font-size: calc(2.1 * var(--pitch-staff-step-size)); font-weight: 400; line-height: 1; }
 .verticalGlow > span { inset: 0 auto 0 var(--pitch-glow-position); width: min(44%, 44rem); transform: translateX(-50%); background: linear-gradient(90deg, transparent, var(--pitch-glow-color) 50%, transparent); }
 
+.names {
+  position: fixed;
+  top: clamp(88px, 14svh, 152px);
+  left: 50%;
+  z-index: 11;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px 22px;
+  width: max-content;
+  max-width: calc(100vw - 40px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  user-select: none;
+}
+.names[hidden], .names > span[hidden] { display: none; }
+.names > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--pitch-glow-color);
+  opacity: 0;
+  font-size: clamp(2.2rem, 6vmin, 4.5rem);
+  line-height: 1;
+  text-shadow: 0 2px 8px #030710, 0 0 2px #030710;
+}
+.names strong { font-weight: 900; letter-spacing: -.035em; }
+.names small { font-size: .42em; font-weight: 800; letter-spacing: 0; white-space: nowrap; }
+
 @media (forced-colors: active) {
   .staff, .glow, .edgeGlow, .notes { display: none; }
   .edgeRim { display: none; }
+  .names > span { color: CanvasText; text-shadow: none; }
 }
