@@ -279,16 +279,24 @@ export function earSearchFutureProbeNotes(
   if (typeof latest.id !== "number") return latest.notes;
   const latestEvent = [...attacks].reverse().find((attack) => attack.id === latest.id);
   if (!latestEvent) return latest.notes;
-  const accepted = new Set(tracker.acceptedProbeIds);
-  let burstStartMs = latest.onsetMs;
-  for (let index = tracker.recentProbes.length - 2; index >= 0; index -= 1) {
-    const probe = tracker.recentProbes[index];
-    if (accepted.has(probe.id) || latestEvent.onsetMs - probe.onsetMs > chordWindowMs) break;
-    burstStartMs = Math.min(burstStartMs, probe.onsetMs);
+  // Probe onsets may use a local receipt clock while these raw attacks retain
+  // their source clock. IDs connect the two; only raw-to-raw time differences
+  // describe the physical burst. An accepted probe is an ID barrier even when
+  // its final attack shares a timestamp with the next exploratory note.
+  let acceptedThroughId = -1;
+  for (const id of tracker.acceptedProbeIds) {
+    if (typeof id === "number" && id < latestEvent.id) acceptedThroughId = Math.max(acceptedThroughId, id);
   }
-  const burstNotes = attacks
-    .filter((attack) => attack.id <= latestEvent.id && attack.onsetMs >= burstStartMs && attack.onsetMs <= latestEvent.onsetMs)
-    .map((attack) => attack.note);
+  const eligible = attacks
+    .filter((attack) => attack.id > acceptedThroughId && attack.id <= latestEvent.id)
+    .sort((first, second) => first.id - second.id);
+  const burstNotes: number[] = [];
+  for (let index = eligible.length - 1; index >= 0; index -= 1) {
+    const attack = eligible[index];
+    const elapsedMs = latestEvent.onsetMs - attack.onsetMs;
+    if (elapsedMs < 0 || elapsedMs > chordWindowMs) break;
+    burstNotes.push(attack.note);
+  }
   return burstNotes.length ? normalizeProbeNotes(burstNotes, "Future-orientation burst") : latest.notes;
 }
 

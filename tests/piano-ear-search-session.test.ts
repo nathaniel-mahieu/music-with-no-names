@@ -33,7 +33,7 @@ test("repeated reference listens retain the secure prefix and continue at the ne
   assert.equal(tracker.probeCount, target.length);
 });
 
-test("a replay preserves a completed route while an explicit reset clears it", () => {
+test("passive rearming preserves a completed route while an explicit reset clears it", () => {
   const target = [landing("only", [60])];
   const complete = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [attack(1, 60, 100)], { chordWindowMs: 40, nowMs: 100 });
   const replayed = rearmEarSearchTracker(target, complete, 7);
@@ -50,6 +50,27 @@ test("a replay preserves a completed route while an explicit reset clears it", (
   assert.deepEqual(reset.recentProbes, []);
   assert.equal(reset.latest, null);
   assert.equal(reset.processedThroughEventId, 9);
+});
+
+test("an explicit reference replay opens a new completed pass but retains partial finds", () => {
+  const target = [landing("first", [60]), landing("second", [62])];
+  const partial = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [attack(1, 60, 100)], { chordWindowMs: 40, nowMs: 100 });
+  const partialReplay = rearmEarSearchTracker(target, partial, 4, { restartCompleted: true });
+  assert.equal(partialReplay.matchedLandings, 1);
+  assert.deepEqual(partialReplay.acceptedProbeIds, [1]);
+  const complete = advanceEarSearchTracker(target, partialReplay, [attack(5, 62, 500)], { chordWindowMs: 40, nowMs: 500 });
+  assert.equal(complete.complete, true);
+  let replay = rearmEarSearchTracker(target, complete, 5, { restartCompleted: true });
+  assert.equal(replay.complete, false);
+  assert.equal(replay.matchedLandings, 0);
+  assert.equal(replay.probeCount, 0);
+  // Listen-time input is excluded at Stop/finish, but the very next key counts.
+  replay = rearmEarSearchTracker(target, replay, 8);
+  replay = advanceEarSearchTracker(target, replay, [attack(7, 60, 700), attack(9, 60, 900)], { chordWindowMs: 40, nowMs: 900 });
+  assert.equal(replay.matchedLandings, 1);
+  assert.deepEqual(replay.acceptedProbeIds, [9]);
+  replay = advanceEarSearchTracker(target, replay, [attack(10, 62, 1000)], { chordWindowMs: 40, nowMs: 1000 });
+  assert.equal(replay.complete, true);
 });
 
 test("pausing clears stale directions without erasing finds and the first resumed key updates the hint", () => {

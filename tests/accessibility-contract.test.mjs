@@ -130,7 +130,11 @@ test("site-wide staff flashes overlay content with synchronized left quarter not
 test("raw MIDI chord feedback precedes frame-batched analysis without losing device timing", async () => {
   const piano = await readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8");
   const attack = piano.slice(piano.indexOf("  const addEvent = useCallback("), piano.indexOf("  const captureArmedDoAttack ="));
+  assert.match(attack, /const receivedAtMs = currentHudTime\(\);\s*showPitchAttacks\(\[note\]\);\s*if \(frozenRef\.current\) return/,
+    "capture receipt time must precede visual work and the paused-recording guard");
   assert.match(attack, /showPitchAttacks\(\[note\]\);\s*if \(frozenRef\.current\) return/);
+  assert.match(attack, /onsetMs: atMs, receivedAtMs,/,
+    "raw attacks need separate source-onset and local-receipt clocks before frame publication");
   assert.match(attack, /phraseEventsRef\.current = nextPhraseEvents;[\s\S]*eventsRef\.current = nextEvents;[\s\S]*publishEvents\(\)/);
   assert.doesNotMatch(attack, /setPhraseEvents|setEvents\(|scaleFrameTimeline|setTimeout|await /,
     "raw note-on must not wait for analysis, rendering, audio, or a chord grouping timer");
@@ -146,13 +150,24 @@ test("raw MIDI chord feedback precedes frame-batched analysis without losing dev
     "page-hide persistence should include attacks waiting for the next paint");
 });
 
-test("Sound Finder replay and Stop preserve finds while explicit Reset clears them", async () => {
-  const finder = await readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8");
+test("Sound Finder partial replay preserves finds and explicit completed replay opens a fresh pass", async () => {
+  const [finder, session] = await Promise.all([
+    readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/piano-ear-search-session.ts", import.meta.url), "utf8"),
+  ]);
   const playback = finder.slice(finder.indexOf("const playReference ="), finder.indexOf("const playAttackHint ="));
   assert.doesNotMatch(playback, /setTracker\(null\)/,
-    "listening again must not silently return the expected attack to the beginning");
+    "a partial replay must not discard its secure prefix");
+  assert.match(playback, /rearmEarSearchTracker\(searchLandings, current, boundaryId, \{ restartCompleted: true \}\)/,
+    "an explicit reference replay after success must make the next practice pass responsive");
+  assert.match(playback, /captureProbeBoundary\(\);[\s\S]*restartCompleted: true[\s\S]*stopAudio\("Preparing the hidden reference/,
+    "a fresh completed pass must establish its input boundary before reference preparation");
   assert.match(finder, /const beginProbeSearch = useCallback\(\(notice: string, resetProgress = false\)/);
   assert.match(finder, /rearmEarSearchTracker\(searchLandings, current, boundaryId, \{ resetProgress \}\)/);
+  assert.match(session, /options\.restartCompleted && checkpoint\.complete/,
+    "completed restart must be opt-in, not a side effect of Pause, Stop, or gather changes");
+  assert.match(session, /\.\.\.checkpoint,[\s\S]*latest: checkpoint\.complete \? checkpoint\.latest : null/,
+    "ordinary rearming must still retain completed success and partial finds");
   assert.match(finder, /const matched = evaluation\?\.matchedLandings \?\? 0/,
     "the shared score clock must keep its caught chips visible during replay too");
   const reset = finder.slice(finder.indexOf("const resetSearch ="), finder.indexOf("const prepareTargetChange ="));
@@ -200,8 +215,11 @@ test("Sound Finder opens probing without a reference and Stop cancels listening 
   assert.match(finder.slice(stopStart, stopEnd), /stopAudio\(\);\s*beginProbeSearch\(/,
     "Stop must invalidate audio before arming fresh keyboard input");
   assert.match(finder, /onClick=\{stopReferenceAndProbe\}>Stop/);
-  assert.match(finder, /event\.onsetMs >= probeBoundaryRef\.current\.atMs/,
-    "pre-Stop events published in a later paint must not receive retroactive credit");
+  assert.match(finder, /import \{ freshEarSearchAttacks, receivedEarSearchAttacks \} from "@\/lib\/piano-ear-search-input"/);
+  assert.match(finder, /const fresh = freshEarSearchAttacks\(events, current, probeBoundaryRef\.current\)/,
+    "fresh-event boundary filtering and source-clock normalization belong to the shared tested helper");
+  assert.doesNotMatch(finder, /event\.onsetMs >= probeBoundaryRef\.current\.atMs/,
+    "the HUD must not reject new local receipts using a possibly differently based source onset");
   assert.match(finder, /stopAudio\("Preparing the hidden reference[^\n]*"playing"\)/,
     "asynchronous audio preparation must not reopen probes before playback");
   assert.match(finder, /disabled=\{visiblePhase === "playing" \|\| !searchLandings\.length\}/,
@@ -213,6 +231,27 @@ test("Sound Finder opens probing without a reference and Stop cancels listening 
   assert.ok(oversizeStart >= 0 && oversizeEnd > oversizeStart);
   assert.doesNotMatch(finder.slice(oversizeStart, oversizeEnd), /stopAudio\(|setPhase\(|setTracker\(/,
     "refusing oversized reference audio must preserve the active search and its event boundary");
+});
+
+test("Sound Finder restores historical receipts in this page's clock rather than reusing an old page clock", async () => {
+  const piano = await readFile(new URL("../app/PianoLab.tsx", import.meta.url), "utf8");
+  const restoreStart = piano.indexOf("const restoredPhrase = saved.phraseEvents.map");
+  const restoreEnd = piano.indexOf("const restoredEvents =", restoreStart);
+  assert.ok(restoreStart >= 0 && restoreEnd > restoreStart);
+  const restored = piano.slice(restoreStart, restoreEnd);
+  assert.match(restored, /onsetMs: event\.onsetMs \+ shift/);
+  assert.match(restored, /receivedAtMs: Math\.max\(0, event\.onsetMs \+ shift\)/,
+    "persisted receipts must become historical too, even when the original MIDI source clock was offset");
+  assert.doesNotMatch(restored, /receivedAtMs: event\.receivedAtMs(?:\s*\+\s*shift)?/,
+    "a prior page's receipt clock must never be treated as a fresh post-Stop attack");
+});
+
+test("Sound Finder future orientation filters restored history before validating physical attack bursts", async () => {
+  const finder = await readFile(new URL("../app/PianoEarSearchHud.tsx", import.meta.url), "utf8");
+  assert.match(finder, /const currentPassInput = receivedEarSearchAttacks\(eventsRef\.current, probeBoundaryRef\.current\);\s*const echoNotes = earSearchFutureProbeNotes\(tracker, currentPassInput,/,
+    "old negative historical onsets must be excluded before the future-burst validator sees them");
+  assert.doesNotMatch(finder, /earSearchFutureProbeNotes\(tracker, eventsRef\.current,/,
+    "a wrong new probe must not crash on unrelated restored history from before this pass");
 });
 
 test("Sight Shapes keeps notation, interval, keyboard, and learner-report channels explicit and silent", async () => {
@@ -643,7 +682,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
     "future echoes must derive from finalized probe clusters rather than raw held keys");
   assert.match(finder, /tracker\.acceptedProbeIds\.includes\(latest\.id\)[\s\S]*setFutureEchoes\(\[\]\)[\s\S]*return/,
     "a correctly accepted probe must not also illuminate repeated future occurrences");
-  assert.match(finder, /const echoNotes = earSearchFutureProbeNotes\(tracker, eventsRef\.current, gathersTexture \? clusterWindow : 40\)/,
+  assert.match(finder, /const echoNotes = earSearchFutureProbeNotes\(tracker, currentPassInput, gathersTexture \? clusterWindow : 40\)/,
     "future chord fractions need a physical attack burst independent from the current target's key count");
   assert.match(finder, /earSearchFutureEchoes\(searchLandings, tracker\.matchedLandings, echoNotes\)/);
   assert.match(finder, /FUTURE_ECHO_MS = 850/);

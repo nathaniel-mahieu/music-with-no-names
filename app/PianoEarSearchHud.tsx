@@ -51,6 +51,7 @@ import { configureSafetyCompressor, loudnessControlGain } from "@/lib/audio-leve
 import { frequencyFromMidi } from "@/lib/piano-model";
 import { parseStoredScoreFlowSource, SCORE_FLOW_HISTORY_STORAGE_KEY, SCORE_FLOW_STORAGE_KEY } from "@/lib/score-flow-storage";
 import { rearmEarSearchTracker } from "@/lib/piano-ear-search-session";
+import { freshEarSearchAttacks, receivedEarSearchAttacks } from "@/lib/piano-ear-search-input";
 import { DEFAULT_EAR_SEARCH_CHORD_WINDOW, EAR_SEARCH_CHORD_WINDOWS, EAR_SEARCH_GATHER_STORAGE_KEY, parseEarSearchChordWindow, type EarSearchChordWindow } from "@/lib/piano-ear-search-preferences";
 
 type EarSearchHudEvent = {
@@ -58,6 +59,7 @@ type EarSearchHudEvent = {
   note: number;
   velocity: number;
   onsetMs: number;
+  receivedAtMs?: number;
   keyReleaseMs?: number | null;
   releaseMs: number | null;
 };
@@ -292,15 +294,15 @@ function RevealedMap({ notes, timelineLength, showConventions, showStaff = false
   </div>;
 }
 
-export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
+export function PianoEarSearchHud({ events, activeNotes, showConventions, frozen, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
   const twoHand = mode === "two-hand";
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
   const [fileState, setFileState] = useState<"empty" | "loading" | "ready" | "error">("empty");
   const [fileNotice, setFileNotice] = useState("Use the score already loaded in Score Flow, choose MusicXML, or try the original demo.");
-  const [timeSpan, setTimeSpan] = useState<EarSearchTimeSpan>("half-bar");
+  const [timeSpan, setTimeSpan] = useState<EarSearchTimeSpan>("one-bar");
   const [practiceHand, setPracticeHand] = useState<PracticeHand>("both");
-  const [voice, setVoice] = useState<EarSearchVoice>(twoHand ? "staff-anchors" : "upper");
+  const [voice, setVoice] = useState<EarSearchVoice>("full");
   const [chunkIndex, setChunkIndex] = useState(0);
   const [hintMode, setHintMode] = useState<HintMode>("compass");
   // Untimed ear search needs its own forgiving window, not the live HUD's
@@ -565,9 +567,7 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
     if (frozen || phase !== "searching" || !searchLandings.length) return;
     const task = window.setTimeout(() => setTracker((current) => {
       if (!current) return current;
-      const fresh = events
-        .filter((event) => event.id > current.processedThroughEventId && event.onsetMs >= probeBoundaryRef.current.atMs)
-        .map((event) => ({ id: event.id, note: event.note, onsetMs: event.onsetMs }));
+      const fresh = freshEarSearchAttacks(events, current, probeBoundaryRef.current);
       const newestOnset = fresh.at(-1)?.onsetMs ?? current.pendingAttacks.at(-1)?.onsetMs ?? 0;
       return advanceEarSearchTracker(searchLandings, current, fresh, {
         chordWindowMs: gathersTexture ? clusterWindow : 40,
@@ -607,7 +607,8 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
         setFutureEchoAnnouncement("");
         return;
       }
-      const echoNotes = earSearchFutureProbeNotes(tracker, eventsRef.current, gathersTexture ? clusterWindow : 40);
+      const currentPassInput = receivedEarSearchAttacks(eventsRef.current, probeBoundaryRef.current);
+      const echoNotes = earSearchFutureProbeNotes(tracker, currentPassInput, gathersTexture ? clusterWindow : 40);
       const echoes = earSearchFutureEchoes(searchLandings, tracker.matchedLandings, echoNotes);
       setFutureEchoes(echoes);
       if (!echoes.length) {
@@ -668,6 +669,13 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
     }
     if (frozen) onResumeCapture();
     clearFutureEchoes();
+    captureProbeBoundary();
+    const boundaryId = probeBoundaryRef.current.eventId;
+    // Listening partway through keeps finds. Listening after success opens a
+    // fresh practice pass instead of silently leaving the matcher completed.
+    setTracker((current) => searchLandings.length
+      ? rearmEarSearchTracker(searchLandings, current, boundaryId, { restartCompleted: true })
+      : null);
     // Gate preparation too: context.resume() can await a browser gesture.
     stopAudio("Preparing the hidden reference… Stop at any time to start probing.", "playing");
     setRevealed(false);
@@ -766,7 +774,7 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
       if (audioMasterRef.current === master) audioMasterRef.current = null;
       beginProbeSearch("Reference playback could not start. Silent probing is ready; check audio permission if you want to listen.");
     }
-  }, [beginProbeSearch, clearFutureEchoes, frozen, onResumeCapture, referencePlan, referenceVolume, score, searchLandings, stopAudio, targetLandings.length, timeSpan, tooDense, twoHand, voice]);
+  }, [beginProbeSearch, captureProbeBoundary, clearFutureEchoes, frozen, onResumeCapture, referencePlan, referenceVolume, score, searchLandings, stopAudio, targetLandings.length, timeSpan, tooDense, twoHand, voice]);
 
   const playAttackHint = useCallback(async (landing: EarSearchLanding, timelineIndex: number) => {
     if (phase === "playing" || !landing.notes.length) return;
@@ -872,6 +880,7 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
   const restDurationMs = referencePlan?.restSpans.reduce((sum, rest) => sum + rest.durationMs, 0) ?? 0;
   const frameHasSound = Boolean(referencePlan?.cues.some((cue) => cue.notes.length));
   const listeningOnly = tooDense || !targetLandings.length;
+  const inputReceipt = `Input #${Math.max(0, newestEventId(events))} · ${activeNotes.length} active · ${evaluation?.probeCount ?? 0} probes judged`;
   const pausedCue = { title: "Hints paused", body: "Resume capture to update this cue. Your found attacks are kept." };
   const gatheringCue = { title: "Gathering your keys", body: "Your note group is still open. Feedback follows when it closes." };
   const place = hintsPaused ? pausedCue : gathering ? gatheringCue : placeCopy(feedback);
@@ -912,7 +921,7 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
         ? twoHand ? `That score landing is secure. The next belongs to ${staffLabel(handProgress.nextStaff).toLowerCase()}.` : "That attack is found; its chip now shows the score-authored staff. Hold the accepted sound, then search for the next relationship."
         : "Wrong probes do not consume a slot or erase earlier progress. Look down at your hands for as long as you need."
       : visiblePhase === "complete" && !listeningOnly
-        ? "The route is found. Replay it, reset your probes, or choose Reveal. No notation opens automatically."
+        ? "The route is found. Practice again starts a fresh pass immediately; listening again also opens a new pass. No notation opens automatically."
         : listeningOnly
           ? tooDense ? "Choose a shorter window to probe this frame, or listen to its complete texture."
             : "This layer has no new attack to match. You can listen to its holds and rests, change the layer, or select another start."
@@ -932,7 +941,7 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
       <div className={styles.transport}>
         <div className={styles.chunkStepper}><button type="button" disabled={safeChunkIndex <= 0} onClick={() => { prepareTargetChange(); setChunkIndex(Math.max(0, safeChunkIndex - 1)); }} aria-label="Previous frame start">←</button><select aria-label="Frame start" title="Fixed half-bar starts; window length does not change these numbers" value={safeChunkIndex} onChange={(event) => { prepareTargetChange(); setChunkIndex(Number(event.target.value)); }}>{chunks.map((candidate, index) => <option key={candidate.ordinal} value={index}>Start {formatEarSearchFrameStart(candidate)}</option>)}</select><button type="button" disabled={safeChunkIndex >= chunks.length - 1} onClick={() => { prepareTargetChange(); setChunkIndex(Math.min(chunks.length - 1, safeChunkIndex + 1)); }} aria-label="Next frame start">→</button></div>
         {visiblePhase === "playing" ? <button type="button" className={styles.stopButton} onClick={stopReferenceAndProbe}>Stop</button> : <button type="button" className={styles.listenButton} disabled={!chunk || !referencePlan || referencePlan.totalDurationMs <= 0} onClick={() => void playReference()}>{hasHeard ? "Hear whole frame again" : "Hear hidden phrase"}</button>}
-        {visiblePhase !== "playing" && !listeningOnly ? <button type="button" onClick={resetSearch}>Reset probes</button> : null}
+        {visiblePhase !== "playing" && !listeningOnly ? <button type="button" onClick={resetSearch}>{evaluation?.complete ? "Practice again" : "Reset probes"}</button> : null}
       </div>
     </header>
 
@@ -941,7 +950,7 @@ export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCap
     {!chunks.length ? <div className={styles.noChunks}><strong>No score-time frame exists here.</strong><p>Try another score. Sound Finder keeps authored time and does not invent material outside it.</p></div> : <>
       <div className={cx(styles.statusStrip, hintsPaused && styles.isCapturePaused)} data-gathering={gathering || undefined}>
         <span className={cx(styles.phaseLamp, styles[`phase_${hintsPaused ? "paused" : visiblePhase}`])} aria-hidden="true" />
-        <div><strong>{phaseTitle}</strong><small role="status" aria-live="polite">{hintsPaused ? "Keyboard colors are live; no new probes are counted until capture resumes." : gathering ? gatherSummary : audioNotice}</small></div>
+        <div><div className={styles.statusHeading}><strong>{phaseTitle}</strong><span className={styles.inputReceipt} data-input-active={activeNotes.length > 0 || gathering} aria-label={inputReceipt}>{inputReceipt}</span></div><small role="status" aria-live="polite">{hintsPaused ? "Keyboard colors are live; no new probes are counted until capture resumes." : gathering ? gatherSummary : audioNotice}</small></div>
         {hintsPaused ? <button type="button" className={styles.resumeHintsButton} onClick={onResumeCapture}>Resume hints</button> : null}
       </div>
 

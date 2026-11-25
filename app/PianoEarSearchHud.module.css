@@ -243,6 +243,10 @@
   background: rgba(4, 7, 13, .64);
 }
 
+.statusHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 3px 12px; }
+.inputReceipt { color: var(--ear-muted); font-size: .63rem; font-variant-numeric: tabular-nums; }
+.inputReceipt[data-input-active="true"] { color: var(--ear-teal); }
+
 .phaseLamp {
   width: 10px;
   height: 10px;

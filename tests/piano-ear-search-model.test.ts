@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import "./piano-ear-search-session.test.ts";
+import "./piano-ear-search-input.test.ts";
 import { ORBIT_STUDY_MUSICXML, normalizeImportedMusicXmlScore, parseMusicXml } from "../lib/musicxml-import.ts";
 import { analyzeLocalPitchCollections, normalizeSheetMusicScore } from "../lib/sheet-music-coach-model.ts";
 import { parseStoredScoreFlowSource } from "../lib/score-flow-storage.ts";
@@ -82,6 +83,49 @@ test("future chord orientation reconstructs one physical burst when evaluation s
     targetNoteCount: 3,
     coverage: 1,
   }]);
+});
+
+test("future chord orientation compares raw source times rather than local probe times", () => {
+  const target = [landing("current-single", [48]), landing("future-dyad", [60, 64])];
+  const sourceAttacks = [
+    { id: 1, note: 60, onsetMs: 100 },
+    { id: 2, note: 64, onsetMs: 120 },
+  ];
+  const localAttacks = sourceAttacks.map((attack) => ({ ...attack, onsetMs: attack.onsetMs + 11_000 }));
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target), localAttacks, { chordWindowMs: 40, nowMs: 11_120 });
+  assert.deepEqual(tracker.recentProbes.map((item) => item.onsetMs), [11_100, 11_120]);
+  const notes = earSearchFutureProbeNotes(tracker, sourceAttacks, 40);
+  assert.deepEqual(notes, [60, 64]);
+  assert.deepEqual(earSearchFutureEchoes(target, tracker.matchedLandings, notes), [{
+    landingId: "future-dyad", landingIndex: 1, matchedNoteCount: 2, targetNoteCount: 2, coverage: 1,
+  }]);
+});
+
+test("future orientation cannot cross an accepted attack ID even at the same source time", () => {
+  const target = [landing("accepted", [48]), landing("current", [50]), landing("future", [48, 60, 64])];
+  const sourceAttacks = [
+    { id: 1, note: 48, onsetMs: 100 },
+    { id: 2, note: 60, onsetMs: 100 },
+    { id: 3, note: 64, onsetMs: 120 },
+  ];
+  const localAttacks = sourceAttacks.map((attack) => ({ ...attack, onsetMs: attack.onsetMs + 11_000 }));
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target), localAttacks, { chordWindowMs: 40, nowMs: 11_120 });
+  assert.deepEqual(tracker.acceptedProbeIds, [1]);
+  const notes = earSearchFutureProbeNotes(tracker, sourceAttacks, 40);
+  assert.deepEqual(notes, [60, 64]);
+  assert.equal(earSearchFutureEchoes(target, tracker.matchedLandings, notes)[0].coverage, 2 / 3);
+});
+
+test("future orientation uses one fixed source-time window rather than chaining nearby attacks", () => {
+  const target = [landing("current", [48]), landing("future", [60, 64, 67])];
+  const sourceAttacks = [
+    { id: 1, note: 60, onsetMs: 100 },
+    { id: 2, note: 64, onsetMs: 130 },
+    { id: 3, note: 67, onsetMs: 160 },
+  ];
+  const localAttacks = sourceAttacks.map((attack) => ({ ...attack, onsetMs: attack.onsetMs + 11_000 }));
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target), localAttacks, { chordWindowMs: 40, nowMs: 11_160 });
+  assert.deepEqual(earSearchFutureProbeNotes(tracker, sourceAttacks, 40), [64, 67]);
 });
 
 test("future echo input stays bounded and ignores empty or malformed played notes", () => {

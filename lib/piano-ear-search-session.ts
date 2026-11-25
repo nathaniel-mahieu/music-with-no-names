@@ -3,16 +3,17 @@ import { createEarSearchTracker, type EarSearchLanding, type EarSearchTracker } 
 /**
  * Return from listening without forgetting the learner's secure prefix.
  * Unfinished chord attacks cannot bridge playback, and listen-time input must
- * never be replayed as fresh probes. Only an explicit reset clears finds.
+ * never be replayed as fresh probes. Explicit reset clears finds; an explicit
+ * reference replay may also open a fresh pass once the whole target is found.
  */
 export function rearmEarSearchTracker(
   target: readonly EarSearchLanding[],
   checkpoint: EarSearchTracker | null,
   processedThroughEventId: number,
-  options: { resetProgress?: boolean } = {},
+  options: { resetProgress?: boolean; restartCompleted?: boolean } = {},
 ): EarSearchTracker {
   const fresh = createEarSearchTracker(target, processedThroughEventId);
-  if (!checkpoint || options.resetProgress) return fresh;
+  if (!checkpoint || options.resetProgress || (options.restartCompleted && checkpoint.complete)) return fresh;
   if (checkpoint.totalLandings !== target.length
     || !Number.isInteger(checkpoint.matchedLandings)
     || checkpoint.matchedLandings < 0 || checkpoint.matchedLandings > target.length) {

@@ -14,6 +14,19 @@ function gatherChangeBody(source) {
   return source.slice(source.indexOf("{", start) + 1, end);
 }
 
+test("Sound Finder starts with Full texture and a one-bar window while retaining reductions", async () => {
+  const source = await readHud();
+  assert.match(source, /useState<EarSearchTimeSpan>\("one-bar"\)/,
+    "both Sound Finder modes should start with a one-bar listening window");
+  assert.match(source, /useState<EarSearchVoice>\("full"\)/,
+    "both Sound Finder modes should require the full selected-staff texture by default");
+  for (const value of ["half-bar", "one-bar", "two-bars", "upper", "bass", "staff-anchors", "full"]) {
+    assert.match(source, new RegExp(`<option value="${value}">`),
+      `the ${value} choice must remain available after changing the defaults`);
+  }
+  assert.match(source, /<option value="full">Full texture<\/option>/);
+});
+
 test("Sound Finder uses its own forgiving gather preference rather than the live MIDI analysis window", async () => {
   const source = await readHud();
   assert.match(source, /useState<EarSearchChordWindow>\(DEFAULT_EAR_SEARCH_CHORD_WINDOW\)/);

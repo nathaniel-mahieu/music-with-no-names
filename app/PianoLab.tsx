@@ -180,6 +180,8 @@ type HudNoteEvent = {
   channel: number;
   source: "midi" | "screen";
   onsetMs: number;
+  /** Local callback receipt clock, separate from the device's musical onset. */
+  receivedAtMs?: number;
   keyReleaseMs: number | null;
   releaseMs: number | null;
   releaseReason: "key" | "pedal" | null;
@@ -4476,6 +4478,7 @@ export function PianoLab() {
             const restoredPhrase = saved.phraseEvents.map((event) => ({
               ...event,
               onsetMs: event.onsetMs + shift,
+              receivedAtMs: Math.max(0, event.onsetMs + shift),
               keyReleaseMs: event.keyReleaseMs == null ? null : event.keyReleaseMs + shift,
               releaseMs: event.releaseMs == null ? currentNow - 350 : event.releaseMs + shift,
               releaseReason: event.releaseReason ?? "key",
@@ -4694,9 +4697,10 @@ export function PianoLab() {
   }, [updateEvents]);
 
   const addEvent = useCallback((note: number, velocity: number, channel: number, source: HudNoteEvent["source"], fieldNotes: number[], atMs = currentHudTime(), midiFieldNotes?: number[]) => {
+    const receivedAtMs = currentHudTime();
     showPitchAttacks([note]);
     if (frozenRef.current) return;
-    const event: HudNoteEvent = { id: nextIdRef.current, note, velocity, channel, source, onsetMs: atMs, keyReleaseMs: null, releaseMs: null, releaseReason: null, fieldNotes: uniqueSorted(fieldNotes), ...(midiFieldNotes ? { midiFieldNotes: uniqueSorted(midiFieldNotes) } : {}) };
+    const event: HudNoteEvent = { id: nextIdRef.current, note, velocity, channel, source, onsetMs: atMs, receivedAtMs, keyReleaseMs: null, releaseMs: null, releaseReason: null, fieldNotes: uniqueSorted(fieldNotes), ...(midiFieldNotes ? { midiFieldNotes: uniqueSorted(midiFieldNotes) } : {}) };
     nextIdRef.current += 1;
     const nextEvents = pushRollingNoteEvent(eventsRef.current, event, 7);
     const nextPhraseEvents = focusLens === "score-flow" || isEarSearchFocus
