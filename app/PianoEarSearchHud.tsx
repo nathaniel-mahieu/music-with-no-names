@@ -51,6 +51,7 @@ import { configureSafetyCompressor, loudnessControlGain } from "@/lib/audio-leve
 import { frequencyFromMidi } from "@/lib/piano-model";
 import { parseStoredScoreFlowSource, SCORE_FLOW_HISTORY_STORAGE_KEY, SCORE_FLOW_STORAGE_KEY } from "@/lib/score-flow-storage";
 import { rearmEarSearchTracker } from "@/lib/piano-ear-search-session";
+import { DEFAULT_EAR_SEARCH_CHORD_WINDOW, EAR_SEARCH_CHORD_WINDOWS, EAR_SEARCH_GATHER_STORAGE_KEY, parseEarSearchChordWindow, type EarSearchChordWindow } from "@/lib/piano-ear-search-preferences";
 
 type EarSearchHudEvent = {
   id: number;
@@ -64,6 +65,7 @@ type EarSearchHudEvent = {
 type PianoEarSearchHudProps = {
   events: EarSearchHudEvent[];
   activeNotes: number[];
+  /** Caller compatibility: untimed gathering has its own more forgiving setting. */
   chordWindowMs: number;
   showConventions: boolean;
   frozen: boolean;
@@ -290,7 +292,7 @@ function RevealedMap({ notes, timelineLength, showConventions, showStaff = false
   </div>;
 }
 
-export function PianoEarSearchHud({ events, chordWindowMs, showConventions, frozen, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
+export function PianoEarSearchHud({ events, showConventions, frozen, onResumeCapture, mode = "classic" }: PianoEarSearchHudProps) {
   const twoHand = mode === "two-hand";
   const [imported, setImported] = useState<ImportedMusicXmlScore | null>(null);
   const [score, setScore] = useState<SheetMusicScore | null>(null);
@@ -301,7 +303,9 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const [voice, setVoice] = useState<EarSearchVoice>(twoHand ? "staff-anchors" : "upper");
   const [chunkIndex, setChunkIndex] = useState(0);
   const [hintMode, setHintMode] = useState<HintMode>("compass");
-  const [clusterWindow, setClusterWindow] = useState<140 | 240 | 480>(chordWindowMs <= 80 ? 140 : chordWindowMs >= 320 ? 480 : 240);
+  // Untimed ear search needs its own forgiving window, not the live HUD's
+  // tighter together/rolled analysis setting.
+  const [clusterWindow, setClusterWindow] = useState<EarSearchChordWindow>(DEFAULT_EAR_SEARCH_CHORD_WINDOW);
   const [tempoPercent, setTempoPercent] = useState(72);
   const [referenceVolume, setReferenceVolume] = useState(88);
   const [phase, setPhase] = useState<SearchPhase>("ready");
@@ -331,6 +335,10 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const memoryListRef = useRef<HTMLOListElement | null>(null);
 
   useEffect(() => { eventsRef.current = events; }, [events]);
+  useEffect(() => {
+    try { setClusterWindow(parseEarSearchChordWindow(window.sessionStorage.getItem(EAR_SEARCH_GATHER_STORAGE_KEY))); }
+    catch { /* The forgiving default also works when browser storage is blocked. */ }
+  }, []);
   const captureProbeBoundary = useCallback(() => {
     probeBoundaryRef.current = { eventId: newestEventId(eventsRef.current), atMs: performance.now() };
   }, []);
@@ -585,7 +593,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   useEffect(() => {
     const task = window.setTimeout(() => {
       const latest = tracker?.recentProbes.at(-1);
-      if (frozen || phase !== "searching" || !tracker || !tracker.latest || !latest || !searchLandings.length) {
+      if (frozen || phase !== "searching" || !tracker || !tracker.latest || !latest || !searchLandings.length || tracker.pendingAttacks.length > 0) {
         clearFutureEchoes();
         return;
       }
@@ -625,6 +633,18 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     disposeAudio();
     setRevealed(false);
     beginProbeSearch("Fresh search. New key attacks count now; listening is optional.", true);
+  };
+
+  const changeGatherWindow = (value: EarSearchChordWindow) => {
+    captureProbeBoundary();
+    clearFutureEchoes();
+    const boundaryId = probeBoundaryRef.current.eventId;
+    setTracker((current) => searchLandings.length ? rearmEarSearchTracker(searchLandings, current, boundaryId) : null);
+    setClusterClockMs(0);
+    setClusterWindow(value);
+    if (phase !== "playing") setAudioNotice("Chord gather changed. Your finds are kept; start a fresh chord when capture is active.");
+    try { window.sessionStorage.setItem(EAR_SEARCH_GATHER_STORAGE_KEY, String(value)); }
+    catch { /* The choice still works in memory without storage. */ }
   };
 
   const prepareTargetChange = (notice = "Frame changed. Start probing now, or listen to the reference.") => {
@@ -840,7 +860,10 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const visiblePhase: SearchPhase = phase === "searching" && evaluation?.complete ? "complete" : phase;
   const hintsPaused = frozen && visiblePhase !== "playing";
   const canProbe = visiblePhase === "searching" && !frozen;
-  const feedback = !frozen && (visiblePhase === "searching" || visiblePhase === "complete") ? evaluation?.latest ?? null : null;
+  const gatheringKeys = canProbe ? new Set(tracker?.pendingAttacks.map((attack) => attack.note) ?? []).size : 0;
+  const gathering = gatheringKeys > 0;
+  const gatherSummary = `${gatheringKeys} distinct played key${gatheringKeys === 1 ? "" : "s"} received. Gather up to ${clusterWindow} ms from the first key; rhythm is not graded.`;
+  const feedback = !frozen && !gathering && (visiblePhase === "searching" || visiblePhase === "complete") ? evaluation?.latest ?? null : null;
   const matched = evaluation?.matchedLandings ?? 0;
   const total = searchLandings.length;
   const timelineTotal = timelineLandings.length;
@@ -850,13 +873,14 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
   const frameHasSound = Boolean(referencePlan?.cues.some((cue) => cue.notes.length));
   const listeningOnly = tooDense || !targetLandings.length;
   const pausedCue = { title: "Hints paused", body: "Resume capture to update this cue. Your found attacks are kept." };
-  const place = hintsPaused ? pausedCue : placeCopy(feedback);
-  const direction = hintsPaused ? pausedCue : directionCopy(feedback);
-  const interval = hintsPaused ? pausedCue : !feedback && matched > 0
+  const gatheringCue = { title: "Gathering your keys", body: "Your note group is still open. Feedback follows when it closes." };
+  const place = hintsPaused ? pausedCue : gathering ? gatheringCue : placeCopy(feedback);
+  const direction = hintsPaused ? pausedCue : gathering ? gatheringCue : directionCopy(feedback);
+  const interval = hintsPaused ? pausedCue : gathering ? gatheringCue : !feedback && matched > 0
     ? { title: "Next relationship waits", body: "Your last found landing is kept. Play a new probe to compare its direction and reach." }
     : intervalCopy(feedback);
-  const collectionCue = hintsPaused ? pausedCue : collectionCopy(feedback);
-  const texture = hintsPaused ? pausedCue : textureCopy(feedback);
+  const collectionCue = hintsPaused ? pausedCue : gathering ? gatheringCue : collectionCopy(feedback);
+  const texture = hintsPaused ? pausedCue : gathering ? gatheringCue : textureCopy(feedback);
   const chordCountMismatch = gathersTexture && (feedback?.texture === "fewer-keys" || feedback?.texture === "more-keys");
   const primaryCue: PrimaryCue = hintMode === "blind" ? null
     : chordCountMismatch ? "texture"
@@ -865,6 +889,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
         : feedback.pitchFamily === "same-family" ? "place" : "direction";
   const accepted = new Set(evaluation?.acceptedProbeIds ?? []);
   const phaseTitle = hintsPaused ? "Capture paused · hints are not updating"
+    : gathering ? `Gathering chord · ${gatheringKeys} played key${gatheringKeys === 1 ? "" : "s"}`
     : visiblePhase === "playing" ? frameHasSound ? "Listen · the whole frame is sounding" : "Listen · hold the written silence"
       : visiblePhase === "searching" ? "Your time · there is no clock"
         : visiblePhase === "complete" ? listeningOnly ? tooDense ? "Frame heard · shorten it to begin searching" : "Frame heard · no new attack to search" : "Phrase found · hold the shape in memory"
@@ -879,6 +904,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
       : canProbe ? "Next landing" : "Opening landing";
   const centralInstruction = hintsPaused
     ? "Your keys can still glow, but pitch hints are paused. Resume capture to keep searching. Your found attacks are kept."
+    : gathering ? `${gatherSummary} Repeating a key does not add another chord member.`
     : visiblePhase === "playing"
     ? "Listen again without losing your finds, or press Stop to probe now. Keys played during reference playback do not count."
     : visiblePhase === "searching"
@@ -913,9 +939,9 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
     {fileState === "loading" || fileState === "error" ? <p className={styles.scoreImportNotice} role={fileState === "error" ? "alert" : "status"}>{fileNotice}</p> : null}
 
     {!chunks.length ? <div className={styles.noChunks}><strong>No score-time frame exists here.</strong><p>Try another score. Sound Finder keeps authored time and does not invent material outside it.</p></div> : <>
-      <div className={cx(styles.statusStrip, hintsPaused && styles.isCapturePaused)}>
+      <div className={cx(styles.statusStrip, hintsPaused && styles.isCapturePaused)} data-gathering={gathering || undefined}>
         <span className={cx(styles.phaseLamp, styles[`phase_${hintsPaused ? "paused" : visiblePhase}`])} aria-hidden="true" />
-        <div><strong>{phaseTitle}</strong><small role="status" aria-live="polite">{hintsPaused ? "Keyboard colors are live; no new probes are counted until capture resumes." : audioNotice}</small></div>
+        <div><strong>{phaseTitle}</strong><small role="status" aria-live="polite">{hintsPaused ? "Keyboard colors are live; no new probes are counted until capture resumes." : gathering ? gatherSummary : audioNotice}</small></div>
         {hintsPaused ? <button type="button" className={styles.resumeHintsButton} onClick={onResumeCapture}>Resume hints</button> : null}
       </div>
 
@@ -954,7 +980,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
           <div className={cx(styles.compass, hintMode === "blind" && styles.isBlind)}>
             <article className={styles.placeChannel} data-active={Boolean(feedback) && hintMode !== "blind" && !chordCountMismatch} data-primary={primaryCue === "place"} aria-current={primaryCue === "place" ? "step" : undefined} data-caught={feedback?.status === "caught"}><b className={styles.cueGlyph} aria-hidden="true">{hintMode === "blind" || chordCountMismatch ? "·" : placeGlyph(feedback)}</b><span>Place / octave{primaryCue === "place" ? <em className={styles.nextMove}>Next move</em> : null}</span><strong>{hintMode === "blind" ? "Held back" : chordCountMismatch ? "Chord shape first" : place.title}</strong><small>{hintMode === "blind" ? "Progress only mode withholds register proximity." : chordCountMismatch ? "Match the number of gathered keys before using chord-center or octave guidance." : place.body}</small></article>
             <article className={styles.directionChannel} data-active={Boolean(feedback) && hintMode !== "blind" && !chordCountMismatch} data-primary={primaryCue === "direction"} aria-current={primaryCue === "direction" ? "step" : undefined} data-caught={feedback?.status === "caught"}><b className={styles.cueGlyph} aria-hidden="true">{hintMode === "blind" || chordCountMismatch ? "·" : directionGlyph(feedback)}</b><span>Pitch direction{primaryCue === "direction" ? <em className={styles.nextMove}>Next move</em> : null}</span><strong>{hintMode === "blind" ? "Held back" : chordCountMismatch ? "Chord shape first" : direction.title}</strong><small>{hintMode === "blind" ? "No higher/lower cue in this mode." : chordCountMismatch ? "A partial chord's center can point the hand the wrong way, so this cue waits." : direction.body}</small></article>
-            <div className={styles.soundCore} aria-hidden="true"><i /><i /><i /><b>{hintsPaused ? "paused" : visiblePhase === "playing" ? "listen" : visiblePhase === "complete" ? "found" : visiblePhase === "searching" ? "probe" : "ready"}</b></div>
+            <div className={styles.soundCore} aria-hidden="true"><i /><i /><i /><b>{hintsPaused ? "paused" : gathering ? "gather" : visiblePhase === "playing" ? "listen" : visiblePhase === "complete" ? "found" : visiblePhase === "searching" ? "probe" : "ready"}</b></div>
             <article className={styles.intervalChannel} data-active={Boolean(feedback) && hintMode !== "blind"} data-primary={primaryCue === "interval" || primaryCue === "texture"} aria-current={primaryCue === "interval" || primaryCue === "texture" ? "step" : undefined} data-caught={feedback?.status === "caught"}><b className={styles.cueGlyph} aria-hidden="true">{hintMode === "blind" ? "·" : chordCountMismatch ? textureGlyph(feedback) : intervalGlyph(feedback)}</b><span>{hintMode === "blind" ? "Relationship feedback" : chordCountMismatch ? "Chord key count first" : "Relationship from last caught landing"}{primaryCue === "interval" || primaryCue === "texture" ? <em className={styles.nextMove}>Next move</em> : null}</span><strong>{hintMode === "blind" ? "Held back" : chordCountMismatch ? texture.title : interval.title}</strong><small>{hintMode === "blind" ? "No contour or width cue in this mode." : chordCountMismatch ? texture.body : `${interval.body}${gathersTexture ? ` Texture: ${texture.title}. ${texture.body}` : ""}`}</small></article>
             <article className={styles.collectionChannel} data-active={Boolean(feedback) && hintMode !== "blind" && !chordCountMismatch} data-tertiary="true" data-caught={feedback?.status === "caught"}><b className={styles.cueGlyph} aria-hidden="true">{hintMode === "blind" || chordCountMismatch ? "·" : collectionGlyph(feedback)}</b><span>Collection context</span><strong>{hintMode === "blind" ? "Held back" : chordCountMismatch ? "Wait for chord shape" : collectionCue.title}</strong><small>{hintMode === "blind" ? "No local collection cue in this mode." : chordCountMismatch ? "Collection membership is secondary until the gathered key count matches." : collectionCue.body}</small></article>
           </div>
@@ -962,7 +988,7 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
         </main>
 
         <aside className={styles.probeDock}>
-          <div><span>Recent probes</span><strong>{hintsPaused ? "Capture paused · no new probes counted" : listeningOnly ? "Listen to this frame; no probe target is active" : clusters.length ? `${evaluation?.probeCount ?? clusters.length} explored · latest ${clusters.length} shown` : twoHand ? "Waiting for keyboard probes" : "Waiting for your hands"}</strong><small>{listeningOnly ? "A rest-only or over-dense frame remains audible and navigable instead of disappearing." : "The latest 64 probes stay visible; caught progress persists independently and seconds between probes do not matter."}</small></div>
+          <div><span>Recent probes</span><strong>{hintsPaused ? "Capture paused · no new probes counted" : gathering ? `${gatheringKeys} played key${gatheringKeys === 1 ? "" : "s"} gathering · not yet judged` : listeningOnly ? "Listen to this frame; no probe target is active" : clusters.length ? `${evaluation?.probeCount ?? clusters.length} explored · latest ${clusters.length} shown` : twoHand ? "Waiting for keyboard probes" : "Waiting for your hands"}</strong><small>{listeningOnly ? "A rest-only or over-dense frame remains audible and navigable instead of disappearing." : "The latest 64 probes stay visible; caught progress persists independently and seconds between probes do not matter."}</small></div>
           <ol>{clusters.slice(-8).map((cluster, index) => <li key={`${cluster.id}-${index}`} className={accepted.has(cluster.id) ? styles.isAccepted : undefined}><i aria-hidden="true">{accepted.has(cluster.id) ? "✓" : "·"}</i><div><strong>{accepted.has(cluster.id) ? "caught" : "exploring"}</strong><small>{cluster.notes.length > 1 ? `${cluster.notes.length} played keys together` : "one played key"}</small></div></li>)}</ol>
           <div className={styles.probeRules}><p><b>Sound:</b> your piano or DAW</p><p><b>Data:</b> attacks only</p><p><b>Clock:</b> deliberately ignored</p><p><b>{twoHand ? "Staff:" : "Meaning:"}</b> {twoHand ? "from MusicXML, never inferred from MIDI pitch" : "separate cues, never a musicality score"}</p></div>
         </aside>
@@ -972,12 +998,12 @@ export function PianoEarSearchHud({ events, chordWindowMs, showConventions, froz
         <div><strong>MIDI remains silent.</strong><span>Only explicit frame and chip ear-hint controls create sound. {twoHand ? "Upper/lower labels describe the score; MIDI cannot see which physical hand played. " : ""}Sustain and held keys do not become new attacks.</span></div>
         <label><span>Frame + hint level · {referenceVolume}%</span><input type="range" min={0} max={100} value={referenceVolume} aria-label="Sound Finder frame and hint level" aria-valuetext={`${referenceVolume} percent`} onChange={(event) => { const value = Number(event.target.value); setReferenceVolume(value); const context = audioContextRef.current; const master = audioMasterRef.current; if (context && master && context.state !== "closed") master.gain.setTargetAtTime(referenceGain(value), context.currentTime, .025); }} /></label>
         <label><span>Tempo · {tempoPercent}%</span><input type="range" min={45} max={100} step={1} value={tempoPercent} aria-label="Hidden phrase tempo" aria-valuetext={`${tempoPercent} percent of score tempo`} onChange={(event) => { prepareTargetChange(); setTempoPercent(Number(event.target.value)); }} /></label>
-        {gathersTexture ? <label><span>Multi-key gather</span><select value={clusterWindow} onChange={(event) => setClusterWindow(Number(event.target.value) as 140 | 240 | 480)}><option value={140}>Close · 140 ms</option><option value={240}>Beginner · 240 ms</option><option value={480}>Build slowly · 480 ms</option></select></label> : null}
+        {gathersTexture ? <label title="Time from the first played key, separate from live HUD grouping. Saved for this tab; rhythm is not graded."><span>Chord gather</span><select value={clusterWindow} onChange={(event) => changeGatherWindow(parseEarSearchChordWindow(event.target.value))}>{EAR_SEARCH_CHORD_WINDOWS.map((windowMs) => <option key={windowMs} value={windowMs}>{windowMs === 300 ? "Close" : windowMs === 600 ? "Forgiving" : "Slow build"} · {windowMs} ms</option>)}</select></label> : null}
         <button ref={revealButtonRef} type="button" className={styles.revealButton} disabled={visiblePhase === "playing" || !searchLandings.length} aria-pressed={revealed} onClick={() => revealed ? closeReveal(false) : setRevealed(true)}>{revealed ? "Hide exact map" : "Reveal exact map"}</button>
       </footer>
 
       {revealed ? <section className={styles.revealDrawer} role="dialog" aria-modal="true" aria-labelledby="ear-search-reveal-title" onKeyDown={handleRevealKeyDown}><header><div><span>Chosen disclosure · after listening</span><h4 id="ear-search-reveal-title">Connect the remembered sound to exact semitone places.</h4></div><button ref={revealCloseRef} type="button" onClick={() => closeReveal()}>Close exact map</button></header><RevealedMap notes={searchLandings.map((landing) => ({ ...landing, timelineIndex: (timelineLandings.find((item) => item.id === landing.id)?.timelineIndex ?? 0) + 1 }))} timelineLength={timelineTotal} showConventions={showConventions} showStaff /></section> : null}
-      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{hintsPaused ? `Capture paused. Resume hints to update feedback. ${matched} of ${total} landings remain secure.` : listeningOnly && visiblePhase === "complete" ? tooDense ? `Full frame heard. ${targetLandings.length} attacks exceed the ${EAR_SEARCH_MAX_LANDINGS}-attack search limit; choose a shorter frame.` : "Full frame heard. This selected staff has no new attack to search." : feedbackAnnouncement(feedback, matched, total, Boolean(evaluation?.complete), visiblePhase, hintMode, evaluation?.probeCount ?? 0, primaryCue)}{twoHand && !hintsPaused && visiblePhase !== "complete" ? ` ${handCueVerb}: ${staffLabel(currentStaff)}. Pitch remains hidden.` : ""}</p>
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{hintsPaused ? `Capture paused. Resume hints to update feedback. ${matched} of ${total} landings remain secure.` : gathering ? gatherSummary : listeningOnly && visiblePhase === "complete" ? tooDense ? `Full frame heard. ${targetLandings.length} attacks exceed the ${EAR_SEARCH_MAX_LANDINGS}-attack search limit; choose a shorter frame.` : "Full frame heard. This selected staff has no new attack to search." : feedbackAnnouncement(feedback, matched, total, Boolean(evaluation?.complete), visiblePhase, hintMode, evaluation?.probeCount ?? 0, primaryCue)}{twoHand && !hintsPaused && visiblePhase !== "complete" ? ` ${handCueVerb}: ${staffLabel(currentStaff)}. Pitch remains hidden.` : ""}</p>
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{futureEchoAnnouncement}</p>
     </>}
   </section>;

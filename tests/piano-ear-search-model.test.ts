@@ -14,6 +14,7 @@ import {
   earSearchFutureEchoes,
   earSearchFutureProbeNotes,
   earSearchLandingsForChunk,
+  earSearchPendingDueAt,
   evaluateEarSearch,
   formatEarSearchFrameStart,
   selectEarSearchChunkLoop,
@@ -462,6 +463,170 @@ test("a key held across Stop is not a fresh chord member and cannot leak listeni
   assert.deepEqual(complete.acceptedProbeIds, [10], "later exploratory attacks must not erase the secure prefix");
 });
 
+test("a beginner-sized window accepts a slowly rolled triad before its fixed deadline", () => {
+  const target = [landing("triad", [60, 64, 67])];
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 180 },
+    { id: 3, note: 67, onsetMs: 360 },
+  ], { chordWindowMs: 600, nowMs: 400 });
+  assert.equal(tracker.probeCount, 0);
+  assert.equal(earSearchPendingDueAt(target, tracker, 600), 420);
+  tracker = advanceEarSearchTracker(target, tracker, [], { chordWindowMs: 600, nowMs: 420 });
+  assert.equal(tracker.complete, true);
+  assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[60, 64, 67]]);
+  assert.deepEqual(tracker.acceptedProbeIds, [3]);
+});
+
+test("rearticulating an incomplete chord does not masquerade as another member", () => {
+  const target = [landing("triad", [60, 64, 67])];
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 60, onsetMs: 80 },
+    { id: 3, note: 64, onsetMs: 160 },
+  ], { chordWindowMs: 600, nowMs: 300 });
+  assert.equal(tracker.probeCount, 0);
+  assert.equal(earSearchPendingDueAt(target, tracker, 600), 600,
+    "three raw attacks still contain only two distinct chord members");
+  tracker = advanceEarSearchTracker(target, tracker, [
+    { id: 4, note: 67, onsetMs: 320 },
+  ], { chordWindowMs: 600, nowMs: 380 });
+  assert.equal(tracker.complete, true);
+  assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[60, 64, 67]]);
+  assert.deepEqual(tracker.acceptedProbeIds, [4]);
+});
+
+test("a duplicate after chord completion does not prolong settling into the next landing", () => {
+  const target = [landing("dyad", [60, 64]), landing("next", [67])];
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 80 },
+    { id: 3, note: 60, onsetMs: 120 },
+  ], { chordWindowMs: 600, nowMs: 120 });
+  assert.equal(earSearchPendingDueAt(target, tracker, 600), 140,
+    "settling follows the last new member, not a duplicate reattack");
+  tracker = advanceEarSearchTracker(target, tracker, [
+    { id: 4, note: 67, onsetMs: 170 },
+  ], { chordWindowMs: 600, nowMs: 230 });
+  assert.equal(tracker.complete, true);
+  assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[60, 64], [67]]);
+  assert.deepEqual(tracker.acceptedProbeIds, [3, 4], "probe identity still uses its last raw attack");
+});
+
+test("distinct overfull chords still reject immediately and the next rolled attempt can recover", () => {
+  const target = [landing("triad", [60, 64, 67])];
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 60, onsetMs: 20 },
+    { id: 3, note: 64, onsetMs: 100 },
+    { id: 4, note: 61, onsetMs: 200 },
+    { id: 5, note: 69, onsetMs: 230 },
+  ], { chordWindowMs: 600, nowMs: 230 });
+  assert.equal(tracker.complete, false);
+  assert.equal(tracker.latest?.texture, "more-keys");
+  assert.deepEqual(tracker.recentProbes[0].notes, [60, 61, 64, 69]);
+  assert.deepEqual(tracker.pendingAttacks, []);
+  tracker = advanceEarSearchTracker(target, tracker, [
+    { id: 6, note: 60, onsetMs: 1_000 },
+    { id: 7, note: 64, onsetMs: 1_300 },
+    { id: 8, note: 67, onsetMs: 1_450 },
+  ], { chordWindowMs: 600, nowMs: 1_510 });
+  assert.equal(tracker.complete, true);
+  assert.equal(tracker.probeCount, 2);
+  assert.deepEqual(tracker.acceptedProbeIds, [8]);
+});
+
+test("the one-second window accepts a slow two-hand build without waiting a full second once complete", () => {
+  const target = [landing("triad", [48, 60, 64])];
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+    { id: 1, note: 48, onsetMs: 0 },
+    { id: 2, note: 60, onsetMs: 420 },
+    { id: 3, note: 64, onsetMs: 900 },
+  ], { chordWindowMs: 1000, nowMs: 959 });
+  assert.equal(tracker.complete, false);
+  assert.equal(earSearchPendingDueAt(target, tracker, 1000), 960);
+  tracker = advanceEarSearchTracker(target, tracker, [], { chordWindowMs: 1000, nowMs: 960 });
+  assert.equal(tracker.complete, true);
+});
+
+test("wide gathering remains anchored to the first key instead of chaining each later attack", () => {
+  const target = [landing("triad", [60, 64, 67])];
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 64, onsetMs: 400 },
+    { id: 3, note: 67, onsetMs: 800 },
+  ], { chordWindowMs: 600, nowMs: 1_400 });
+  assert.equal(tracker.complete, false);
+  assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[60, 64], [67]]);
+});
+
+test("the fixed gathering deadline retains its exact half-open boundary", () => {
+  const target = [landing("triad", [60, 64, 67])];
+  for (const lastOnset of [599, 600]) {
+    const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+      { id: 1, note: 60, onsetMs: 0 },
+      { id: 2, note: 64, onsetMs: 300 },
+      { id: 3, note: 67, onsetMs: lastOnset },
+    ], { chordWindowMs: 600, nowMs: 1_300 });
+    assert.equal(tracker.complete, lastOnset === 599);
+    assert.deepEqual(tracker.recentProbes.map((item) => item.notes), lastOnset === 599 ? [[60, 64, 67]] : [[60, 64], [67]]);
+  }
+});
+
+test("exported pending deadlines match cached membership across batched and incremental duplicate input", () => {
+  const target = [landing("triad", [60, 64, 67])];
+  const attacks = [
+    { id: 1, note: 60, onsetMs: 0 },
+    { id: 2, note: 60, onsetMs: 80 },
+    { id: 3, note: 64, onsetMs: 160 },
+    { id: 4, note: 67, onsetMs: 320 },
+    { id: 5, note: 67, onsetMs: 340 },
+  ];
+  let incremental = createEarSearchTracker(target, 0);
+  for (const attack of attacks) incremental = advanceEarSearchTracker(target, incremental, [attack], { chordWindowMs: 600, nowMs: attack.onsetMs });
+  const batched = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), attacks, { chordWindowMs: 600, nowMs: 340 });
+  assert.deepEqual(incremental, batched);
+  assert.equal(earSearchPendingDueAt(target, incremental, 600), 380);
+  assert.equal(advanceEarSearchTracker(target, incremental, [], { chordWindowMs: 600, nowMs: 379 }), incremental);
+  incremental = advanceEarSearchTracker(target, incremental, [], { chordWindowMs: 600, nowMs: 380 });
+  assert.equal(incremental.complete, true);
+  assert.deepEqual(incremental.acceptedProbeIds, [5]);
+  assert.equal(earSearchPendingDueAt(target, incremental, 600), null);
+});
+
+test("duplicate gathering stays bounded across updates without mutating a rejected checkpoint", () => {
+  const target = [landing("triad", [60, 64, 67])];
+  const repeats = Array.from({ length: 4096 }, (_, index) => ({ id: index + 1, note: 60, onsetMs: 0 }));
+  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), repeats, { chordWindowMs: 600, nowMs: 0 });
+  assert.equal(tracker.pendingAttacks.length, 4096);
+  assert.equal(tracker.probeCount, 0);
+  assert.throws(() => advanceEarSearchTracker(target, tracker, [
+    { id: 4097, note: 64, onsetMs: 1 },
+  ], { chordWindowMs: 600, nowMs: 1 }), /4096 raw attacks/);
+  assert.equal(tracker.pendingAttacks.length, 4096);
+  assert.equal(tracker.processedThroughEventId, 4096);
+  assert.equal(tracker.latest, null);
+  const closed = advanceEarSearchTracker(target, tracker, [], { chordWindowMs: 600, nowMs: 600 });
+  assert.equal(closed.latest?.texture, "fewer-keys");
+  assert.deepEqual(closed.pendingAttacks, []);
+});
+
+test("wide gathering still separates fast following singleton and chord landings", () => {
+  for (const window of [600, 1000]) {
+    const target = [landing("first", [60, 64]), landing("second", [60, 65]), landing("last", [67])];
+    const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), [
+      { id: 1, note: 60, onsetMs: 0 },
+      { id: 2, note: 64, onsetMs: 80 },
+      { id: 3, note: 60, onsetMs: 160 },
+      { id: 4, note: 65, onsetMs: 200 },
+      { id: 5, note: 67, onsetMs: 280 },
+    ], { chordWindowMs: window, nowMs: 340 });
+    assert.equal(tracker.complete, true);
+    assert.deepEqual(tracker.recentProbes.map((item) => item.notes), [[60, 64], [60, 65], [67]]);
+    assert.deepEqual(tracker.acceptedProbeIds, [2, 4, 5]);
+  }
+});
+
 test("target-aware gathering locks an accepted chord before the next fast landing", () => {
   const target = [landing("chord", [60, 64]), landing("next", [67])];
   let tracker = createEarSearchTracker(target, 0);
@@ -518,7 +683,10 @@ test("a 17-key exploratory burst rejects a 16-key target without crashing and ca
 test("duplicate-heavy dense probes normalize distinct keys without a 16-attack exception", () => {
   const target = [landing("dense-chord", Array.from({ length: 16 }, (_, index) => 40 + index))];
   const repeated = Array.from({ length: 17 }, (_, index) => ({ id: index + 1, note: 60, onsetMs: 100 + index }));
-  const tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), repeated, { chordWindowMs: 240, nowMs: 116 });
+  let tracker = advanceEarSearchTracker(target, createEarSearchTracker(target, 0), repeated, { chordWindowMs: 240, nowMs: 116 });
+  assert.equal(tracker.probeCount, 0, "repeated attacks of one key must not count as 17 chord members");
+  assert.equal(earSearchPendingDueAt(target, tracker, 240), 340);
+  tracker = advanceEarSearchTracker(target, tracker, [], { chordWindowMs: 240, nowMs: 340 });
   assert.equal(tracker.complete, false);
   assert.equal(tracker.latest?.texture, "fewer-keys");
   assert.deepEqual(tracker.recentProbes[0].notes, [60]);

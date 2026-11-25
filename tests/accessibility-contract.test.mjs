@@ -5,6 +5,8 @@ import "./piano-pitch-visual-settings.test.ts";
 import "./piano-pitch-rim.test.mjs";
 import "./piano-pitch-names.test.mjs";
 import "./piano-pitch-markers.test.mjs";
+import "./piano-ear-search-preferences.test.ts";
+import "./piano-ear-search-gather-contract.test.mjs";
 
 const LABS = ["GuideLab", "ScaleLab", "PianoLab", "VoiceLab", "EarLab", "HarmonyLab", "RhythmLab", "JourneyLab", "RecordingLab", "AtlasLab", "PersonalLab", "TechnicalNotesLab"];
 
@@ -547,7 +549,7 @@ test("Sound Finder keeps slow hidden-target search untimed, bounded, and non-lea
   assert.match(finder, /role="dialog" aria-modal="true"/);
   assert.match(finder, /role="region" tabIndex=\{0\} aria-label="Scrollable revealed phrase pitch map"/);
   assert.match(finder, /role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(finder, /<small role="status" aria-live="polite">\{hintsPaused \? "Keyboard colors are live; no new probes are counted until capture resumes\." : audioNotice\}<\/small>/);
+  assert.match(finder, /<small role="status" aria-live="polite">\{hintsPaused \? "Keyboard colors are live; no new probes are counted until capture resumes\." : gathering \? gatherSummary : audioNotice\}<\/small>/);
   assert.doesNotMatch(finder, /midiConnected|midiStatus|onConnectMidi|MIDI not connected/, "Sound Finder must use the shared Piano input bar for device setup");
   assert.match(finder, /role="progressbar" aria-label="Hidden reference playback"/);
   assert.match(finder, /<option value="half-bar">/);

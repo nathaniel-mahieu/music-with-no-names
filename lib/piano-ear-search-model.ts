@@ -438,13 +438,33 @@ export function createEarSearchTracker(
   };
 }
 
-function pendingProbeDueAt(target: readonly EarSearchLanding[], tracker: EarSearchTracker, chordWindowMs: number) {
+type PendingChordMembership = {
+  notes: Set<number>;
+  lastNewNoteOnsetMs: number;
+};
+
+function pendingChordMembership(attacks: readonly EarSearchAttack[]): PendingChordMembership {
+  const membership = { notes: new Set<number>(), lastNewNoteOnsetMs: 0 };
+  for (const attack of attacks) {
+    if (membership.notes.has(attack.note)) continue;
+    membership.notes.add(attack.note);
+    membership.lastNewNoteOnsetMs = attack.onsetMs;
+  }
+  return membership;
+}
+
+function pendingProbeDueAt(
+  target: readonly EarSearchLanding[],
+  tracker: EarSearchTracker,
+  chordWindowMs: number,
+  membership = pendingChordMembership(tracker.pendingAttacks),
+) {
   if (!tracker.pendingAttacks.length || tracker.complete || tracker.matchedLandings >= target.length) return null;
   const first = tracker.pendingAttacks[0].onsetMs;
-  const last = tracker.pendingAttacks.at(-1)!.onsetMs;
+  const last = membership.lastNewNoteOnsetMs;
   const expectedKeyCount = target[tracker.matchedLandings].notes.length;
   if (expectedKeyCount === 1) return chordWindowMs <= 40 ? last : Math.min(first + chordWindowMs, last + EAR_SEARCH_CHORD_SETTLE_MS);
-  return tracker.pendingAttacks.length >= expectedKeyCount
+  return membership.notes.size >= expectedKeyCount
     ? Math.min(first + chordWindowMs, last + EAR_SEARCH_CHORD_SETTLE_MS)
     : first + chordWindowMs;
 }
@@ -464,7 +484,7 @@ export function earSearchPendingDueAt(
 
 /**
  * Incrementally turn raw key attacks into stable probes. The expected landing's
- * key count starts a short settle period, so near-simultaneous extra tones are
+ * distinct key count starts a short settle period, so near-simultaneous extra tones are
  * still diagnosed while a later melodic attack cannot mutate an already
  * accepted sonority. Accepted progress lives in this checkpoint rather than
  * in the rolling event/probe display window.
@@ -495,7 +515,11 @@ export function advanceEarSearchTracker(
     })
     .filter((attack) => attack.id > tracker.processedThroughEventId)
     .sort((first, second) => first.id - second.id);
-  const existingDueAt = pendingProbeDueAt(target, tracker, options.chordWindowMs);
+  // Maintain membership once per update rather than rescanning a duplicate-
+  // heavy attack burst for every new event. Reattacks neither complete a chord
+  // prematurely nor extend its settle period after all members are present.
+  const membership = pendingChordMembership(tracker.pendingAttacks);
+  const existingDueAt = pendingProbeDueAt(target, tracker, options.chordWindowMs, membership);
   const pendingCanClose = existingDueAt !== null && options.nowMs >= existingDueAt;
   if (!fresh.length && !pendingCanClose) return tracker;
 
@@ -509,6 +533,8 @@ export function advanceEarSearchTracker(
     if (!next.pendingAttacks.length || next.complete) return;
     const raw = next.pendingAttacks;
     next.pendingAttacks = [];
+    membership.notes.clear();
+    membership.lastNewNoteOnsetMs = 0;
     const probe: EarSearchProbe = {
       id: raw.at(-1)!.id,
       notes: normalizeProbeNotes(raw.map((attack) => attack.note), `Probe ${next.probeCount + 1}`),
@@ -530,14 +556,21 @@ export function advanceEarSearchTracker(
   for (const attack of fresh) {
     next.processedThroughEventId = Math.max(next.processedThroughEventId, attack.id);
     if (next.complete) continue;
-    const dueAt = pendingProbeDueAt(target, next, options.chordWindowMs);
+    const dueAt = pendingProbeDueAt(target, next, options.chordWindowMs, membership);
     if (dueAt !== null && attack.onsetMs >= dueAt) finalizePending();
     if (next.complete) continue;
+    if (next.pendingAttacks.length >= EAR_SEARCH_MAX_PROBES) {
+      throw new RangeError(`An ear-search probe is limited to ${EAR_SEARCH_MAX_PROBES} raw attacks.`);
+    }
     next.pendingAttacks.push(attack);
+    if (!membership.notes.has(attack.note)) {
+      membership.notes.add(attack.note);
+      membership.lastNewNoteOnsetMs = attack.onsetMs;
+    }
     const expectedKeyCount = target[next.matchedLandings].notes.length;
-    if ((expectedKeyCount === 1 && options.chordWindowMs <= 40) || next.pendingAttacks.length > expectedKeyCount) finalizePending();
+    if ((expectedKeyCount === 1 && options.chordWindowMs <= 40) || membership.notes.size > expectedKeyCount) finalizePending();
   }
-  const dueAt = pendingProbeDueAt(target, next, options.chordWindowMs);
+  const dueAt = pendingProbeDueAt(target, next, options.chordWindowMs, membership);
   if (dueAt !== null && options.nowMs >= dueAt) finalizePending();
   return next;
 }

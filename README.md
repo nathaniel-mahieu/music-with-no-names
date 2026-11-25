@@ -12,6 +12,8 @@ Replaying the hidden reference or pressing Stop preserves already-found attacks.
 
 Paused capture now visibly suspends directional hints instead of leaving an old instruction active. **Resume hints** reconnects to the shared capture control without clearing your finds; replay and resume wait for a fresh probe before giving a new direction. The blank on-screen keyboard has manual **Lower octave / Center / Higher octave** controls, so bass and high-register notes are reachable without revealing the target or transposing MIDI. Dense and duplicate-heavy probes are diagnosed without truncating them to a false match or crashing the tracker.
 
+Full-texture Sound Finder starts with a forgiving **600 ms chord gather**; choose 300 ms or 1000 ms in the footer. This preference is saved for the browser tab and is separate from the live HUD's chord grouping. An incomplete chord has the full window from its first key; complete groups settle quickly so the next score landing stays separate. Repeated attacks count as the same chord member and cannot close an unfinished chord early. While a group is open, the HUD acknowledges the distinct keys received and withholds stale directional hints. Changing the gather setting discards only unfinished input, keeping found progress and paused capture intact; rhythm is not graded.
+
 Scale Quality Explorer: [open the tonic-and-scale MIDI HUD](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=piano&pianoLens=scale-quality)
 
 Technical Notes: [open the implementation and model reference](https://nathaniel-mahieu.github.io/music-with-no-names/?lab=technical)

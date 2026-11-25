@@ -253,6 +253,7 @@
 
 .phase_playing { border-color: var(--ear-gold); background: var(--ear-gold); box-shadow: 0 0 18px var(--ear-gold); }
 .phase_searching { border-color: var(--ear-blue); background: var(--ear-blue); box-shadow: 0 0 15px rgba(122, 184, 255, .6); }
+.statusStrip[data-gathering="true"] .phaseLamp { border-color: var(--ear-teal); background: var(--ear-teal); box-shadow: 0 0 15px rgba(114, 230, 209, .45); }
 .phase_complete { border-color: var(--ear-teal); background: var(--ear-teal); box-shadow: 0 0 18px rgba(114, 230, 209, .8); }
 .phase_paused { border-color: var(--ear-muted); background: transparent; box-shadow: none; }
 .statusStrip.isCapturePaused { grid-template-columns: 14px minmax(0, 1fr) auto; background: rgba(72, 54, 24, .32); }
